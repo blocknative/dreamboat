@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  releases-matrix:
+    name: Release Go Binary
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        # build and publish in parallel: linux/amd64
+        goos: [linux]
+        goarch: [amd64]
+    steps:
+      - name: Checkout the codebase
+        uses: actions/checkout@v2
+      - name: build the app
+        uses: wangyoucao577/go-release-action@v1.26
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          goos: ${{ matrix.goos }}
+          goarch: ${{ matrix.goarch }}
+          binary_name: relay
+          asset_name: ${{ github.ref_name }}-relay-${{ matrix.goos }}-${{ matrix.goarch }}
+          project_path: ./cmd/relay
