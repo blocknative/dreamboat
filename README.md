@@ -8,6 +8,8 @@
 
 An Ethereum 2.0 Relay for proposer-builder separation (PBS) with MEV-boost.  Commissioned, built, and put to sea by Blocknative.
 
+![blocknative-dreamboat](https://user-images.githubusercontent.com/9452561/189974883-6910dd5c-0f55-4aa6-87be-515c5930362e.png)
+
 ## Quickstart
 
 #### Installation
