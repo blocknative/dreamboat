@@ -26,6 +26,8 @@ $ go install github.com/blocknative/dreamboat
 $ dreamboat --help
 ```
 
+Documentation can be found [here](https://docs.blocknative.com/mev-relay-instructions-for-ethereum-validators).
+
 ## What is Dreamboat?
 
 Dreamboat is a relay for Ethereum 2.0, it ships blocks from builders to validators.  Dreamboat is for anyone who wants to strengthen the Eth network by running their own relay.  Dreamboat's all-in-one design, modular code base and stunning performance will dazzle beginners and seasoned hackers alike.  All aboard!
