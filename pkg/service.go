@@ -30,17 +30,17 @@ type RelayService interface {
 	GetValidators() BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
-	GetDelivered(context.Context, TraceQuery) ([]types.BidTrace, error)
+	GetPayloadDelivered(context.Context, TraceQuery) ([]types.BidTrace, error)
 	GetBlockReceived(context.Context, TraceQuery) ([]BidTraceWithTimestamp, error)
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
 
 type TraceQuery struct {
-	slot          Slot
-	blockHash     types.Hash
-	blockNum      uint64
-	pubkey        types.PublicKey
-	cursor, limit uint64
+	Slot          Slot
+	BlockHash     types.Hash
+	BlockNum      uint64
+	Pubkey        types.PublicKey
+	Cursor, Limit uint64
 }
 
 type DefaultService struct {
@@ -202,22 +202,22 @@ func (s *DefaultService) GetValidators() BuilderGetValidatorsResponseEntrySlice 
 	return s.Relay.GetValidators(&s.state)
 }
 
-func (s *DefaultService) GetDelivered(ctx context.Context, query TraceQuery) ([]types.BidTrace, error) {
+func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQuery) ([]types.BidTrace, error) {
 	var (
 		event HeaderAndTrace
 		err   error
 	)
 
-	if query.slot > Slot(0) {
-		event, err = s.state.Datastore().GetHeader(ctx, query.slot, true)
-	} else if strings.Compare(query.blockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
-		event, err = s.state.Datastore().GetHeaderByBlockHash(ctx, query.blockHash, true)
-	} else if query.blockNum != 0 {
-		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.blockNum, true)
-	} else if strings.Compare(query.pubkey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0 {
-		event, err = s.state.Datastore().GetHeaderByPubkey(ctx, query.pubkey, true)
+	if query.Slot > Slot(0) {
+		event, err = s.state.Datastore().GetHeader(ctx, query.Slot, true)
+	} else if strings.Compare(query.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
+		event, err = s.state.Datastore().GetHeaderByBlockHash(ctx, query.BlockHash, true)
+	} else if query.BlockNum != 0 {
+		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.BlockNum, true)
+	} else if strings.Compare(query.Pubkey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0 {
+		event, err = s.state.Datastore().GetHeaderByPubkey(ctx, query.Pubkey, true)
 	} else {
-		return s.getTailDelivered(ctx, query.limit, query.cursor)
+		return s.getTailDelivered(ctx, query.Limit, query.Cursor)
 	}
 
 	if err == nil {
@@ -231,7 +231,7 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 	stop := headSlot - Slot(s.Config.TTL/DurationPerSlot)
 
 	if cursor != 0 {
-		stop := Max(Slot(cursor), stop)
+		stop = Max(Slot(cursor), stop)
 		if headSlot <= stop {
 			return nil, errors.New("invalid cursor, is higher than headslot range")
 		}
@@ -249,7 +249,7 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 
 	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
 		slots = slots[:0]
-		for s := highSlot; highSlot-Slot(limit) < s; s-- {
+		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
 			slots = append(slots, s)
 		}
 
@@ -274,14 +274,14 @@ func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery)
 		err   error
 	)
 
-	if query.slot > 0 {
-		event, err = s.state.Datastore().GetHeader(ctx, query.slot, false)
-	} else if strings.Compare(query.blockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
-		event, err = s.state.Datastore().GetHeaderByBlockHash(ctx, query.blockHash, false)
-	} else if query.blockNum != 0 {
-		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.blockNum, false)
+	if query.Slot > 0 {
+		event, err = s.state.Datastore().GetHeader(ctx, query.Slot, false)
+	} else if strings.Compare(query.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
+		event, err = s.state.Datastore().GetHeaderByBlockHash(ctx, query.BlockHash, false)
+	} else if query.BlockNum != 0 {
+		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.BlockNum, false)
 	} else {
-		return s.getTailBlockReceived(ctx, query.limit)
+		return s.getTailBlockReceived(ctx, query.Limit)
 	}
 
 	if err == nil {
@@ -302,7 +302,7 @@ func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64)
 
 	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
 		slots = slots[:0]
-		for s := highSlot; highSlot-Slot(limit) < s; s-- {
+		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
 			slots = append(slots, s)
 		}
 

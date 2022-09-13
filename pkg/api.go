@@ -265,9 +265,9 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		return http.StatusBadRequest, err
 	}
 
-	blocks, err := a.Service.GetDelivered(r.Context(),
-		TraceQuery{slot: slot, blockHash: bh, blockNum: bn,
-			pubkey: pk, cursor: cursor, limit: limit},
+	blocks, err := a.Service.GetPayloadDelivered(r.Context(),
+		TraceQuery{Slot: slot, BlockHash: bh, BlockNum: bn,
+			Pubkey: pk, Cursor: cursor, Limit: limit},
 	)
 	return a.respond(w, blocks, err)
 }
@@ -296,7 +296,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 	}
 
 	blocks, err := a.Service.GetBlockReceived(r.Context(),
-		TraceQuery{slot: slot, blockHash: bh, blockNum: bn, limit: limit},
+		TraceQuery{Slot: slot, BlockHash: bh, BlockNum: bn, Limit: limit},
 	)
 	return a.respond(w, blocks, err)
 }
