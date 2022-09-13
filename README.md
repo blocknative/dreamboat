@@ -65,7 +65,7 @@ Stuck?  Don't despair!  Drop by our [discord](https://discord.com/invite/KZaBVME
 ### Building Locally
 
 ```
-$ go install cmd/relay
+$ go run cmd/dreamboat
 ```
 
 
