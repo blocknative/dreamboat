@@ -45,7 +45,6 @@ func TestRegisterValidator(t *testing.T) {
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
-	// TODO: should we check something else in the beaconclient?
 	bc.EXPECT().KnownValidators().Return(knownValidators).Times(N)
 
 	err = r.RegisterValidator(ctx, registrations, state{ds: ds, bc: bc})
@@ -303,7 +302,6 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
-	// TODO: should we check something else in the beaconclient?
 	bc.EXPECT().KnownValidators().Return(knownValidators).Times(b.N * N)
 
 	b.ResetTimer()
@@ -344,7 +342,6 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
-	// TODO: should we check something else in the beaconclient?
 	bc.EXPECT().KnownValidators().Return(knownValidators).Times(b.N * N)
 
 	var wg sync.WaitGroup

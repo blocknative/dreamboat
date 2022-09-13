@@ -9,10 +9,10 @@ import (
 	reflect "reflect"
 	time "time"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
+	relay "github.com/blocknative/dreamboat/pkg"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
-	go_datastore "github.com/ipfs/go-datastore"
+	datastore "github.com/ipfs/go-datastore"
 )
 
 // MockDatastore is a mock of Datastore interface.
@@ -39,10 +39,10 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 }
 
 // GetHeader mocks base method.
-func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 pkg.Slot, arg2 bool) (pkg.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 relay.Slot, arg2 bool) (relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1, arg2)
-	ret0, _ := ret[0].(pkg.HeaderAndTrace)
+	ret0, _ := ret[0].(relay.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -54,10 +54,10 @@ func (mr *MockDatastoreMockRecorder) GetHeader(arg0, arg1, arg2 interface{}) *go
 }
 
 // GetHeaderBatch mocks base method.
-func (m *MockDatastore) GetHeaderBatch(arg0 context.Context, arg1 []pkg.Slot, arg2 bool) ([]pkg.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeaderBatch(arg0 context.Context, arg1 []relay.Slot, arg2 bool) ([]relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeaderBatch", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]pkg.HeaderAndTrace)
+	ret0, _ := ret[0].([]relay.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -69,10 +69,10 @@ func (mr *MockDatastoreMockRecorder) GetHeaderBatch(arg0, arg1, arg2 interface{}
 }
 
 // GetHeaderByBlockHash mocks base method.
-func (m *MockDatastore) GetHeaderByBlockHash(arg0 context.Context, arg1 types.Hash, arg2 bool) (pkg.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeaderByBlockHash(arg0 context.Context, arg1 types.Hash, arg2 bool) (relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeaderByBlockHash", arg0, arg1, arg2)
-	ret0, _ := ret[0].(pkg.HeaderAndTrace)
+	ret0, _ := ret[0].(relay.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -84,10 +84,10 @@ func (mr *MockDatastoreMockRecorder) GetHeaderByBlockHash(arg0, arg1, arg2 inter
 }
 
 // GetHeaderByBlockNum mocks base method.
-func (m *MockDatastore) GetHeaderByBlockNum(arg0 context.Context, arg1 uint64, arg2 bool) (pkg.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeaderByBlockNum(arg0 context.Context, arg1 uint64, arg2 bool) (relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeaderByBlockNum", arg0, arg1, arg2)
-	ret0, _ := ret[0].(pkg.HeaderAndTrace)
+	ret0, _ := ret[0].(relay.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -99,10 +99,10 @@ func (mr *MockDatastoreMockRecorder) GetHeaderByBlockNum(arg0, arg1, arg2 interf
 }
 
 // GetHeaderByPubkey mocks base method.
-func (m *MockDatastore) GetHeaderByPubkey(arg0 context.Context, arg1 types.PublicKey, arg2 bool) (pkg.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeaderByPubkey(arg0 context.Context, arg1 types.PublicKey, arg2 bool) (relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeaderByPubkey", arg0, arg1, arg2)
-	ret0, _ := ret[0].(pkg.HeaderAndTrace)
+	ret0, _ := ret[0].(relay.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -114,10 +114,10 @@ func (mr *MockDatastoreMockRecorder) GetHeaderByPubkey(arg0, arg1, arg2 interfac
 }
 
 // GetPayload mocks base method.
-func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 types.Hash) (*pkg.BlockBidAndTrace, error) {
+func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 types.Hash) (*relay.BlockBidAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1)
-	ret0, _ := ret[0].(*pkg.BlockBidAndTrace)
+	ret0, _ := ret[0].(*relay.BlockBidAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -129,7 +129,7 @@ func (mr *MockDatastoreMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.
 }
 
 // GetRegistration mocks base method.
-func (m *MockDatastore) GetRegistration(arg0 context.Context, arg1 pkg.PubKey) (types.SignedValidatorRegistration, error) {
+func (m *MockDatastore) GetRegistration(arg0 context.Context, arg1 relay.PubKey) (types.SignedValidatorRegistration, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRegistration", arg0, arg1)
 	ret0, _ := ret[0].(types.SignedValidatorRegistration)
@@ -144,7 +144,7 @@ func (mr *MockDatastoreMockRecorder) GetRegistration(arg0, arg1 interface{}) *go
 }
 
 // PutDelivered mocks base method.
-func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 pkg.Slot, arg2 time.Duration) error {
+func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 relay.Slot, arg2 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -158,7 +158,7 @@ func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2 interface{}) 
 }
 
 // PutHeader mocks base method.
-func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 pkg.Slot, arg2 pkg.HeaderAndTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 relay.Slot, arg2 relay.HeaderAndTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutHeader", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -172,7 +172,7 @@ func (mr *MockDatastoreMockRecorder) PutHeader(arg0, arg1, arg2, arg3 interface{
 }
 
 // PutPayload mocks base method.
-func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 types.Hash, arg2 *pkg.BlockBidAndTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 types.Hash, arg2 *relay.BlockBidAndTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutPayload", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -186,7 +186,7 @@ func (mr *MockDatastoreMockRecorder) PutPayload(arg0, arg1, arg2, arg3 interface
 }
 
 // PutRegistration mocks base method.
-func (m *MockDatastore) PutRegistration(arg0 context.Context, arg1 pkg.PubKey, arg2 types.SignedValidatorRegistration, arg3 time.Duration) error {
+func (m *MockDatastore) PutRegistration(arg0 context.Context, arg1 relay.PubKey, arg2 types.SignedValidatorRegistration, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutRegistration", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -237,7 +237,7 @@ func (mr *MockTTLStorageMockRecorder) Close() *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockTTLStorage) Get(arg0 context.Context, arg1 go_datastore.Key) ([]byte, error) {
+func (m *MockTTLStorage) Get(arg0 context.Context, arg1 datastore.Key) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", arg0, arg1)
 	ret0, _ := ret[0].([]byte)
@@ -252,7 +252,7 @@ func (mr *MockTTLStorageMockRecorder) Get(arg0, arg1 interface{}) *gomock.Call {
 }
 
 // GetBatch mocks base method.
-func (m *MockTTLStorage) GetBatch(ctx context.Context, keys []go_datastore.Key) ([][]byte, error) {
+func (m *MockTTLStorage) GetBatch(ctx context.Context, keys []datastore.Key) ([][]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBatch", ctx, keys)
 	ret0, _ := ret[0].([][]byte)
@@ -267,7 +267,7 @@ func (mr *MockTTLStorageMockRecorder) GetBatch(ctx, keys interface{}) *gomock.Ca
 }
 
 // PutWithTTL mocks base method.
-func (m *MockTTLStorage) PutWithTTL(arg0 context.Context, arg1 go_datastore.Key, arg2 []byte, arg3 time.Duration) error {
+func (m *MockTTLStorage) PutWithTTL(arg0 context.Context, arg1 datastore.Key, arg2 []byte, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutWithTTL", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)

@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
+	relay "github.com/blocknative/dreamboat/pkg"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -37,10 +37,10 @@ func (m *MockRelayService) EXPECT() *MockRelayServiceMockRecorder {
 }
 
 // GetBlockReceived mocks base method.
-func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 pkg.Slot) ([]pkg.BidTraceWithTimestamp, error) {
+func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 relay.Slot) ([]relay.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBlockReceived", arg0, arg1)
-	ret0, _ := ret[0].([]pkg.BidTraceWithTimestamp)
+	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -52,10 +52,10 @@ func (mr *MockRelayServiceMockRecorder) GetBlockReceived(arg0, arg1 interface{})
 }
 
 // GetBlockReceivedByHash mocks base method.
-func (m *MockRelayService) GetBlockReceivedByHash(arg0 context.Context, arg1 types.Hash) ([]pkg.BidTraceWithTimestamp, error) {
+func (m *MockRelayService) GetBlockReceivedByHash(arg0 context.Context, arg1 types.Hash) ([]relay.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBlockReceivedByHash", arg0, arg1)
-	ret0, _ := ret[0].([]pkg.BidTraceWithTimestamp)
+	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -67,10 +67,10 @@ func (mr *MockRelayServiceMockRecorder) GetBlockReceivedByHash(arg0, arg1 interf
 }
 
 // GetBlockReceivedByNum mocks base method.
-func (m *MockRelayService) GetBlockReceivedByNum(arg0 context.Context, arg1 uint64) ([]pkg.BidTraceWithTimestamp, error) {
+func (m *MockRelayService) GetBlockReceivedByNum(arg0 context.Context, arg1 uint64) ([]relay.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBlockReceivedByNum", arg0, arg1)
-	ret0, _ := ret[0].([]pkg.BidTraceWithTimestamp)
+	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -82,7 +82,7 @@ func (mr *MockRelayServiceMockRecorder) GetBlockReceivedByNum(arg0, arg1 interfa
 }
 
 // GetDelivered mocks base method.
-func (m *MockRelayService) GetDelivered(arg0 context.Context, arg1 pkg.Slot) ([]types.BidTrace, error) {
+func (m *MockRelayService) GetDelivered(arg0 context.Context, arg1 relay.Slot) ([]types.BidTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDelivered", arg0, arg1)
 	ret0, _ := ret[0].([]types.BidTrace)
@@ -142,7 +142,7 @@ func (mr *MockRelayServiceMockRecorder) GetDeliveredByPubKey(arg0, arg1 interfac
 }
 
 // GetHeader mocks base method.
-func (m *MockRelayService) GetHeader(arg0 context.Context, arg1 pkg.HeaderRequest) (*types.GetHeaderResponse, error) {
+func (m *MockRelayService) GetHeader(arg0 context.Context, arg1 relay.HeaderRequest) (*types.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
 	ret0, _ := ret[0].(*types.GetHeaderResponse)
@@ -172,10 +172,10 @@ func (mr *MockRelayServiceMockRecorder) GetPayload(arg0, arg1 interface{}) *gomo
 }
 
 // GetTailBlockReceived mocks base method.
-func (m *MockRelayService) GetTailBlockReceived(arg0 context.Context, arg1 uint64) ([]pkg.BidTraceWithTimestamp, error) {
+func (m *MockRelayService) GetTailBlockReceived(arg0 context.Context, arg1 uint64) ([]relay.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTailBlockReceived", arg0, arg1)
-	ret0, _ := ret[0].([]pkg.BidTraceWithTimestamp)
+	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -217,10 +217,10 @@ func (mr *MockRelayServiceMockRecorder) GetTailDeliveredCursor(arg0, arg1, arg2 
 }
 
 // GetValidators mocks base method.
-func (m *MockRelayService) GetValidators() pkg.BuilderGetValidatorsResponseEntrySlice {
+func (m *MockRelayService) GetValidators() relay.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValidators")
-	ret0, _ := ret[0].(pkg.BuilderGetValidatorsResponseEntrySlice)
+	ret0, _ := ret[0].(relay.BuilderGetValidatorsResponseEntrySlice)
 	return ret0
 }
 

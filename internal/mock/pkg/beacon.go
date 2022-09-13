@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
+	relay "github.com/blocknative/dreamboat/pkg"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -50,10 +50,10 @@ func (mr *MockBeaconClientMockRecorder) Endpoint() *gomock.Call {
 }
 
 // GetProposerDuties mocks base method.
-func (m *MockBeaconClient) GetProposerDuties(arg0 pkg.Epoch) (*pkg.RegisteredProposersResponse, error) {
+func (m *MockBeaconClient) GetProposerDuties(arg0 relay.Epoch) (*relay.RegisteredProposersResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProposerDuties", arg0)
-	ret0, _ := ret[0].(*pkg.RegisteredProposersResponse)
+	ret0, _ := ret[0].(*relay.RegisteredProposersResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -65,10 +65,10 @@ func (mr *MockBeaconClientMockRecorder) GetProposerDuties(arg0 interface{}) *gom
 }
 
 // KnownValidators mocks base method.
-func (m *MockBeaconClient) KnownValidators(arg0 pkg.Slot) (pkg.AllValidatorsResponse, error) {
+func (m *MockBeaconClient) KnownValidators(arg0 relay.Slot) (relay.AllValidatorsResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "KnownValidators", arg0)
-	ret0, _ := ret[0].(pkg.AllValidatorsResponse)
+	ret0, _ := ret[0].(relay.AllValidatorsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -80,7 +80,7 @@ func (mr *MockBeaconClientMockRecorder) KnownValidators(arg0 interface{}) *gomoc
 }
 
 // SubscribeToHeadEvents mocks base method.
-func (m *MockBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan pkg.HeadEvent) {
+func (m *MockBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan relay.HeadEvent) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubscribeToHeadEvents", ctx, slotC)
 }
@@ -92,10 +92,10 @@ func (mr *MockBeaconClientMockRecorder) SubscribeToHeadEvents(ctx, slotC interfa
 }
 
 // SyncStatus mocks base method.
-func (m *MockBeaconClient) SyncStatus() (*pkg.SyncStatusPayloadData, error) {
+func (m *MockBeaconClient) SyncStatus() (*relay.SyncStatusPayloadData, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SyncStatus")
-	ret0, _ := ret[0].(*pkg.SyncStatusPayloadData)
+	ret0, _ := ret[0].(*relay.SyncStatusPayloadData)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

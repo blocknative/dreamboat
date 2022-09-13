@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
+	relay "github.com/blocknative/dreamboat/pkg"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -37,10 +37,10 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // Beacon mocks base method.
-func (m *MockState) Beacon() pkg.BeaconState {
+func (m *MockState) Beacon() relay.BeaconState {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Beacon")
-	ret0, _ := ret[0].(pkg.BeaconState)
+	ret0, _ := ret[0].(relay.BeaconState)
 	return ret0
 }
 
@@ -51,10 +51,10 @@ func (mr *MockStateMockRecorder) Beacon() *gomock.Call {
 }
 
 // Datastore mocks base method.
-func (m *MockState) Datastore() pkg.Datastore {
+func (m *MockState) Datastore() relay.Datastore {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Datastore")
-	ret0, _ := ret[0].(pkg.Datastore)
+	ret0, _ := ret[0].(relay.Datastore)
 	return ret0
 }
 
@@ -88,10 +88,10 @@ func (m *MockBeaconState) EXPECT() *MockBeaconStateMockRecorder {
 }
 
 // HeadSlot mocks base method.
-func (m *MockBeaconState) HeadSlot() pkg.Slot {
+func (m *MockBeaconState) HeadSlot() relay.Slot {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HeadSlot")
-	ret0, _ := ret[0].(pkg.Slot)
+	ret0, _ := ret[0].(relay.Slot)
 	return ret0
 }
 
@@ -101,39 +101,41 @@ func (mr *MockBeaconStateMockRecorder) HeadSlot() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadSlot", reflect.TypeOf((*MockBeaconState)(nil).HeadSlot))
 }
 
-// KnownValidators mocks base method.
-func (m *MockBeaconState) KnownValidators() map[types.PubkeyHex]struct{} {
+// IsKnownValidator mocks base method.
+func (m *MockBeaconState) IsKnownValidator(arg0 types.PubkeyHex) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KnownValidators")
-	ret0, _ := ret[0].(map[types.PubkeyHex]struct{})
-	return ret0
+	ret := m.ctrl.Call(m, "IsKnownValidator", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// KnownValidators indicates an expected call of KnownValidators.
-func (mr *MockBeaconStateMockRecorder) KnownValidators() *gomock.Call {
+// IsKnownValidator indicates an expected call of IsKnownValidator.
+func (mr *MockBeaconStateMockRecorder) IsKnownValidator(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockBeaconState)(nil).KnownValidators))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsKnownValidator", reflect.TypeOf((*MockBeaconState)(nil).IsKnownValidator), arg0)
 }
 
 // KnownValidatorsByIndex mocks base method.
-func (m *MockBeaconState) KnownValidatorsByIndex() map[uint64]types.PubkeyHex {
+func (m *MockBeaconState) KnownValidatorsByIndex(arg0 uint64) (types.PubkeyHex, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KnownValidatorsByIndex")
-	ret0, _ := ret[0].(map[uint64]types.PubkeyHex)
-	return ret0
+	ret := m.ctrl.Call(m, "KnownValidatorsByIndex", arg0)
+	ret0, _ := ret[0].(types.PubkeyHex)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // KnownValidatorsByIndex indicates an expected call of KnownValidatorsByIndex.
-func (mr *MockBeaconStateMockRecorder) KnownValidatorsByIndex() *gomock.Call {
+func (mr *MockBeaconStateMockRecorder) KnownValidatorsByIndex(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorsByIndex", reflect.TypeOf((*MockBeaconState)(nil).KnownValidatorsByIndex))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorsByIndex", reflect.TypeOf((*MockBeaconState)(nil).KnownValidatorsByIndex), arg0)
 }
 
 // ValidatorsMap mocks base method.
-func (m *MockBeaconState) ValidatorsMap() pkg.BuilderGetValidatorsResponseEntrySlice {
+func (m *MockBeaconState) ValidatorsMap() relay.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidatorsMap")
-	ret0, _ := ret[0].(pkg.BuilderGetValidatorsResponseEntrySlice)
+	ret0, _ := ret[0].(relay.BuilderGetValidatorsResponseEntrySlice)
 	return ret0
 }
 
@@ -167,7 +169,7 @@ func (m *MockRelay) EXPECT() *MockRelayMockRecorder {
 }
 
 // GetHeader mocks base method.
-func (m *MockRelay) GetHeader(arg0 context.Context, arg1 pkg.HeaderRequest, arg2 pkg.State) (*types.GetHeaderResponse, error) {
+func (m *MockRelay) GetHeader(arg0 context.Context, arg1 relay.HeaderRequest, arg2 relay.State) (*types.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*types.GetHeaderResponse)
@@ -182,7 +184,7 @@ func (mr *MockRelayMockRecorder) GetHeader(arg0, arg1, arg2 interface{}) *gomock
 }
 
 // GetPayload mocks base method.
-func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *types.SignedBlindedBeaconBlock, arg2 pkg.State) (*types.GetPayloadResponse, error) {
+func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *types.SignedBlindedBeaconBlock, arg2 relay.State) (*types.GetPayloadResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*types.GetPayloadResponse)
@@ -197,10 +199,10 @@ func (mr *MockRelayMockRecorder) GetPayload(arg0, arg1, arg2 interface{}) *gomoc
 }
 
 // GetValidators mocks base method.
-func (m *MockRelay) GetValidators(arg0 pkg.State) pkg.BuilderGetValidatorsResponseEntrySlice {
+func (m *MockRelay) GetValidators(arg0 relay.State) relay.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValidators", arg0)
-	ret0, _ := ret[0].(pkg.BuilderGetValidatorsResponseEntrySlice)
+	ret0, _ := ret[0].(relay.BuilderGetValidatorsResponseEntrySlice)
 	return ret0
 }
 
@@ -211,7 +213,7 @@ func (mr *MockRelayMockRecorder) GetValidators(arg0 interface{}) *gomock.Call {
 }
 
 // RegisterValidator mocks base method.
-func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []types.SignedValidatorRegistration, arg2 pkg.State) error {
+func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []types.SignedValidatorRegistration, arg2 relay.State) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -225,7 +227,7 @@ func (mr *MockRelayMockRecorder) RegisterValidator(arg0, arg1, arg2 interface{})
 }
 
 // SubmitBlock mocks base method.
-func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest, arg2 pkg.State) error {
+func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest, arg2 relay.State) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
