@@ -27,7 +27,6 @@ var (
 )
 
 type BeaconClient interface {
-	// Returned channel automatically closes when underlying beacon client disconnects.
 	SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent)
 	GetProposerDuties(Epoch) (*RegisteredProposersResponse, error)
 	SyncStatus() (*SyncStatusPayloadData, error)
