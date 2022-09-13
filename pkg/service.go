@@ -500,7 +500,7 @@ type beaconState struct {
 	validatorsState
 }
 
-func (s beaconState) KnownValidatorsByIndex(index uint64) (types.PubkeyHex, error) {
+func (s beaconState) KnownValidatorByIndex(index uint64) (types.PubkeyHex, error) {
 	pk, ok := s.knownValidatorsByIndex[index]
 	if !ok {
 		return "", ErrUnknownValue

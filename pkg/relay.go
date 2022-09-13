@@ -34,7 +34,7 @@ type State interface {
 }
 
 type BeaconState interface {
-	KnownValidatorsByIndex(uint64) (types.PubkeyHex, error)
+	KnownValidatorByIndex(uint64) (types.PubkeyHex, error)
 	IsKnownValidator(types.PubkeyHex) (bool, error)
 	HeadSlot() Slot
 	ValidatorsMap() BuilderGetValidatorsResponseEntrySlice
@@ -279,7 +279,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		return nil, fmt.Errorf("invalid signature")
 	}
 
-	proposerPubkey, err := state.Beacon().KnownValidatorsByIndex(payloadRequest.Message.ProposerIndex)
+	proposerPubkey, err := state.Beacon().KnownValidatorByIndex(payloadRequest.Message.ProposerIndex)
 	if err != nil && errors.Is(err, ErrUnknownValue) {
 		return nil, fmt.Errorf("unknown validator for index %d", payloadRequest.Message.ProposerIndex)
 	} else if err != nil {

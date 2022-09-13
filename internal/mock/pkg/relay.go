@@ -116,19 +116,19 @@ func (mr *MockBeaconStateMockRecorder) IsKnownValidator(arg0 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsKnownValidator", reflect.TypeOf((*MockBeaconState)(nil).IsKnownValidator), arg0)
 }
 
-// KnownValidatorsByIndex mocks base method.
-func (m *MockBeaconState) KnownValidatorsByIndex(arg0 uint64) (types.PubkeyHex, error) {
+// KnownValidatorByIndex mocks base method.
+func (m *MockBeaconState) KnownValidatorByIndex(arg0 uint64) (types.PubkeyHex, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "KnownValidatorsByIndex", arg0)
+	ret := m.ctrl.Call(m, "KnownValidatorByIndex", arg0)
 	ret0, _ := ret[0].(types.PubkeyHex)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// KnownValidatorsByIndex indicates an expected call of KnownValidatorsByIndex.
-func (mr *MockBeaconStateMockRecorder) KnownValidatorsByIndex(arg0 interface{}) *gomock.Call {
+// KnownValidatorByIndex indicates an expected call of KnownValidatorByIndex.
+func (mr *MockBeaconStateMockRecorder) KnownValidatorByIndex(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorsByIndex", reflect.TypeOf((*MockBeaconState)(nil).KnownValidatorsByIndex), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorByIndex", reflect.TypeOf((*MockBeaconState)(nil).KnownValidatorByIndex), arg0)
 }
 
 // ValidatorsMap mocks base method.

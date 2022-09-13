@@ -203,7 +203,7 @@ func TestGetPayload(t *testing.T) {
 	err = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 	require.NoError(t, err)
 
-	bc.EXPECT().KnownValidatorsByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
+	bc.EXPECT().KnownValidatorByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
 
 	response, err := r.GetPayload(ctx, request, state{ds: ds, bc: bc})
 	require.NoError(t, err)
@@ -557,7 +557,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		time.Minute)
 	_ = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 
-	bc.EXPECT().KnownValidatorsByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
+	bc.EXPECT().KnownValidatorByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -640,7 +640,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		time.Minute)
 	_ = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 
-	bc.EXPECT().KnownValidatorsByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
+	bc.EXPECT().KnownValidatorByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
