@@ -22,6 +22,7 @@ var (
 	ErrBeaconNodeSyncing     = errors.New("beacon node is syncing")
 	ErrMissingRequest        = errors.New("req is nil")
 	ErrMissingSecretKey      = errors.New("secret key is nil")
+	ErrUnknownValue          = errors.New("value is unknown")
 	UnregisteredValidatorMsg = "unregistered validator"
 	noBuilderBidMsg          = "no builder bid"
 	badHeaderMsg             = "invalid block header from datastore"
@@ -29,7 +30,14 @@ var (
 
 type State interface {
 	Datastore() Datastore
-	Beacon() BeaconClient
+	Beacon() BeaconState
+}
+
+type BeaconState interface {
+	KnownValidatorByIndex(uint64) (types.PubkeyHex, error)
+	IsKnownValidator(types.PubkeyHex) (bool, error)
+	HeadSlot() Slot
+	ValidatorsMap() BuilderGetValidatorsResponseEntrySlice
 }
 
 type Relay interface {
@@ -136,9 +144,15 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 		}
 
 		pk := PubKey{registerRequest.Message.Pubkey}
-		if !state.Beacon().IsValidator(pk) {
+
+		ok, err = state.Beacon().IsKnownValidator(pk.PubkeyHex())
+		if err != nil {
+			return err
+		} else if !ok {
 			if rs.config.CheckKnownValidator {
 				return fmt.Errorf("not a validator")
+			} else {
+				logger.WithField("pubkey", pk.PublicKey).Debug("is not a known validator")
 			}
 		}
 
@@ -211,11 +225,11 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 
 	vd, err := state.Datastore().GetRegistration(ctx, pk)
 	if err != nil {
-		log.Warn("unregistered validator")
+		logger.Warn("unregistered validator")
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 	if vd.Message.Pubkey != pk.PublicKey {
-		log.Warn("registration and request pubkey mismatch")
+		logger.Warn("registration and request pubkey mismatch")
 		return nil, fmt.Errorf("unknown validator")
 	}
 
@@ -265,10 +279,11 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		return nil, fmt.Errorf("invalid signature")
 	}
 
-	proposerPubkey, err := state.Beacon().GetProposerByIndex(payloadRequest.Message.ProposerIndex)
-	if err != nil {
-		return nil, fmt.Errorf("unknown validator")
-
+	proposerPubkey, err := state.Beacon().KnownValidatorByIndex(payloadRequest.Message.ProposerIndex)
+	if err != nil && errors.Is(err, ErrUnknownValue) {
+		return nil, fmt.Errorf("unknown validator for index %d", payloadRequest.Message.ProposerIndex)
+	} else if err != nil {
+		return nil, err
 	}
 
 	pk, err := types.HexToPubkey(proposerPubkey.String())
@@ -433,7 +448,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 // GetValidators returns a list of registered block proposers in current and next epoch
 func (rs *DefaultRelay) GetValidators(state State) BuilderGetValidatorsResponseEntrySlice {
 	log := rs.Log().WithField("method", "GetValidators")
-	validators := state.Beacon().GetValidatorsMap()
+	validators := state.Beacon().ValidatorsMap()
 	log.With(validators).Debug("validatored map sent")
 	return validators
 }

@@ -25,7 +25,7 @@ var (
 )
 
 func main() {
-	fmt.Print("submitting block... ")
+	fmt.Print("getting payload... ")
 	if err := submitRequest(); err != nil {
 		panic(err)
 	}
@@ -77,6 +77,8 @@ func validGetPayloadRequest(domain types.Domain) (*types.SignedBlindedBeaconBloc
 	if err != nil {
 		return nil, err
 	}
+
+	header.BlockHash = submitRequest.Message.BlockHash
 
 	msg := &types.BlindedBeaconBlock{
 		Slot:          submitRequest.Message.Slot,

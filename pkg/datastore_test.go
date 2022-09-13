@@ -468,15 +468,6 @@ func randomTransactions(size int) []hexutil.Bytes {
 	return txs
 }
 
-func randomValidator() relay.ValidatorData {
-	return relay.ValidatorData{
-		PubKey:       relay.PubKey{random48Bytes()},
-		FeeRecipient: types.Address(random20Bytes()),
-		GasLimit:     rand.Uint64(),
-		Timestamp:    rand.Uint64(),
-	}
-}
-
 func randomRegistration() types.SignedValidatorRegistration {
 	msg := &types.RegisterValidatorRequestMessage{
 		FeeRecipient: types.Address(random20Bytes()),
@@ -510,20 +501,6 @@ func validValidatorRegistration(t require.TestingT, domain types.Domain) (*types
 		Message:   msg,
 		Signature: signature,
 	}, sk
-}
-
-func validValidatorData(t require.TestingT, domain types.Domain) relay.ValidatorData {
-	registration, _ := validValidatorRegistration(t, domain)
-	return validatorFromRegistration(registration)
-}
-
-func validatorFromRegistration(registration *types.SignedValidatorRegistration) relay.ValidatorData {
-	return relay.ValidatorData{
-		PubKey:       relay.PubKey{registration.Message.Pubkey},
-		FeeRecipient: registration.Message.FeeRecipient,
-		GasLimit:     registration.Message.GasLimit,
-		Timestamp:    registration.Message.Timestamp,
-	}
 }
 
 func validSubmitBlockRequest(t require.TestingT, domain types.Domain) *types.BuilderSubmitBlockRequest {

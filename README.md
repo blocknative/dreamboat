@@ -14,7 +14,7 @@ An Ethereum 2.0 Relay for proposer-builder separation (PBS) with MEV-boost.  Com
 
 #### Installation
 
-Install with `go get`, or download the latest release [here](https://github.com/blocknative/relay/releases/latest).
+Install with `go get`, or download the latest release [here](https://github.com/blocknative/dreamboat/releases/latest).
 
 ```bash
 $ go install github.com/blocknative/dreamboat
