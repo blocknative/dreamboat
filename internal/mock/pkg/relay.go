@@ -37,10 +37,10 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // Beacon mocks base method.
-func (m *MockState) Beacon() relay.BeaconClient {
+func (m *MockState) Beacon() relay.BeaconState {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Beacon")
-	ret0, _ := ret[0].(relay.BeaconClient)
+	ret0, _ := ret[0].(relay.BeaconState)
 	return ret0
 }
 
@@ -62,6 +62,87 @@ func (m *MockState) Datastore() relay.Datastore {
 func (mr *MockStateMockRecorder) Datastore() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Datastore", reflect.TypeOf((*MockState)(nil).Datastore))
+}
+
+// MockBeaconState is a mock of BeaconState interface.
+type MockBeaconState struct {
+	ctrl     *gomock.Controller
+	recorder *MockBeaconStateMockRecorder
+}
+
+// MockBeaconStateMockRecorder is the mock recorder for MockBeaconState.
+type MockBeaconStateMockRecorder struct {
+	mock *MockBeaconState
+}
+
+// NewMockBeaconState creates a new mock instance.
+func NewMockBeaconState(ctrl *gomock.Controller) *MockBeaconState {
+	mock := &MockBeaconState{ctrl: ctrl}
+	mock.recorder = &MockBeaconStateMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBeaconState) EXPECT() *MockBeaconStateMockRecorder {
+	return m.recorder
+}
+
+// HeadSlot mocks base method.
+func (m *MockBeaconState) HeadSlot() relay.Slot {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HeadSlot")
+	ret0, _ := ret[0].(relay.Slot)
+	return ret0
+}
+
+// HeadSlot indicates an expected call of HeadSlot.
+func (mr *MockBeaconStateMockRecorder) HeadSlot() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadSlot", reflect.TypeOf((*MockBeaconState)(nil).HeadSlot))
+}
+
+// IsKnownValidator mocks base method.
+func (m *MockBeaconState) IsKnownValidator(arg0 types.PubkeyHex) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsKnownValidator", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsKnownValidator indicates an expected call of IsKnownValidator.
+func (mr *MockBeaconStateMockRecorder) IsKnownValidator(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsKnownValidator", reflect.TypeOf((*MockBeaconState)(nil).IsKnownValidator), arg0)
+}
+
+// KnownValidatorByIndex mocks base method.
+func (m *MockBeaconState) KnownValidatorByIndex(arg0 uint64) (types.PubkeyHex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "KnownValidatorByIndex", arg0)
+	ret0, _ := ret[0].(types.PubkeyHex)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// KnownValidatorByIndex indicates an expected call of KnownValidatorByIndex.
+func (mr *MockBeaconStateMockRecorder) KnownValidatorByIndex(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorByIndex", reflect.TypeOf((*MockBeaconState)(nil).KnownValidatorByIndex), arg0)
+}
+
+// ValidatorsMap mocks base method.
+func (m *MockBeaconState) ValidatorsMap() relay.BuilderGetValidatorsResponseEntrySlice {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidatorsMap")
+	ret0, _ := ret[0].(relay.BuilderGetValidatorsResponseEntrySlice)
+	return ret0
+}
+
+// ValidatorsMap indicates an expected call of ValidatorsMap.
+func (mr *MockBeaconStateMockRecorder) ValidatorsMap() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidatorsMap", reflect.TypeOf((*MockBeaconState)(nil).ValidatorsMap))
 }
 
 // MockRelay is a mock of Relay interface.

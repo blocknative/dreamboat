@@ -9,7 +9,6 @@ import (
 	reflect "reflect"
 
 	relay "github.com/blocknative/dreamboat/pkg"
-	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -36,19 +35,18 @@ func (m *MockBeaconClient) EXPECT() *MockBeaconClientMockRecorder {
 	return m.recorder
 }
 
-// GetProposerByIndex mocks base method.
-func (m *MockBeaconClient) GetProposerByIndex(arg0 uint64) (types.PubkeyHex, error) {
+// Endpoint mocks base method.
+func (m *MockBeaconClient) Endpoint() string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProposerByIndex", arg0)
-	ret0, _ := ret[0].(types.PubkeyHex)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "Endpoint")
+	ret0, _ := ret[0].(string)
+	return ret0
 }
 
-// GetProposerByIndex indicates an expected call of GetProposerByIndex.
-func (mr *MockBeaconClientMockRecorder) GetProposerByIndex(arg0 interface{}) *gomock.Call {
+// Endpoint indicates an expected call of Endpoint.
+func (mr *MockBeaconClientMockRecorder) Endpoint() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerByIndex", reflect.TypeOf((*MockBeaconClient)(nil).GetProposerByIndex), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Endpoint", reflect.TypeOf((*MockBeaconClient)(nil).Endpoint))
 }
 
 // GetProposerDuties mocks base method.
@@ -66,74 +64,31 @@ func (mr *MockBeaconClientMockRecorder) GetProposerDuties(arg0 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDuties", reflect.TypeOf((*MockBeaconClient)(nil).GetProposerDuties), arg0)
 }
 
-// GetValidatorsMap mocks base method.
-func (m *MockBeaconClient) GetValidatorsMap() relay.BuilderGetValidatorsResponseEntrySlice {
+// KnownValidators mocks base method.
+func (m *MockBeaconClient) KnownValidators(arg0 relay.Slot) (relay.AllValidatorsResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetValidatorsMap")
-	ret0, _ := ret[0].(relay.BuilderGetValidatorsResponseEntrySlice)
-	return ret0
+	ret := m.ctrl.Call(m, "KnownValidators", arg0)
+	ret0, _ := ret[0].(relay.AllValidatorsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// GetValidatorsMap indicates an expected call of GetValidatorsMap.
-func (mr *MockBeaconClientMockRecorder) GetValidatorsMap() *gomock.Call {
+// KnownValidators indicates an expected call of KnownValidators.
+func (mr *MockBeaconClientMockRecorder) KnownValidators(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidatorsMap", reflect.TypeOf((*MockBeaconClient)(nil).GetValidatorsMap))
-}
-
-// HeadSlot mocks base method.
-func (m *MockBeaconClient) HeadSlot() relay.Slot {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HeadSlot")
-	ret0, _ := ret[0].(relay.Slot)
-	return ret0
-}
-
-// HeadSlot indicates an expected call of HeadSlot.
-func (mr *MockBeaconClientMockRecorder) HeadSlot() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadSlot", reflect.TypeOf((*MockBeaconClient)(nil).HeadSlot))
-}
-
-// IsValidator mocks base method.
-func (m *MockBeaconClient) IsValidator(arg0 relay.PubKey) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsValidator", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsValidator indicates an expected call of IsValidator.
-func (mr *MockBeaconClientMockRecorder) IsValidator(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsValidator", reflect.TypeOf((*MockBeaconClient)(nil).IsValidator), arg0)
-}
-
-// ProcessNewSlot mocks base method.
-func (m *MockBeaconClient) ProcessNewSlot(arg0 context.Context, arg1 relay.Slot, arg2 relay.Datastore) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ProcessNewSlot", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ProcessNewSlot indicates an expected call of ProcessNewSlot.
-func (mr *MockBeaconClientMockRecorder) ProcessNewSlot(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessNewSlot", reflect.TypeOf((*MockBeaconClient)(nil).ProcessNewSlot), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockBeaconClient)(nil).KnownValidators), arg0)
 }
 
 // SubscribeToHeadEvents mocks base method.
-func (m *MockBeaconClient) SubscribeToHeadEvents(arg0 context.Context) <-chan relay.HeadEvent {
+func (m *MockBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan relay.HeadEvent) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribeToHeadEvents", arg0)
-	ret0, _ := ret[0].(<-chan relay.HeadEvent)
-	return ret0
+	m.ctrl.Call(m, "SubscribeToHeadEvents", ctx, slotC)
 }
 
 // SubscribeToHeadEvents indicates an expected call of SubscribeToHeadEvents.
-func (mr *MockBeaconClientMockRecorder) SubscribeToHeadEvents(arg0 interface{}) *gomock.Call {
+func (mr *MockBeaconClientMockRecorder) SubscribeToHeadEvents(ctx, slotC interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToHeadEvents", reflect.TypeOf((*MockBeaconClient)(nil).SubscribeToHeadEvents), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToHeadEvents", reflect.TypeOf((*MockBeaconClient)(nil).SubscribeToHeadEvents), ctx, slotC)
 }
 
 // SyncStatus mocks base method.
@@ -149,18 +104,4 @@ func (m *MockBeaconClient) SyncStatus() (*relay.SyncStatusPayloadData, error) {
 func (mr *MockBeaconClientMockRecorder) SyncStatus() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncStatus", reflect.TypeOf((*MockBeaconClient)(nil).SyncStatus))
-}
-
-// UpdateProposerDuties mocks base method.
-func (m *MockBeaconClient) UpdateProposerDuties(arg0 context.Context, arg1 relay.Slot, arg2 relay.Datastore) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateProposerDuties", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateProposerDuties indicates an expected call of UpdateProposerDuties.
-func (mr *MockBeaconClientMockRecorder) UpdateProposerDuties(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProposerDuties", reflect.TypeOf((*MockBeaconClient)(nil).UpdateProposerDuties), arg0, arg1, arg2)
 }
