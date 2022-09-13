@@ -318,7 +318,7 @@ type SyncStatusPayloadData struct {
 	IsSyncing bool   `json:"is_syncing"`
 }
 
-// HeadEvent is emitted when <...>  // TODO
+// HeadEvent is emitted when subscribing to head events
 type HeadEvent struct {
 	Slot  uint64 `json:"slot,string"`
 	Block string `json:"block"`

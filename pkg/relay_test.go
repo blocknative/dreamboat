@@ -222,8 +222,6 @@ func TestGetValidators(t *testing.T) {
 	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
-	// beacon client expected logic
-	// TODO: should we check something else in the beaconclient?
 	bc.EXPECT().ValidatorsMap().Return(nil).Times(1)
 
 	validators := r.GetValidators(state{ds: ds, bc: bc})
