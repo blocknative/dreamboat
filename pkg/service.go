@@ -4,6 +4,7 @@ package relay
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,18 +30,17 @@ type RelayService interface {
 	GetValidators() BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
-	GetDelivered(context.Context, Slot) ([]types.BidTrace, error)
-	GetDeliveredByHash(context.Context, types.Hash) ([]types.BidTrace, error)
-	GetDeliveredByNum(context.Context, uint64) ([]types.BidTrace, error)
-	GetDeliveredByPubKey(context.Context, types.PublicKey) ([]types.BidTrace, error)
-	GetTailDelivered(context.Context, uint64) ([]types.BidTrace, error)
-	GetTailDeliveredCursor(context.Context, uint64, uint64) ([]types.BidTrace, error)
-
-	GetBlockReceived(context.Context, Slot) ([]BidTraceWithTimestamp, error)
-	GetBlockReceivedByHash(context.Context, types.Hash) ([]BidTraceWithTimestamp, error)
-	GetBlockReceivedByNum(context.Context, uint64) ([]BidTraceWithTimestamp, error)
-	GetTailBlockReceived(context.Context, uint64) ([]BidTraceWithTimestamp, error)
+	GetDelivered(context.Context, TraceQuery) ([]types.BidTrace, error)
+	GetBlockReceived(context.Context, TraceQuery) ([]BidTraceWithTimestamp, error)
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
+}
+
+type TraceQuery struct {
+	slot          Slot
+	blockHash     types.Hash
+	blockNum      uint64
+	pubkey        types.PublicKey
+	cursor, limit uint64
 }
 
 type DefaultService struct {
@@ -202,52 +202,38 @@ func (s *DefaultService) GetValidators() BuilderGetValidatorsResponseEntrySlice 
 	return s.Relay.GetValidators(&s.state)
 }
 
-func (s *DefaultService) GetDelivered(ctx context.Context, slot Slot) ([]types.BidTrace, error) {
-	event, err := s.state.Datastore().GetHeader(ctx, slot, true)
+func (s *DefaultService) GetDelivered(ctx context.Context, query TraceQuery) ([]types.BidTrace, error) {
+	var (
+		event HeaderAndTrace
+		err   error
+	)
+	if query.slot > Slot(0) {
+		event, err = s.state.Datastore().GetHeader(ctx, query.slot, true)
+	} else if strings.Compare(query.blockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
+		event, err = s.state.Datastore().GetHeaderByBlockHash(ctx, query.blockHash, true)
+	} else if query.blockNum != 0 {
+		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.blockNum, true)
+	} else if strings.Compare(query.pubkey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0 {
+		event, err = s.state.Datastore().GetHeaderByPubkey(ctx, query.pubkey, true)
+	} else if query.cursor != 0 {
+		headSlot := s.state.Beacon().HeadSlot()
+		stop := Slot(query.cursor)
+		if headSlot <= stop {
+			return nil, errors.New("invalid cursor, is higher than headslot range")
+		}
+		if maxStop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot); stop < maxStop {
+			stop = maxStop
+		}
+		return s.getTailDelivered(ctx, uint64(headSlot-stop), stop)
+	} else {
+		stop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot)
+		return s.getTailDelivered(ctx, query.limit, stop)
+	}
+
 	if err == nil {
 		return []types.BidTrace{event.Trace.BidTrace}, err
 	}
 	return nil, err
-}
-
-func (s *DefaultService) GetDeliveredByHash(ctx context.Context, bh types.Hash) ([]types.BidTrace, error) {
-	event, err := s.state.Datastore().GetHeaderByBlockHash(ctx, bh, true)
-	if err == nil {
-		return []types.BidTrace{event.Trace.BidTrace}, err
-	}
-	return nil, err
-}
-
-func (s *DefaultService) GetDeliveredByNum(ctx context.Context, bn uint64) ([]types.BidTrace, error) {
-	event, err := s.state.Datastore().GetHeaderByBlockNum(ctx, bn, true)
-	if err == nil {
-		return []types.BidTrace{event.Trace.BidTrace}, err
-	}
-	return nil, err
-}
-
-func (s *DefaultService) GetDeliveredByPubKey(ctx context.Context, pk types.PublicKey) ([]types.BidTrace, error) {
-	event, err := s.state.Datastore().GetHeaderByPubkey(ctx, pk, true)
-	if err == nil {
-		return []types.BidTrace{event.Trace.BidTrace}, err
-	}
-	return nil, err
-}
-
-func (s *DefaultService) GetTailDelivered(ctx context.Context, limit uint64) ([]types.BidTrace, error) {
-	stop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot)
-	return s.getTailDelivered(ctx, limit, stop)
-}
-func (s *DefaultService) GetTailDeliveredCursor(ctx context.Context, limit, cursor uint64) ([]types.BidTrace, error) {
-	headSlot := s.state.Beacon().HeadSlot()
-	stop := Slot(cursor)
-	if headSlot <= stop {
-		return nil, errors.New("invalid cursor, is higher than headslot range")
-	}
-	if maxStop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot); stop < maxStop {
-		stop = maxStop
-	}
-	return s.getTailDelivered(ctx, limit, stop)
 }
 
 func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, stop Slot) ([]types.BidTrace, error) {
@@ -257,7 +243,7 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, sto
 	s.Log.WithField("limit", limit).
 		WithField("start", s.state.Beacon().HeadSlot()).
 		WithField("stop", stop).
-		Debug("getting delivered traces")
+		Debug("querying delivered payload traces")
 
 	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
 		slots = slots[:0]
