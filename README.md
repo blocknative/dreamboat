@@ -4,7 +4,7 @@
 
 [![GoDoc](https://godoc.org/github.com/blocknative/dreamboat?status.svg)](https://godoc.org/github.com/blocknative/dreamboat)
 [![Go Report Card](https://goreportcard.com/badge/github.com/blocknative/dreamboat?style=flat-square)](https://goreportcard.com/report/github.com/blocknative/dreamboat)
-<!-- [![Go](https://github.com/blocknative/dreamboat/actions/workflows/go.yml/badge.svg)](https://github.com/blocknative/dreamboat/actions/workflows/go.yml) -->
+[![Discord](https://img.shields.io/discord/542403978693050389?color=%237289da&label=discord&style=flat-square)](https://img.shields.io/discord/542403978693050389?color=%237289da&label=discord&style=flat-square)
 
 An Ethereum 2.0 Relay for proposer-builder separation (PBS) with MEV-boost.  Commissioned, built, and put to sea by Blocknative.
 
