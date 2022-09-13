@@ -208,7 +208,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 					return
 				case slotC <- head:
 					logger.
-						WithField("beaconEndpoint", b.beaconEndpoint.String()).
+						With(head).
 						Debug("read head subscription")
 				}
 			})
