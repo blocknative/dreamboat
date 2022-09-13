@@ -207,6 +207,7 @@ func (s *DefaultService) GetDelivered(ctx context.Context, query TraceQuery) ([]
 		event HeaderAndTrace
 		err   error
 	)
+
 	if query.slot > Slot(0) {
 		event, err = s.state.Datastore().GetHeader(ctx, query.slot, true)
 	} else if strings.Compare(query.blockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
@@ -215,19 +216,8 @@ func (s *DefaultService) GetDelivered(ctx context.Context, query TraceQuery) ([]
 		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.blockNum, true)
 	} else if strings.Compare(query.pubkey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0 {
 		event, err = s.state.Datastore().GetHeaderByPubkey(ctx, query.pubkey, true)
-	} else if query.cursor != 0 {
-		headSlot := s.state.Beacon().HeadSlot()
-		stop := Slot(query.cursor)
-		if headSlot <= stop {
-			return nil, errors.New("invalid cursor, is higher than headslot range")
-		}
-		if maxStop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot); stop < maxStop {
-			stop = maxStop
-		}
-		return s.getTailDelivered(ctx, uint64(headSlot-stop), stop)
 	} else {
-		stop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot)
-		return s.getTailDelivered(ctx, query.limit, stop)
+		return s.getTailDelivered(ctx, query.limit, query.cursor)
 	}
 
 	if err == nil {
@@ -236,7 +226,19 @@ func (s *DefaultService) GetDelivered(ctx context.Context, query TraceQuery) ([]
 	return nil, err
 }
 
-func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, stop Slot) ([]types.BidTrace, error) {
+func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]types.BidTrace, error) {
+	headSlot := s.state.Beacon().HeadSlot()
+	stop := headSlot - Slot(s.Config.TTL/DurationPerSlot)
+
+	if cursor != 0 {
+		stop := Max(Slot(cursor), stop)
+		if headSlot <= stop {
+			return nil, errors.New("invalid cursor, is higher than headslot range")
+		}
+
+		limit = uint64(headSlot - stop)
+	}
+
 	batch := make([]HeaderAndTrace, 0, limit)
 	slots := make([]Slot, 0, limit)
 
@@ -266,31 +268,29 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, sto
 	return events, nil
 }
 
-func (s *DefaultService) GetBlockReceived(ctx context.Context, slot Slot) ([]BidTraceWithTimestamp, error) {
-	event, err := s.state.Datastore().GetHeader(ctx, slot, false)
+func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery) ([]BidTraceWithTimestamp, error) {
+	var (
+		event HeaderAndTrace
+		err   error
+	)
+
+	if query.slot > 0 {
+		event, err = s.state.Datastore().GetHeader(ctx, query.slot, false)
+	} else if strings.Compare(query.blockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
+		event, err = s.state.Datastore().GetHeaderByBlockHash(ctx, query.blockHash, false)
+	} else if query.blockNum != 0 {
+		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.blockNum, false)
+	} else {
+		return s.getTailBlockReceived(ctx, query.limit)
+	}
+
 	if err == nil {
 		return []BidTraceWithTimestamp{*event.Trace}, err
 	}
 	return nil, err
 }
 
-func (s *DefaultService) GetBlockReceivedByHash(ctx context.Context, bh types.Hash) ([]BidTraceWithTimestamp, error) {
-	event, err := s.state.Datastore().GetHeaderByBlockHash(ctx, bh, false)
-	if err == nil {
-		return []BidTraceWithTimestamp{*event.Trace}, err
-	}
-	return nil, err
-}
-
-func (s *DefaultService) GetBlockReceivedByNum(ctx context.Context, bn uint64) ([]BidTraceWithTimestamp, error) {
-	event, err := s.state.Datastore().GetHeaderByBlockNum(ctx, bn, false)
-	if err == nil {
-		return []BidTraceWithTimestamp{*event.Trace}, err
-	}
-	return nil, err
-}
-
-func (s *DefaultService) GetTailBlockReceived(ctx context.Context, limit uint64) ([]BidTraceWithTimestamp, error) {
+func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64) ([]BidTraceWithTimestamp, error) {
 	batch := make([]HeaderAndTrace, 0, limit)
 	stop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot)
 	slots := make([]Slot, 0)
@@ -298,7 +298,7 @@ func (s *DefaultService) GetTailBlockReceived(ctx context.Context, limit uint64)
 	s.Log.WithField("limit", limit).
 		WithField("start", s.state.Beacon().HeadSlot()).
 		WithField("stop", stop).
-		Debug("getting received traces")
+		Debug("querying received block traces")
 
 	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
 		slots = slots[:0]
