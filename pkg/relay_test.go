@@ -45,7 +45,7 @@ func TestRegisterValidator(t *testing.T) {
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
-	bc.EXPECT().KnownValidators().Return(knownValidators).Times(N)
+	bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).Times(N)
 
 	err = r.RegisterValidator(ctx, registrations, state{ds: ds, bc: bc})
 	require.NoError(t, err)
@@ -203,9 +203,7 @@ func TestGetPayload(t *testing.T) {
 	err = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 	require.NoError(t, err)
 
-	knownValidatorsByIndex := make(map[uint64]types.PubkeyHex)
-	knownValidatorsByIndex[request.Message.ProposerIndex] = registration.Message.Pubkey.PubkeyHex()
-	bc.EXPECT().KnownValidatorsByIndex().Return(knownValidatorsByIndex).Times(1)
+	bc.EXPECT().KnownValidatorsByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
 
 	response, err := r.GetPayload(ctx, request, state{ds: ds, bc: bc})
 	require.NoError(t, err)
@@ -302,7 +300,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
-	bc.EXPECT().KnownValidators().Return(knownValidators).Times(b.N * N)
+	bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).Times(b.N * N)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -342,7 +340,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
-	bc.EXPECT().KnownValidators().Return(knownValidators).Times(b.N * N)
+	bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).Times(b.N * N)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -561,9 +559,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		time.Minute)
 	_ = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 
-	knownValidatorsByIndex := make(map[uint64]types.PubkeyHex)
-	knownValidatorsByIndex[request.Message.ProposerIndex] = registration.Message.Pubkey.PubkeyHex()
-	bc.EXPECT().KnownValidatorsByIndex().Return(knownValidatorsByIndex).Times(1)
+	bc.EXPECT().KnownValidatorsByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -646,9 +642,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		time.Minute)
 	_ = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 
-	knownValidatorsByIndex := make(map[uint64]types.PubkeyHex)
-	knownValidatorsByIndex[request.Message.ProposerIndex] = registration.Message.Pubkey.PubkeyHex()
-	bc.EXPECT().KnownValidatorsByIndex().Return(knownValidatorsByIndex).Times(1)
+	bc.EXPECT().KnownValidatorsByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
