@@ -22,12 +22,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
-<<<<<<< HEAD
-          binary_name: relay
-          asset_name: ${{ github.ref_name }}-relay-${{ matrix.goos }}-${{ matrix.goarch }}
-          project_path: ./cmd/relay
-=======
           binary_name: dreamboat
           asset_name: ${{ github.ref_name }}-dreamboat-${{ matrix.goos }}-${{ matrix.goarch }}
           project_path: ./cmd/dreamboat
->>>>>>> main
