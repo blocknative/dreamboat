@@ -233,7 +233,7 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	header, err := state.Datastore().GetHeader(ctx, slot, false)
+	header, err := state.Datastore().GetHeader(ctx, slot)
 	if err != nil {
 		log.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
@@ -338,7 +338,23 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		Data:    payload.Payload.Data,
 	}
 
-	if err := state.Datastore().PutDelivered(ctx, Slot(payloadRequest.Message.Slot), rs.config.TTL); err != nil {
+	trace := DeliveredTrace{
+		Trace: BidTraceWithTimestamp{
+			BidTrace: types.BidTrace{
+				Slot:                 payloadRequest.Message.Slot,
+				ParentHash:           payload.Payload.Data.ParentHash,
+				BlockHash:            payload.Payload.Data.BlockHash,
+				BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
+				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
+				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
+				Value:                payload.Trace.Message.Value,
+			},
+			Timestamp: payload.Payload.Data.Timestamp,
+		},
+		BlockNumber: payload.Payload.Data.BlockNumber,
+	}
+
+	if err := state.Datastore().PutDelivered(ctx, Slot(payloadRequest.Message.Slot), trace, rs.config.TTL); err != nil {
 		rs.Log().WithError(err).Warn("failed to set payload after delivery")
 	}
 

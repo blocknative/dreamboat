@@ -33,14 +33,23 @@ type PayloadKey struct {
 	Slot      Slot
 }
 
+type DeliveredTrace struct {
+	Trace       BidTraceWithTimestamp
+	BlockNumber uint64
+}
+
 type Datastore interface {
 	PutHeader(context.Context, Slot, HeaderAndTrace, time.Duration) error
-	PutDelivered(context.Context, Slot, time.Duration) error
-	GetHeader(context.Context, Slot, bool) (HeaderAndTrace, error)
-	GetHeaderBatch(context.Context, []Slot, bool) ([]HeaderAndTrace, error)
-	GetHeaderByBlockHash(context.Context, types.Hash, bool) (HeaderAndTrace, error)
-	GetHeaderByBlockNum(context.Context, uint64, bool) (HeaderAndTrace, error)
-	GetHeaderByPubkey(context.Context, types.PublicKey, bool) (HeaderAndTrace, error)
+	GetHeader(context.Context, Slot) (HeaderAndTrace, error)
+	GetHeaderByBlockHash(context.Context, types.Hash) (HeaderAndTrace, error)
+	GetHeaderByBlockNum(context.Context, uint64) (HeaderAndTrace, error)
+	GetHeaderBatch(context.Context, []Slot) ([]HeaderAndTrace, error)
+	PutDelivered(context.Context, Slot, DeliveredTrace, time.Duration) error
+	GetDelivered(context.Context, Slot) (BidTraceWithTimestamp, error)
+	GetDeliveredBatch(context.Context, []Slot) ([]BidTraceWithTimestamp, error)
+	GetDeliveredByBlockHash(context.Context, types.Hash) (BidTraceWithTimestamp, error)
+	GetDeliveredByBlockNum(context.Context, uint64) (BidTraceWithTimestamp, error)
+	GetDeliveredByPubkey(context.Context, types.PublicKey) (BidTraceWithTimestamp, error)
 	PutPayload(context.Context, PayloadKey, *BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, PayloadKey) (*BlockBidAndTrace, error)
 	PutRegistration(context.Context, PubKey, types.SignedValidatorRegistration, time.Duration) error
@@ -59,15 +68,11 @@ type TTLStorage interface {
 }
 
 func (s DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header HeaderAndTrace, ttl time.Duration) error {
-	if err := s.Storage.PutWithTTL(ctx, HeaderHashKey(header.Trace.BlockHash), HeaderKey(slot).Bytes(), ttl); err != nil {
+	if err := s.Storage.PutWithTTL(ctx, HeaderHashKey(header.Header.BlockHash), HeaderKey(slot).Bytes(), ttl); err != nil {
 		return err
 	}
 
 	if err := s.Storage.PutWithTTL(ctx, HeaderNumKey(header.Header.BlockNumber), HeaderKey(slot).Bytes(), ttl); err != nil {
-		return err
-	}
-
-	if err := s.Storage.PutWithTTL(ctx, HeaderPubkeyKey(header.Trace.ProposerPubkey), HeaderKey(slot).Bytes(), ttl); err != nil {
 		return err
 	}
 
@@ -78,63 +83,135 @@ func (s DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header Heade
 	return s.Storage.PutWithTTL(ctx, HeaderKey(slot), data, ttl)
 }
 
-func (s DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, ttl time.Duration) error {
-	return s.Storage.PutWithTTL(ctx, DeliveredKey(HeaderKey(slot)), []byte{0}, ttl)
+func (s DefaultDatastore) GetHeader(ctx context.Context, slot Slot) (HeaderAndTrace, error) {
+	data, err := s.Storage.Get(ctx, HeaderKey(slot))
+	if err != nil {
+		return HeaderAndTrace{}, err
+	}
+
+	var trace HeaderAndTrace
+	err = json.Unmarshal(data, &trace)
+	return trace, err
 }
 
-func (s DefaultDatastore) GetHeader(ctx context.Context, slot Slot, delivered bool) (HeaderAndTrace, error) {
-	return s.getHeader(ctx, HeaderKey(slot), delivered)
-}
-
-func (s DefaultDatastore) GetHeaderByBlockHash(ctx context.Context, bh types.Hash, delivered bool) (HeaderAndTrace, error) {
+func (s DefaultDatastore) GetHeaderByBlockHash(ctx context.Context, bh types.Hash) (HeaderAndTrace, error) {
 	rawKey, err := s.Storage.Get(ctx, HeaderHashKey(bh))
 	if err != nil {
 		return HeaderAndTrace{}, err
 	}
-	return s.getHeader(ctx, ds.NewKey(string(rawKey)), delivered)
+
+	data, err := s.Storage.Get(ctx, ds.NewKey(string(rawKey)))
+	if err != nil {
+		return HeaderAndTrace{}, err
+	}
+
+	var trace HeaderAndTrace
+	err = json.Unmarshal(data, &trace)
+	return trace, err
 }
 
-func (s DefaultDatastore) GetHeaderByBlockNum(ctx context.Context, bn uint64, delivered bool) (HeaderAndTrace, error) {
+func (s DefaultDatastore) GetHeaderByBlockNum(ctx context.Context, bn uint64) (HeaderAndTrace, error) {
 	rawKey, err := s.Storage.Get(ctx, HeaderNumKey(bn))
 	if err != nil {
 		return HeaderAndTrace{}, err
 	}
-	return s.getHeader(ctx, ds.NewKey(string(rawKey)), delivered)
-}
 
-func (s DefaultDatastore) GetHeaderByPubkey(ctx context.Context, pk types.PublicKey, delivered bool) (HeaderAndTrace, error) {
-	rawKey, err := s.Storage.Get(ctx, HeaderPubkeyKey(pk))
+	data, err := s.Storage.Get(ctx, ds.NewKey(string(rawKey)))
 	if err != nil {
 		return HeaderAndTrace{}, err
 	}
-	return s.getHeader(ctx, ds.NewKey(string(rawKey)), delivered)
+
+	var trace HeaderAndTrace
+	err = json.Unmarshal(data, &trace)
+	return trace, err
 }
 
-func (s DefaultDatastore) getHeader(ctx context.Context, key ds.Key, delivered bool) (HeaderAndTrace, error) {
-	if delivered && !s.isDelivered(ctx, key) {
-		return HeaderAndTrace{}, ds.ErrNotFound
+func (s DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace DeliveredTrace, ttl time.Duration) error {
+	if err := s.Storage.PutWithTTL(ctx, DeliveredHashKey(trace.Trace.BlockHash), DeliveredKey(slot).Bytes(), ttl); err != nil {
+		return err
 	}
 
+	if err := s.Storage.PutWithTTL(ctx, DeliveredNumKey(trace.BlockNumber), DeliveredKey(slot).Bytes(), ttl); err != nil {
+		return err
+	}
+
+	if err := s.Storage.PutWithTTL(ctx, DeliveredPubkeyKey(trace.Trace.ProposerPubkey), DeliveredKey(slot).Bytes(), ttl); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(trace.Trace)
+	if err != nil {
+		return err
+	}
+
+	return s.Storage.PutWithTTL(ctx, DeliveredKey(slot), data, ttl)
+}
+
+func (s DefaultDatastore) GetDelivered(ctx context.Context, slot Slot) (BidTraceWithTimestamp, error) {
+	return s.getDelivered(ctx, DeliveredKey(slot))
+}
+
+func (s DefaultDatastore) GetDeliveredByBlockHash(ctx context.Context, bh types.Hash) (BidTraceWithTimestamp, error) {
+	rawKey, err := s.Storage.Get(ctx, DeliveredHashKey(bh))
+	if err != nil {
+		return BidTraceWithTimestamp{}, err
+	}
+	return s.getDelivered(ctx, ds.NewKey(string(rawKey)))
+}
+
+func (s DefaultDatastore) GetDeliveredByBlockNum(ctx context.Context, bn uint64) (BidTraceWithTimestamp, error) {
+	rawKey, err := s.Storage.Get(ctx, DeliveredNumKey(bn))
+	if err != nil {
+		return BidTraceWithTimestamp{}, err
+	}
+	return s.getDelivered(ctx, ds.NewKey(string(rawKey)))
+}
+
+func (s DefaultDatastore) GetDeliveredByPubkey(ctx context.Context, pk types.PublicKey) (BidTraceWithTimestamp, error) {
+	rawKey, err := s.Storage.Get(ctx, DeliveredPubkeyKey(pk))
+	if err != nil {
+		return BidTraceWithTimestamp{}, err
+	}
+	return s.getDelivered(ctx, ds.NewKey(string(rawKey)))
+}
+
+func (s DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (BidTraceWithTimestamp, error) {
 	data, err := s.Storage.Get(ctx, key)
 	if err != nil {
-		return HeaderAndTrace{}, err
+		return BidTraceWithTimestamp{}, err
 	}
-	var header HeaderAndTrace
-	err = json.Unmarshal(data, &header)
-	return header, err
+
+	var trace BidTraceWithTimestamp
+	err = json.Unmarshal(data, &trace)
+	return trace, err
 }
 
-func (s DefaultDatastore) isDelivered(ctx context.Context, key ds.Key) bool {
-	_, err := s.Storage.Get(ctx, DeliveredKey(key))
-	return err == nil
-}
-
-func (s DefaultDatastore) GetHeaderBatch(ctx context.Context, slots []Slot, delivered bool) ([]HeaderAndTrace, error) {
+func (s DefaultDatastore) GetDeliveredBatch(ctx context.Context, slots []Slot) ([]BidTraceWithTimestamp, error) {
 	keys := make([]ds.Key, 0, len(slots))
 	for _, slot := range slots {
-		if delivered && !s.isDelivered(ctx, HeaderKey(slot)) {
-			continue
+		keys = append(keys, DeliveredKey(slot))
+	}
+
+	batch, err := s.Storage.GetBatch(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	traceBatch := make([]BidTraceWithTimestamp, 0, len(batch))
+	for _, data := range batch {
+		var trace BidTraceWithTimestamp
+		if err = json.Unmarshal(data, &trace); err != nil {
+			return nil, err
 		}
+		traceBatch = append(traceBatch, trace)
+	}
+
+	return traceBatch, err
+}
+
+func (s DefaultDatastore) GetHeaderBatch(ctx context.Context, slots []Slot) ([]HeaderAndTrace, error) {
+	keys := make([]ds.Key, 0, len(slots))
+	for _, slot := range slots {
 		keys = append(keys, HeaderKey(slot))
 	}
 
@@ -191,10 +268,6 @@ func (s DefaultDatastore) GetRegistration(ctx context.Context, pk PubKey) (types
 	return registration, err
 }
 
-func DeliveredKey(key ds.Key) ds.Key {
-	return ds.NewKey(fmt.Sprintf("delivered-%s", key.String()))
-}
-
 func HeaderKey(slot Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-%d", slot))
 }
@@ -207,8 +280,20 @@ func HeaderNumKey(bn uint64) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-num-%d", bn))
 }
 
-func HeaderPubkeyKey(pk types.PublicKey) ds.Key {
-	return ds.NewKey(fmt.Sprintf("header-pk-%s", pk.String()))
+func DeliveredKey(slot Slot) ds.Key {
+	return ds.NewKey(fmt.Sprintf("delivered-%d", slot))
+}
+
+func DeliveredHashKey(bh types.Hash) ds.Key {
+	return ds.NewKey(fmt.Sprintf("delivered-hash-%s", bh.String()))
+}
+
+func DeliveredNumKey(bn uint64) ds.Key {
+	return ds.NewKey(fmt.Sprintf("delivered-num-%d", bn))
+}
+
+func DeliveredPubkeyKey(pk types.PublicKey) ds.Key {
+	return ds.NewKey(fmt.Sprintf("delivered-pk-%s", pk.String()))
 }
 
 func PayloadKeyKey(key PayloadKey) ds.Key {
