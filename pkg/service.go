@@ -265,6 +265,8 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, sta
 		WithField("stop", stop).
 		Debug("getting delivered traces")
 
+	// we iterate from 'start' till 'stop' with 'limit' size steps, because most of the slots are expected to be empty,
+	// so we will do multiple iteratios of size 'limit' until we obtain enough results
 	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
 		slots = slots[:0]
 		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
@@ -321,6 +323,8 @@ func (s *DefaultService) GetTailBlockReceived(ctx context.Context, limit uint64)
 		WithField("stop", stop).
 		Debug("getting received traces")
 
+	// we iterate from 'start' till 'stop' with 'limit' size steps, because most of the slots are expected to be empty,
+	// so we will do multiple iteratios of size 'limit' until we obtain enough results
 	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
 		slots = slots[:0]
 		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
