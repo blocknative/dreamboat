@@ -27,6 +27,12 @@ type BidTraceWithTimestamp struct {
 	Timestamp uint64 `json:"timestamp,string"`
 }
 
+type PayloadKey struct {
+	BlockHash types.Hash
+	Proposer  types.PublicKey
+	Slot      Slot
+}
+
 type Datastore interface {
 	PutHeader(context.Context, Slot, HeaderAndTrace, time.Duration) error
 	PutDelivered(context.Context, Slot, time.Duration) error
@@ -35,8 +41,8 @@ type Datastore interface {
 	GetHeaderByBlockHash(context.Context, types.Hash, bool) (HeaderAndTrace, error)
 	GetHeaderByBlockNum(context.Context, uint64, bool) (HeaderAndTrace, error)
 	GetHeaderByPubkey(context.Context, types.PublicKey, bool) (HeaderAndTrace, error)
-	PutPayload(context.Context, types.Hash, *BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, types.Hash) (*BlockBidAndTrace, error)
+	PutPayload(context.Context, PayloadKey, *BlockBidAndTrace, time.Duration) error
+	GetPayload(context.Context, PayloadKey) (*BlockBidAndTrace, error)
 	PutRegistration(context.Context, PubKey, types.SignedValidatorRegistration, time.Duration) error
 	GetRegistration(context.Context, PubKey) (types.SignedValidatorRegistration, error)
 }
@@ -149,16 +155,16 @@ func (s DefaultDatastore) GetHeaderBatch(ctx context.Context, slots []Slot, deli
 	return headerBatch, err
 }
 
-func (s DefaultDatastore) PutPayload(ctx context.Context, h types.Hash, payload *BlockBidAndTrace, ttl time.Duration) error {
+func (s DefaultDatastore) PutPayload(ctx context.Context, key PayloadKey, payload *BlockBidAndTrace, ttl time.Duration) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	return s.Storage.PutWithTTL(ctx, PayloadKey(h), data, ttl)
+	return s.Storage.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
 }
 
-func (s DefaultDatastore) GetPayload(ctx context.Context, h types.Hash) (*BlockBidAndTrace, error) {
-	data, err := s.Storage.Get(ctx, PayloadKey(h))
+func (s DefaultDatastore) GetPayload(ctx context.Context, key PayloadKey) (*BlockBidAndTrace, error) {
+	data, err := s.Storage.Get(ctx, PayloadKeyKey(key))
 	if err != nil {
 		return nil, err
 	}
@@ -205,8 +211,8 @@ func HeaderPubkeyKey(pk types.PublicKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-pk-%s", pk.String()))
 }
 
-func PayloadKey(h types.Hash) ds.Key {
-	return ds.NewKey(fmt.Sprintf("payload-%s", h.String()))
+func PayloadKeyKey(key PayloadKey) ds.Key {
+	return ds.NewKey(fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot))
 }
 
 func ValidatorKey(pk PubKey) ds.Key {
