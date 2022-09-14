@@ -485,7 +485,7 @@ func simulateBlock() bool {
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) PayloadKey {
 	return PayloadKey{
-		BlockHash: submission.Message.BlockHash,
+		BlockHash: submission.ExecutionPayload.BlockHash,
 		Proposer:  submission.Message.ProposerPubkey,
 		Slot:      Slot(submission.Message.Slot),
 	}
