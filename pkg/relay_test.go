@@ -99,7 +99,8 @@ func TestGetHeader(t *testing.T) {
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
 	// fill the datastore
-	err = ds.PutPayload(ctx, submitRequest.Message.BlockHash, &payload, time.Minute)
+	key := relay.SubmissionToKey(submitRequest)
+	err = ds.PutPayload(ctx, key, &payload, time.Minute)
 	require.NoError(t, err)
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
@@ -188,7 +189,12 @@ func TestGetPayload(t *testing.T) {
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
 	// fill the datastore
-	err = ds.PutPayload(ctx, submitRequest.Message.BlockHash, &payload, time.Minute)
+	key := relay.PayloadKey{
+		BlockHash: request.Message.Body.ExecutionPayloadHeader.BlockHash,
+		Proposer:  registration.Message.Pubkey,
+		Slot:      relay.Slot(request.Message.Slot),
+	}
+	err = ds.PutPayload(ctx, key, &payload, time.Minute)
 	require.NoError(t, err)
 	err = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
@@ -260,7 +266,8 @@ func TestSubmitBlock(t *testing.T) {
 	require.NoError(t, err)
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
-	gotPayload, err := ds.GetPayload(ctx, submitRequest.Message.BlockHash)
+	key := relay.SubmissionToKey(submitRequest)
+	gotPayload, err := ds.GetPayload(ctx, key)
 	require.NoError(t, err)
 	require.EqualValues(t, payload, *gotPayload)
 
@@ -395,7 +402,8 @@ func BenchmarkGetHeader(b *testing.B) {
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
 	// fill the datastore
-	_ = ds.PutPayload(ctx, submitRequest.Message.BlockHash, &payload, time.Minute)
+	key := relay.SubmissionToKey(submitRequest)
+	_ = ds.PutPayload(ctx, key, &payload, time.Minute)
 	header, _ := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	_ = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
@@ -455,7 +463,8 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
 	// fill the datastore
-	_ = ds.PutPayload(ctx, submitRequest.Message.BlockHash, &payload, time.Minute)
+	key := relay.SubmissionToKey(submitRequest)
+	_ = ds.PutPayload(ctx, key, &payload, time.Minute)
 	header, _ := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	_ = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
@@ -545,7 +554,12 @@ func BenchmarkGetPayload(b *testing.B) {
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
 	// fill the datastore
-	_ = ds.PutPayload(ctx, submitRequest.Message.BlockHash, &payload, time.Minute)
+	key := relay.PayloadKey{
+		BlockHash: request.Message.Body.ExecutionPayloadHeader.BlockHash,
+		Proposer:  registration.Message.Pubkey,
+		Slot:      relay.Slot(request.Message.Slot),
+	}
+	_ = ds.PutPayload(ctx, key, &payload, time.Minute)
 	_ = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
@@ -628,7 +642,12 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
 	// fill the datastore
-	_ = ds.PutPayload(ctx, submitRequest.Message.BlockHash, &payload, time.Minute)
+	key := relay.PayloadKey{
+		BlockHash: request.Message.Body.ExecutionPayloadHeader.BlockHash,
+		Proposer:  registration.Message.Pubkey,
+		Slot:      relay.Slot(request.Message.Slot),
+	}
+	_ = ds.PutPayload(ctx, key, &payload, time.Minute)
 	_ = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,

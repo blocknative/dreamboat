@@ -238,11 +238,16 @@ func TestPutGetPayload(t *testing.T) {
 	payload := randomBlockBidAndTrace()
 
 	// put
-	err := ds.PutPayload(ctx, payload.Payload.Data.BlockHash, payload, time.Minute)
+	key := relay.PayloadKey{
+		BlockHash: payload.Trace.Message.BlockHash,
+		Proposer:  payload.Trace.Message.ProposerPubkey,
+		Slot:      relay.Slot(payload.Trace.Message.Slot),
+	}
+	err := ds.PutPayload(ctx, key, payload, time.Minute)
 	require.NoError(t, err)
 
 	// get
-	gotPayload, err := ds.GetPayload(ctx, payload.Payload.Data.BlockHash)
+	gotPayload, err := ds.GetPayload(ctx, key)
 	require.NoError(t, err)
 	require.EqualValues(t, *payload, *gotPayload)
 }
