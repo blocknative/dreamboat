@@ -14,6 +14,7 @@ require (
 	github.com/stretchr/testify v1.7.2
 	github.com/supranational/blst v0.3.8-0.20220526154634-513d2456b344
 	github.com/urfave/cli/v2 v2.10.2
+	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20220907003533-145caa8ea1d0
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
 )
@@ -41,7 +42,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
@@ -55,6 +55,6 @@ require (
 require (
 	github.com/flashbots/go-boost-utils v0.3.2
 	github.com/gorilla/mux v1.8.0
-	github.com/r3labs/sse v0.0.0-20210224172625-26fe804710bc
+	github.com/r3labs/sse/v2 v2.8.1
 	golang.org/x/sys v0.0.0-20220727055044-e65921a090b8 // indirect
 )

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/lthibault/log"
-	"github.com/r3labs/sse"
+	"github.com/r3labs/sse/v2"
 	uberatomic "go.uber.org/atomic"
 )
 
@@ -190,14 +190,14 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 	logger := b.log.WithField("method", "SubscribeToHeadEvents")
 
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String())
-	client := sse.NewClient(eventsURL)
-	var head HeadEvent
 
 	go func() {
 		defer logger.Debug("head events subscription stopped")
 
 		for {
+			client := sse.NewClient(eventsURL)
 			err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
+				var head HeadEvent
 				if err := json.Unmarshal(msg.Data, &head); err != nil {
 					logger.WithError(err).Debug("event subscription failed")
 				}
