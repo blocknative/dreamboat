@@ -437,7 +437,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
 				Value:                payload.Trace.Message.Value,
 			},
-			Timestamp: uint64(time.Now().UnixMicro()),
+			Timestamp: payload.Payload.Data.Timestamp,
 		},
 	}
 
