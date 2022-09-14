@@ -78,6 +78,8 @@ func validGetPayloadRequest(domain types.Domain) (*types.SignedBlindedBeaconBloc
 		return nil, err
 	}
 
+	header.BlockHash = submitRequest.Message.BlockHash
+
 	msg := &types.BlindedBeaconBlock{
 		Slot:          submitRequest.Message.Slot,
 		ProposerIndex: 2,
