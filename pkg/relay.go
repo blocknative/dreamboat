@@ -309,7 +309,13 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		return nil, fmt.Errorf("signature invalid")
 	}
 
-	payload, err := state.Datastore().GetPayload(ctx, payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash)
+	key := PayloadKey{
+		BlockHash: payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
+		Proposer:  pk,
+		Slot:      Slot(payloadRequest.Message.Slot),
+	}
+
+	payload, err := state.Datastore().GetPayload(ctx, key)
 	if err != nil || payload == nil {
 		logger.With(log.F{
 			"slot":      payloadRequest.Message.Slot,
@@ -410,7 +416,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 	}
 	payload := SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
 
-	if err := state.Datastore().PutPayload(ctx, submitBlockRequest.Message.BlockHash, &payload, rs.config.TTL); err != nil {
+	if err := state.Datastore().PutPayload(ctx, SubmissionToKey(submitBlockRequest), &payload, rs.config.TTL); err != nil {
 		return err
 	}
 
@@ -467,4 +473,12 @@ func simulateBlock() bool {
 	// TODO : Simulate block here once support for external builders
 	// we currently only support a single internally trusted builder
 	return true
+}
+
+func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) PayloadKey {
+	return PayloadKey{
+		BlockHash: submission.Message.BlockHash,
+		Proposer:  submission.Message.ProposerPubkey,
+		Slot:      Slot(submission.Message.Slot),
+	}
 }
