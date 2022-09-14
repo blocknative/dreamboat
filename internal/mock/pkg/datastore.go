@@ -114,7 +114,7 @@ func (mr *MockDatastoreMockRecorder) GetHeaderByPubkey(arg0, arg1, arg2 interfac
 }
 
 // GetPayload mocks base method.
-func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 types.Hash) (*relay.BlockBidAndTrace, error) {
+func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 relay.PayloadKey) (*relay.BlockBidAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1)
 	ret0, _ := ret[0].(*relay.BlockBidAndTrace)
@@ -172,7 +172,7 @@ func (mr *MockDatastoreMockRecorder) PutHeader(arg0, arg1, arg2, arg3 interface{
 }
 
 // PutPayload mocks base method.
-func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 types.Hash, arg2 *relay.BlockBidAndTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 relay.PayloadKey, arg2 *relay.BlockBidAndTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutPayload", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
