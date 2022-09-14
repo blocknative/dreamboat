@@ -428,7 +428,15 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 	h := HeaderAndTrace{
 		Header: header,
 		Trace: &BidTraceWithTimestamp{
-			BidTrace:  *submitBlockRequest.Message,
+			BidTrace: types.BidTrace{
+				Slot:                 submitBlockRequest.Message.Slot,
+				ParentHash:           payload.Payload.Data.ParentHash,
+				BlockHash:            payload.Payload.Data.BlockHash,
+				BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
+				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
+				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
+				Value:                payload.Trace.Message.Value,
+			},
 			Timestamp: uint64(time.Now().UnixMicro()),
 		},
 	}
