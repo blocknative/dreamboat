@@ -219,7 +219,7 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	header, err := state.Datastore().GetHeader(ctx, slot, false)
+	header, err := state.Datastore().GetHeader(ctx, HeaderQuery{Slot: slot})
 	if err != nil {
 		log.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)

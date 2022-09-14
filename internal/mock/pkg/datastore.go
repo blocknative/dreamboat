@@ -39,78 +39,33 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 }
 
 // GetHeader mocks base method.
-func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 relay.Slot, arg2 bool) (relay.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 relay.HeaderQuery) (relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
 	ret0, _ := ret[0].(relay.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetHeader indicates an expected call of GetHeader.
-func (mr *MockDatastoreMockRecorder) GetHeader(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockDatastoreMockRecorder) GetHeader(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockDatastore)(nil).GetHeader), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockDatastore)(nil).GetHeader), arg0, arg1)
 }
 
 // GetHeaderBatch mocks base method.
-func (m *MockDatastore) GetHeaderBatch(arg0 context.Context, arg1 []relay.Slot, arg2 bool) ([]relay.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeaderBatch(arg0 context.Context, arg1 []relay.HeaderQuery) ([]relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeaderBatch", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetHeaderBatch", arg0, arg1)
 	ret0, _ := ret[0].([]relay.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetHeaderBatch indicates an expected call of GetHeaderBatch.
-func (mr *MockDatastoreMockRecorder) GetHeaderBatch(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockDatastoreMockRecorder) GetHeaderBatch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaderBatch", reflect.TypeOf((*MockDatastore)(nil).GetHeaderBatch), arg0, arg1, arg2)
-}
-
-// GetHeaderByBlockHash mocks base method.
-func (m *MockDatastore) GetHeaderByBlockHash(arg0 context.Context, arg1 types.Hash, arg2 bool) (relay.HeaderAndTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeaderByBlockHash", arg0, arg1, arg2)
-	ret0, _ := ret[0].(relay.HeaderAndTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetHeaderByBlockHash indicates an expected call of GetHeaderByBlockHash.
-func (mr *MockDatastoreMockRecorder) GetHeaderByBlockHash(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaderByBlockHash", reflect.TypeOf((*MockDatastore)(nil).GetHeaderByBlockHash), arg0, arg1, arg2)
-}
-
-// GetHeaderByBlockNum mocks base method.
-func (m *MockDatastore) GetHeaderByBlockNum(arg0 context.Context, arg1 uint64, arg2 bool) (relay.HeaderAndTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeaderByBlockNum", arg0, arg1, arg2)
-	ret0, _ := ret[0].(relay.HeaderAndTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetHeaderByBlockNum indicates an expected call of GetHeaderByBlockNum.
-func (mr *MockDatastoreMockRecorder) GetHeaderByBlockNum(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaderByBlockNum", reflect.TypeOf((*MockDatastore)(nil).GetHeaderByBlockNum), arg0, arg1, arg2)
-}
-
-// GetHeaderByPubkey mocks base method.
-func (m *MockDatastore) GetHeaderByPubkey(arg0 context.Context, arg1 types.PublicKey, arg2 bool) (relay.HeaderAndTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeaderByPubkey", arg0, arg1, arg2)
-	ret0, _ := ret[0].(relay.HeaderAndTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetHeaderByPubkey indicates an expected call of GetHeaderByPubkey.
-func (mr *MockDatastoreMockRecorder) GetHeaderByPubkey(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaderByPubkey", reflect.TypeOf((*MockDatastore)(nil).GetHeaderByPubkey), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaderBatch", reflect.TypeOf((*MockDatastore)(nil).GetHeaderBatch), arg0, arg1)
 }
 
 // GetPayload mocks base method.

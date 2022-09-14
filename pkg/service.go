@@ -209,13 +209,13 @@ func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQue
 	)
 
 	if query.Slot > Slot(0) {
-		event, err = s.state.Datastore().GetHeader(ctx, query.Slot, true)
+		event, err = s.state.Datastore().GetHeader(ctx, HeaderQuery{Slot: query.Slot, IsDelivered: true})
 	} else if strings.Compare(query.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
-		event, err = s.state.Datastore().GetHeaderByBlockHash(ctx, query.BlockHash, true)
+		event, err = s.state.Datastore().GetHeader(ctx, HeaderQuery{BlockHash: query.BlockHash, IsDelivered: true})
 	} else if query.BlockNum != 0 {
-		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.BlockNum, true)
+		event, err = s.state.Datastore().GetHeader(ctx, HeaderQuery{BlockNum: query.BlockNum, IsDelivered: true})
 	} else if strings.Compare(query.Pubkey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0 {
-		event, err = s.state.Datastore().GetHeaderByPubkey(ctx, query.Pubkey, true)
+		event, err = s.state.Datastore().GetHeader(ctx, HeaderQuery{PubKey: query.Pubkey, IsDelivered: true})
 	} else {
 		return s.getTailDelivered(ctx, query.Limit, query.Cursor)
 	}
@@ -240,7 +240,7 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 	}
 
 	batch := make([]HeaderAndTrace, 0, limit)
-	slots := make([]Slot, 0, limit)
+	queries := make([]HeaderQuery, 0, limit)
 
 	s.Log.WithField("limit", limit).
 		WithField("start", s.state.Beacon().HeadSlot()).
@@ -248,12 +248,12 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 		Debug("querying delivered payload traces")
 
 	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
-		slots = slots[:0]
+		queries = queries[:0]
 		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
-			slots = append(slots, s)
+			queries = append(queries, HeaderQuery{Slot: s, IsDelivered: true})
 		}
 
-		nextBatch, err := s.state.Datastore().GetHeaderBatch(ctx, slots, true)
+		nextBatch, err := s.state.Datastore().GetHeaderBatch(ctx, queries)
 		if err != nil {
 			s.Log.WithError(err).Warn("failed getting header batch")
 		} else {
@@ -275,11 +275,11 @@ func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery)
 	)
 
 	if query.Slot > 0 {
-		event, err = s.state.Datastore().GetHeader(ctx, query.Slot, false)
+		event, err = s.state.Datastore().GetHeader(ctx, HeaderQuery{Slot: query.Slot})
 	} else if strings.Compare(query.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
-		event, err = s.state.Datastore().GetHeaderByBlockHash(ctx, query.BlockHash, false)
+		event, err = s.state.Datastore().GetHeader(ctx, HeaderQuery{BlockHash: query.BlockHash})
 	} else if query.BlockNum != 0 {
-		event, err = s.state.Datastore().GetHeaderByBlockNum(ctx, query.BlockNum, false)
+		event, err = s.state.Datastore().GetHeader(ctx, HeaderQuery{BlockNum: query.BlockNum})
 	} else {
 		return s.getTailBlockReceived(ctx, query.Limit)
 	}
@@ -293,7 +293,7 @@ func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery)
 func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64) ([]BidTraceWithTimestamp, error) {
 	batch := make([]HeaderAndTrace, 0, limit)
 	stop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot)
-	slots := make([]Slot, 0)
+	queries := make([]HeaderQuery, 0)
 
 	s.Log.WithField("limit", limit).
 		WithField("start", s.state.Beacon().HeadSlot()).
@@ -301,12 +301,12 @@ func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64)
 		Debug("querying received block traces")
 
 	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
-		slots = slots[:0]
+		queries = queries[:0]
 		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
-			slots = append(slots, s)
+			queries = append(queries, HeaderQuery{Slot: s})
 		}
 
-		nextBatch, err := s.state.Datastore().GetHeaderBatch(ctx, slots, false)
+		nextBatch, err := s.state.Datastore().GetHeaderBatch(ctx, queries)
 		if err != nil {
 			s.Log.WithError(err).Warn("failed getting header batch")
 		} else {
