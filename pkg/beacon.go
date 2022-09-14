@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/lthibault/log"
-	"github.com/r3labs/sse"
+	"github.com/r3labs/sse/v2"
 	uberatomic "go.uber.org/atomic"
 )
 
