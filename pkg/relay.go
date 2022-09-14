@@ -293,7 +293,8 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	rs.Log().WithFields(logrus.Fields{
 		"slot":      payloadRequest.Message.Slot,
 		"pubKey":    proposerPubkey,
-		"blockHash": payloadRequest.Message.Body.Eth1Data.BlockHash,
+		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
+		"proposer":  pk,
 	}).Debug("payload requested")
 
 	ok, err := types.VerifySignature(
@@ -319,7 +320,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	if err != nil || payload == nil {
 		logger.With(log.F{
 			"slot":      payloadRequest.Message.Slot,
-			"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash.String(),
+			"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		}).WithError(err).Error("no payload found")
 		return nil, ErrNoPayloadFound
 	}
@@ -389,6 +390,13 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 	logger := rs.Log().WithField("method", "SubmitBlock")
 	timeStart := time.Now()
 
+	logger.With(log.F{
+		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"slot":             submitBlockRequest.Message.Slot,
+		"blockHash":        submitBlockRequest.ExecutionPayload.BlockHash,
+		"proposer":         submitBlockRequest.Message.ProposerPubkey,
+	}).Trace("block submission requested")
+
 	_, err := rs.verifyBlock(submitBlockRequest)
 	if err != nil {
 		logger.WithError(err).
@@ -453,7 +461,8 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"slot":             submitBlockRequest.Message.Slot,
-		"blockHash":        payload.Payload.Data.BlockHash,
+		"blockHash":        submitBlockRequest.ExecutionPayload.BlockHash,
+		"proposer":         submitBlockRequest.Message.ProposerPubkey,
 	}).Trace("builder block stored")
 
 	return nil
