@@ -190,14 +190,14 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 	logger := b.log.WithField("method", "SubscribeToHeadEvents")
 
 	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String())
-	client := sse.NewClient(eventsURL)
-	var head HeadEvent
 
 	go func() {
+		client := sse.NewClient(eventsURL)
 		defer logger.Debug("head events subscription stopped")
 
 		for {
 			err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
+				var head HeadEvent
 				if err := json.Unmarshal(msg.Data, &head); err != nil {
 					logger.WithError(err).Debug("event subscription failed")
 				}
