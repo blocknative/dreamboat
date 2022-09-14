@@ -3,7 +3,6 @@ package relay
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -377,33 +376,35 @@ func (s *DefaultService) GetDeliveredByPubKey(ctx context.Context, pk types.Publ
 }
 
 func (s *DefaultService) GetTailDelivered(ctx context.Context, limit uint64) ([]types.BidTrace, error) {
-	stop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot)
-	return s.getTailDelivered(ctx, limit, stop)
+	start := s.state.Beacon().HeadSlot()
+	stop := start - Slot(s.Config.TTL/DurationPerSlot)
+	return s.getTailDelivered(ctx, limit, start, stop)
 }
 func (s *DefaultService) GetTailDeliveredCursor(ctx context.Context, limit, cursor uint64) ([]types.BidTrace, error) {
 	headSlot := s.state.Beacon().HeadSlot()
-	stop := Slot(cursor)
-	if headSlot <= stop {
-		return nil, errors.New("invalid cursor, is higher than headslot range")
+	start := Slot(cursor)
+	if headSlot < start {
+		start = headSlot
 	}
-	if maxStop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot); stop < maxStop {
+	stop := start - Slot(s.Config.TTL/DurationPerSlot)
+	if maxStop := headSlot - Slot(s.Config.TTL/DurationPerSlot); stop < maxStop {
 		stop = maxStop
 	}
-	return s.getTailDelivered(ctx, limit, stop)
+	return s.getTailDelivered(ctx, limit, start, stop)
 }
 
-func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, stop Slot) ([]types.BidTrace, error) {
+func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, start, stop Slot) ([]types.BidTrace, error) {
 	batch := make([]HeaderAndTrace, 0, limit)
 	slots := make([]Slot, 0, limit)
 
 	s.Log.WithField("limit", limit).
-		WithField("start", s.state.Beacon().HeadSlot()).
+		WithField("start", start).
 		WithField("stop", stop).
 		Debug("getting delivered traces")
 
-	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
+	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
 		slots = slots[:0]
-		for s := highSlot; highSlot-Slot(limit) < s; s-- {
+		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
 			slots = append(slots, s)
 		}
 
@@ -458,7 +459,7 @@ func (s *DefaultService) GetTailBlockReceived(ctx context.Context, limit uint64)
 
 	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
 		slots = slots[:0]
-		for s := highSlot; highSlot-Slot(limit) < s; s-- {
+		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
 			slots = append(slots, s)
 		}
 
