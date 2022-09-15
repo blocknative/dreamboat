@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -18,6 +19,7 @@ import (
 )
 
 var (
+	ErrPartialregistration   = errors.New("partial registration")
 	ErrNoPayloadFound        = errors.New("no payload found")
 	ErrBeaconNodeSyncing     = errors.New("beacon node is syncing")
 	ErrMissingRequest        = errors.New("req is nil")
@@ -96,6 +98,7 @@ func verifyTimestamp(timestamp uint64) bool {
 func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.SignedValidatorRegistration, state State) error {
 	logger := rs.Log().WithField("method", "RegisterValidator")
 	timeStart := time.Now()
+	totalRegistered := int64(0)
 
 	g, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < runtime.NumCPU(); i++ {
@@ -105,26 +108,35 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.S
 			end = len(payload)
 		}
 		g.Go(func() error {
-			return rs.processValidator(ctx, payload[start:end], state)
+			registered := rs.processValidator(ctx, payload[start:end], state)
+			atomic.AddInt64(&totalRegistered, int64(registered))
+			return nil
 		})
 	}
 
 	if err := g.Wait(); err != nil {
-		logger.WithError(err).Debug("validator registration failed")
+		logger.WithError(err).WithField("requests", len(payload)).WithField("registered", totalRegistered).Debug("validator registration failed")
 		return err
+	}
+
+	if totalRegistered != int64(len(payload)) {
+		logger.WithField("requests", len(payload)).WithField("registered", totalRegistered).Debug("validators registration failed")
+		return ErrPartialregistration
 	}
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"numberValidators": len(payload),
+		"registered":       totalRegistered,
 	}).Trace("validator registrations succeeded")
 
 	return nil
 }
 
-func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.SignedValidatorRegistration, state State) error {
+func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.SignedValidatorRegistration, state State) int64 {
 	logger := rs.Log().WithField("method", "RegisterValidator")
 	timeStart := time.Now()
+	registered := int64(0)
 
 	for i := 0; i < len(payload) && ctx.Err() == nil; i++ {
 		registerRequest := payload[i]
@@ -135,37 +147,41 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 			registerRequest.Signature[:],
 		)
 		if !ok || err != nil {
-			logger.WithError(err).Debug("signature invalid")
-			return fmt.Errorf("signature invalid")
+			logger.WithError(err).WithField("pubkey", registerRequest.Message.Pubkey).Debug("signature invalid")
+			continue
 		}
 
 		if verifyTimestamp(registerRequest.Message.Timestamp) {
-			return fmt.Errorf("request too far in future")
+			logger.WithField("pubkey", registerRequest.Message.Pubkey).Debug("request too far in future")
+			continue
 		}
 
 		pk := PubKey{registerRequest.Message.Pubkey}
 
 		ok, err = state.Beacon().IsKnownValidator(pk.PubkeyHex())
 		if err != nil {
-			return err
+			logger.WithError(err).WithField("pubkey", registerRequest.Message.Pubkey).Debug("failed to check known validator")
+			continue
 		} else if !ok {
+			logger.WithField("pubkey", pk.PublicKey).Debug("is not a known validator")
 			if rs.config.CheckKnownValidator {
-				return fmt.Errorf("not a validator")
+				logger.WithField("pubkey", registerRequest.Message.Pubkey).Error("is not a known validator")
+				continue
 			} else {
-				logger.WithField("pubkey", pk.PublicKey).Debug("is not a known validator")
+
 			}
 		}
 
 		// check previous validator registration
 		previousValidator, err := state.Datastore().GetRegistration(ctx, pk)
 		if err != nil && !errors.Is(err, ds.ErrNotFound) {
-			log.Warn(err)
+			logger.Warn(err)
 		}
 
 		if err == nil {
 			// skip registration if
 			if registerRequest.Message.Timestamp < previousValidator.Message.Timestamp {
-				rs.Log().Debug("request timestamp less than previous")
+				logger.Debug("request timestamp less than previous")
 				continue
 			}
 
@@ -184,19 +200,21 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 
 		// officially register validator
 		if err := state.Datastore().PutRegistration(ctx, pk, registerRequest, rs.config.TTL); err != nil {
-			rs.Log().WithError(err).Debug("Error in PutRegistration")
-			return err
+			logger.WithError(err).Debug("Error in PutRegistration")
+			continue
 		}
 
 		logger.WithField("pubkey", pk).Trace("validator registered")
+		registered++
 	}
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"numberValidators": len(payload),
+		"registered":       registered,
 	}).Trace("validator batch registered")
 
-	return nil
+	return registered
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
