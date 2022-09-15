@@ -3,12 +3,14 @@ package relay
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
+	ds "github.com/ipfs/go-datastore"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
@@ -278,6 +280,12 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 				Slot:  e.Slot,
 				Entry: &reg,
 			})
+		} else if errors.Is(err, ds.ErrNotFound) {
+			l.With(log.F{
+				"method": "UpdateProposerDuties",
+				"slot":   e.Slot}).
+				With(e.PubKey).
+				Debug("validator not registered")
 		}
 	}
 
@@ -287,6 +295,7 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 		"epochFrom":        epoch,
 		"epochTo":          epoch + 1,
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"receivedDuties":   len(current.Data),
 	}).With(state.proposerDutiesResponse).Debug("proposer duties updated")
 
 	return nil
