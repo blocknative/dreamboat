@@ -187,6 +187,8 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 			rs.Log().WithError(err).Debug("Error in PutRegistration")
 			return err
 		}
+
+		logger.WithField("pubkey", pk).Trace("validator registered")
 	}
 
 	logger.With(log.F{
