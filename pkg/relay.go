@@ -20,6 +20,7 @@ import (
 var (
 	ErrNoPayloadFound        = errors.New("no payload found")
 	ErrNoHeaderFound         = errors.New("no header found")
+	ErrPayloadDelivered      = errors.New("slot payload already delivered")
 	ErrBeaconNodeSyncing     = errors.New("beacon node is syncing")
 	ErrMissingRequest        = errors.New("req is nil")
 	ErrMissingSecretKey      = errors.New("secret key is nil")
@@ -426,7 +427,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 	}
 
 	if _, err := state.Datastore().GetDelivered(ctx, Slot(submitBlockRequest.Message.Slot)); err == nil {
-		return errors.New("slot payload already delivered")
+		return ErrPayloadDelivered
 	}
 
 	signedBuilderBid, err := SubmitBlockRequestToSignedBuilderBid(
