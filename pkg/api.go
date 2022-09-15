@@ -285,9 +285,16 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int, error) {
+	limit, err := limit(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return http.StatusBadRequest, err
+	} else if errors.Is(err, ErrParamNotFound) {
+		limit = 100
+	}
+
 	slot, err := specificSlot(r)
 	if err == nil {
-		blocks, err := a.Service.GetBlockReceived(r.Context(), slot)
+		blocks, err := a.Service.GetBlockReceived(r.Context(), slot, limit)
 		return a.respond(w, blocks, err)
 	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
 		return http.StatusBadRequest, err
@@ -309,15 +316,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 		return http.StatusBadRequest, err
 	}
 
-	limit, err := limit(r)
-	if err == nil {
-		blocks, err := a.Service.GetTailBlockReceived(r.Context(), limit)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
-		return http.StatusBadRequest, err
-	}
-
-	blocks, err := a.Service.GetTailBlockReceived(r.Context(), 100)
+	blocks, err := a.Service.GetTailBlockReceived(r.Context(), limit)
 	return a.respond(w, blocks, err)
 }
 

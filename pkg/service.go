@@ -36,7 +36,7 @@ type RelayService interface {
 	GetTailDelivered(context.Context, uint64) ([]types.BidTrace, error)
 	GetTailDeliveredCursor(context.Context, uint64, uint64) ([]types.BidTrace, error)
 
-	GetBlockReceived(context.Context, Slot) ([]BidTraceWithTimestamp, error)
+	GetBlockReceived(context.Context, Slot, uint64) ([]BidTraceWithTimestamp, error)
 	GetBlockReceivedByHash(context.Context, types.Hash) ([]BidTraceWithTimestamp, error)
 	GetBlockReceivedByNum(context.Context, uint64) ([]BidTraceWithTimestamp, error)
 	GetTailBlockReceived(context.Context, uint64) ([]BidTraceWithTimestamp, error)
@@ -424,11 +424,12 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, sta
 	return events, nil
 }
 
-func (s *DefaultService) GetBlockReceived(ctx context.Context, slot Slot) ([]BidTraceWithTimestamp, error) {
+func (s *DefaultService) GetBlockReceived(ctx context.Context, slot Slot, limit uint64) ([]BidTraceWithTimestamp, error) {
 	events, err := s.state.Datastore().GetHeader(ctx, slot)
 	if err == nil {
 		traces := make([]BidTraceWithTimestamp, 0, len(events))
-		for _, event := range events {
+		amount := min(len(events), int(limit))
+		for _, event := range events[:amount] {
 			traces = append(traces, *event.Trace)
 		}
 		return traces, err
