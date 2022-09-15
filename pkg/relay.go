@@ -19,6 +19,7 @@ import (
 
 var (
 	ErrNoPayloadFound        = errors.New("no payload found")
+	ErrNoHeaderFound         = errors.New("no header found")
 	ErrBeaconNodeSyncing     = errors.New("beacon node is syncing")
 	ErrMissingRequest        = errors.New("req is nil")
 	ErrMissingSecretKey      = errors.New("secret key is nil")
@@ -233,11 +234,13 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	header, err := state.Datastore().GetHeader(ctx, slot)
-	if err != nil {
-		log.Warn(noBuilderBidMsg)
-		return nil, fmt.Errorf(noBuilderBidMsg)
+	headers, err := state.Datastore().GetHeader(ctx, slot)
+	if err != nil || len(headers) == 0 {
+		logger.Warn(ErrNoHeaderFound)
+		return nil, ErrNoHeaderFound
 	}
+
+	header := headers[len(headers)-1] // TODO: decide how to choose header
 
 	if header.Header == nil || strings.Compare(header.Header.ParentHash.String(), parentHash.String()) != 0 {
 		log.Debug(badHeaderMsg)
@@ -420,6 +423,10 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 			WithField("builder", submitBlockRequest.Message.BuilderPubkey).
 			Debug("block verification failed")
 		return fmt.Errorf("verify block: %w", err)
+	}
+
+	if _, err := state.Datastore().GetDelivered(ctx, Slot(submitBlockRequest.Message.Slot)); err == nil {
+		return errors.New("slot payload already delivered")
 	}
 
 	signedBuilderBid, err := SubmitBlockRequestToSignedBuilderBid(

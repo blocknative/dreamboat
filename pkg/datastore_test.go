@@ -36,13 +36,13 @@ func TestPutGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := ds.GetHeader(ctx, slot)
+	gotHeaders, err := ds.GetHeader(ctx, slot)
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	require.EqualValues(t, header.Trace.Value, gotHeaders[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeaders[0].Header)
 
 	// get by block hash
-	gotHeader, err = ds.GetHeaderByBlockHash(ctx, header.Header.BlockHash)
+	gotHeader, err := ds.GetHeaderByBlockHash(ctx, header.Header.BlockHash)
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
@@ -52,6 +52,47 @@ func TestPutGetHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
+}
+
+func TestPutGetHeaderMultiple(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const N = 10
+
+	ds := relay.DefaultDatastore{Storage: newMockDatastore()}
+
+	slot := relay.Slot(rand.Int())
+	headers := make([]relay.HeaderAndTrace, 0, N)
+	for i := 0; i < N; i++ {
+		headers = append(headers, randomHeaderAndTrace())
+		// put
+		err := ds.PutHeader(ctx, slot, headers[i], time.Minute)
+		require.NoError(t, err)
+	}
+
+	// get
+	gotHeaders, err := ds.GetHeader(ctx, slot)
+	require.NoError(t, err)
+	require.Len(t, gotHeaders, len(headers))
+	require.EqualValues(t, headers, gotHeaders)
+
+	for i := 0; i < N; i++ {
+		// get by block hash
+		gotHeader, err := ds.GetHeaderByBlockHash(ctx, headers[i].Header.BlockHash)
+		require.NoError(t, err)
+		require.EqualValues(t, headers[i].Trace.Value, gotHeader.Trace.Value)
+		require.EqualValues(t, *headers[i].Header, *gotHeader.Header)
+
+		// get by block number
+		gotHeader, err = ds.GetHeaderByBlockNum(ctx, headers[i].Header.BlockNumber)
+		require.NoError(t, err)
+		require.EqualValues(t, headers[i].Trace.Value, gotHeader.Trace.Value)
+		require.EqualValues(t, *headers[i].Header, *gotHeader.Header)
+	}
+
 }
 
 func TestPutGetHeaderDelivered(t *testing.T) {

@@ -114,10 +114,10 @@ func (mr *MockDatastoreMockRecorder) GetDeliveredByPubkey(arg0, arg1 interface{}
 }
 
 // GetHeader mocks base method.
-func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 relay.Slot) (relay.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 relay.Slot) ([]relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
-	ret0, _ := ret[0].(relay.HeaderAndTrace)
+	ret0, _ := ret[0].([]relay.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

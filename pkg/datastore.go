@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -40,7 +41,7 @@ type DeliveredTrace struct {
 
 type Datastore interface {
 	PutHeader(context.Context, Slot, HeaderAndTrace, time.Duration) error
-	GetHeader(context.Context, Slot) (HeaderAndTrace, error)
+	GetHeader(context.Context, Slot) ([]HeaderAndTrace, error)
 	GetHeaderByBlockHash(context.Context, types.Hash) (HeaderAndTrace, error)
 	GetHeaderByBlockNum(context.Context, uint64) (HeaderAndTrace, error)
 	GetHeaderBatch(context.Context, []Slot) ([]HeaderAndTrace, error)
@@ -76,22 +77,32 @@ func (s DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header Heade
 		return err
 	}
 
-	data, err := json.Marshal(header)
+	headers := []HeaderAndTrace{header}
+	data, err := s.Storage.Get(ctx, HeaderKey(slot))
+	if err == nil {
+		var currentHeaders []HeaderAndTrace
+		if err := json.Unmarshal(data, &currentHeaders); err != nil {
+			return err
+		}
+		headers = append(currentHeaders, header)
+	}
+
+	data, err = json.Marshal(headers)
 	if err != nil {
 		return err
 	}
 	return s.Storage.PutWithTTL(ctx, HeaderKey(slot), data, ttl)
 }
 
-func (s DefaultDatastore) GetHeader(ctx context.Context, slot Slot) (HeaderAndTrace, error) {
+func (s DefaultDatastore) GetHeader(ctx context.Context, slot Slot) ([]HeaderAndTrace, error) {
 	data, err := s.Storage.Get(ctx, HeaderKey(slot))
 	if err != nil {
-		return HeaderAndTrace{}, err
+		return nil, err
 	}
 
-	var trace HeaderAndTrace
-	err = json.Unmarshal(data, &trace)
-	return trace, err
+	var headers []HeaderAndTrace
+	err = json.Unmarshal(data, &headers)
+	return headers, err
 }
 
 func (s DefaultDatastore) GetHeaderByBlockHash(ctx context.Context, bh types.Hash) (HeaderAndTrace, error) {
@@ -105,9 +116,18 @@ func (s DefaultDatastore) GetHeaderByBlockHash(ctx context.Context, bh types.Has
 		return HeaderAndTrace{}, err
 	}
 
-	var trace HeaderAndTrace
-	err = json.Unmarshal(data, &trace)
-	return trace, err
+	var headers []HeaderAndTrace
+	if err = json.Unmarshal(data, &headers); err != nil {
+		return HeaderAndTrace{}, err
+	}
+
+	for _, header := range headers {
+		if strings.Compare(header.Header.BlockHash.String(), bh.String()) == 0 {
+			return header, nil
+		}
+	}
+
+	return HeaderAndTrace{}, ds.ErrNotFound
 }
 
 func (s DefaultDatastore) GetHeaderByBlockNum(ctx context.Context, bn uint64) (HeaderAndTrace, error) {
@@ -121,9 +141,18 @@ func (s DefaultDatastore) GetHeaderByBlockNum(ctx context.Context, bn uint64) (H
 		return HeaderAndTrace{}, err
 	}
 
-	var trace HeaderAndTrace
-	err = json.Unmarshal(data, &trace)
-	return trace, err
+	var headers []HeaderAndTrace
+	if err = json.Unmarshal(data, &headers); err != nil {
+		return HeaderAndTrace{}, err
+	}
+
+	for _, header := range headers {
+		if header.Header.BlockNumber == bn {
+			return header, nil
+		}
+	}
+
+	return HeaderAndTrace{}, ds.ErrNotFound
 }
 
 func (s DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace DeliveredTrace, ttl time.Duration) error {
@@ -222,11 +251,11 @@ func (s DefaultDatastore) GetHeaderBatch(ctx context.Context, slots []Slot) ([]H
 
 	headerBatch := make([]HeaderAndTrace, 0, len(batch))
 	for _, data := range batch {
-		var header HeaderAndTrace
-		if err = json.Unmarshal(data, &header); err != nil {
+		var headers []HeaderAndTrace
+		if err = json.Unmarshal(data, &headers); err != nil {
 			return nil, err
 		}
-		headerBatch = append(headerBatch, header)
+		headerBatch = append(headerBatch, headers...)
 	}
 
 	return headerBatch, err

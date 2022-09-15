@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	slot uint64 = 772407
+	slot uint64 = 773796
 )
 
 func main() {

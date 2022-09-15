@@ -275,7 +275,7 @@ func TestSubmitBlock(t *testing.T) {
 	require.NoError(t, err)
 	gotHeader, err := ds.GetHeader(ctx, relay.Slot(submitRequest.Message.Slot))
 	require.NoError(t, err)
-	require.EqualValues(t, header, gotHeader.Header)
+	require.EqualValues(t, header, gotHeader[0].Header)
 }
 
 func BenchmarkRegisterValidator(b *testing.B) {

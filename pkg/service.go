@@ -425,9 +425,13 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, sta
 }
 
 func (s *DefaultService) GetBlockReceived(ctx context.Context, slot Slot) ([]BidTraceWithTimestamp, error) {
-	event, err := s.state.Datastore().GetHeader(ctx, slot)
+	events, err := s.state.Datastore().GetHeader(ctx, slot)
 	if err == nil {
-		return []BidTraceWithTimestamp{*event.Trace}, err
+		traces := make([]BidTraceWithTimestamp, 0, len(events))
+		for _, event := range events {
+			traces = append(traces, *event.Trace)
+		}
+		return traces, err
 	}
 	return nil, err
 }
