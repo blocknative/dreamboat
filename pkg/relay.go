@@ -109,18 +109,18 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.S
 		}
 		g.Go(func() error {
 			registered := rs.processValidator(ctx, payload[start:end], state)
-			atomic.AddInt64(&totalRegistered, int64(registered))
+			atomic.AddInt64(&totalRegistered, registered)
 			return nil
 		})
 	}
 
 	if err := g.Wait(); err != nil {
-		logger.WithError(err).WithField("requests", len(payload)).WithField("registered", totalRegistered).Debug("validator registration failed")
+		logger.WithError(err).WithField("numberValidators", len(payload)).WithField("registered", totalRegistered).Debug("validator registration failed")
 		return err
 	}
 
 	if totalRegistered != int64(len(payload)) {
-		logger.WithField("requests", len(payload)).WithField("registered", totalRegistered).Debug("validators registration failed")
+		logger.WithField("numberValidators", len(payload)).WithField("registered", totalRegistered).Debug("validators registration failed")
 		return ErrPartialregistration
 	}
 
