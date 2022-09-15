@@ -165,7 +165,7 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 		} else if !ok {
 			logger.WithField("pubkey", pk.PublicKey).Debug("is not a known validator")
 			if rs.config.CheckKnownValidator {
-				logger.WithField("pubkey", registerRequest.Message.Pubkey).Error("is not a known validator")
+				logger.WithField("pubkey", registerRequest.Message.Pubkey).Debug("is not a known validator")
 				continue
 			} else {
 
