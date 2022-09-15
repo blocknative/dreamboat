@@ -273,7 +273,7 @@ func TestSubmitBlock(t *testing.T) {
 
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeader, err := ds.GetHeader(ctx, relay.Slot(submitRequest.Message.Slot), false)
+	gotHeader, err := ds.GetHeader(ctx, relay.Slot(submitRequest.Message.Slot))
 	require.NoError(t, err)
 	require.EqualValues(t, header, gotHeader.Header)
 }

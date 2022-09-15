@@ -344,33 +344,33 @@ func (s *DefaultService) GetValidators() BuilderGetValidatorsResponseEntrySlice 
 }
 
 func (s *DefaultService) GetDelivered(ctx context.Context, slot Slot) ([]types.BidTrace, error) {
-	event, err := s.state.Datastore().GetHeader(ctx, slot, true)
+	event, err := s.state.Datastore().GetDelivered(ctx, slot)
 	if err == nil {
-		return []types.BidTrace{event.Trace.BidTrace}, err
+		return []types.BidTrace{event.BidTrace}, err
 	}
 	return nil, err
 }
 
 func (s *DefaultService) GetDeliveredByHash(ctx context.Context, bh types.Hash) ([]types.BidTrace, error) {
-	event, err := s.state.Datastore().GetHeaderByBlockHash(ctx, bh, true)
+	event, err := s.state.Datastore().GetDeliveredByBlockHash(ctx, bh)
 	if err == nil {
-		return []types.BidTrace{event.Trace.BidTrace}, err
+		return []types.BidTrace{event.BidTrace}, err
 	}
 	return nil, err
 }
 
 func (s *DefaultService) GetDeliveredByNum(ctx context.Context, bn uint64) ([]types.BidTrace, error) {
-	event, err := s.state.Datastore().GetHeaderByBlockNum(ctx, bn, true)
+	event, err := s.state.Datastore().GetDeliveredByBlockNum(ctx, bn)
 	if err == nil {
-		return []types.BidTrace{event.Trace.BidTrace}, err
+		return []types.BidTrace{event.BidTrace}, err
 	}
 	return nil, err
 }
 
 func (s *DefaultService) GetDeliveredByPubKey(ctx context.Context, pk types.PublicKey) ([]types.BidTrace, error) {
-	event, err := s.state.Datastore().GetHeaderByPubkey(ctx, pk, true)
+	event, err := s.state.Datastore().GetDeliveredByPubkey(ctx, pk)
 	if err == nil {
-		return []types.BidTrace{event.Trace.BidTrace}, err
+		return []types.BidTrace{event.BidTrace}, err
 	}
 	return nil, err
 }
@@ -380,6 +380,7 @@ func (s *DefaultService) GetTailDelivered(ctx context.Context, limit uint64) ([]
 	stop := start - Slot(s.Config.TTL/DurationPerSlot)
 	return s.getTailDelivered(ctx, limit, start, stop)
 }
+
 func (s *DefaultService) GetTailDeliveredCursor(ctx context.Context, limit, cursor uint64) ([]types.BidTrace, error) {
 	headSlot := s.state.Beacon().HeadSlot()
 	start := Slot(cursor)
@@ -394,7 +395,7 @@ func (s *DefaultService) GetTailDeliveredCursor(ctx context.Context, limit, curs
 }
 
 func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, start, stop Slot) ([]types.BidTrace, error) {
-	batch := make([]HeaderAndTrace, 0, limit)
+	batch := make([]BidTraceWithTimestamp, 0, limit)
 	slots := make([]Slot, 0, limit)
 
 	s.Log.WithField("limit", limit).
@@ -408,7 +409,7 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, sta
 			slots = append(slots, s)
 		}
 
-		nextBatch, err := s.state.Datastore().GetHeaderBatch(ctx, slots, true)
+		nextBatch, err := s.state.Datastore().GetDeliveredBatch(ctx, slots)
 		if err != nil {
 			s.Log.WithError(err).Warn("failed getting header batch")
 		} else {
@@ -418,13 +419,13 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit uint64, sta
 
 	events := make([]types.BidTrace, 0, len(batch))
 	for _, event := range batch {
-		events = append(events, event.Trace.BidTrace)
+		events = append(events, event.BidTrace)
 	}
 	return events, nil
 }
 
 func (s *DefaultService) GetBlockReceived(ctx context.Context, slot Slot) ([]BidTraceWithTimestamp, error) {
-	event, err := s.state.Datastore().GetHeader(ctx, slot, false)
+	event, err := s.state.Datastore().GetHeader(ctx, slot)
 	if err == nil {
 		return []BidTraceWithTimestamp{*event.Trace}, err
 	}
@@ -432,7 +433,7 @@ func (s *DefaultService) GetBlockReceived(ctx context.Context, slot Slot) ([]Bid
 }
 
 func (s *DefaultService) GetBlockReceivedByHash(ctx context.Context, bh types.Hash) ([]BidTraceWithTimestamp, error) {
-	event, err := s.state.Datastore().GetHeaderByBlockHash(ctx, bh, false)
+	event, err := s.state.Datastore().GetHeaderByBlockHash(ctx, bh)
 	if err == nil {
 		return []BidTraceWithTimestamp{*event.Trace}, err
 	}
@@ -440,7 +441,7 @@ func (s *DefaultService) GetBlockReceivedByHash(ctx context.Context, bh types.Ha
 }
 
 func (s *DefaultService) GetBlockReceivedByNum(ctx context.Context, bn uint64) ([]BidTraceWithTimestamp, error) {
-	event, err := s.state.Datastore().GetHeaderByBlockNum(ctx, bn, false)
+	event, err := s.state.Datastore().GetHeaderByBlockNum(ctx, bn)
 	if err == nil {
 		return []BidTraceWithTimestamp{*event.Trace}, err
 	}
@@ -463,7 +464,7 @@ func (s *DefaultService) GetTailBlockReceived(ctx context.Context, limit uint64)
 			slots = append(slots, s)
 		}
 
-		nextBatch, err := s.state.Datastore().GetHeaderBatch(ctx, slots, false)
+		nextBatch, err := s.state.Datastore().GetHeaderBatch(ctx, slots)
 		if err != nil {
 			s.Log.WithError(err).Warn("failed getting header batch")
 		} else {
