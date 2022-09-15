@@ -209,9 +209,9 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 	}
 
 	logger.With(log.F{
-		"processingTimeMs":          time.Since(timeStart).Milliseconds(),
-		"partitionNumberValidators": len(payload),
-		"registered":                registered,
+		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"numberValidators": len(payload),
+		"registered":       registered,
 	}).Trace("validator batch registered")
 
 	return registered
