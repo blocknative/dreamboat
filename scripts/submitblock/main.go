@@ -20,7 +20,11 @@ const (
 )
 
 var (
+<<<<<<< HEAD
 	slot uint64 = 773796
+=======
+	slot uint64 = 772407
+>>>>>>> main
 )
 
 func main() {
