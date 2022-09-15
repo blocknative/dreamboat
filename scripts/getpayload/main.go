@@ -20,8 +20,8 @@ const (
 )
 
 var (
-	slot      uint64 = 772407
-	blockHash        = "0x697fa47885b2ea7b27df43668739006a7de9f67000ee6dd984aba2d22a882cb1"
+	slot      uint64 = 0
+	blockHash        = ""
 )
 
 func main() {
