@@ -134,7 +134,7 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.S
 }
 
 func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.SignedValidatorRegistration, state State) int64 {
-	logger := rs.Log().WithField("method", "RegisterValidator")
+	logger := rs.Log().WithField("method", "ProcessValidator")
 	timeStart := time.Now()
 	registered := int64(0)
 
