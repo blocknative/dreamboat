@@ -179,33 +179,34 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 
 	const N = 10
 
-	batch := make([]relay.HeaderAndTrace, 0)
+	batch := make([]relay.BidTraceWithTimestamp, 0)
 	slots := make([]relay.Slot, 0)
 
 	for i := 0; i < N; i++ {
-		header := randomHeaderAndTrace()
+		header := randomBlockBidAndTrace()
+		trace := header.Trace
 		slot := relay.Slot(rand.Int())
 
-		batch = append(batch, header)
+		batch = append(batch, relay.BidTraceWithTimestamp{BidTrace: *trace.Message, Timestamp: header.Payload.Data.Timestamp})
 		slots = append(slots, slot)
 	}
 
 	sort.Slice(batch, func(i, j int) bool {
-		return batch[i].Trace.Slot < batch[j].Trace.Slot
+		return batch[i].Slot < batch[j].Slot
 	})
 
 	store := newMockDatastore()
 	ds := relay.DefaultDatastore{Storage: store}
-	for i, header := range batch {
-		ds.PutHeader(ctx, slots[i], header, time.Minute)
+	for i, trace := range batch {
+		ds.PutHeader(ctx, slots[i], relay.HeaderAndTrace{Trace: &trace, Header: &types.ExecutionPayloadHeader{}}, time.Minute)
 	}
 	// get
 	gotBatch, _ := ds.GetDeliveredBatch(ctx, slots)
 	require.Len(t, gotBatch, 0)
 
 	for i := 0; i < N; i++ {
-		header := batch[i]
-		err := ds.PutDelivered(ctx, slots[i], relay.DeliveredTrace{Trace: *header.Trace, BlockNumber: header.Header.BlockNumber}, time.Minute)
+		trace := batch[i]
+		err := ds.PutDelivered(ctx, slots[i], relay.DeliveredTrace{Trace: trace, BlockNumber: 0}, time.Minute)
 		require.NoError(t, err)
 
 	}
