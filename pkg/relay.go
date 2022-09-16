@@ -109,7 +109,9 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.S
 	}
 
 	if err := g.Wait(); err != nil {
-		logger.WithError(err).Debug("validator registration failed")
+		logger.
+			WithError(err).
+			Debug("validator registration failed")
 		return err
 	}
 
@@ -134,12 +136,15 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 			registerRequest.Signature[:],
 		)
 		if !ok || err != nil {
-			logger.WithError(err).WithField("pubkey", registerRequest.Message.Pubkey).Debug("signature invalid")
-			return fmt.Errorf("signature invalid")
+			logger.
+				WithError(err).
+				WithField("pubkey", registerRequest.Message.Pubkey).
+				Debug("signature invalid")
+			return fmt.Errorf("signature invalid for %s", registerRequest.Message.Pubkey.String())
 		}
 
 		if verifyTimestamp(registerRequest.Message.Timestamp) {
-			return fmt.Errorf("request too far in future")
+			return fmt.Errorf("request too far in future for %s", registerRequest.Message.Pubkey.String())
 		}
 
 		pk := PubKey{registerRequest.Message.Pubkey}
@@ -149,12 +154,12 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 			return err
 		} else if !ok {
 			if rs.config.CheckKnownValidator {
-				return fmt.Errorf("not a known validator")
+				return fmt.Errorf("%s not a known validator", registerRequest.Message.Pubkey.String())
 			} else {
 				logger.
 					WithField("pubkey", pk.PublicKey).
 					WithField("slot", state.Beacon().HeadSlot()).
-					Debug("is not a known validator")
+					Debug("not a known validator")
 			}
 		}
 
@@ -188,7 +193,7 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 		// officially register validator
 		if err := state.Datastore().PutRegistration(ctx, pk, registerRequest, rs.config.TTL); err != nil {
 			logger.WithField("pubkey", registerRequest.Message.Pubkey).WithError(err).Debug("Error in PutRegistration")
-			return err
+			return fmt.Errorf("failed to store %s", registerRequest.Message.Pubkey.String())
 		}
 	}
 
