@@ -237,17 +237,18 @@ func (s *DefaultService) knownValidatorsUpdateTime() time.Time {
 }
 
 func (s *DefaultService) updateProposerDuties(ctx context.Context, client BeaconClient, headSlot Slot) error {
-	logger := s.Log.WithField("method", "UpdateProposerDuties")
-	timeStart := time.Now()
-
-	state := dutiesState{}
-
 	epoch := headSlot.Epoch()
 
-	l := s.Log.With(log.F{
+	logger := s.Log.With(log.F{
+		"method":    "UpdateProposerDuties",
+		"slot":      headSlot,
 		"epochFrom": epoch,
 		"epochTo":   epoch + 1,
 	})
+
+	timeStart := time.Now()
+
+	state := dutiesState{}
 
 	// Query current epoch
 	current, err := client.GetProposerDuties(epoch)
@@ -267,35 +268,28 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 	state.proposerDutiesResponse = make(BuilderGetValidatorsResponseEntrySlice, 0, len(entries))
 	state.currentSlot = headSlot
 
+	notRegistered := 0
 	for _, e := range entries {
 		reg, err := s.Datastore.GetRegistration(ctx, e.PubKey)
 		if err == nil {
-			l.With(log.F{
-				"method": "UpdateProposerDuties",
-				"slot":   e.Slot},
-			).With(e.PubKey).
-				Debug("updating Proposer duties")
+			logger.With(e.PubKey).
+				Debug("new proposer duty")
 
 			state.proposerDutiesResponse = append(state.proposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
 				Slot:  e.Slot,
 				Entry: &reg,
 			})
 		} else if errors.Is(err, ds.ErrNotFound) {
-			l.With(log.F{
-				"method": "UpdateProposerDuties",
-				"slot":   e.Slot}).
-				With(e.PubKey).
-				Debug("validator not registered")
+			notRegistered++
 		}
 	}
 
 	s.state.duties.Store(state)
 
 	logger.With(log.F{
-		"epochFrom":        epoch,
-		"epochTo":          epoch + 1,
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
-		"receivedDuties":   len(current.Data),
+		"processingTimeMs":        time.Since(timeStart).Milliseconds(),
+		"receivedDuties":          len(entries),
+		"notRegisteredValidators": notRegistered,
 	}).With(state.proposerDutiesResponse).Debug("proposer duties updated")
 
 	return nil

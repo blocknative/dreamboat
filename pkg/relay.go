@@ -123,7 +123,7 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.S
 }
 
 func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.SignedValidatorRegistration, state State) error {
-	logger := rs.Log().WithField("method", "RegisterValidator")
+	logger := rs.Log().WithField("method", "ProcessValidator")
 	timeStart := time.Now()
 
 	for i := 0; i < len(payload) && ctx.Err() == nil; i++ {
@@ -135,7 +135,7 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 			registerRequest.Signature[:],
 		)
 		if !ok || err != nil {
-			logger.WithError(err).Debug("signature invalid")
+			logger.WithError(err).WithField("pubkey", registerRequest.Message.Pubkey).Debug("signature invalid")
 			return fmt.Errorf("signature invalid")
 		}
 
@@ -150,22 +150,25 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 			return err
 		} else if !ok {
 			if rs.config.CheckKnownValidator {
-				return fmt.Errorf("not a validator")
+				return fmt.Errorf("not a known validator")
 			} else {
-				logger.WithField("pubkey", pk.PublicKey).Debug("is not a known validator")
+				logger.
+					WithField("pubkey", pk.PublicKey).
+					WithField("slot", state.Beacon().HeadSlot()).
+					Debug("is not a known validator")
 			}
 		}
 
 		// check previous validator registration
 		previousValidator, err := state.Datastore().GetRegistration(ctx, pk)
 		if err != nil && !errors.Is(err, ds.ErrNotFound) {
-			log.Warn(err)
+			logger.Warn(err)
 		}
 
 		if err == nil {
 			// skip registration if
 			if registerRequest.Message.Timestamp < previousValidator.Message.Timestamp {
-				rs.Log().Debug("request timestamp less than previous")
+				logger.WithField("pubkey", registerRequest.Message.Pubkey).Debug("request timestamp less than previous")
 				continue
 			}
 
@@ -173,27 +176,26 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 				(registerRequest.Message.FeeRecipient != previousValidator.Message.FeeRecipient ||
 					registerRequest.Message.GasLimit != previousValidator.Message.GasLimit) {
 				// to help debug issues with validator set ups
-				rs.Log().With(log.F{
+				logger.With(log.F{
 					"prevFeeRecipient":    previousValidator.Message.FeeRecipient,
 					"requestFeeRecipient": registerRequest.Message.FeeRecipient,
 					"prevGasLimit":        previousValidator.Message.GasLimit,
 					"requestGasLimit":     registerRequest.Message.GasLimit,
+					"pubkey":              registerRequest.Message.Pubkey,
 				}).Debug("different registration fields")
 			}
 		}
 
 		// officially register validator
 		if err := state.Datastore().PutRegistration(ctx, pk, registerRequest, rs.config.TTL); err != nil {
-			rs.Log().WithError(err).Debug("Error in PutRegistration")
+			logger.WithField("pubkey", registerRequest.Message.Pubkey).WithError(err).Debug("Error in PutRegistration")
 			return err
 		}
-
-		logger.WithField("pubkey", pk).Trace("validator registered")
 	}
 
 	logger.With(log.F{
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
-		"numberValidators": len(payload),
+		"processingTimeMs":      time.Since(timeStart).Milliseconds(),
+		"numberBatchValidators": len(payload),
 	}).Trace("validator batch registered")
 
 	return nil
@@ -405,15 +407,18 @@ func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, 
 
 // SubmitBlock Accepts block from trusted builder and stores
 func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *types.BuilderSubmitBlockRequest, state State) error {
-	logger := rs.Log().WithField("method", "SubmitBlock")
 	timeStart := time.Now()
 
-	logger.With(log.F{
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
-		"slot":             submitBlockRequest.Message.Slot,
-		"blockHash":        submitBlockRequest.ExecutionPayload.BlockHash,
-		"proposer":         submitBlockRequest.Message.ProposerPubkey,
-	}).Trace("block submission requested")
+	logger := rs.Log().With(log.F{
+		"method":    "SubmitBlock",
+		"builder":   submitBlockRequest.Message.BuilderPubkey,
+		"blockHash": submitBlockRequest.ExecutionPayload.BlockHash,
+		"slot":      submitBlockRequest.Message.Slot,
+		"proposer":  submitBlockRequest.Message.ProposerPubkey,
+		"bid":       submitBlockRequest.Message.Value.String(),
+	})
+
+	logger.Trace("block submission requested")
 
 	_, err := rs.verifyBlock(submitBlockRequest)
 	if err != nil {
@@ -440,6 +445,18 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 
 		return fmt.Errorf("block submission failed: %w", err)
 	}
+
+	slot := Slot(submitBlockRequest.Message.Slot)
+
+	existingHeader, err := state.Datastore().GetHeader(ctx, slot)
+	if err == nil && submitBlockRequest.Message.Value.Cmp(&existingHeader.Trace.Value) < 1 {
+		// received bid is lower than current bid, so we do not store it
+		logger.
+			WithField("existingBid", existingHeader.Trace.Value.String()).
+			Debug("lower bid received")
+		return nil
+	}
+
 	payload := SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
 
 	if err := state.Datastore().PutPayload(ctx, SubmissionToKey(submitBlockRequest), &payload, rs.config.TTL); err != nil {
@@ -461,15 +478,13 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 				BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
 				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
 				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
-				Value:                payload.Trace.Message.Value,
+				Value:                submitBlockRequest.Message.Value,
 			},
 			Timestamp: payload.Payload.Data.Timestamp,
 		},
 	}
 
-	s := Slot(submitBlockRequest.Message.Slot)
-
-	err = state.Datastore().PutHeader(ctx, s, h, rs.config.TTL)
+	err = state.Datastore().PutHeader(ctx, slot, h, rs.config.TTL)
 
 	if err != nil {
 		logger.WithError(err).Error("PutHeader failed")
@@ -481,6 +496,8 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 		"slot":             submitBlockRequest.Message.Slot,
 		"blockHash":        submitBlockRequest.ExecutionPayload.BlockHash,
 		"proposer":         submitBlockRequest.Message.ProposerPubkey,
+		"builder":          submitBlockRequest.Message.BuilderPubkey,
+		"bid":              submitBlockRequest.Message.Value,
 	}).Trace("builder block stored")
 
 	return nil
