@@ -20,8 +20,8 @@ const (
 )
 
 var (
-	slot uint64        = 772408
-	bid  types.U256Str = types.IntToU256(2)
+	slot uint64        = 0
+	bid  types.U256Str = types.IntToU256(0)
 )
 
 func main() {

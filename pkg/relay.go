@@ -494,11 +494,6 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
-		"slot":             submitBlockRequest.Message.Slot,
-		"blockHash":        submitBlockRequest.ExecutionPayload.BlockHash,
-		"proposer":         submitBlockRequest.Message.ProposerPubkey,
-		"builder":          submitBlockRequest.Message.BuilderPubkey,
-		"bid":              submitBlockRequest.Message.Value,
 	}).Trace("builder block stored")
 
 	return nil
