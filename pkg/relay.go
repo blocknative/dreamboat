@@ -220,11 +220,13 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, err
 	}
 
-	logger.With(log.F{
+	logger = logger.With(log.F{
 		"slot":       slot,
 		"parentHash": parentHash,
 		"pubkey":     pk,
-	}).Debug("header requested")
+	})
+
+	logger.Trace("header requested")
 
 	vd, err := state.Datastore().GetRegistration(ctx, pk)
 	if err != nil {
@@ -268,6 +270,7 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		"bidValue":         bid.Value.String(),
 		"blockHash":        bid.Header.BlockHash.String(),
 		"feeRecipient":     bid.Header.FeeRecipient.String(),
+		"slot":             slot,
 	}).Trace("bid sent")
 
 	return response, nil
