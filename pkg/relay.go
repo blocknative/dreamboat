@@ -13,7 +13,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/lthibault/log"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -294,9 +293,8 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	if err != nil {
 		return nil, err
 	}
-	rs.Log().WithFields(logrus.Fields{
+	logger.With(log.F{
 		"slot":      payloadRequest.Message.Slot,
-		"pubKey":    proposerPubkey,
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		"proposer":  pk,
 	}).Debug("payload requested")
@@ -308,8 +306,8 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		payloadRequest.Signature[:],
 	)
 	if !ok || err != nil {
-		rs.Log().WithField(
-			"pubKey", proposerPubkey,
+		logger.WithField(
+			"proposer", proposerPubkey,
 		).Error("signature invalid")
 		return nil, fmt.Errorf("signature invalid")
 	}
@@ -322,10 +320,11 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 
 	payload, err := state.Datastore().GetPayload(ctx, key)
 	if err != nil || payload == nil {
-		logger.With(log.F{
+		logger.WithError(err).With(log.F{
+			"proposer":  pk,
 			"slot":      payloadRequest.Message.Slot,
 			"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
-		}).WithError(err).Error("no payload found")
+		}).Error("no payload found")
 		return nil, ErrNoPayloadFound
 	}
 
@@ -335,6 +334,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		"blockNumber":  payload.Payload.Data.BlockNumber,
 		"stateRoot":    payload.Payload.Data.StateRoot,
 		"feeRecipient": payload.Payload.Data.FeeRecipient,
+		"bid":          payload.Bid.Data.Message.Value,
 	}).Info("payload fetched")
 
 	response := types.GetPayloadResponse{
@@ -366,6 +366,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"slot":             payloadRequest.Message.Slot,
 		"blockHash":        payload.Payload.Data.BlockHash,
+		"bid":              payload.Bid.Data.Message.Value,
 	}).Trace("payload sent")
 
 	return &response, nil
