@@ -38,8 +38,38 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 	return m.recorder
 }
 
+// GetDelivered mocks base method.
+func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 relay.Query) (relay.BidTraceWithTimestamp, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDelivered", arg0, arg1)
+	ret0, _ := ret[0].(relay.BidTraceWithTimestamp)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDelivered indicates an expected call of GetDelivered.
+func (mr *MockDatastoreMockRecorder) GetDelivered(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDelivered", reflect.TypeOf((*MockDatastore)(nil).GetDelivered), arg0, arg1)
+}
+
+// GetDeliveredBatch mocks base method.
+func (m *MockDatastore) GetDeliveredBatch(arg0 context.Context, arg1 []relay.Query) ([]relay.BidTraceWithTimestamp, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDeliveredBatch", arg0, arg1)
+	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDeliveredBatch indicates an expected call of GetDeliveredBatch.
+func (mr *MockDatastoreMockRecorder) GetDeliveredBatch(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredBatch", reflect.TypeOf((*MockDatastore)(nil).GetDeliveredBatch), arg0, arg1)
+}
+
 // GetHeader mocks base method.
-func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 relay.HeaderQuery) (relay.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 relay.Query) (relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
 	ret0, _ := ret[0].(relay.HeaderAndTrace)
@@ -54,7 +84,7 @@ func (mr *MockDatastoreMockRecorder) GetHeader(arg0, arg1 interface{}) *gomock.C
 }
 
 // GetHeaderBatch mocks base method.
-func (m *MockDatastore) GetHeaderBatch(arg0 context.Context, arg1 []relay.HeaderQuery) ([]relay.HeaderAndTrace, error) {
+func (m *MockDatastore) GetHeaderBatch(arg0 context.Context, arg1 []relay.Query) ([]relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeaderBatch", arg0, arg1)
 	ret0, _ := ret[0].([]relay.HeaderAndTrace)
@@ -69,7 +99,7 @@ func (mr *MockDatastoreMockRecorder) GetHeaderBatch(arg0, arg1 interface{}) *gom
 }
 
 // GetPayload mocks base method.
-func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 types.Hash) (*relay.BlockBidAndTrace, error) {
+func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 relay.PayloadKey) (*relay.BlockBidAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1)
 	ret0, _ := ret[0].(*relay.BlockBidAndTrace)
@@ -99,17 +129,17 @@ func (mr *MockDatastoreMockRecorder) GetRegistration(arg0, arg1 interface{}) *go
 }
 
 // PutDelivered mocks base method.
-func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 relay.Slot, arg2 time.Duration) error {
+func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 relay.Slot, arg2 relay.DeliveredTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PutDelivered indicates an expected call of PutDelivered.
-func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutDelivered", reflect.TypeOf((*MockDatastore)(nil).PutDelivered), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutDelivered", reflect.TypeOf((*MockDatastore)(nil).PutDelivered), arg0, arg1, arg2, arg3)
 }
 
 // PutHeader mocks base method.
@@ -127,7 +157,7 @@ func (mr *MockDatastoreMockRecorder) PutHeader(arg0, arg1, arg2, arg3 interface{
 }
 
 // PutPayload mocks base method.
-func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 types.Hash, arg2 *relay.BlockBidAndTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 relay.PayloadKey, arg2 *relay.BlockBidAndTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutPayload", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)

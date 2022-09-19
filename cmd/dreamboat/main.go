@@ -54,7 +54,7 @@ var flags = []cli.Flag{
 		Value:   time.Second * 2,
 		EnvVars: []string{"RELAY_TIMEOUT"},
 	},
-	&cli.StringFlag{
+	&cli.StringSliceFlag{
 		Name:    "beacon",
 		Usage:   "`url` for beacon endpoint",
 		EnvVars: []string{"RELAY_BEACON"},
@@ -134,7 +134,7 @@ func setup() cli.BeforeFunc {
 			Network:             c.String("network"),
 			BuilderCheck:        c.Bool("check-builder"),
 			BuilderURLs:         c.StringSlice("builder"),
-			BeaconEndpoint:      c.String("beacon"),
+			BeaconEndpoints:     c.StringSlice("beacon"),
 			PubKey:              pk,
 			SecretKey:           sk,
 			Datadir:             c.String("datadir"),

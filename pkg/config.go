@@ -51,7 +51,7 @@ type Config struct {
 	Network             string
 	RelayRequestTimeout time.Duration
 	BuilderCheck        bool
-	BeaconEndpoint      string
+	BeaconEndpoints     []string
 	PubKey              types.PublicKey
 	SecretKey           *bls.SecretKey
 	Datadir             string

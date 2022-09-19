@@ -36,24 +36,24 @@ func TestPutGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := ds.GetHeader(ctx, relay.HeaderQuery{Slot: slot})
+	gotHeader, err := ds.GetHeader(ctx, relay.Query{Slot: slot})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
 
 	// get by block hash
-	gotHeader, err = ds.GetHeader(ctx, relay.HeaderQuery{BlockHash: header.Trace.BlockHash})
+	gotHeader, err = ds.GetHeader(ctx, relay.Query{BlockHash: header.Trace.BlockHash})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
 
 	// get by block number
-	gotHeader, err = ds.GetHeader(ctx, relay.HeaderQuery{BlockNum: header.Header.BlockNumber})
+	gotHeader, err = ds.GetHeader(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
 
-	gotHeader, err = ds.GetHeader(ctx, relay.HeaderQuery{PubKey: header.Trace.ProposerPubkey})
+	gotHeader, err = ds.GetHeader(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
@@ -75,46 +75,42 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	_, err = d.GetHeader(ctx, relay.HeaderQuery{Slot: slot, IsDelivered: true})
+	_, err = d.GetDelivered(ctx, relay.Query{Slot: slot})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block hash
-	_, err = d.GetHeader(ctx, relay.HeaderQuery{BlockHash: header.Trace.BlockHash, IsDelivered: true})
+	_, err = d.GetDelivered(ctx, relay.Query{BlockHash: header.Trace.BlockHash})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block number
-	_, err = d.GetHeader(ctx, relay.HeaderQuery{BlockNum: header.Header.BlockNumber, IsDelivered: true})
+	_, err = d.GetDelivered(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
-	_, err = d.GetHeader(ctx, relay.HeaderQuery{PubKey: header.Trace.ProposerPubkey, IsDelivered: true})
+	_, err = d.GetDelivered(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// set as delivered and retrieve again
-	err = d.PutDelivered(ctx, slot, time.Minute)
+	err = d.PutDelivered(ctx, slot, relay.DeliveredTrace{Trace: *header.Trace, BlockNumber: header.Header.BlockNumber}, time.Minute)
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := d.GetHeader(ctx, relay.HeaderQuery{Slot: slot, IsDelivered: true})
+	gotHeader, err := d.GetDelivered(ctx, relay.Query{Slot: slot})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
 	// get by block hash
-	gotHeader, err = d.GetHeader(ctx, relay.HeaderQuery{BlockHash: header.Trace.BlockHash, IsDelivered: true})
+	gotHeader, err = d.GetDelivered(ctx, relay.Query{BlockHash: header.Trace.BlockHash})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
 	// get by block number
-	gotHeader, err = d.GetHeader(ctx, relay.HeaderQuery{BlockNum: header.Header.BlockNumber, IsDelivered: true})
+	gotHeader, err = d.GetDelivered(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
-	gotHeader, err = d.GetHeader(ctx, relay.HeaderQuery{PubKey: header.Trace.ProposerPubkey, IsDelivered: true})
+	gotHeader, err = d.GetDelivered(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 }
 
 func TestPutGetHeaderBatch(t *testing.T) {
@@ -126,14 +122,14 @@ func TestPutGetHeaderBatch(t *testing.T) {
 	const N = 10
 
 	batch := make([]relay.HeaderAndTrace, 0)
-	queries := make([]relay.HeaderQuery, 0)
+	queries := make([]relay.Query, 0)
 
 	for i := 0; i < N; i++ {
 		header := randomHeaderAndTrace()
 		slot := relay.Slot(rand.Int())
 
 		batch = append(batch, header)
-		queries = append(queries, relay.HeaderQuery{Slot: slot})
+		queries = append(queries, relay.Query{Slot: slot})
 	}
 
 	sort.Slice(batch, func(i, j int) bool {
@@ -188,14 +184,14 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 	const N = 10
 
 	batch := make([]relay.HeaderAndTrace, 0)
-	queries := make([]relay.HeaderQuery, 0)
+	queries := make([]relay.Query, 0)
 
 	for i := 0; i < N; i++ {
 		header := randomHeaderAndTrace()
-		slot := relay.Slot(rand.Int())
+		slot := relay.Slot(header.Trace.Slot)
 
 		batch = append(batch, header)
-		queries = append(queries, relay.HeaderQuery{Slot: slot, IsDelivered: true})
+		queries = append(queries, relay.Query{Slot: slot})
 	}
 
 	sort.Slice(batch, func(i, j int) bool {
@@ -204,22 +200,24 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 
 	store := newMockDatastore()
 	ds := relay.DefaultDatastore{Storage: store}
-	for i, payload := range batch {
-		ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
+	for i, header := range batch {
+		err := ds.PutHeader(ctx, queries[i].Slot, header, time.Minute)
+		require.NoError(t, err)
 	}
 	// get
-	gotBatch, _ := ds.GetHeaderBatch(ctx, queries)
+	gotBatch, _ := ds.GetDeliveredBatch(ctx, queries)
 	require.Len(t, gotBatch, 0)
 
-	for i := 0; i < N; i++ {
-		err := ds.PutDelivered(ctx, queries[i].Slot, time.Minute)
+	for i, header := range batch {
+		trace := relay.DeliveredTrace{Trace: *header.Trace, BlockNumber: header.Header.BlockNumber}
+		err := ds.PutDelivered(ctx, queries[i].Slot, trace, time.Minute)
 		require.NoError(t, err)
 	}
 
-	gotBatch, err := ds.GetHeaderBatch(ctx, queries)
+	gotBatch, err := ds.GetDeliveredBatch(ctx, queries)
 	require.NoError(t, err)
 	sort.Slice(gotBatch, func(i, j int) bool {
-		return gotBatch[i].Trace.Slot < gotBatch[j].Trace.Slot
+		return gotBatch[i].BidTrace.Slot < gotBatch[j].BidTrace.Slot
 	})
 	require.Len(t, gotBatch, len(batch))
 	require.EqualValues(t, batch, gotBatch)
@@ -238,11 +236,16 @@ func TestPutGetPayload(t *testing.T) {
 	payload := randomBlockBidAndTrace()
 
 	// put
-	err := ds.PutPayload(ctx, payload.Payload.Data.BlockHash, payload, time.Minute)
+	key := relay.PayloadKey{
+		BlockHash: payload.Trace.Message.BlockHash,
+		Proposer:  payload.Trace.Message.ProposerPubkey,
+		Slot:      relay.Slot(payload.Trace.Message.Slot),
+	}
+	err := ds.PutPayload(ctx, key, payload, time.Minute)
 	require.NoError(t, err)
 
 	// get
-	gotPayload, err := ds.GetPayload(ctx, payload.Payload.Data.BlockHash)
+	gotPayload, err := ds.GetPayload(ctx, key)
 	require.NoError(t, err)
 	require.EqualValues(t, *payload, *gotPayload)
 }
@@ -468,15 +471,6 @@ func randomTransactions(size int) []hexutil.Bytes {
 	return txs
 }
 
-func randomValidator() relay.ValidatorData {
-	return relay.ValidatorData{
-		PubKey:       relay.PubKey{random48Bytes()},
-		FeeRecipient: types.Address(random20Bytes()),
-		GasLimit:     rand.Uint64(),
-		Timestamp:    rand.Uint64(),
-	}
-}
-
 func randomRegistration() types.SignedValidatorRegistration {
 	msg := &types.RegisterValidatorRequestMessage{
 		FeeRecipient: types.Address(random20Bytes()),
@@ -510,20 +504,6 @@ func validValidatorRegistration(t require.TestingT, domain types.Domain) (*types
 		Message:   msg,
 		Signature: signature,
 	}, sk
-}
-
-func validValidatorData(t require.TestingT, domain types.Domain) relay.ValidatorData {
-	registration, _ := validValidatorRegistration(t, domain)
-	return validatorFromRegistration(registration)
-}
-
-func validatorFromRegistration(registration *types.SignedValidatorRegistration) relay.ValidatorData {
-	return relay.ValidatorData{
-		PubKey:       relay.PubKey{registration.Message.Pubkey},
-		FeeRecipient: registration.Message.FeeRecipient,
-		GasLimit:     registration.Message.GasLimit,
-		Timestamp:    registration.Message.Timestamp,
-	}
 }
 
 func validSubmitBlockRequest(t require.TestingT, domain types.Domain) *types.BuilderSubmitBlockRequest {

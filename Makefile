@@ -1,5 +1,5 @@
 build:
-	go build ./cmd/relay
+	go build ./cmd/dreamboat
 
 build-cli:
 	go build ./cmd/test-cli
