@@ -372,6 +372,8 @@ func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQue
 
 	if err == nil {
 		return []types.BidTrace{event.BidTrace}, err
+	} else if errors.Is(err, ds.ErrNotFound) {
+		return []types.BidTrace{}, nil
 	}
 	return nil, err
 }
@@ -436,6 +438,8 @@ func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery)
 
 	if err == nil {
 		return []BidTraceWithTimestamp{*event.Trace}, err
+	} else if errors.Is(err, ds.ErrNotFound) {
+		return []BidTraceWithTimestamp{}, nil
 	}
 	return nil, err
 }
