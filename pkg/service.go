@@ -45,6 +45,30 @@ type TraceQuery struct {
 	Cursor, Limit uint64
 }
 
+func (q TraceQuery) HasSlot() bool {
+	return q.Slot > Slot(0)
+}
+
+func (q TraceQuery) HasBlockHash() bool {
+	return strings.Compare(q.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0
+}
+
+func (q TraceQuery) HasBlockNum() bool {
+	return q.BlockNum != 0
+}
+
+func (q TraceQuery) HasPubkey() bool {
+	return strings.Compare(q.Pubkey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0
+}
+
+func (q TraceQuery) HasCursor() bool {
+	return q.Cursor != 0
+}
+
+func (q TraceQuery) HasLimit() bool {
+	return q.Limit != 0
+}
+
 type DefaultService struct {
 	Log             log.Logger
 	Config          Config
@@ -358,13 +382,13 @@ func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQue
 		err   error
 	)
 
-	if query.Slot > Slot(0) {
+	if query.HasSlot() {
 		event, err = s.state.Datastore().GetDelivered(ctx, Query{Slot: query.Slot})
-	} else if strings.Compare(query.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
+	} else if query.HasBlockHash() {
 		event, err = s.state.Datastore().GetDelivered(ctx, Query{BlockHash: query.BlockHash})
-	} else if query.BlockNum != 0 {
+	} else if query.HasBlockNum() {
 		event, err = s.state.Datastore().GetDelivered(ctx, Query{BlockNum: query.BlockNum})
-	} else if strings.Compare(query.Pubkey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0 {
+	} else if query.HasPubkey() {
 		event, err = s.state.Datastore().GetDelivered(ctx, Query{PubKey: query.Pubkey})
 	} else {
 		return s.getTailDelivered(ctx, query.Limit, query.Cursor)
@@ -426,11 +450,11 @@ func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery)
 		err   error
 	)
 
-	if query.Slot > 0 {
+	if query.HasSlot() {
 		event, err = s.state.Datastore().GetHeader(ctx, Query{Slot: query.Slot})
-	} else if strings.Compare(query.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
+	} else if query.HasBlockHash() {
 		event, err = s.state.Datastore().GetHeader(ctx, Query{BlockHash: query.BlockHash})
-	} else if query.BlockNum != 0 {
+	} else if query.HasBlockNum() {
 		event, err = s.state.Datastore().GetHeader(ctx, Query{BlockNum: query.BlockNum})
 	} else {
 		return s.getTailBlockReceived(ctx, query.Limit)
