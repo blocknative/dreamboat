@@ -53,7 +53,7 @@ require (
 )
 
 require (
-	github.com/flashbots/go-boost-utils v0.3.2
+	github.com/flashbots/go-boost-utils v1.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/r3labs/sse/v2 v2.8.1
 	golang.org/x/sys v0.0.0-20220727055044-e65921a090b8 // indirect
