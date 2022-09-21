@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,11 +45,11 @@ type TraceQuery struct {
 }
 
 func (q TraceQuery) HasSlot() bool {
-	return q.Slot > Slot(0)
+	return q.Slot != Slot(0)
 }
 
 func (q TraceQuery) HasBlockHash() bool {
-	return q.BlockHash == types.Hash{}
+	return q.BlockHash != types.Hash{}
 }
 
 func (q TraceQuery) HasBlockNum() bool {
@@ -58,7 +57,7 @@ func (q TraceQuery) HasBlockNum() bool {
 }
 
 func (q TraceQuery) HasPubkey() bool {
-	return q.Pubkey == types.PublicKey{}
+	return q.Pubkey != types.PublicKey{}
 }
 
 func (q TraceQuery) HasCursor() bool {
