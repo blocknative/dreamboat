@@ -3,12 +3,14 @@ package relay
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
+	ds "github.com/ipfs/go-datastore"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
@@ -276,6 +278,8 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 				Slot:  e.Slot,
 				Entry: &reg,
 			})
+		} else if err != nil && errors.Is(err, ds.ErrNotFound) {
+			logger.Warn(err)
 		}
 	}
 
