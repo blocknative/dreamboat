@@ -3,14 +3,12 @@ package relay
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
-	ds "github.com/ipfs/go-datastore"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
@@ -268,7 +266,6 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 	state.proposerDutiesResponse = make(BuilderGetValidatorsResponseEntrySlice, 0, len(entries))
 	state.currentSlot = headSlot
 
-	notRegistered := 0
 	for _, e := range entries {
 		reg, err := s.Datastore.GetRegistration(ctx, e.PubKey)
 		if err == nil {
@@ -279,17 +276,14 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 				Slot:  e.Slot,
 				Entry: &reg,
 			})
-		} else if errors.Is(err, ds.ErrNotFound) {
-			notRegistered++
 		}
 	}
 
 	s.state.duties.Store(state)
 
 	logger.With(log.F{
-		"processingTimeMs":        time.Since(timeStart).Milliseconds(),
-		"receivedDuties":          len(entries),
-		"notRegisteredValidators": notRegistered,
+		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"receivedDuties":   len(entries),
 	}).With(state.proposerDutiesResponse).Debug("proposer duties updated")
 
 	return nil

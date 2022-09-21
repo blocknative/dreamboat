@@ -463,15 +463,6 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 		return errors.New("the slot payload was already delivered")
 	}
 
-	existingHeader, err := state.Datastore().GetHeader(ctx, slot)
-	if err == nil && submitBlockRequest.Message.Value.Cmp(&existingHeader.Trace.Value) < 1 {
-		// received bid is lower than current bid, so we do not store it
-		logger.
-			WithField("existingBid", existingHeader.Trace.Value.String()).
-			Debug("lower bid received")
-		return nil
-	}
-
 	payload := SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
 
 	if err := state.Datastore().PutPayload(ctx, SubmissionToKey(submitBlockRequest), &payload, rs.config.TTL); err != nil {
