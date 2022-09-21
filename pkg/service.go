@@ -50,7 +50,7 @@ func (q TraceQuery) HasSlot() bool {
 }
 
 func (q TraceQuery) HasBlockHash() bool {
-	return strings.Compare(q.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0
+	return q.BlockHash == types.Hash{}
 }
 
 func (q TraceQuery) HasBlockNum() bool {
@@ -58,7 +58,7 @@ func (q TraceQuery) HasBlockNum() bool {
 }
 
 func (q TraceQuery) HasPubkey() bool {
-	return strings.Compare(q.Pubkey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0
+	return q.Pubkey == types.PublicKey{}
 }
 
 func (q TraceQuery) HasCursor() bool {

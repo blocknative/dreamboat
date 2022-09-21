@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -241,7 +240,7 @@ func (s DefaultDatastore) queryToHeaderKey(ctx context.Context, query Query) (ds
 		err    error
 	)
 
-	if strings.Compare(query.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
+	if (query.BlockHash != types.Hash{}) {
 		rawKey, err = s.Storage.Get(ctx, HeaderHashKey(query.BlockHash))
 	} else if query.BlockNum != 0 {
 		rawKey, err = s.Storage.Get(ctx, HeaderNumKey(query.BlockNum))
@@ -261,11 +260,11 @@ func (s DefaultDatastore) queryTodeliveredKey(ctx context.Context, query Query) 
 		err    error
 	)
 
-	if strings.Compare(query.BlockHash.String(), "0x0000000000000000000000000000000000000000000000000000000000000000") != 0 {
+	if (query.BlockHash != types.Hash{}) {
 		rawKey, err = s.Storage.Get(ctx, DeliveredHashKey(query.BlockHash))
 	} else if query.BlockNum != 0 {
 		rawKey, err = s.Storage.Get(ctx, DeliveredNumKey(query.BlockNum))
-	} else if strings.Compare(query.PubKey.String(), "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000") != 0 {
+	} else if (query.PubKey != types.PublicKey{}) {
 		rawKey, err = s.Storage.Get(ctx, DeliveredPubkeyKey(query.PubKey))
 	} else {
 		rawKey = HeaderKey(query.Slot).Bytes()
