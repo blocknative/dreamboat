@@ -124,7 +124,7 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.S
 }
 
 func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.SignedValidatorRegistration, state State) error {
-	logger := rs.Log().WithField("method", "ProcessValidator")
+	logger := rs.Log().WithField("method", "RegisterValidator")
 	timeStart := time.Now()
 
 	for i := 0; i < len(payload) && ctx.Err() == nil; i++ {
@@ -199,7 +199,7 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 
 	logger.With(log.F{
 		"processingTimeMs":      time.Since(timeStart).Milliseconds(),
-		"numberBatchValidators": len(payload),
+		"numberValidators": len(payload),
 	}).Trace("validator batch registered")
 
 	return nil
@@ -304,7 +304,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	logger.With(log.F{
 		"slot":      payloadRequest.Message.Slot,
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
-		"proposer":  pk,
+		"pubkey":  pk,
 	}).Debug("payload requested")
 
 	ok, err := types.VerifySignature(
@@ -315,7 +315,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	)
 	if !ok || err != nil {
 		logger.WithField(
-			"proposer", proposerPubkey,
+			"pubkey", proposerPubkey,
 		).Error("signature invalid")
 		return nil, fmt.Errorf("signature invalid")
 	}
@@ -329,7 +329,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	payload, err := state.Datastore().GetPayload(ctx, key)
 	if err != nil || payload == nil {
 		logger.WithError(err).With(log.F{
-			"proposer":  pk,
+			"pubkey":  pk,
 			"slot":      payloadRequest.Message.Slot,
 			"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		}).Error("no payload found")
@@ -456,6 +456,12 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 	}
 
 	slot := Slot(submitBlockRequest.Message.Slot)
+
+	_, err = state.Datastore().GetDelivered(ctx, slot)
+	if err == nil {
+		logger.Debug("block submission after payload delivered")
+		return errors.New("the slot payload was already delivered")
+	}
 
 	existingHeader, err := state.Datastore().GetHeader(ctx, slot)
 	if err == nil && submitBlockRequest.Message.Value.Cmp(&existingHeader.Trace.Value) < 1 {
