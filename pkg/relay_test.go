@@ -168,7 +168,7 @@ func TestGetPayload(t *testing.T) {
 			AttesterSlashings:      []*types.AttesterSlashing{},
 			Attestations:           []*types.Attestation{},
 			Deposits:               []*types.Deposit{},
-			VoluntaryExits:         []*types.VoluntaryExit{},
+			VoluntaryExits:         []*types.SignedVoluntaryExit{},
 			SyncAggregate:          &types.SyncAggregate{types.CommitteeBits{0x07}, types.Signature{0x08}},
 			ExecutionPayloadHeader: header,
 		},

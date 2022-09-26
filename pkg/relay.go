@@ -359,6 +359,8 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 				BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
 				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
 				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
+				GasLimit:             payload.Payload.Data.GasLimit,
+				GasUsed:              payload.Payload.Data.GasUsed,
 				Value:                payload.Trace.Message.Value,
 			},
 			Timestamp: payload.Payload.Data.Timestamp,
