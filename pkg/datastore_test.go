@@ -36,19 +36,24 @@ func TestPutGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := ds.GetHeader(ctx, slot)
+	gotHeader, err := ds.GetHeader(ctx, relay.Query{Slot: slot})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
 
 	// get by block hash
-	gotHeader, err = ds.GetHeaderByBlockHash(ctx, header.Header.BlockHash)
+	gotHeader, err = ds.GetHeader(ctx, relay.Query{BlockHash: header.Trace.BlockHash})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
 
 	// get by block number
-	gotHeader, err = ds.GetHeaderByBlockNum(ctx, header.Header.BlockNumber)
+	gotHeader, err = ds.GetHeader(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
+	require.NoError(t, err)
+	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeader.Header)
+
+	gotHeader, err = ds.GetHeader(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
@@ -70,41 +75,40 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	_, err = d.GetDelivered(ctx, slot)
+	_, err = d.GetDelivered(ctx, relay.Query{Slot: slot})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block hash
-	_, err = d.GetDeliveredByBlockHash(ctx, header.Trace.BlockHash)
+	_, err = d.GetDelivered(ctx, relay.Query{BlockHash: header.Trace.BlockHash})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block number
-	_, err = d.GetDeliveredByBlockNum(ctx, header.Header.BlockNumber)
+	_, err = d.GetDelivered(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
-	_, err = d.GetDeliveredByPubkey(ctx, header.Trace.ProposerPubkey)
+	_, err = d.GetDelivered(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// set as delivered and retrieve again
 	err = d.PutDelivered(ctx, slot, relay.DeliveredTrace{Trace: *header.Trace, BlockNumber: header.Header.BlockNumber}, time.Minute)
-
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := d.GetDelivered(ctx, slot)
+	gotHeader, err := d.GetDelivered(ctx, relay.Query{Slot: slot})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
 	// get by block hash
-	gotHeader, err = d.GetDeliveredByBlockHash(ctx, header.Trace.BlockHash)
+	gotHeader, err = d.GetDelivered(ctx, relay.Query{BlockHash: header.Trace.BlockHash})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
 	// get by block number
-	gotHeader, err = d.GetDeliveredByBlockNum(ctx, header.Header.BlockNumber)
+	gotHeader, err = d.GetDelivered(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
-	gotHeader, err = d.GetDeliveredByPubkey(ctx, header.Trace.ProposerPubkey)
+	gotHeader, err = d.GetDelivered(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 }
@@ -118,14 +122,14 @@ func TestPutGetHeaderBatch(t *testing.T) {
 	const N = 10
 
 	batch := make([]relay.HeaderAndTrace, 0)
-	slots := make([]relay.Slot, 0)
+	queries := make([]relay.Query, 0)
 
 	for i := 0; i < N; i++ {
 		header := randomHeaderAndTrace()
 		slot := relay.Slot(rand.Int())
 
 		batch = append(batch, header)
-		slots = append(slots, slot)
+		queries = append(queries, relay.Query{Slot: slot})
 	}
 
 	sort.Slice(batch, func(i, j int) bool {
@@ -138,10 +142,10 @@ func TestPutGetHeaderBatch(t *testing.T) {
 		store := newMockDatastore()
 		ds := relay.DefaultDatastore{Storage: store}
 		for i, payload := range batch {
-			ds.PutHeader(ctx, slots[i], payload, time.Minute)
+			ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
 		}
 		// get
-		gotBatch, err := ds.GetHeaderBatch(ctx, slots)
+		gotBatch, err := ds.GetHeaderBatch(ctx, queries)
 		require.NoError(t, err)
 		sort.Slice(gotBatch, func(i, j int) bool {
 			return gotBatch[i].Trace.Slot < gotBatch[j].Trace.Slot
@@ -158,10 +162,10 @@ func TestPutGetHeaderBatch(t *testing.T) {
 		ds := relay.DefaultDatastore{Storage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 		for i, payload := range batch {
-			ds.PutHeader(ctx, slots[i], payload, time.Minute)
+			ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
 		}
 		// get
-		gotBatch, err := ds.GetHeaderBatch(ctx, slots)
+		gotBatch, err := ds.GetHeaderBatch(ctx, queries)
 		require.NoError(t, err)
 		sort.Slice(gotBatch, func(i, j int) bool {
 			return gotBatch[i].Trace.Slot < gotBatch[j].Trace.Slot
@@ -179,39 +183,38 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 
 	const N = 10
 
-	batch := make([]relay.BidTraceWithTimestamp, 0)
-	slots := make([]relay.Slot, 0)
+	batch := make([]relay.HeaderAndTrace, 0)
+	queries := make([]relay.Query, 0)
 
 	for i := 0; i < N; i++ {
-		header := randomBlockBidAndTrace()
-		trace := header.Trace
-		slot := relay.Slot(rand.Int())
+		header := randomHeaderAndTrace()
+		slot := relay.Slot(header.Trace.Slot)
 
-		batch = append(batch, relay.BidTraceWithTimestamp{BidTrace: *trace.Message, Timestamp: header.Payload.Data.Timestamp})
-		slots = append(slots, slot)
+		batch = append(batch, header)
+		queries = append(queries, relay.Query{Slot: slot})
 	}
 
 	sort.Slice(batch, func(i, j int) bool {
-		return batch[i].Slot < batch[j].Slot
+		return batch[i].Trace.Slot < batch[j].Trace.Slot
 	})
 
 	store := newMockDatastore()
 	ds := relay.DefaultDatastore{Storage: store}
-	for i, trace := range batch {
-		ds.PutHeader(ctx, slots[i], relay.HeaderAndTrace{Trace: &trace, Header: &types.ExecutionPayloadHeader{}}, time.Minute)
+	for i, header := range batch {
+		err := ds.PutHeader(ctx, queries[i].Slot, header, time.Minute)
+		require.NoError(t, err)
 	}
 	// get
-	gotBatch, _ := ds.GetDeliveredBatch(ctx, slots)
+	gotBatch, _ := ds.GetDeliveredBatch(ctx, queries)
 	require.Len(t, gotBatch, 0)
 
-	for i := 0; i < N; i++ {
-		trace := batch[i]
-		err := ds.PutDelivered(ctx, slots[i], relay.DeliveredTrace{Trace: trace, BlockNumber: 0}, time.Minute)
+	for i, header := range batch {
+		trace := relay.DeliveredTrace{Trace: *header.Trace, BlockNumber: header.Header.BlockNumber}
+		err := ds.PutDelivered(ctx, queries[i].Slot, trace, time.Minute)
 		require.NoError(t, err)
-
 	}
 
-	gotBatch, err := ds.GetDeliveredBatch(ctx, slots)
+	gotBatch, err := ds.GetDeliveredBatch(ctx, queries)
 	require.NoError(t, err)
 	sort.Slice(gotBatch, func(i, j int) bool {
 		return gotBatch[i].BidTrace.Slot < gotBatch[j].BidTrace.Slot

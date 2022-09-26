@@ -37,7 +37,7 @@ func (m *MockRelayService) EXPECT() *MockRelayServiceMockRecorder {
 }
 
 // GetBlockReceived mocks base method.
-func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 relay.Slot) ([]relay.BidTraceWithTimestamp, error) {
+func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 relay.TraceQuery) ([]relay.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBlockReceived", arg0, arg1)
 	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
@@ -49,96 +49,6 @@ func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 relay.Slo
 func (mr *MockRelayServiceMockRecorder) GetBlockReceived(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockReceived", reflect.TypeOf((*MockRelayService)(nil).GetBlockReceived), arg0, arg1)
-}
-
-// GetBlockReceivedByHash mocks base method.
-func (m *MockRelayService) GetBlockReceivedByHash(arg0 context.Context, arg1 types.Hash) ([]relay.BidTraceWithTimestamp, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlockReceivedByHash", arg0, arg1)
-	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBlockReceivedByHash indicates an expected call of GetBlockReceivedByHash.
-func (mr *MockRelayServiceMockRecorder) GetBlockReceivedByHash(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockReceivedByHash", reflect.TypeOf((*MockRelayService)(nil).GetBlockReceivedByHash), arg0, arg1)
-}
-
-// GetBlockReceivedByNum mocks base method.
-func (m *MockRelayService) GetBlockReceivedByNum(arg0 context.Context, arg1 uint64) ([]relay.BidTraceWithTimestamp, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlockReceivedByNum", arg0, arg1)
-	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBlockReceivedByNum indicates an expected call of GetBlockReceivedByNum.
-func (mr *MockRelayServiceMockRecorder) GetBlockReceivedByNum(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockReceivedByNum", reflect.TypeOf((*MockRelayService)(nil).GetBlockReceivedByNum), arg0, arg1)
-}
-
-// GetDelivered mocks base method.
-func (m *MockRelayService) GetDelivered(arg0 context.Context, arg1 relay.Slot) ([]types.BidTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDelivered", arg0, arg1)
-	ret0, _ := ret[0].([]types.BidTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetDelivered indicates an expected call of GetDelivered.
-func (mr *MockRelayServiceMockRecorder) GetDelivered(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDelivered", reflect.TypeOf((*MockRelayService)(nil).GetDelivered), arg0, arg1)
-}
-
-// GetDeliveredByHash mocks base method.
-func (m *MockRelayService) GetDeliveredByHash(arg0 context.Context, arg1 types.Hash) ([]types.BidTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDeliveredByHash", arg0, arg1)
-	ret0, _ := ret[0].([]types.BidTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetDeliveredByHash indicates an expected call of GetDeliveredByHash.
-func (mr *MockRelayServiceMockRecorder) GetDeliveredByHash(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredByHash", reflect.TypeOf((*MockRelayService)(nil).GetDeliveredByHash), arg0, arg1)
-}
-
-// GetDeliveredByNum mocks base method.
-func (m *MockRelayService) GetDeliveredByNum(arg0 context.Context, arg1 uint64) ([]types.BidTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDeliveredByNum", arg0, arg1)
-	ret0, _ := ret[0].([]types.BidTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetDeliveredByNum indicates an expected call of GetDeliveredByNum.
-func (mr *MockRelayServiceMockRecorder) GetDeliveredByNum(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredByNum", reflect.TypeOf((*MockRelayService)(nil).GetDeliveredByNum), arg0, arg1)
-}
-
-// GetDeliveredByPubKey mocks base method.
-func (m *MockRelayService) GetDeliveredByPubKey(arg0 context.Context, arg1 types.PublicKey) ([]types.BidTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDeliveredByPubKey", arg0, arg1)
-	ret0, _ := ret[0].([]types.BidTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetDeliveredByPubKey indicates an expected call of GetDeliveredByPubKey.
-func (mr *MockRelayServiceMockRecorder) GetDeliveredByPubKey(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredByPubKey", reflect.TypeOf((*MockRelayService)(nil).GetDeliveredByPubKey), arg0, arg1)
 }
 
 // GetHeader mocks base method.
@@ -171,49 +81,19 @@ func (mr *MockRelayServiceMockRecorder) GetPayload(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockRelayService)(nil).GetPayload), arg0, arg1)
 }
 
-// GetTailBlockReceived mocks base method.
-func (m *MockRelayService) GetTailBlockReceived(arg0 context.Context, arg1 uint64) ([]relay.BidTraceWithTimestamp, error) {
+// GetPayloadDelivered mocks base method.
+func (m *MockRelayService) GetPayloadDelivered(arg0 context.Context, arg1 relay.TraceQuery) ([]types.BidTrace, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTailBlockReceived", arg0, arg1)
-	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTailBlockReceived indicates an expected call of GetTailBlockReceived.
-func (mr *MockRelayServiceMockRecorder) GetTailBlockReceived(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTailBlockReceived", reflect.TypeOf((*MockRelayService)(nil).GetTailBlockReceived), arg0, arg1)
-}
-
-// GetTailDelivered mocks base method.
-func (m *MockRelayService) GetTailDelivered(arg0 context.Context, arg1 uint64) ([]types.BidTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTailDelivered", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetPayloadDelivered", arg0, arg1)
 	ret0, _ := ret[0].([]types.BidTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetTailDelivered indicates an expected call of GetTailDelivered.
-func (mr *MockRelayServiceMockRecorder) GetTailDelivered(arg0, arg1 interface{}) *gomock.Call {
+// GetPayloadDelivered indicates an expected call of GetPayloadDelivered.
+func (mr *MockRelayServiceMockRecorder) GetPayloadDelivered(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTailDelivered", reflect.TypeOf((*MockRelayService)(nil).GetTailDelivered), arg0, arg1)
-}
-
-// GetTailDeliveredCursor mocks base method.
-func (m *MockRelayService) GetTailDeliveredCursor(arg0 context.Context, arg1, arg2 uint64) ([]types.BidTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTailDeliveredCursor", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]types.BidTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTailDeliveredCursor indicates an expected call of GetTailDeliveredCursor.
-func (mr *MockRelayServiceMockRecorder) GetTailDeliveredCursor(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTailDeliveredCursor", reflect.TypeOf((*MockRelayService)(nil).GetTailDeliveredCursor), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayloadDelivered", reflect.TypeOf((*MockRelayService)(nil).GetPayloadDelivered), arg0, arg1)
 }
 
 // GetValidators mocks base method.
