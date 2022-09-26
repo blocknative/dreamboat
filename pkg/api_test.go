@@ -144,7 +144,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), relay.Slot(100)).
+			GetBlockReceived(gomock.Any(), relay.TraceQuery{Limit: 100, Slot: 100}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -167,7 +167,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceivedByHash(gomock.Any(), blockHash).
+			GetBlockReceived(gomock.Any(), relay.TraceQuery{Limit: 100, BlockHash: blockHash}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -189,7 +189,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceivedByNum(gomock.Any(), uint64(100)).
+			GetBlockReceived(gomock.Any(), relay.TraceQuery{Limit: 100, BlockNum: 100}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -211,7 +211,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetTailBlockReceived(gomock.Any(), uint64(50)).
+			GetBlockReceived(gomock.Any(), relay.TraceQuery{Limit: 50}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -232,7 +232,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetTailBlockReceived(gomock.Any(), uint64(100)).
+			GetBlockReceived(gomock.Any(), relay.TraceQuery{Limit: 100}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -254,7 +254,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetDelivered(gomock.Any(), relay.Slot(100)).
+			GetPayloadDelivered(gomock.Any(), relay.TraceQuery{Limit: 100, Slot: 100}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -277,11 +277,12 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetDeliveredByHash(gomock.Any(), blockHash).
+			GetPayloadDelivered(gomock.Any(), relay.TraceQuery{Limit: 100, BlockHash: blockHash}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
 	})
+
 	t.Run("payloadDelivered block_number", func(t *testing.T) {
 		t.Parallel()
 
@@ -299,7 +300,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetDeliveredByNum(gomock.Any(), uint64(100)).
+			GetPayloadDelivered(gomock.Any(), relay.TraceQuery{Limit: 100, BlockNum: 100}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -321,7 +322,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetTailDeliveredCursor(gomock.Any(), uint64(100), uint64(50)).
+			GetPayloadDelivered(gomock.Any(), relay.TraceQuery{Limit: 100, Cursor: 50}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -343,7 +344,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetTailDelivered(gomock.Any(), uint64(50)).
+			GetPayloadDelivered(gomock.Any(), relay.TraceQuery{Limit: 50}).
 			Times(1)
 
 		server.ServeHTTP(w, req)
@@ -364,7 +365,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetTailDelivered(gomock.Any(), uint64(100)).
+			GetPayloadDelivered(gomock.Any(), relay.TraceQuery{Limit: 100}).
 			Times(1)
 
 		server.ServeHTTP(w, req)

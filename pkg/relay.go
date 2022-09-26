@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -243,13 +242,13 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	header, err := state.Datastore().GetHeader(ctx, slot)
+	header, err := state.Datastore().GetHeader(ctx, Query{Slot: slot})
 	if err != nil {
 		log.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 
-	if header.Header == nil || strings.Compare(header.Header.ParentHash.String(), parentHash.String()) != 0 {
+	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}

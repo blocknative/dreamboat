@@ -234,91 +234,86 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) (int,
 
 func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) (int, error) {
 	slot, err := specificSlot(r)
-	if err == nil {
-		blocks, err := a.Service.GetDelivered(r.Context(), slot)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	}
 
 	bh, err := blockHash(r)
-	if err == nil {
-		blocks, err := a.Service.GetDeliveredByHash(r.Context(), bh)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	}
 
 	bn, err := blockNumber(r)
-	if err == nil {
-		blocks, err := a.Service.GetDeliveredByNum(r.Context(), bn)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	}
 
 	pk, err := publickKey(r)
-	if err == nil {
-		blocks, err := a.Service.GetDeliveredByPubKey(r.Context(), pk)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	}
 
 	limit, err := limit(r)
-	if errors.Is(err, ErrParamNotFound) {
-		limit = 100
-	} else if err != nil {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
+	} else if errors.Is(err, ErrParamNotFound) {
+		limit = 100
 	}
 
 	cursor, err := cursor(r)
-	if err == nil {
-		blocks, err := a.Service.GetTailDeliveredCursor(r.Context(), limit, cursor)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	}
 
-	blocks, err := a.Service.GetTailDelivered(r.Context(), limit)
+	query := TraceQuery{
+		Slot:      slot,
+		BlockHash: bh,
+		BlockNum:  bn,
+		Pubkey:    pk,
+		Cursor:    cursor,
+		Limit:     limit,
+	}
+
+	blocks, err := a.Service.GetPayloadDelivered(r.Context(), query)
 	return a.respond(w, blocks, err)
 }
 
 func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int, error) {
 	slot, err := specificSlot(r)
-	if err == nil {
-		blocks, err := a.Service.GetBlockReceived(r.Context(), slot)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	}
 
 	bh, err := blockHash(r)
-	if err == nil {
-		blocks, err := a.Service.GetBlockReceivedByHash(r.Context(), bh)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	}
 
 	bn, err := blockNumber(r)
-	if err == nil {
-		blocks, err := a.Service.GetBlockReceivedByNum(r.Context(), bn)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	}
 
 	limit, err := limit(r)
-	if err == nil {
-		blocks, err := a.Service.GetTailBlockReceived(r.Context(), limit)
-		return a.respond(w, blocks, err)
-	} else if err != nil && !errors.Is(err, ErrParamNotFound) {
+	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
+	} else if errors.Is(err, ErrParamNotFound) {
+		limit = 100
 	}
 
-	blocks, err := a.Service.GetTailBlockReceived(r.Context(), 100)
+	query := TraceQuery{
+		Slot:      slot,
+		BlockHash: bh,
+		BlockNum:  bn,
+		Limit:     limit,
+	}
+
+	blocks, err := a.Service.GetBlockReceived(r.Context(), query)
 	return a.respond(w, blocks, err)
+}
+
+func isInvalidParameter(err error) bool {
+	return isInvalidParameter(err)
 }
 
 func (a *API) respond(w http.ResponseWriter, v any, err error) (int, error) {
