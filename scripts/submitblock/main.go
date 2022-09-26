@@ -20,7 +20,8 @@ const (
 )
 
 var (
-	slot uint64 = 772407
+	slot uint64        = 0
+	bid  types.U256Str = types.IntToU256(0)
 )
 
 func main() {
@@ -86,7 +87,7 @@ func validSubmitBlockRequest(domain types.Domain) (*types.BuilderSubmitBlockRequ
 		BuilderPubkey:        pubKey,
 		ProposerPubkey:       types.PublicKey(random48Bytes()),
 		ProposerFeeRecipient: types.Address(random20Bytes()),
-		Value:                types.IntToU256(rand.Uint64()),
+		Value:                bid,
 	}
 
 	signature, err := types.SignMessage(msg, domain, sk)

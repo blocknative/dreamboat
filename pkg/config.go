@@ -36,7 +36,7 @@ type PubKey struct{ types.PublicKey }
 
 func (pk PubKey) Loggable() map[string]any {
 	return map[string]any{
-		"pub_key": pk,
+		"pubkey": pk,
 	}
 }
 
@@ -124,8 +124,8 @@ type builder struct {
 
 func (b builder) Loggable() map[string]any {
 	return map[string]any{
-		"pub_key": b.PubKey,
-		"url":     b.URL,
+		"pubkey": b.PubKey,
+		"url":    b.URL,
 	}
 }
 
