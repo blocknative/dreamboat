@@ -115,7 +115,7 @@ func randomPayload() *types.ExecutionPayload {
 		GasLimit:      rand.Uint64(),
 		GasUsed:       rand.Uint64(),
 		Timestamp:     rand.Uint64(),
-		ExtraData:     hexutil.Bytes{},
+		ExtraData:     types.ExtraData{},
 		BaseFeePerGas: types.IntToU256(rand.Uint64()),
 		BlockHash:     types.Hash(random32Bytes()),
 		Transactions:  randomTransactions(2),
