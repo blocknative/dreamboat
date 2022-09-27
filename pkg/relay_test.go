@@ -70,7 +70,7 @@ func TestGetHeader(t *testing.T) {
 	sk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: sk,
+		SecretKey: sk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
@@ -136,7 +136,7 @@ func TestGetPayload(t *testing.T) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,
+		SecretKey: pk,  //pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes()),
 		TTL:       time.Minute}
 	r, _ := relay.NewRelay(config)
@@ -375,7 +375,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,
+		SecretKey: pk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
@@ -436,7 +436,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,
+		SecretKey: pk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
@@ -505,7 +505,7 @@ func BenchmarkGetPayload(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,
+		SecretKey: pk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
@@ -534,7 +534,7 @@ func BenchmarkGetPayload(b *testing.B) {
 			AttesterSlashings:      []*types.AttesterSlashing{},
 			Attestations:           []*types.Attestation{},
 			Deposits:               []*types.Deposit{},
-			VoluntaryExits:         []*types.VoluntaryExit{},
+			VoluntaryExits:         []*types.SignedVoluntaryExit{},
 			SyncAggregate:          &types.SyncAggregate{types.CommitteeBits{0x07}, types.Signature{0x08}},
 			ExecutionPayloadHeader: header,
 		},
@@ -593,7 +593,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,
+		SecretKey: pk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
@@ -622,7 +622,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 			AttesterSlashings:      []*types.AttesterSlashing{},
 			Attestations:           []*types.Attestation{},
 			Deposits:               []*types.Deposit{},
-			VoluntaryExits:         []*types.VoluntaryExit{},
+			VoluntaryExits:         []*types.SignedVoluntaryExit{},
 			SyncAggregate:          &types.SyncAggregate{types.CommitteeBits{0x07}, types.Signature{0x08}},
 			ExecutionPayloadHeader: header,
 		},
@@ -687,7 +687,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	ctrl := gomock.NewController(b)
 
 	pk, _, _ := bls.GenerateNewKeypair()
-	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk}
+	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk}  // pragma: allowlist secret
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
@@ -716,7 +716,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	ctrl := gomock.NewController(b)
 
 	pk, _, _ := bls.GenerateNewKeypair()
-	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk}
+	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk}  // pragma: allowlist secret
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)

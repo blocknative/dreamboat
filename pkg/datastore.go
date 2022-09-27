@@ -126,7 +126,7 @@ func (s DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace Del
 }
 
 func (s DefaultDatastore) GetDelivered(ctx context.Context, query Query) (BidTraceWithTimestamp, error) {
-	key, err := s.queryTodeliveredKey(ctx, query)
+	key, err := s.queryToDeliveredKey(ctx, query)
 	if err != nil {
 		return BidTraceWithTimestamp{}, err
 	}
@@ -147,7 +147,7 @@ func (s DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (BidTrac
 func (s DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Query) ([]BidTraceWithTimestamp, error) {
 	keys := make([]ds.Key, 0, len(queries))
 	for _, query := range queries {
-		key, err := s.queryTodeliveredKey(ctx, query)
+		key, err := s.queryToDeliveredKey(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -254,7 +254,7 @@ func (s DefaultDatastore) queryToHeaderKey(ctx context.Context, query Query) (ds
 	return ds.NewKey(string(rawKey)), nil
 }
 
-func (s DefaultDatastore) queryTodeliveredKey(ctx context.Context, query Query) (ds.Key, error) {
+func (s DefaultDatastore) queryToDeliveredKey(ctx context.Context, query Query) (ds.Key, error) {
 	var (
 		rawKey []byte
 		err    error
@@ -267,7 +267,7 @@ func (s DefaultDatastore) queryTodeliveredKey(ctx context.Context, query Query) 
 	} else if (query.PubKey != types.PublicKey{}) {
 		rawKey, err = s.Storage.Get(ctx, DeliveredPubkeyKey(query.PubKey))
 	} else {
-		rawKey = HeaderKey(query.Slot).Bytes()
+		rawKey = DeliveredKey(query.Slot).Bytes()
 	}
 
 	if err != nil {
