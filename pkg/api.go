@@ -313,7 +313,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 }
 
 func isInvalidParameter(err error) bool {
-	return isInvalidParameter(err)
+	return err != nil && !errors.Is(err, ErrParamNotFound)
 }
 
 func (a *API) respond(w http.ResponseWriter, v any, err error) (int, error) {

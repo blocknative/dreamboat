@@ -42,7 +42,7 @@ func TestPutGetHeader(t *testing.T) {
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
 
 	// get by block hash
-	gotHeader, err = ds.GetHeader(ctx, relay.Query{BlockHash: header.Trace.BlockHash})
+	gotHeader, err = ds.GetHeader(ctx, relay.Query{BlockHash: header.Header.BlockHash})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
@@ -53,10 +53,10 @@ func TestPutGetHeader(t *testing.T) {
 	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader.Header)
 
-	gotHeader, err = ds.GetHeader(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
-	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	// gotHeader, err = ds.GetHeader(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
+	// require.NoError(t, err)
+	// require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
+	// require.EqualValues(t, *header.Header, *gotHeader.Header)
 }
 
 func TestPutGetHeaderDelivered(t *testing.T) {
@@ -183,24 +183,26 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 
 	const N = 10
 
-	batch := make([]relay.HeaderAndTrace, 0)
+	headers := make([]relay.HeaderAndTrace, 0)
+	batch := make([]relay.BidTraceWithTimestamp, 0)
 	queries := make([]relay.Query, 0)
 
 	for i := 0; i < N; i++ {
 		header := randomHeaderAndTrace()
 		slot := relay.Slot(header.Trace.Slot)
 
-		batch = append(batch, header)
+		headers = append(headers, header)
+		batch = append(batch, *header.Trace)
 		queries = append(queries, relay.Query{Slot: slot})
 	}
 
 	sort.Slice(batch, func(i, j int) bool {
-		return batch[i].Trace.Slot < batch[j].Trace.Slot
+		return batch[i].Slot < batch[j].Slot
 	})
 
 	store := newMockDatastore()
 	ds := relay.DefaultDatastore{Storage: store}
-	for i, header := range batch {
+	for i, header := range headers {
 		err := ds.PutHeader(ctx, queries[i].Slot, header, time.Minute)
 		require.NoError(t, err)
 	}
@@ -208,7 +210,7 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 	gotBatch, _ := ds.GetDeliveredBatch(ctx, queries)
 	require.Len(t, gotBatch, 0)
 
-	for i, header := range batch {
+	for i, header := range headers {
 		trace := relay.DeliveredTrace{Trace: *header.Trace, BlockNumber: header.Header.BlockNumber}
 		err := ds.PutDelivered(ctx, queries[i].Slot, trace, time.Minute)
 		require.NoError(t, err)
