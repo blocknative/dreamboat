@@ -458,7 +458,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 
 	slot := Slot(submitBlockRequest.Message.Slot)
 
-	_, err = state.Datastore().GetDelivered(ctx, slot)
+	_, err = state.Datastore().GetDelivered(ctx, Query{Slot: slot})
 	if err == nil {
 		logger.Debug("block submission after payload delivered")
 		return errors.New("the slot payload was already delivered")
