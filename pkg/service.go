@@ -301,7 +301,7 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 				Slot:  e.Slot,
 				Entry: &reg,
 			})
-		} else if err != nil && errors.Is(err, ds.ErrNotFound) {
+		} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
 			logger.Warn(err)
 		}
 	}
