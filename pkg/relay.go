@@ -197,7 +197,7 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 	}
 
 	logger.With(log.F{
-		"processingTimeMs":      time.Since(timeStart).Milliseconds(),
+		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"numberValidators": len(payload),
 	}).Trace("validator batch registered")
 
@@ -242,11 +242,13 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	header, err := state.Datastore().GetHeader(ctx, Query{Slot: slot})
-	if err != nil {
-		log.Warn(noBuilderBidMsg)
+	headers, err := state.Datastore().GetHeaders(ctx, Query{Slot: slot})
+	if err != nil || len(headers) < 1 {
+		logger.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
+
+	header := headers[len(headers)-1]  // choose the received last header
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)
@@ -303,7 +305,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	logger.With(log.F{
 		"slot":      payloadRequest.Message.Slot,
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
-		"pubkey":  pk,
+		"pubkey":    pk,
 	}).Debug("payload requested")
 
 	ok, err := types.VerifySignature(
@@ -328,7 +330,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	payload, err := state.Datastore().GetPayload(ctx, key)
 	if err != nil || payload == nil {
 		logger.WithError(err).With(log.F{
-			"pubkey":  pk,
+			"pubkey":    pk,
 			"slot":      payloadRequest.Message.Slot,
 			"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		}).Error("no payload found")

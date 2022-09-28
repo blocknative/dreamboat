@@ -68,21 +68,6 @@ func (mr *MockDatastoreMockRecorder) GetDeliveredBatch(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredBatch", reflect.TypeOf((*MockDatastore)(nil).GetDeliveredBatch), arg0, arg1)
 }
 
-// GetHeader mocks base method.
-func (m *MockDatastore) GetHeader(arg0 context.Context, arg1 relay.Query) (relay.HeaderAndTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
-	ret0, _ := ret[0].(relay.HeaderAndTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetHeader indicates an expected call of GetHeader.
-func (mr *MockDatastoreMockRecorder) GetHeader(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockDatastore)(nil).GetHeader), arg0, arg1)
-}
-
 // GetHeaderBatch mocks base method.
 func (m *MockDatastore) GetHeaderBatch(arg0 context.Context, arg1 []relay.Query) ([]relay.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
@@ -96,6 +81,21 @@ func (m *MockDatastore) GetHeaderBatch(arg0 context.Context, arg1 []relay.Query)
 func (mr *MockDatastoreMockRecorder) GetHeaderBatch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaderBatch", reflect.TypeOf((*MockDatastore)(nil).GetHeaderBatch), arg0, arg1)
+}
+
+// GetHeaders mocks base method.
+func (m *MockDatastore) GetHeaders(arg0 context.Context, arg1 relay.Query) ([]relay.HeaderAndTrace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHeaders", arg0, arg1)
+	ret0, _ := ret[0].([]relay.HeaderAndTrace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHeaders indicates an expected call of GetHeaders.
+func (mr *MockDatastoreMockRecorder) GetHeaders(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaders", reflect.TypeOf((*MockDatastore)(nil).GetHeaders), arg0, arg1)
 }
 
 // GetPayload mocks base method.
