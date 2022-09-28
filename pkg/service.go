@@ -114,7 +114,7 @@ func (s *DefaultService) Run(ctx context.Context) (err error) {
 			s.Storage = &TTLDatastoreBatcher{storage}
 		}
 
-		s.Datastore = &DefaultDatastore{Storage: s.Storage}
+		s.Datastore = &DefaultDatastore{TTLStorage: s.Storage}
 	}
 	s.Log.
 		WithFields(logrus.Fields{
@@ -437,22 +437,26 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 
 func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery) ([]BidTraceWithTimestamp, error) {
 	var (
-		event HeaderAndTrace
-		err   error
+		events []HeaderAndTrace
+		err    error
 	)
 
 	if query.HasSlot() {
-		event, err = s.state.Datastore().GetHeader(ctx, Query{Slot: query.Slot})
+		events, err = s.state.Datastore().GetHeaders(ctx, Query{Slot: query.Slot})
 	} else if query.HasBlockHash() {
-		event, err = s.state.Datastore().GetHeader(ctx, Query{BlockHash: query.BlockHash})
+		events, err = s.state.Datastore().GetHeaders(ctx, Query{BlockHash: query.BlockHash})
 	} else if query.HasBlockNum() {
-		event, err = s.state.Datastore().GetHeader(ctx, Query{BlockNum: query.BlockNum})
+		events, err = s.state.Datastore().GetHeaders(ctx, Query{BlockNum: query.BlockNum})
 	} else {
 		return s.getTailBlockReceived(ctx, query.Limit)
 	}
 
 	if err == nil {
-		return []BidTraceWithTimestamp{*event.Trace}, err
+		traces := make([]BidTraceWithTimestamp, 0, len(events))
+		for _, event := range events {
+			traces = append(traces, *event.Trace)
+		}
+		return traces, err
 	} else if errors.Is(err, ds.ErrNotFound) {
 		return []BidTraceWithTimestamp{}, nil
 	}
