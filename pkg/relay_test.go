@@ -28,7 +28,7 @@ func TestRegisterValidator(t *testing.T) {
 
 	config := relay.Config{Log: log.New(), Network: "ropsten", TTL: time.Minute}
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	relaySigningDomain, err := relay.ComputeDomain(
@@ -73,7 +73,7 @@ func TestGetHeader(t *testing.T) {
 		SecretKey: sk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	relaySigningDomain, err := relay.ComputeDomain(
@@ -140,7 +140,7 @@ func TestGetPayload(t *testing.T) {
 		PubKey:    types.PublicKey(random48Bytes()),
 		TTL:       time.Minute}
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	proposerSigningDomain, err := relay.ComputeDomain(
@@ -225,7 +225,7 @@ func TestGetValidators(t *testing.T) {
 	config := relay.Config{Log: log.New(), Network: "ropsten"}
 	r, err := relay.NewRelay(config)
 	require.NoError(t, err)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	bc.EXPECT().ValidatorsMap().Return(nil).Times(1)
@@ -245,7 +245,7 @@ func TestSubmitBlock(t *testing.T) {
 	sk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: sk, TTL: time.Minute}
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	relaySigningDomain, err := relay.ComputeDomain(
@@ -273,9 +273,10 @@ func TestSubmitBlock(t *testing.T) {
 
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeader, err := ds.GetHeader(ctx, relay.Query{Slot: relay.Slot(submitRequest.Message.Slot)})
+	gotHeaders, err := ds.GetHeaders(ctx, relay.Query{Slot: relay.Slot(submitRequest.Message.Slot)})
 	require.NoError(t, err)
-	require.EqualValues(t, header, gotHeader.Header)
+	require.Len(t, gotHeaders, 1)
+	require.EqualValues(t, header, gotHeaders[0].Header)
 }
 
 func BenchmarkRegisterValidator(b *testing.B) {
@@ -289,7 +290,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 	config := relay.Config{Log: log.New(), Network: "ropsten", TTL: 5 * time.Minute}
 	r, _ := relay.NewRelay(config)
 
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	validators := make([]types.SignedValidatorRegistration, 0, N)
@@ -329,7 +330,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	config := relay.Config{Log: log.New(), Network: "ropsten"}
 	r, _ := relay.NewRelay(config)
 
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	validators := make([]types.SignedValidatorRegistration, 0, N)
@@ -378,7 +379,7 @@ func BenchmarkGetHeader(b *testing.B) {
 		SecretKey: pk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	proposerSigningDomain, _ := relay.ComputeDomain(
@@ -439,7 +440,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		SecretKey: pk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	proposerSigningDomain, _ := relay.ComputeDomain(
@@ -508,7 +509,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		SecretKey: pk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	proposerSigningDomain, _ := relay.ComputeDomain(
@@ -596,7 +597,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		SecretKey: pk,  // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	proposerSigningDomain, _ := relay.ComputeDomain(
@@ -689,7 +690,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk}  // pragma: allowlist secret
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	relaySigningDomain, _ := relay.ComputeDomain(
@@ -718,7 +719,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk}  // pragma: allowlist secret
 	r, _ := relay.NewRelay(config)
-	ds := &relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
 	relaySigningDomain, _ := relay.ComputeDomain(
