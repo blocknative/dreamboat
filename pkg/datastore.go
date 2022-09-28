@@ -4,7 +4,9 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -47,7 +49,7 @@ type DeliveredTrace struct {
 
 type Datastore interface {
 	PutHeader(context.Context, Slot, HeaderAndTrace, time.Duration) error
-	GetHeader(context.Context, Query) (HeaderAndTrace, error)
+	GetHeaders(context.Context, Query) ([]HeaderAndTrace, error)
 	GetHeaderBatch(context.Context, []Query) ([]HeaderAndTrace, error)
 	PutDelivered(context.Context, Slot, DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, Query) (BidTraceWithTimestamp, error)
@@ -59,7 +61,8 @@ type Datastore interface {
 }
 
 type DefaultDatastore struct {
-	Storage TTLStorage
+	TTLStorage
+	mu sync.Mutex
 }
 
 type TTLStorage interface {
@@ -69,51 +72,63 @@ type TTLStorage interface {
 	Close() error
 }
 
-func (s DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header HeaderAndTrace, ttl time.Duration) error {
-	if err := s.Storage.PutWithTTL(ctx, HeaderHashKey(header.Header.BlockHash), HeaderKey(slot).Bytes(), ttl); err != nil {
+func (s *DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header HeaderAndTrace, ttl time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	headers, err := s.getHeaders(ctx, HeaderKey(slot))
+	if errors.Is(err, ds.ErrNotFound) {
+		headers = make([]HeaderAndTrace, 0, 1)
+	} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
 		return err
 	}
 
-	if err := s.Storage.PutWithTTL(ctx, HeaderNumKey(header.Header.BlockNumber), HeaderKey(slot).Bytes(), ttl); err != nil {
+	headers = append(headers, header)
+
+	if err := s.TTLStorage.PutWithTTL(ctx, HeaderHashKey(header.Header.BlockHash), HeaderKey(slot).Bytes(), ttl); err != nil {
 		return err
 	}
 
-	data, err := json.Marshal(header)
+	if err := s.TTLStorage.PutWithTTL(ctx, HeaderNumKey(header.Header.BlockNumber), HeaderKey(slot).Bytes(), ttl); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(headers)
 	if err != nil {
 		return err
 	}
-	return s.Storage.PutWithTTL(ctx, HeaderKey(slot), data, ttl)
+	return s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), data, ttl)
 }
 
-func (s DefaultDatastore) GetHeader(ctx context.Context, query Query) (HeaderAndTrace, error) {
+func (s *DefaultDatastore) GetHeaders(ctx context.Context, query Query) ([]HeaderAndTrace, error) {
 	key, err := s.queryToHeaderKey(ctx, query)
 	if err != nil {
-		return HeaderAndTrace{}, err
+		return nil, err
 	}
-	return s.getHeader(ctx, key)
+	return s.getHeaders(ctx, key)
 }
 
-func (s DefaultDatastore) getHeader(ctx context.Context, key ds.Key) (HeaderAndTrace, error) {
-	data, err := s.Storage.Get(ctx, key)
+func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]HeaderAndTrace, error) {
+	data, err := s.TTLStorage.Get(ctx, key)
 	if err != nil {
-		return HeaderAndTrace{}, err
+		return nil, err
 	}
 
-	var trace HeaderAndTrace
+	var trace []HeaderAndTrace
 	err = json.Unmarshal(data, &trace)
 	return trace, err
 }
 
-func (s DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace DeliveredTrace, ttl time.Duration) error {
-	if err := s.Storage.PutWithTTL(ctx, DeliveredHashKey(trace.Trace.BlockHash), DeliveredKey(slot).Bytes(), ttl); err != nil {
+func (s *DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace DeliveredTrace, ttl time.Duration) error {
+	if err := s.TTLStorage.PutWithTTL(ctx, DeliveredHashKey(trace.Trace.BlockHash), DeliveredKey(slot).Bytes(), ttl); err != nil {
 		return err
 	}
 
-	if err := s.Storage.PutWithTTL(ctx, DeliveredNumKey(trace.BlockNumber), DeliveredKey(slot).Bytes(), ttl); err != nil {
+	if err := s.TTLStorage.PutWithTTL(ctx, DeliveredNumKey(trace.BlockNumber), DeliveredKey(slot).Bytes(), ttl); err != nil {
 		return err
 	}
 
-	if err := s.Storage.PutWithTTL(ctx, DeliveredPubkeyKey(trace.Trace.ProposerPubkey), DeliveredKey(slot).Bytes(), ttl); err != nil {
+	if err := s.TTLStorage.PutWithTTL(ctx, DeliveredPubkeyKey(trace.Trace.ProposerPubkey), DeliveredKey(slot).Bytes(), ttl); err != nil {
 		return err
 	}
 
@@ -122,10 +137,10 @@ func (s DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace Del
 		return err
 	}
 
-	return s.Storage.PutWithTTL(ctx, DeliveredKey(slot), data, ttl)
+	return s.TTLStorage.PutWithTTL(ctx, DeliveredKey(slot), data, ttl)
 }
 
-func (s DefaultDatastore) GetDelivered(ctx context.Context, query Query) (BidTraceWithTimestamp, error) {
+func (s *DefaultDatastore) GetDelivered(ctx context.Context, query Query) (BidTraceWithTimestamp, error) {
 	key, err := s.queryToDeliveredKey(ctx, query)
 	if err != nil {
 		return BidTraceWithTimestamp{}, err
@@ -133,8 +148,8 @@ func (s DefaultDatastore) GetDelivered(ctx context.Context, query Query) (BidTra
 	return s.getDelivered(ctx, key)
 }
 
-func (s DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (BidTraceWithTimestamp, error) {
-	data, err := s.Storage.Get(ctx, key)
+func (s *DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (BidTraceWithTimestamp, error) {
+	data, err := s.TTLStorage.Get(ctx, key)
 	if err != nil {
 		return BidTraceWithTimestamp{}, err
 	}
@@ -144,7 +159,7 @@ func (s DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (BidTrac
 	return trace, err
 }
 
-func (s DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Query) ([]BidTraceWithTimestamp, error) {
+func (s *DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Query) ([]BidTraceWithTimestamp, error) {
 	keys := make([]ds.Key, 0, len(queries))
 	for _, query := range queries {
 		key, err := s.queryToDeliveredKey(ctx, query)
@@ -154,7 +169,7 @@ func (s DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Query
 		keys = append(keys, key)
 	}
 
-	batch, err := s.Storage.GetBatch(ctx, keys)
+	batch, err := s.TTLStorage.GetBatch(ctx, keys)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +186,7 @@ func (s DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Query
 	return traceBatch, err
 }
 
-func (s DefaultDatastore) GetHeaderBatch(ctx context.Context, queries []Query) ([]HeaderAndTrace, error) {
+func (s *DefaultDatastore) GetHeaderBatch(ctx context.Context, queries []Query) ([]HeaderAndTrace, error) {
 	keys := make([]ds.Key, 0, len(queries))
 	for _, query := range queries {
 		key, err := s.queryToHeaderKey(ctx, query)
@@ -181,33 +196,33 @@ func (s DefaultDatastore) GetHeaderBatch(ctx context.Context, queries []Query) (
 		keys = append(keys, key)
 	}
 
-	batch, err := s.Storage.GetBatch(ctx, keys)
+	batch, err := s.TTLStorage.GetBatch(ctx, keys)
 	if err != nil {
 		return nil, err
 	}
 
 	headerBatch := make([]HeaderAndTrace, 0, len(batch))
 	for _, data := range batch {
-		var header HeaderAndTrace
-		if err = json.Unmarshal(data, &header); err != nil {
+		var headers []HeaderAndTrace
+		if err = json.Unmarshal(data, &headers); err != nil {
 			return nil, err
 		}
-		headerBatch = append(headerBatch, header)
+		headerBatch = append(headerBatch, headers...)
 	}
 
 	return headerBatch, err
 }
 
-func (s DefaultDatastore) PutPayload(ctx context.Context, key PayloadKey, payload *BlockBidAndTrace, ttl time.Duration) error {
+func (s *DefaultDatastore) PutPayload(ctx context.Context, key PayloadKey, payload *BlockBidAndTrace, ttl time.Duration) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	return s.Storage.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
+	return s.TTLStorage.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
 }
 
-func (s DefaultDatastore) GetPayload(ctx context.Context, key PayloadKey) (*BlockBidAndTrace, error) {
-	data, err := s.Storage.Get(ctx, PayloadKeyKey(key))
+func (s *DefaultDatastore) GetPayload(ctx context.Context, key PayloadKey) (*BlockBidAndTrace, error) {
+	data, err := s.TTLStorage.Get(ctx, PayloadKeyKey(key))
 	if err != nil {
 		return nil, err
 	}
@@ -216,16 +231,16 @@ func (s DefaultDatastore) GetPayload(ctx context.Context, key PayloadKey) (*Bloc
 	return &payload, err
 }
 
-func (s DefaultDatastore) PutRegistration(ctx context.Context, pk PubKey, registration types.SignedValidatorRegistration, ttl time.Duration) error {
+func (s *DefaultDatastore) PutRegistration(ctx context.Context, pk PubKey, registration types.SignedValidatorRegistration, ttl time.Duration) error {
 	data, err := json.Marshal(registration)
 	if err != nil {
 		return err
 	}
-	return s.Storage.PutWithTTL(ctx, RegistrationKey(pk), data, ttl)
+	return s.TTLStorage.PutWithTTL(ctx, RegistrationKey(pk), data, ttl)
 }
 
-func (s DefaultDatastore) GetRegistration(ctx context.Context, pk PubKey) (types.SignedValidatorRegistration, error) {
-	data, err := s.Storage.Get(ctx, RegistrationKey(pk))
+func (s *DefaultDatastore) GetRegistration(ctx context.Context, pk PubKey) (types.SignedValidatorRegistration, error) {
+	data, err := s.TTLStorage.Get(ctx, RegistrationKey(pk))
 	if err != nil {
 		return types.SignedValidatorRegistration{}, err
 	}
@@ -234,16 +249,16 @@ func (s DefaultDatastore) GetRegistration(ctx context.Context, pk PubKey) (types
 	return registration, err
 }
 
-func (s DefaultDatastore) queryToHeaderKey(ctx context.Context, query Query) (ds.Key, error) {
+func (s *DefaultDatastore) queryToHeaderKey(ctx context.Context, query Query) (ds.Key, error) {
 	var (
 		rawKey []byte
 		err    error
 	)
 
 	if (query.BlockHash != types.Hash{}) {
-		rawKey, err = s.Storage.Get(ctx, HeaderHashKey(query.BlockHash))
+		rawKey, err = s.TTLStorage.Get(ctx, HeaderHashKey(query.BlockHash))
 	} else if query.BlockNum != 0 {
-		rawKey, err = s.Storage.Get(ctx, HeaderNumKey(query.BlockNum))
+		rawKey, err = s.TTLStorage.Get(ctx, HeaderNumKey(query.BlockNum))
 	} else {
 		rawKey = HeaderKey(query.Slot).Bytes()
 	}
@@ -254,18 +269,18 @@ func (s DefaultDatastore) queryToHeaderKey(ctx context.Context, query Query) (ds
 	return ds.NewKey(string(rawKey)), nil
 }
 
-func (s DefaultDatastore) queryToDeliveredKey(ctx context.Context, query Query) (ds.Key, error) {
+func (s *DefaultDatastore) queryToDeliveredKey(ctx context.Context, query Query) (ds.Key, error) {
 	var (
 		rawKey []byte
 		err    error
 	)
 
 	if (query.BlockHash != types.Hash{}) {
-		rawKey, err = s.Storage.Get(ctx, DeliveredHashKey(query.BlockHash))
+		rawKey, err = s.TTLStorage.Get(ctx, DeliveredHashKey(query.BlockHash))
 	} else if query.BlockNum != 0 {
-		rawKey, err = s.Storage.Get(ctx, DeliveredNumKey(query.BlockNum))
+		rawKey, err = s.TTLStorage.Get(ctx, DeliveredNumKey(query.BlockNum))
 	} else if (query.PubKey != types.PublicKey{}) {
-		rawKey, err = s.Storage.Get(ctx, DeliveredPubkeyKey(query.PubKey))
+		rawKey, err = s.TTLStorage.Get(ctx, DeliveredPubkeyKey(query.PubKey))
 	} else {
 		rawKey = DeliveredKey(query.Slot).Bytes()
 	}

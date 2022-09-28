@@ -26,7 +26,7 @@ func TestPutGetHeader(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ds := relay.DefaultDatastore{Storage: newMockDatastore()}
+	ds := relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 
 	header := randomHeaderAndTrace()
 	slot := relay.Slot(rand.Int())
@@ -36,27 +36,75 @@ func TestPutGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := ds.GetHeader(ctx, relay.Query{Slot: slot})
+	gotHeader, err := ds.GetHeaders(ctx, relay.Query{Slot: slot})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
 
 	// get by block hash
-	gotHeader, err = ds.GetHeader(ctx, relay.Query{BlockHash: header.Header.BlockHash})
+	gotHeader, err = ds.GetHeaders(ctx, relay.Query{BlockHash: header.Header.BlockHash})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
 
 	// get by block number
-	gotHeader, err = ds.GetHeader(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
+	gotHeader, err = ds.GetHeaders(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader.Header)
+	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+}
 
-	// gotHeader, err = ds.GetHeader(ctx, relay.Query{PubKey: header.Trace.ProposerPubkey})
-	// require.NoError(t, err)
-	// require.EqualValues(t, header.Trace.Value, gotHeader.Trace.Value)
-	// require.EqualValues(t, *header.Header, *gotHeader.Header)
+func TestPutGetHeaders(t *testing.T) {
+	t.Parallel()
+
+	const N = 100
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ds := relay.DefaultDatastore{TTLStorage: newMockDatastore()}
+
+	headers := make([]relay.HeaderAndTrace, N)
+	slots := make([]relay.Slot, N)
+
+	var wg sync.WaitGroup
+	for i := 0; i < N; i++ {
+		go func(i int) {
+			header := randomHeaderAndTrace()
+			slot := relay.Slot(rand.Int())
+			err := ds.PutHeader(ctx, slot, header, time.Minute)
+			require.NoError(t, err)
+			headers[i] = header
+			slots[i] = slot
+			wg.Done()
+		}(i)
+		wg.Add(1)
+	}
+
+	wg.Wait()
+
+	for i := 0; i < N; i++ {
+		slot := slots[i]
+		header := headers[i]
+
+		// get
+		gotHeader, err := ds.GetHeaders(ctx, relay.Query{Slot: slot})
+		require.NoError(t, err)
+		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
+		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+
+		// get by block hash
+		gotHeader, err = ds.GetHeaders(ctx, relay.Query{BlockHash: header.Header.BlockHash})
+		require.NoError(t, err)
+		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
+		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+
+		// get by block number
+		gotHeader, err = ds.GetHeaders(ctx, relay.Query{BlockNum: header.Header.BlockNumber})
+		require.NoError(t, err)
+		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
+		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+	}
 }
 
 func TestPutGetHeaderDelivered(t *testing.T) {
@@ -65,7 +113,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d := relay.DefaultDatastore{Storage: newMockDatastore()}
+	d := relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 
 	header := randomHeaderAndTrace()
 	slot := relay.Slot(rand.Int())
@@ -140,7 +188,7 @@ func TestPutGetHeaderBatch(t *testing.T) {
 		t.Parallel()
 
 		store := newMockDatastore()
-		ds := relay.DefaultDatastore{Storage: store}
+		ds := relay.DefaultDatastore{TTLStorage: store}
 		for i, payload := range batch {
 			ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
 		}
@@ -159,7 +207,7 @@ func TestPutGetHeaderBatch(t *testing.T) {
 
 		store, err := badger.NewDatastore("/tmp/BadgerBatcher", &badger.DefaultOptions)
 		require.NoError(t, err)
-		ds := relay.DefaultDatastore{Storage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
+		ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 		for i, payload := range batch {
 			ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
@@ -201,7 +249,7 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 	})
 
 	store := newMockDatastore()
-	ds := relay.DefaultDatastore{Storage: store}
+	ds := relay.DefaultDatastore{TTLStorage: store}
 	for i, header := range headers {
 		err := ds.PutHeader(ctx, queries[i].Slot, header, time.Minute)
 		require.NoError(t, err)
@@ -233,7 +281,7 @@ func TestPutGetPayload(t *testing.T) {
 	defer cancel()
 
 	store := newMockDatastore()
-	ds := relay.DefaultDatastore{Storage: store}
+	ds := relay.DefaultDatastore{TTLStorage: store}
 
 	payload := randomBlockBidAndTrace()
 
@@ -259,7 +307,7 @@ func TestPutGetRegistration(t *testing.T) {
 	defer cancel()
 
 	store := newMockDatastore()
-	ds := relay.DefaultDatastore{Storage: store}
+	ds := relay.DefaultDatastore{TTLStorage: store}
 
 	registration := randomRegistration()
 	key := relay.PubKey{registration.Message.Pubkey}
@@ -281,7 +329,7 @@ func BenchmarkPutRegistration(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := relay.DefaultDatastore{Storage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	registration := randomRegistration()
 	key := relay.PubKey{registration.Message.Pubkey}
@@ -304,7 +352,7 @@ func BenchmarkPutRegistrationParallel(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := relay.DefaultDatastore{Storage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	registration := randomRegistration()
 	key := relay.PubKey{registration.Message.Pubkey}
@@ -335,7 +383,7 @@ func BenchmarkGetRegistration(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := relay.DefaultDatastore{Storage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	registration := randomRegistration()
 	key := relay.PubKey{registration.Message.Pubkey}
@@ -360,7 +408,7 @@ func BenchmarkGetRegistrationParallel(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := relay.DefaultDatastore{Storage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	registration := randomRegistration()
 	key := relay.PubKey{registration.Message.Pubkey}
