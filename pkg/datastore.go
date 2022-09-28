@@ -114,9 +114,7 @@ func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]Header
 		return nil, err
 	}
 
-	var trace []HeaderAndTrace
-	err = json.Unmarshal(data, &trace)
-	return trace, err
+	return s.unsmarshalHeaders(data)
 }
 
 func (s *DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace DeliveredTrace, ttl time.Duration) error {
@@ -203,14 +201,26 @@ func (s *DefaultDatastore) GetHeaderBatch(ctx context.Context, queries []Query) 
 
 	headerBatch := make([]HeaderAndTrace, 0, len(batch))
 	for _, data := range batch {
-		var headers []HeaderAndTrace
-		if err = json.Unmarshal(data, &headers); err != nil {
+		headers, err := s.unsmarshalHeaders(data)
+		if err != nil {
 			return nil, err
 		}
 		headerBatch = append(headerBatch, headers...)
 	}
 
 	return headerBatch, err
+}
+
+func (s *DefaultDatastore) unsmarshalHeaders(data []byte) ([]HeaderAndTrace, error) {
+	var headers []HeaderAndTrace
+	if err := json.Unmarshal(data, &headers); err != nil {
+		var header HeaderAndTrace
+		if err := json.Unmarshal(data, &header); err != nil {
+			return nil, err
+		}
+		return []HeaderAndTrace{header}, nil
+	}
+	return headers, nil
 }
 
 func (s *DefaultDatastore) PutPayload(ctx context.Context, key PayloadKey, payload *BlockBidAndTrace, ttl time.Duration) error {
