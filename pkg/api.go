@@ -40,6 +40,10 @@ const (
 	PathPprofProfile = "/debug/pprof/profile"
 )
 
+const (
+	dataLimit = 200
+)
+
 var (
 	ErrParamNotFound = errors.New("not found")
 )
@@ -257,7 +261,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	} else if errors.Is(err, ErrParamNotFound) {
-		limit = 100
+		limit = dataLimit
 	}
 
 	cursor, err := cursor(r)
@@ -298,7 +302,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	} else if errors.Is(err, ErrParamNotFound) {
-		limit = 100
+		limit = dataLimit
 	}
 
 	query := TraceQuery{
@@ -368,7 +372,13 @@ func blockNumber(r *http.Request) (uint64, error) {
 
 func limit(r *http.Request) (uint64, error) {
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		return strconv.ParseUint(limitStr, 10, 64)
+		limit, err := strconv.ParseUint(limitStr, 10, 64)
+		if err != nil{
+			return 0, err
+		} else if dataLimit<limit{
+			return 0, fmt.Errorf("limit is higher than %d", dataLimit)
+		}
+		return limit, err
 	}
 	return 0, ErrParamNotFound
 }
