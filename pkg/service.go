@@ -394,17 +394,13 @@ func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQue
 }
 
 func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]types.BidTrace, error) {
-	start := s.state.Beacon().HeadSlot()
-	stop := start - Slot(s.Config.TTL/DurationPerSlot)
-
+	headSlot := s.state.Beacon().HeadSlot()
+	start := headSlot
 	if cursor != 0 {
-		stop = Max(Slot(cursor), stop)
-		if start <= stop {
-			return nil, errors.New("invalid cursor, is higher than headslot range")
-		}
-
-		limit = uint64(start - stop)
+		start = min(headSlot, Slot(cursor))
 	}
+
+	stop := start - Slot(s.Config.TTL/DurationPerSlot)
 
 	batch := make([]BidTraceWithTimestamp, 0, limit)
 	queries := make([]Query, 0, limit)
