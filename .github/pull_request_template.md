@@ -8,4 +8,4 @@ Explain the need or decisions which make this change necessary
 Briefly explain what components you modified or added, and how, to give context to your reviewers
 
 # Testing 🧪
-- [ ] `go test ./...` from root
+- [ ] `go test -race ./...` from root
