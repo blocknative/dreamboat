@@ -41,7 +41,7 @@ const (
 )
 
 const (
-	dataLimit = 200
+	DataLimit = 200
 )
 
 var (
@@ -261,7 +261,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	} else if errors.Is(err, ErrParamNotFound) {
-		limit = dataLimit
+		limit = DataLimit
 	}
 
 	cursor, err := cursor(r)
@@ -302,7 +302,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 	if isInvalidParameter(err) {
 		return http.StatusBadRequest, err
 	} else if errors.Is(err, ErrParamNotFound) {
-		limit = dataLimit
+		limit = DataLimit
 	}
 
 	query := TraceQuery{
@@ -375,8 +375,8 @@ func limit(r *http.Request) (uint64, error) {
 		limit, err := strconv.ParseUint(limitStr, 10, 64)
 		if err != nil{
 			return 0, err
-		} else if dataLimit<limit{
-			return 0, fmt.Errorf("limit is higher than %d", dataLimit)
+		} else if DataLimit<limit{
+			return 0, fmt.Errorf("limit is higher than %d", DataLimit)
 		}
 		return limit, err
 	}
