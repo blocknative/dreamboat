@@ -59,15 +59,15 @@ var flags = []cli.Flag{
 		Usage:   "`url` for beacon endpoint",
 		EnvVars: []string{"RELAY_BEACON"},
 	},
-	&cli.BoolFlag{
-		Name:    "check-builders",
-		Usage:   "check builder blocks",
-		EnvVars: []string{"RELAY_CHECK_BUILDERS"},
+	&cli.StringSliceFlag{
+		Name:    "simulation",
+		Usage:   "`url` for simulation cluster endpoint",
+		EnvVars: []string{"RELAY_SIMULATION"},
 	},
 	&cli.StringSliceFlag{
 		Name:    "builder",
 		Usage:   "`url` formatted as schema://pubkey@host",
-		EnvVars: []string{"BN_RELAY_BUILDER_URLS"},
+		EnvVars: []string{"RELAY_BUILDER_URLS"},
 	},
 	&cli.StringFlag{
 		Name:    "network",
@@ -91,7 +91,7 @@ var flags = []cli.Flag{
 		Name:    "ttl",
 		Usage:   "ttl of the data",
 		Value:   24 * time.Hour,
-		EnvVars: []string{"BN_RELAY_TTL"},
+		EnvVars: []string{"RELAY_TTL"},
 	},
 	&cli.BoolFlag{
 		Name:  "checkKnownValidator",
@@ -132,9 +132,9 @@ func setup() cli.BeforeFunc {
 			Log:                 logger(c),
 			RelayRequestTimeout: c.Duration("timeout"),
 			Network:             c.String("network"),
-			BuilderCheck:        c.Bool("check-builder"),
 			BuilderURLs:         c.StringSlice("builder"),
 			BeaconEndpoints:     c.StringSlice("beacon"),
+			SimulationEndpoint:  c.String("simulation"),
 			PubKey:              pk,
 			SecretKey:           sk,
 			Datadir:             c.String("datadir"),
