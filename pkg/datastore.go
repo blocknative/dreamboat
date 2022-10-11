@@ -83,6 +83,10 @@ func (s *DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header Head
 		return err
 	}
 
+	if 0 < len(headers) && headers[len(headers)-1].Header.BlockHash == header.Header.BlockHash {
+		return nil // deduplicate
+	}
+
 	headers = append(headers, header)
 
 	if err := s.TTLStorage.PutWithTTL(ctx, HeaderHashKey(header.Header.BlockHash), HeaderKey(slot).Bytes(), ttl); err != nil {
