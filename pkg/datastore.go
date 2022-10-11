@@ -83,6 +83,10 @@ func (s *DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header Head
 		return err
 	}
 
+	if 0 < len(headers) && headers[len(headers)-1].Header.BlockHash == header.Header.BlockHash {
+		return nil // deduplicate
+	}
+
 	headers = append(headers, header)
 
 	if err := s.TTLStorage.PutWithTTL(ctx, HeaderHashKey(header.Header.BlockHash), HeaderKey(slot).Bytes(), ttl); err != nil {
@@ -105,7 +109,12 @@ func (s *DefaultDatastore) GetHeaders(ctx context.Context, query Query) ([]Heade
 	if err != nil {
 		return nil, err
 	}
-	return s.getHeaders(ctx, key)
+	headers, err := s.getHeaders(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.deduplicateHeaders(headers, query), nil
 }
 
 func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]HeaderAndTrace, error) {
@@ -115,6 +124,27 @@ func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]Header
 	}
 
 	return s.unsmarshalHeaders(data)
+}
+
+func (s *DefaultDatastore) deduplicateHeaders(headers []HeaderAndTrace, query Query) []HeaderAndTrace {
+	filtered := headers[:0]
+	for _, header := range headers {
+		if (query.BlockHash != types.Hash{}) && (query.BlockHash != header.Header.BlockHash) {
+			continue
+		}
+		if (query.BlockNum != 0) && (query.BlockNum != header.Header.BlockNumber) {
+			continue
+		}
+		if (query.Slot != 0) && (uint64(query.Slot) != header.Trace.Slot) {
+			continue
+		}
+		if (query.PubKey != types.PublicKey{}) && (query.PubKey != header.Trace.ProposerPubkey) {
+			continue
+		}
+		filtered = append(filtered, header)
+	}
+
+	return filtered
 }
 
 func (s *DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace DeliveredTrace, ttl time.Duration) error {
@@ -185,30 +215,25 @@ func (s *DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Quer
 }
 
 func (s *DefaultDatastore) GetHeaderBatch(ctx context.Context, queries []Query) ([]HeaderAndTrace, error) {
-	keys := make([]ds.Key, 0, len(queries))
+	var batch []HeaderAndTrace
+
 	for _, query := range queries {
 		key, err := s.queryToHeaderKey(ctx, query)
 		if err != nil {
 			return nil, err
 		}
-		keys = append(keys, key)
-	}
 
-	batch, err := s.TTLStorage.GetBatch(ctx, keys)
-	if err != nil {
-		return nil, err
-	}
-
-	headerBatch := make([]HeaderAndTrace, 0, len(batch))
-	for _, data := range batch {
-		headers, err := s.unsmarshalHeaders(data)
-		if err != nil {
+		headers, err := s.getHeaders(ctx, key)
+		if errors.Is(err, ds.ErrNotFound) {
+			continue
+		} else if err != nil {
 			return nil, err
 		}
-		headerBatch = append(headerBatch, headers...)
+
+		batch = append(batch, headers...)
 	}
 
-	return headerBatch, err
+	return batch, nil
 }
 
 func (s *DefaultDatastore) unsmarshalHeaders(data []byte) ([]HeaderAndTrace, error) {

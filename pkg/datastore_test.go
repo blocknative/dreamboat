@@ -54,6 +54,33 @@ func TestPutGetHeader(t *testing.T) {
 	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
 }
 
+func TestPutGetHeaderDuplicate(t *testing.T) {
+	t.Parallel()
+
+	const N = 10
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ds := relay.DefaultDatastore{TTLStorage: newMockDatastore()}
+
+	header := randomHeaderAndTrace()
+	slot := relay.Slot(rand.Int())
+
+	for i := 0; i < N; i++ {
+		// put
+		err := ds.PutHeader(ctx, slot, header, time.Minute)
+		require.NoError(t, err)
+	}
+
+	// get
+	gotHeaders, err := ds.GetHeaders(ctx, relay.Query{Slot: slot})
+	require.NoError(t, err)
+	require.Len(t, gotHeaders, 1)
+	require.EqualValues(t, header.Trace.Value, gotHeaders[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeaders[0].Header)
+}
+
 func TestPutGetHeaders(t *testing.T) {
 	t.Parallel()
 
