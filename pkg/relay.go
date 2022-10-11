@@ -485,7 +485,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 				ParentHash:           payload.Payload.Data.ParentHash,
 				BlockHash:            payload.Payload.Data.BlockHash,
 				BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
-				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,git
+				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
 				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
 				Value:                submitBlockRequest.Message.Value,
 			},
