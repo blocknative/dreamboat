@@ -485,13 +485,17 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 				ParentHash:           payload.Payload.Data.ParentHash,
 				BlockHash:            payload.Payload.Data.BlockHash,
 				BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
-				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
+				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,git
 				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
 				Value:                submitBlockRequest.Message.Value,
 			},
 			Timestamp: payload.Payload.Data.Timestamp,
 		},
 	}
+
+	// TODO : store an array of headers, one per new builder
+	// This opens a DDOS vector of sending the same block from many different pubkeys
+	// first pass solution :we should limit to 1.5 x current number of builders.
 
 	err = state.Datastore().PutHeader(ctx, slot, h, rs.config.TTL)
 
