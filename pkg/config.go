@@ -73,6 +73,10 @@ func (c *Config) validate() error {
 		return err
 	}
 
+	if err := c.validateSimulationEndpoint(); err != nil {
+		return err
+	}
+
 	return c.validateBuilders()
 }
 
@@ -102,6 +106,14 @@ func (c *Config) validateNetwork() error {
 		return errors.New("unknown network")
 	}
 	return nil
+}
+
+func (c *Config) validateSimulationEndpoint() error {
+	u, err := url.Parse(c.SimulationEndpoint)
+	if err == nil && u.Scheme != "" && u.Host != "" {
+		return nil
+	}
+	return errors.New("invalid simulation endpoint")
 }
 
 func (c *Config) validateBuilders() (err error) {
