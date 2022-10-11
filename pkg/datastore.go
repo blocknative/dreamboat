@@ -127,7 +127,7 @@ func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]Header
 }
 
 func (s *DefaultDatastore) filterHeaders(headers []HeaderAndTrace, query Query) []HeaderAndTrace {
-	var filtered []HeaderAndTrace
+	filtered := headers[:0]
 	for _, header := range headers {
 		if (query.BlockHash != types.Hash{}) && (query.BlockHash != header.Header.BlockHash) {
 			continue
