@@ -114,7 +114,7 @@ func (s *DefaultDatastore) GetHeaders(ctx context.Context, query Query) ([]Heade
 		return nil, err
 	}
 
-	return s.filterHeaders(headers, query), nil
+	return s.deduplicateHeaders(headers, query), nil
 }
 
 func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]HeaderAndTrace, error) {
@@ -126,7 +126,7 @@ func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]Header
 	return s.unsmarshalHeaders(data)
 }
 
-func (s *DefaultDatastore) filterHeaders(headers []HeaderAndTrace, query Query) []HeaderAndTrace {
+func (s *DefaultDatastore) deduplicateHeaders(headers []HeaderAndTrace, query Query) []HeaderAndTrace {
 	filtered := headers[:0]
 	for _, header := range headers {
 		if (query.BlockHash != types.Hash{}) && (query.BlockHash != header.Header.BlockHash) {
