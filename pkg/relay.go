@@ -248,7 +248,7 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 
-	header := headers[len(headers)-1]  // choose the received last header
+	header := headers[len(headers)-1] // choose the received last header
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)
@@ -515,20 +515,31 @@ func (rs *DefaultRelay) GetValidators(state State) BuilderGetValidatorsResponseE
 	return validators
 }
 
+// verifyBlock returns whether a BuilderSubmitBlockRequest has a valid signature and accurate bid
 func (rs *DefaultRelay) verifyBlock(SubmitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) {
 	if SubmitBlockRequest == nil {
 		return false, fmt.Errorf("block empty")
 	}
 
-	_ = simulateBlock()
+	// simluation is more expensive, verify sig first
+	res, _ := types.VerifySignature(
+		SubmitBlockRequest.Message,
+		rs.builderSigningDomain,
+		SubmitBlockRequest.Message.BuilderPubkey[:],
+		SubmitBlockRequest.Signature[:],
+	)
 
-	return types.VerifySignature(SubmitBlockRequest.Message, rs.builderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
+	if !res {
+		return false, fmt.Errorf("invalid signature")
+	}
+
+	return simulateBlock()
 }
 
-func simulateBlock() bool {
+func simulateBlock() (bool, error) {
 	// TODO : Simulate block here once support for external builders
 	// we currently only support a single internally trusted builder
-	return true
+	return true, nil
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) PayloadKey {
