@@ -248,7 +248,7 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 
-	header := headers[len(headers)-1]  // choose the received last header
+	header := headers[len(headers)-1] // choose the received last header
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)
@@ -488,6 +488,8 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
 				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
 				Value:                submitBlockRequest.Message.Value,
+				GasLimit:             payload.Trace.Message.GasLimit,
+				GasUsed:              payload.Trace.Message.GasUsed,
 			},
 			Timestamp: payload.Payload.Data.Timestamp,
 		},
