@@ -70,7 +70,7 @@ func TestGetHeader(t *testing.T) {
 	sk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: sk,  // pragma: allowlist secret
+		SecretKey: sk, // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
@@ -108,7 +108,9 @@ func TestGetHeader(t *testing.T) {
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
-				BidTrace:  *submitRequest.Message,
+				BidTraceExtended: relay.BidTraceExtended{
+					BidTrace: *submitRequest.Message,
+				},
 				Timestamp: uint64(time.Now().UnixMicro()),
 			},
 		},
@@ -136,7 +138,7 @@ func TestGetPayload(t *testing.T) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,  //pragma: allowlist secret
+		SecretKey: pk, //pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes()),
 		TTL:       time.Minute}
 	r, _ := relay.NewRelay(config)
@@ -200,7 +202,9 @@ func TestGetPayload(t *testing.T) {
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
-				BidTrace:  *submitRequest.Message,
+				BidTraceExtended: relay.BidTraceExtended{
+					BidTrace: *submitRequest.Message,
+				},
 				Timestamp: uint64(time.Now().UnixMicro()),
 			},
 		},
@@ -376,7 +380,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,  // pragma: allowlist secret
+		SecretKey: pk, // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
@@ -410,7 +414,9 @@ func BenchmarkGetHeader(b *testing.B) {
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
-				BidTrace:  *submitRequest.Message,
+				BidTraceExtended: relay.BidTraceExtended{
+					BidTrace: *submitRequest.Message,
+				},
 				Timestamp: uint64(time.Now().UnixMicro()),
 			},
 		},
@@ -437,7 +443,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,  // pragma: allowlist secret
+		SecretKey: pk, // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
@@ -471,7 +477,9 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
-				BidTrace:  *submitRequest.Message,
+				BidTraceExtended: relay.BidTraceExtended{
+					BidTrace: *submitRequest.Message,
+				},
 				Timestamp: uint64(time.Now().UnixMicro()),
 			},
 		},
@@ -506,7 +514,7 @@ func BenchmarkGetPayload(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,  // pragma: allowlist secret
+		SecretKey: pk, // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
@@ -565,7 +573,9 @@ func BenchmarkGetPayload(b *testing.B) {
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
-				BidTrace:  *submitRequest.Message,
+				BidTraceExtended: relay.BidTraceExtended{
+					BidTrace: *submitRequest.Message,
+				},
 				Timestamp: uint64(time.Now().UnixMicro()),
 			},
 		},
@@ -594,7 +604,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.Config{Log: log.New(),
 		Network:   "ropsten",
-		SecretKey: pk,  // pragma: allowlist secret
+		SecretKey: pk, // pragma: allowlist secret
 		PubKey:    types.PublicKey(random48Bytes())}
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
@@ -653,7 +663,9 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
-				BidTrace:  *submitRequest.Message,
+				BidTraceExtended: relay.BidTraceExtended{
+					BidTrace: *submitRequest.Message,
+				},
 				Timestamp: uint64(time.Now().UnixMicro()),
 			},
 		},
@@ -688,7 +700,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	ctrl := gomock.NewController(b)
 
 	pk, _, _ := bls.GenerateNewKeypair()
-	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk}  // pragma: allowlist secret
+	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk} // pragma: allowlist secret
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
@@ -717,7 +729,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	ctrl := gomock.NewController(b)
 
 	pk, _, _ := bls.GenerateNewKeypair()
-	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk}  // pragma: allowlist secret
+	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk} // pragma: allowlist secret
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)

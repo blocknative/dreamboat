@@ -482,7 +482,9 @@ func randomHeaderAndTrace() relay.HeaderAndTrace {
 	return relay.HeaderAndTrace{
 		Header: header,
 		Trace: &relay.BidTraceWithTimestamp{
-			BidTrace:  *block.Trace.Message,
+			BidTraceExtended: relay.BidTraceExtended{
+				BidTrace: *block.Trace.Message,
+			},
 			Timestamp: uint64(time.Now().UnixMicro()),
 		},
 	}

@@ -24,9 +24,15 @@ type BlockBidAndTrace struct {
 	Payload *types.GetPayloadResponse
 }
 
-type BidTraceWithTimestamp struct {
+type BidTraceExtended struct {
 	types.BidTrace
-	Timestamp uint64 `json:"timestamp,string"`
+	BlockNumber uint64
+	NumTx       uint64
+}
+
+type BidTraceWithTimestamp struct {
+	BidTraceExtended        //types.BidTrace
+	Timestamp        uint64 `json:"timestamp,string"`
 }
 
 type Query struct {
@@ -45,6 +51,7 @@ type PayloadKey struct {
 type DeliveredTrace struct {
 	Trace       BidTraceWithTimestamp
 	BlockNumber uint64
+	//NumTx       uint64
 }
 
 type Datastore interface {
