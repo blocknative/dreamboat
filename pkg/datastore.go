@@ -26,8 +26,8 @@ type BlockBidAndTrace struct {
 
 type BidTraceExtended struct {
 	types.BidTrace
-	BlockNumber uint64
-	NumTx       uint64
+	BlockNumber uint64 `json:"block_number,string"`
+	NumTx       uint64 `json:"num_tx,string"`
 }
 
 type BidTraceWithTimestamp struct {

@@ -31,7 +31,7 @@ type RelayService interface {
 	GetValidators() BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
-	GetPayloadDelivered(context.Context, TraceQuery) ([]types.BidTrace, error)
+	GetPayloadDelivered(context.Context, TraceQuery) ([]BidTraceExtended, error)
 	GetBlockReceived(context.Context, TraceQuery) ([]BidTraceWithTimestamp, error)
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
