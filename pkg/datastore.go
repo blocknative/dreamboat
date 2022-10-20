@@ -31,8 +31,8 @@ type BidTraceExtended struct {
 }
 
 type BidTraceWithTimestamp struct {
-	BidTraceExtended        //types.BidTrace
-	Timestamp        uint64 `json:"timestamp,string"`
+	BidTraceExtended
+	Timestamp uint64 `json:"timestamp,string"`
 }
 
 type Query struct {
