@@ -29,7 +29,10 @@ func TestPutGetHeader(t *testing.T) {
 	ds := relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 
 	header := randomHeaderAndTrace()
-	slot := relay.Slot(rand.Int())
+	slotInt := rand.Int()
+	slot := relay.Slot(slotInt)
+
+	header.Trace.Slot = uint64(slotInt)
 
 	// put
 	err := ds.PutHeader(ctx, slot, header, time.Minute)
@@ -65,8 +68,10 @@ func TestPutGetHeaderDuplicate(t *testing.T) {
 	ds := relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 
 	header := randomHeaderAndTrace()
-	slot := relay.Slot(rand.Int())
+	slotInt := rand.Int()
+	slot := relay.Slot(slotInt)
 
+	header.Trace.Slot = uint64(slotInt)
 	for i := 0; i < N; i++ {
 		// put
 		err := ds.PutHeader(ctx, slot, header, time.Minute)
@@ -98,7 +103,10 @@ func TestPutGetHeaders(t *testing.T) {
 	for i := 0; i < N; i++ {
 		go func(i int) {
 			header := randomHeaderAndTrace()
-			slot := relay.Slot(rand.Int())
+			slotInt := rand.Int()
+			slot := relay.Slot(slotInt)
+
+			header.Trace.Slot = uint64(slotInt)
 			err := ds.PutHeader(ctx, slot, header, time.Minute)
 			require.NoError(t, err)
 			headers[i] = header
@@ -143,7 +151,10 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	d := relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 
 	header := randomHeaderAndTrace()
-	slot := relay.Slot(rand.Int())
+	slotInt := rand.Int()
+	slot := relay.Slot(slotInt)
+
+	header.Trace.Slot = uint64(slotInt)
 
 	// put
 	err := d.PutHeader(ctx, slot, header, time.Minute)
@@ -201,7 +212,10 @@ func TestPutGetHeaderBatch(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		header := randomHeaderAndTrace()
-		slot := relay.Slot(rand.Int())
+		slotInt := rand.Int()
+		slot := relay.Slot(slotInt)
+
+		header.Trace.Slot = uint64(slotInt)
 
 		batch = append(batch, header)
 		queries = append(queries, relay.Query{Slot: slot})
