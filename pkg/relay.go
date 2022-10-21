@@ -372,7 +372,6 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 			Timestamp: payload.Payload.Data.Timestamp,
 		},
 		BlockNumber: payload.Payload.Data.BlockNumber,
-		//NumTx:       uint64(len(payload.Payload.Data.Transactions)),
 	}
 
 	if err := state.Datastore().PutDelivered(ctx, Slot(payloadRequest.Message.Slot), trace, rs.config.TTL); err != nil {

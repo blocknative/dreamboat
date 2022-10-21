@@ -51,7 +51,6 @@ type PayloadKey struct {
 type DeliveredTrace struct {
 	Trace       BidTraceWithTimestamp
 	BlockNumber uint64
-	//NumTx       uint64
 }
 
 type Datastore interface {
