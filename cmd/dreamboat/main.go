@@ -98,6 +98,12 @@ var flags = []cli.Flag{
 		Usage: "rejects validator registration if it's not a known validator from the beacon",
 		Value: false,
 	},
+	&cli.StringFlag{
+		Name:    "configdir",
+		Usage:   "configuration directory where configurations (e.g., extra networks) are specified",
+		Value:   "/tmp/relay-config",
+		EnvVars: []string{"RELAY_CONFIGDIR"},
+	},
 }
 
 var (
@@ -138,6 +144,7 @@ func setup() cli.BeforeFunc {
 			PubKey:              pk,
 			SecretKey:           sk,
 			Datadir:             c.String("datadir"),
+			Configdir:           c.String("configdir"),
 			TTL:                 c.Duration("ttl"),
 			CheckKnownValidator: c.Bool("checkKnownValidator"),
 		}
