@@ -106,7 +106,7 @@ func (s *DefaultService) Run(ctx context.Context) (err error) {
 	timeDataStoreStart := time.Now()
 	if s.Datastore == nil {
 		if s.Storage == nil {
-			storage, err := badger.NewDatastore(s.Config.Datadir + "/db", &badger.DefaultOptions)
+			storage, err := badger.NewDatastore(s.Config.Datadir, &badger.DefaultOptions)
 			if err != nil {
 				s.Log.WithError(err).Fatal("failed to initialize datastore")
 				return err
