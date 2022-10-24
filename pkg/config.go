@@ -59,7 +59,6 @@ type Config struct {
 	Datadir             string
 	TTL                 time.Duration
 	CheckKnownValidator bool
-	Configdir           string
 
 	// private fields; populated during validation
 	builders              map[PubKey]*builder
@@ -119,7 +118,7 @@ type Network struct {
 }
 
 func (c *Config) readNetworkFromConfig(network string) (Network, error) {
-	jsonFile, err := os.Open(c.Configdir + "/networks.json")
+	jsonFile, err := os.Open(c.Datadir + "/networks.json")
 	if err != nil {
 		return Network{}, err
 	}
@@ -131,7 +130,7 @@ func (c *Config) readNetworkFromConfig(network string) (Network, error) {
 
 	config, ok := networks[network]
 	if !ok{
-		return config, fmt.Errorf("not found in config file: %s", c.Configdir + "/networks.json")
+		return config, fmt.Errorf("not found in config file: %s", c.Datadir + "/networks.json")
 	}
 	
 	return config, nil
