@@ -129,7 +129,12 @@ func (c *Config) readNetworkFromConfig(network string) (Network, error) {
 		return Network{}, err
 	}
 
-	return networks[network], nil
+	config, ok := networks[network]
+	if !ok{
+		return config, fmt.Errorf("not found in config file: %s", c.Configdir + "/networks.json")
+	}
+	
+	return config, nil
 }
 
 func (c *Config) validateBuilders() (err error) {
