@@ -386,7 +386,7 @@ func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQue
 	}
 
 	if err == nil {
-		return []BidTraceExtended{{BidTrace: event.BidTrace}}, err
+		return []BidTraceExtended{{BidTrace: event.BidTrace, BlockNumber: event.BlockNumber, NumTx: event.NumTx}}, err
 	} else if errors.Is(err, ds.ErrNotFound) {
 		return []BidTraceExtended{}, nil
 	}
