@@ -6,52 +6,50 @@ package mock_relay
 
 import (
 	context "context"
-	reflect "reflect"
-
 	relay "github.com/blocknative/dreamboat/pkg"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
+	reflect "reflect"
 )
 
-// MockRelayService is a mock of RelayService interface.
+// MockRelayService is a mock of RelayService interface
 type MockRelayService struct {
 	ctrl     *gomock.Controller
 	recorder *MockRelayServiceMockRecorder
 }
 
-// MockRelayServiceMockRecorder is the mock recorder for MockRelayService.
+// MockRelayServiceMockRecorder is the mock recorder for MockRelayService
 type MockRelayServiceMockRecorder struct {
 	mock *MockRelayService
 }
 
-// NewMockRelayService creates a new mock instance.
+// NewMockRelayService creates a new mock instance
 func NewMockRelayService(ctrl *gomock.Controller) *MockRelayService {
 	mock := &MockRelayService{ctrl: ctrl}
 	mock.recorder = &MockRelayServiceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use.
+// EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockRelayService) EXPECT() *MockRelayServiceMockRecorder {
 	return m.recorder
 }
 
-// GetBlockReceived mocks base method.
-func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 relay.TraceQuery) ([]relay.BidTraceWithTimestamp, error) {
+// RegisterValidator mocks base method
+func (m *MockRelayService) RegisterValidator(arg0 context.Context, arg1 []types.SignedValidatorRegistration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlockReceived", arg0, arg1)
-	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// GetBlockReceived indicates an expected call of GetBlockReceived.
-func (mr *MockRelayServiceMockRecorder) GetBlockReceived(arg0, arg1 interface{}) *gomock.Call {
+// RegisterValidator indicates an expected call of RegisterValidator
+func (mr *MockRelayServiceMockRecorder) RegisterValidator(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockReceived", reflect.TypeOf((*MockRelayService)(nil).GetBlockReceived), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockRelayService)(nil).RegisterValidator), arg0, arg1)
 }
 
-// GetHeader mocks base method.
+// GetHeader mocks base method
 func (m *MockRelayService) GetHeader(arg0 context.Context, arg1 relay.HeaderRequest) (*types.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
@@ -60,13 +58,13 @@ func (m *MockRelayService) GetHeader(arg0 context.Context, arg1 relay.HeaderRequ
 	return ret0, ret1
 }
 
-// GetHeader indicates an expected call of GetHeader.
+// GetHeader indicates an expected call of GetHeader
 func (mr *MockRelayServiceMockRecorder) GetHeader(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockRelayService)(nil).GetHeader), arg0, arg1)
 }
 
-// GetPayload mocks base method.
+// GetPayload mocks base method
 func (m *MockRelayService) GetPayload(arg0 context.Context, arg1 *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1)
@@ -75,28 +73,27 @@ func (m *MockRelayService) GetPayload(arg0 context.Context, arg1 *types.SignedBl
 	return ret0, ret1
 }
 
-// GetPayload indicates an expected call of GetPayload.
+// GetPayload indicates an expected call of GetPayload
 func (mr *MockRelayServiceMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockRelayService)(nil).GetPayload), arg0, arg1)
 }
 
-// GetPayloadDelivered mocks base method.
-func (m *MockRelayService) GetPayloadDelivered(arg0 context.Context, arg1 relay.TraceQuery) ([]types.BidTrace, error) {
+// SubmitBlock mocks base method
+func (m *MockRelayService) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPayloadDelivered", arg0, arg1)
-	ret0, _ := ret[0].([]types.BidTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// GetPayloadDelivered indicates an expected call of GetPayloadDelivered.
-func (mr *MockRelayServiceMockRecorder) GetPayloadDelivered(arg0, arg1 interface{}) *gomock.Call {
+// SubmitBlock indicates an expected call of SubmitBlock
+func (mr *MockRelayServiceMockRecorder) SubmitBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayloadDelivered", reflect.TypeOf((*MockRelayService)(nil).GetPayloadDelivered), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBlock", reflect.TypeOf((*MockRelayService)(nil).SubmitBlock), arg0, arg1)
 }
 
-// GetValidators mocks base method.
+// GetValidators mocks base method
 func (m *MockRelayService) GetValidators() relay.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValidators")
@@ -104,27 +101,43 @@ func (m *MockRelayService) GetValidators() relay.BuilderGetValidatorsResponseEnt
 	return ret0
 }
 
-// GetValidators indicates an expected call of GetValidators.
+// GetValidators indicates an expected call of GetValidators
 func (mr *MockRelayServiceMockRecorder) GetValidators() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidators", reflect.TypeOf((*MockRelayService)(nil).GetValidators))
 }
 
-// RegisterValidator mocks base method.
-func (m *MockRelayService) RegisterValidator(arg0 context.Context, arg1 []types.SignedValidatorRegistration) error {
+// GetPayloadDelivered mocks base method
+func (m *MockRelayService) GetPayloadDelivered(arg0 context.Context, arg1 relay.TraceQuery) ([]relay.BidTraceExtended, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "GetPayloadDelivered", arg0, arg1)
+	ret0, _ := ret[0].([]relay.BidTraceExtended)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// RegisterValidator indicates an expected call of RegisterValidator.
-func (mr *MockRelayServiceMockRecorder) RegisterValidator(arg0, arg1 interface{}) *gomock.Call {
+// GetPayloadDelivered indicates an expected call of GetPayloadDelivered
+func (mr *MockRelayServiceMockRecorder) GetPayloadDelivered(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockRelayService)(nil).RegisterValidator), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayloadDelivered", reflect.TypeOf((*MockRelayService)(nil).GetPayloadDelivered), arg0, arg1)
 }
 
-// Registration mocks base method.
+// GetBlockReceived mocks base method
+func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 relay.TraceQuery) ([]relay.BidTraceWithTimestamp, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlockReceived", arg0, arg1)
+	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBlockReceived indicates an expected call of GetBlockReceived
+func (mr *MockRelayServiceMockRecorder) GetBlockReceived(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockReceived", reflect.TypeOf((*MockRelayService)(nil).GetBlockReceived), arg0, arg1)
+}
+
+// Registration mocks base method
 func (m *MockRelayService) Registration(arg0 context.Context, arg1 types.PublicKey) (types.SignedValidatorRegistration, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Registration", arg0, arg1)
@@ -133,22 +146,8 @@ func (m *MockRelayService) Registration(arg0 context.Context, arg1 types.PublicK
 	return ret0, ret1
 }
 
-// Registration indicates an expected call of Registration.
+// Registration indicates an expected call of Registration
 func (mr *MockRelayServiceMockRecorder) Registration(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Registration", reflect.TypeOf((*MockRelayService)(nil).Registration), arg0, arg1)
-}
-
-// SubmitBlock mocks base method.
-func (m *MockRelayService) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SubmitBlock indicates an expected call of SubmitBlock.
-func (mr *MockRelayServiceMockRecorder) SubmitBlock(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBlock", reflect.TypeOf((*MockRelayService)(nil).SubmitBlock), arg0, arg1)
 }

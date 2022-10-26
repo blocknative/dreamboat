@@ -344,6 +344,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		"stateRoot":    payload.Payload.Data.StateRoot,
 		"feeRecipient": payload.Payload.Data.FeeRecipient,
 		"bid":          payload.Bid.Data.Message.Value,
+		"numTx":        len(payload.Payload.Data.Transactions),
 	}).Info("payload fetched")
 
 	response := types.GetPayloadResponse{
@@ -353,16 +354,20 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 
 	trace := DeliveredTrace{
 		Trace: BidTraceWithTimestamp{
-			BidTrace: types.BidTrace{
-				Slot:                 payloadRequest.Message.Slot,
-				ParentHash:           payload.Payload.Data.ParentHash,
-				BlockHash:            payload.Payload.Data.BlockHash,
-				BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
-				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
-				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
-				GasLimit:             payload.Payload.Data.GasLimit,
-				GasUsed:              payload.Payload.Data.GasUsed,
-				Value:                payload.Trace.Message.Value,
+			BidTraceExtended: BidTraceExtended{
+				BidTrace: types.BidTrace{
+					Slot:                 payloadRequest.Message.Slot,
+					ParentHash:           payload.Payload.Data.ParentHash,
+					BlockHash:            payload.Payload.Data.BlockHash,
+					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
+					GasLimit:             payload.Payload.Data.GasLimit,
+					GasUsed:              payload.Payload.Data.GasUsed,
+					Value:                payload.Trace.Message.Value,
+				},
+				BlockNumber: payload.Payload.Data.BlockNumber,
+				NumTx:       uint64(len(payload.Payload.Data.Transactions)),
 			},
 			Timestamp: payload.Payload.Data.Timestamp,
 		},
@@ -480,16 +485,20 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 	h := HeaderAndTrace{
 		Header: header,
 		Trace: &BidTraceWithTimestamp{
-			BidTrace: types.BidTrace{
-				Slot:                 submitBlockRequest.Message.Slot,
-				ParentHash:           payload.Payload.Data.ParentHash,
-				BlockHash:            payload.Payload.Data.BlockHash,
-				BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
-				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
-				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
-				Value:                submitBlockRequest.Message.Value,
-				GasLimit:             payload.Trace.Message.GasLimit,
-				GasUsed:              payload.Trace.Message.GasUsed,
+			BidTraceExtended: BidTraceExtended{
+				BidTrace: types.BidTrace{
+					Slot:                 submitBlockRequest.Message.Slot,
+					ParentHash:           payload.Payload.Data.ParentHash,
+					BlockHash:            payload.Payload.Data.BlockHash,
+					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
+					Value:                submitBlockRequest.Message.Value,
+					GasLimit:             payload.Trace.Message.GasLimit,
+					GasUsed:              payload.Trace.Message.GasUsed,
+				},
+				BlockNumber: payload.Payload.Data.BlockNumber,
+				NumTx:       uint64(len(payload.Payload.Data.Transactions)),
 			},
 			Timestamp: payload.Payload.Data.Timestamp,
 		},

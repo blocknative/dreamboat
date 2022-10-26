@@ -31,7 +31,7 @@ type RelayService interface {
 	GetValidators() BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
-	GetPayloadDelivered(context.Context, TraceQuery) ([]types.BidTrace, error)
+	GetPayloadDelivered(context.Context, TraceQuery) ([]BidTraceExtended, error)
 	GetBlockReceived(context.Context, TraceQuery) ([]BidTraceWithTimestamp, error)
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
@@ -367,7 +367,7 @@ func (s *DefaultService) GetValidators() BuilderGetValidatorsResponseEntrySlice 
 	return s.Relay.GetValidators(&s.state)
 }
 
-func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQuery) ([]types.BidTrace, error) {
+func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQuery) ([]BidTraceExtended, error) {
 	var (
 		event BidTraceWithTimestamp
 		err   error
@@ -386,14 +386,14 @@ func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQue
 	}
 
 	if err == nil {
-		return []types.BidTrace{event.BidTrace}, err
+		return []BidTraceExtended{{BidTrace: event.BidTrace, BlockNumber: event.BlockNumber, NumTx: event.NumTx}}, err
 	} else if errors.Is(err, ds.ErrNotFound) {
-		return []types.BidTrace{}, nil
+		return []BidTraceExtended{}, nil
 	}
 	return nil, err
 }
 
-func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]types.BidTrace, error) {
+func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]BidTraceExtended, error) {
 	headSlot := s.state.Beacon().HeadSlot()
 	start := headSlot
 	if cursor != 0 {
@@ -424,9 +424,9 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 		}
 	}
 
-	events := make([]types.BidTrace, 0, len(batch))
+	events := make([]BidTraceExtended, 0, len(batch))
 	for _, event := range batch {
-		events = append(events, event.BidTrace)
+		events = append(events, event.BidTraceExtended)
 	}
 	return events, nil
 }
