@@ -1,9 +1,11 @@
 package relay
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -98,9 +100,40 @@ func (c *Config) validateNetwork() error {
 		c.genesisValidatorsRoot = GenesisValidatorsRootGoerli
 		c.bellatrixForkVersion = BellatrixForkVersionGoerli
 	default:
-		return errors.New("unknown network")
+		network, err := c.readNetworkFromConfig(c.Network)
+		if err != nil {
+			return fmt.Errorf("unknown network: %s: %w", c.Network, err)
+		}
+		c.genesisForkVersion = network.GenesisForkVersion
+		c.genesisValidatorsRoot = network.GenesisValidatorsRoot
+		c.bellatrixForkVersion = network.BellatrixForkVersion
 	}
 	return nil
+}
+
+type Network struct {
+	GenesisForkVersion    string `json:"GenesisForkVersion"`
+	GenesisValidatorsRoot string `json:"GenesisValidatorsRoot"`
+	BellatrixForkVersion  string `json:"BellatrixForkVersion"`
+}
+
+func (c *Config) readNetworkFromConfig(network string) (Network, error) {
+	jsonFile, err := os.Open(c.Datadir + "/networks.json")
+	if err != nil {
+		return Network{}, err
+	}
+
+	var networks map[string]Network
+	if err := json.NewDecoder(jsonFile).Decode(&networks); err != nil {
+		return Network{}, err
+	}
+
+	config, ok := networks[network]
+	if !ok{
+		return config, fmt.Errorf("not found in config file: %s", c.Datadir + "/networks.json")
+	}
+	
+	return config, nil
 }
 
 func (c *Config) validateBuilders() (err error) {

@@ -55,9 +55,40 @@ The following features and enhancements are in-progress.
 - [x] Runtime profiling & tracing endpoint
 - [x] Parallel validator-signature verification
 - [x] Contention-free execution along hot paths
-- [ ] Support for multiple beacon clients (in testing stage)
+- [x] Support for multiple beacon clients
 - [ ] Support for multiple external block builders
 
+## Extend the blockchain networks
+Do you need to make your relay work with a different blockchain that is not:
+- Mainnet
+- Kiln
+- Ropsten
+- Sepolia
+- Goerli
+
+Then you need to extend the relay by creating a json file called `networks.json`, and put it inside `datadir` (`datadir` is a parameter you set when running the relay).
+
+Inside the network.json file, you need to specify the network name and three other information:
+- GenesisForkVersion
+- GenesisValidatorsRoot
+- BellatrixForkVersion
+
+Here is an example of how you should format the networks:
+
+```
+{
+    "blocknative":{
+        "GenesisForkVersion": "",
+        "GenesisValidatorsRoot":"",
+        "BellatrixForkVersion": ""
+    },
+    "myNetwork":{
+        "GenesisForkVersion": "",
+        "GenesisValidatorsRoot":"",
+        "BellatrixForkVersion": ""
+    },
+}
+```
 
 ## Support
 
