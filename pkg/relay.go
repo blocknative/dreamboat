@@ -488,14 +488,12 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 				ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
 				ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
 				Value:                submitBlockRequest.Message.Value,
+				GasLimit:             payload.Trace.Message.GasLimit,
+				GasUsed:              payload.Trace.Message.GasUsed,
 			},
 			Timestamp: payload.Payload.Data.Timestamp,
 		},
 	}
-
-	// TODO : store an array of headers, one per new builder
-	// This opens a DDOS vector of sending the same block from many different pubkeys
-	// first pass solution :we should limit to 1.5 x current number of builders.
 
 	err = state.Datastore().PutHeader(ctx, slot, h, rs.config.TTL)
 
@@ -519,31 +517,20 @@ func (rs *DefaultRelay) GetValidators(state State) BuilderGetValidatorsResponseE
 	return validators
 }
 
-// verifyBlock returns whether a BuilderSubmitBlockRequest has a valid signature and accurate bid
 func (rs *DefaultRelay) verifyBlock(SubmitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) {
 	if SubmitBlockRequest == nil {
 		return false, fmt.Errorf("block empty")
 	}
 
-	// simluation is more expensive, verify sig first
-	res, _ := types.VerifySignature(
-		SubmitBlockRequest.Message,
-		rs.builderSigningDomain,
-		SubmitBlockRequest.Message.BuilderPubkey[:],
-		SubmitBlockRequest.Signature[:],
-	)
+	_ = simulateBlock()
 
-	if !res {
-		return false, fmt.Errorf("invalid signature")
-	}
-
-	return simulateBlock()
+	return types.VerifySignature(SubmitBlockRequest.Message, rs.builderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
 }
 
-func simulateBlock() (bool, error) {
+func simulateBlock() bool {
 	// TODO : Simulate block here once support for external builders
 	// we currently only support a single internally trusted builder
-	return true, nil
+	return true
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) PayloadKey {

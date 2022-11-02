@@ -585,35 +585,6 @@ func validSubmitBlockRequest(t require.TestingT, domain types.Domain) *types.Bui
 	}
 }
 
-func validSignedBlindedBeaconBlock(t require.TestingT, domain types.Domain) *types.BuilderSubmitBlockRequest {
-	sk, pk, err := bls.GenerateNewKeypair()
-	require.NoError(t, err)
-
-	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
-
-	payload := randomPayload()
-
-	msg := &types.BidTrace{
-		Slot:                 rand.Uint64(),
-		ParentHash:           types.Hash(random32Bytes()),
-		BlockHash:            types.Hash(random32Bytes()),
-		BuilderPubkey:        types.PublicKey(random48Bytes()),
-		ProposerPubkey:       types.PublicKey(random48Bytes()),
-		ProposerFeeRecipient: types.Address(random20Bytes()),
-		Value:                types.IntToU256(rand.Uint64()),
-	}
-
-	signature, err := types.SignMessage(msg, domain, sk)
-	require.NoError(t, err)
-
-	return &types.BuilderSubmitBlockRequest{
-		Signature:        signature,
-		Message:          msg,
-		ExecutionPayload: payload,
-	}
-}
-
 func random32Bytes() (b [32]byte) {
 	rand.Read(b[:])
 	return b
