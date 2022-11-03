@@ -242,13 +242,13 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	headers, err := state.Datastore().GetHeaders(ctx, Query{Slot: slot})
+	headers, err := state.Datastore().GetMaxProfitHeadersDesc(ctx, slot)
 	if err != nil || len(headers) < 1 {
 		logger.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 
-	header := headers[len(headers)-1] // choose the received last header
+	header := headers[0] // choose the highest bid, which is index 0
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -56,6 +57,7 @@ type DeliveredTrace struct {
 type Datastore interface {
 	PutHeader(context.Context, Slot, HeaderAndTrace, time.Duration) error
 	GetHeaders(context.Context, Query) ([]HeaderAndTrace, error)
+	GetMaxProfitHeadersDesc(context.Context, Slot) ([]HeaderAndTrace, error)
 	GetHeaderBatch(context.Context, []Query) ([]HeaderAndTrace, error)
 	PutDelivered(context.Context, Slot, DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, Query) (BidTraceWithTimestamp, error)
@@ -101,6 +103,10 @@ func (s *DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header Head
 
 	if err := s.TTLStorage.PutWithTTL(ctx, HeaderNumKey(header.Header.BlockNumber), HeaderKey(slot).Bytes(), ttl); err != nil {
 		return err
+	}
+
+	if err := s.putMaxProfitHeader(ctx, slot, header, ttl); err != nil {
+		return fmt.Errorf("failed to set header in max profit list: %w", err)
 	}
 
 	data, err := json.Marshal(headers)
@@ -151,6 +157,42 @@ func (s *DefaultDatastore) deduplicateHeaders(headers []HeaderAndTrace, query Qu
 	}
 
 	return filtered
+}
+
+func (s *DefaultDatastore) putMaxProfitHeader(ctx context.Context, slot Slot, header HeaderAndTrace, ttl time.Duration) error {
+	headers, err := s.getHeaders(ctx, HeaderMaxProfitKey(slot))
+	if errors.Is(err, ds.ErrNotFound) {
+		headers = make([]HeaderAndTrace, 0, 1)
+	} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
+		return err
+	}
+
+	// remove submission from same builder
+	i := 0
+	for ; i < len(headers); i++ {
+		if headers[i].Trace.BuilderPubkey == header.Trace.BuilderPubkey {
+			headers[i] = header
+			break
+		}
+	}
+	if i == len(headers) {
+		headers = append(headers, header)
+	}
+
+	// sort by bid value DESC
+	sort.Slice(headers, func(i, j int) bool {
+		return headers[i].Trace.Value.Cmp(&headers[j].Trace.Value) > 0
+	})
+
+	data, err := json.Marshal(headers)
+	if err != nil {
+		return err
+	}
+	return s.TTLStorage.PutWithTTL(ctx, HeaderMaxProfitKey(slot), data, ttl)
+}
+
+func (s *DefaultDatastore) GetMaxProfitHeadersDesc(ctx context.Context, slot Slot) ([]HeaderAndTrace, error) {
+	return s.getHeaders(ctx, HeaderMaxProfitKey(slot))
 }
 
 func (s *DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace DeliveredTrace, ttl time.Duration) error {
@@ -334,6 +376,10 @@ func (s *DefaultDatastore) queryToDeliveredKey(ctx context.Context, query Query)
 
 func HeaderKey(slot Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-%d", slot))
+}
+
+func HeaderMaxProfitKey(slot Slot) ds.Key {
+	return ds.NewKey(fmt.Sprintf("header/max-profit/%d", slot))
 }
 
 func HeaderHashKey(bh types.Hash) ds.Key {
