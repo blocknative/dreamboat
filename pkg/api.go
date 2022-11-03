@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -87,15 +86,6 @@ func (a *API) init() {
 		router.HandleFunc(PathBuilderBlocksReceived, handler(a.builderBlocksReceived)).Methods(http.MethodGet)
 		router.HandleFunc(PathSpecificRegistration, handler(a.specificRegistration)).Methods(http.MethodGet)
 
-		// add tracer if enabled
-		if a.EnableProfile {
-			router.HandleFunc(PathPprofCmdline, pprof.Cmdline)
-			router.HandleFunc(PathPprofSymbol, pprof.Symbol)
-			router.HandleFunc(PathPprofTrace, pprof.Trace)
-			router.HandleFunc(PathPprofProfile, pprof.Profile)
-			router.PathPrefix(PathPprofIndex).HandlerFunc(pprof.Index)
-		}
-
 		router.Use(mux.CORSMethodMiddleware(router))
 
 		a.mux = router
@@ -136,7 +126,6 @@ func succeed(status int) http.HandlerFunc {
 }
 
 // proposer related handlers
-
 func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status int, err error) {
 	payload := []types.SignedValidatorRegistration{}
 	if err = json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -189,7 +178,6 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 }
 
 // builder related handlers
-
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	var br types.BuilderSubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&br); err != nil {
@@ -217,7 +205,6 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 }
 
 // data API related handlers
-
 func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) (int, error) {
 	pkStr := r.URL.Query().Get("pubkey")
 
@@ -373,9 +360,9 @@ func blockNumber(r *http.Request) (uint64, error) {
 func limit(r *http.Request) (uint64, error) {
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		limit, err := strconv.ParseUint(limitStr, 10, 64)
-		if err != nil{
+		if err != nil {
 			return 0, err
-		} else if DataLimit<limit{
+		} else if DataLimit < limit {
 			return 0, fmt.Errorf("limit is higher than %d", DataLimit)
 		}
 		return limit, err
