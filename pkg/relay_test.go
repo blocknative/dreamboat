@@ -2,6 +2,7 @@ package relay_test
 
 import (
 	"context"
+	"math/rand"
 	"strconv"
 	"sync"
 	"testing"
@@ -278,6 +279,199 @@ func TestSubmitBlock(t *testing.T) {
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
 	gotHeaders, err := ds.GetHeaders(ctx, relay.Query{Slot: relay.Slot(submitRequest.Message.Slot)})
+	require.NoError(t, err)
+	require.Len(t, gotHeaders, 1)
+	require.EqualValues(t, header, gotHeaders[0].Header)
+}
+
+func TestSubmitBlocksTwoBuilders(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctrl := gomock.NewController(t)
+
+	sk, _, _ := bls.GenerateNewKeypair()
+	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: sk, TTL: time.Minute}
+	r, _ := relay.NewRelay(config)
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
+	bc := mock_relay.NewMockBeaconState(ctrl)
+
+	relaySigningDomain, err := relay.ComputeDomain(
+		types.DomainTypeAppBuilder,
+		relay.GenesisForkVersionRopsten,
+		types.Root{}.String())
+	require.NoError(t, err)
+
+	// generate and send 1st block
+	skB1, pkB1, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+
+	var pubKeyB1 types.PublicKey
+	pubKeyB1.FromSlice(pkB1.Compress())
+
+	slot := relay.Slot(rand.Uint64())
+	payloadB1 := randomPayload()
+
+	msgB1 := &types.BidTrace{
+		Slot:                 uint64(slot),
+		ParentHash:           payloadB1.ParentHash,
+		BlockHash:            payloadB1.BlockHash,
+		BuilderPubkey:        pubKeyB1,
+		ProposerPubkey:       types.PublicKey(random48Bytes()),
+		ProposerFeeRecipient: types.Address(random20Bytes()),
+		Value:                types.IntToU256(10),
+	}
+
+	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
+	require.NoError(t, err)
+
+	submitRequestOne := &types.BuilderSubmitBlockRequest{
+		Signature:        signatureB1,
+		Message:          msgB1,
+		ExecutionPayload: payloadB1,
+	}
+
+	err = r.SubmitBlock(ctx, submitRequestOne, state{ds: ds, bc: bc})
+	require.NoError(t, err)
+
+	// generate and send 2nd block
+	skB2, pkB2, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+
+	var pubKeyB2 types.PublicKey
+	pubKeyB2.FromSlice(pkB2.Compress())
+
+	payloadB2 := randomPayload()
+
+	msgB2 := &types.BidTrace{
+		Slot:                 uint64(slot),
+		ParentHash:           payloadB2.ParentHash,
+		BlockHash:            payloadB2.BlockHash,
+		BuilderPubkey:        pubKeyB2,
+		ProposerPubkey:       types.PublicKey(random48Bytes()),
+		ProposerFeeRecipient: types.Address(random20Bytes()),
+		Value:                types.IntToU256(1000),
+	}
+
+	signatureB2, err := types.SignMessage(msgB2, relaySigningDomain, skB2)
+	require.NoError(t, err)
+
+	submitRequestTwo := &types.BuilderSubmitBlockRequest{
+		Signature:        signatureB2,
+		Message:          msgB2,
+		ExecutionPayload: payloadB2,
+	}
+
+	err = r.SubmitBlock(ctx, submitRequestTwo, state{ds: ds, bc: bc})
+	require.NoError(t, err)
+
+	// check that payload served from relay is 2nd builders
+	signedBuilderBid, err := relay.SubmitBlockRequestToSignedBuilderBid(
+		submitRequestOne,
+		config.SecretKey,
+		&config.PubKey,
+		relaySigningDomain)
+	require.NoError(t, err)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequestOne)
+
+	key := relay.SubmissionToKey(submitRequestOne)
+	gotPayload, err := ds.GetPayload(ctx, key)
+	require.NoError(t, err)
+	require.EqualValues(t, payload, *gotPayload)
+
+	header, err := types.PayloadToPayloadHeader(submitRequestTwo.ExecutionPayload)
+	require.NoError(t, err)
+	gotHeaders, err := ds.GetMaxProfitHeadersDesc(ctx, slot)
+
+	require.NoError(t, err)
+	require.Len(t, gotHeaders, 2)
+	require.EqualValues(t, header, gotHeaders[0].Header)
+}
+
+func TestSubmitBlocksCancel(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctrl := gomock.NewController(t)
+
+	sk, _, _ := bls.GenerateNewKeypair()
+	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: sk, TTL: time.Minute}
+	r, _ := relay.NewRelay(config)
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
+	bc := mock_relay.NewMockBeaconState(ctrl)
+
+	relaySigningDomain, err := relay.ComputeDomain(
+		types.DomainTypeAppBuilder,
+		relay.GenesisForkVersionRopsten,
+		types.Root{}.String())
+	require.NoError(t, err)
+
+	// generate and send 1st block
+	skB1, pkB1, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+
+	var pubKeyB1 types.PublicKey
+	pubKeyB1.FromSlice(pkB1.Compress())
+
+	slot := relay.Slot(rand.Uint64())
+	payloadB1 := randomPayload()
+
+	msgB1 := &types.BidTrace{
+		Slot:                 uint64(slot),
+		ParentHash:           payloadB1.ParentHash,
+		BlockHash:            payloadB1.BlockHash,
+		BuilderPubkey:        pubKeyB1,
+		ProposerPubkey:       types.PublicKey(random48Bytes()),
+		ProposerFeeRecipient: types.Address(random20Bytes()),
+		Value:                types.IntToU256(1000),
+	}
+
+	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
+	require.NoError(t, err)
+
+	submitRequestOne := &types.BuilderSubmitBlockRequest{
+		Signature:        signatureB1,
+		Message:          msgB1,
+		ExecutionPayload: payloadB1,
+	}
+
+	err = r.SubmitBlock(ctx, submitRequestOne, state{ds: ds, bc: bc})
+	require.NoError(t, err)
+
+	// generate and send 2nd block from same builder
+	payloadB2 := randomPayload()
+
+	msgB2 := &types.BidTrace{
+		Slot:                 uint64(slot),
+		ParentHash:           payloadB2.ParentHash,
+		BlockHash:            payloadB2.BlockHash,
+		BuilderPubkey:        pubKeyB1,
+		ProposerPubkey:       types.PublicKey(random48Bytes()),
+		ProposerFeeRecipient: types.Address(random20Bytes()),
+		Value:                types.IntToU256(1),
+	}
+
+	signatureB2, err := types.SignMessage(msgB2, relaySigningDomain, skB1)
+	require.NoError(t, err)
+
+	submitRequestTwo := &types.BuilderSubmitBlockRequest{
+		Signature:        signatureB2,
+		Message:          msgB2,
+		ExecutionPayload: payloadB2,
+	}
+
+	err = r.SubmitBlock(ctx, submitRequestTwo, state{ds: ds, bc: bc})
+	require.NoError(t, err)
+
+	// check that payload served from relay is 2nd block with lower value
+	header, err := types.PayloadToPayloadHeader(submitRequestTwo.ExecutionPayload)
+	require.NoError(t, err)
+	gotHeaders, err := ds.GetMaxProfitHeadersDesc(ctx, slot)
+
 	require.NoError(t, err)
 	require.Len(t, gotHeaders, 1)
 	require.EqualValues(t, header, gotHeaders[0].Header)
