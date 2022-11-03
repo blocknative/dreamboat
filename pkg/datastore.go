@@ -106,7 +106,7 @@ func (s *DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header Head
 	}
 
 	if err := s.putMaxProfitHeader(ctx, slot, header, ttl); err != nil {
-		return fmt.Errorf("fail to set header in max profit list: %w", err)
+		return fmt.Errorf("failed to set header in max profit list: %w", err)
 	}
 
 	data, err := json.Marshal(headers)
