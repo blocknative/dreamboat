@@ -172,6 +172,7 @@ func (s *DefaultDatastore) putMaxProfitHeader(ctx context.Context, slot Slot, he
 	for ; i < len(headers); i++ {
 		if headers[i].Trace.BuilderPubkey == header.Trace.BuilderPubkey {
 			headers[i] = header
+			break
 		}
 	}
 	if i == len(headers) {
