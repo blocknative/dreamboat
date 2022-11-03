@@ -221,18 +221,17 @@ func run() cli.ActionFunc {
 			return err
 		})
 
-		// run the http server
+		// run internal http server
 		g.Go(func() (err error) {
 			m := metrics.NewMetrics()
 			internalMux := http.NewServeMux()
 
 			metrics.AttachProfiler(internalMux)
-			if err = packageMetrics.InitBadgerMetrics(m); err != nil {
+			if err = packageMetrics.InitDatastoreMetrics(m); err != nil {
 				return err
 			}
 
 			internalMux.Handle("/metrics", m.Handler())
-
 			config.Log.Info("internal server listening")
 			internalSrv := http.Server{
 				Addr:    c.String("internalAddr"),

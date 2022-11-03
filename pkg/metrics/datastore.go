@@ -5,8 +5,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func InitBadgerMetrics(m *met.Metrics) error {
-	a := map[string]*prometheus.Desc{
+func InitDatastoreMetrics(m *met.Metrics) error {
+	return m.RegisterExpvar(map[string]*prometheus.Desc{
 		"badger_v2_blocked_puts_total":   prometheus.NewDesc("badger_blocked_puts_total", "Blocked Puts", nil, nil),
 		"badger_v2_disk_reads_total":     prometheus.NewDesc("badger_disk_reads_total", "Disk Reads", nil, nil),
 		"badger_v2_disk_writes_total":    prometheus.NewDesc("badger_disk_writes_total", "Disk Writes", nil, nil),
@@ -20,6 +20,5 @@ func InitBadgerMetrics(m *met.Metrics) error {
 		"badger_v2_written_bytes":        prometheus.NewDesc("badger_written_bytes", "Written bytes", nil, nil),
 		"badger_v2_lsm_bloom_hits_total": prometheus.NewDesc("badger_lsm_bloom_hits_total", "LSM Bloom Hits", []string{"level"}, nil),
 		"badger_v2_lsm_level_gets_total": prometheus.NewDesc("badger_lsm_level_gets_total", "LSM Level Gets", []string{"level"}, nil),
-	}
-	return m.RegisterExpvar(a)
+	})
 }
