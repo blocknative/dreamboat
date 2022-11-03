@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"database/sql"
-	"expvar"
 	"net/http"
 	"net/http/pprof"
 
@@ -48,8 +47,6 @@ func (m *Metrics) Handler() http.Handler {
 }
 
 func AttachProfiler(sm *http.ServeMux) {
-
-	sm.Handle("/debug/vars", expvar.Handler())
 	sm.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	sm.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	sm.HandleFunc("/debug/pprof/trace", pprof.Trace)
