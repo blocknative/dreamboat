@@ -8,7 +8,9 @@ import (
 
 	"time"
 
+	"github.com/blocknative/dreamboat/metrics"
 	relay "github.com/blocknative/dreamboat/pkg"
+	packageMetrics "github.com/blocknative/dreamboat/pkg/metrics"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -47,6 +49,12 @@ var flags = []cli.Flag{
 		Usage:   "server listen address",
 		Value:   "localhost:18550",
 		EnvVars: []string{"RELAY_ADDR"},
+	},
+	&cli.StringFlag{
+		Name:    "internalAddr",
+		Usage:   "server listen address",
+		Value:   "0.0.0.0:19550",
+		EnvVars: []string{"RELAY_INTERNAL_ADDR"},
 	},
 	&cli.DurationFlag{
 		Name:    "timeout",
@@ -210,6 +218,30 @@ func run() cli.ActionFunc {
 				err = nil
 			}
 
+			return err
+		})
+
+		// run the http server
+		g.Go(func() (err error) {
+			m := metrics.NewMetrics()
+			internalMux := http.NewServeMux()
+
+			metrics.AttachProfiler(internalMux)
+			if err = packageMetrics.InitBadgerMetrics(m); err != nil {
+				return err
+			}
+
+			internalMux.Handle("/metrics", m.Handler())
+
+			config.Log.Info("internal server listening")
+			internalSrv := http.Server{
+				Addr:    c.String("internalAddr"),
+				Handler: internalMux,
+			}
+
+			if err = internalSrv.ListenAndServe(); err == http.ErrServerClosed {
+				err = nil
+			}
 			return err
 		})
 
