@@ -560,6 +560,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 }
 
 func BenchmarkRegisterValidatorParallel(b *testing.B) {
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -586,16 +587,34 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
-	bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).Times(b.N * N)
+	bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).AnyTimes() // Times(b.N * N)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	wg.Add(b.N)
+	wg.Add(b.N * 3)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
+	for i := 0; i < b.N; i++ {
+		go func() {
+			err := r.RegisterValidator(ctx, validators, state{ds: ds, bc: bc})
+			if err != nil {
+				panic(err)
+			}
+			wg.Done()
+		}()
+	}
+	for i := 0; i < b.N; i++ {
+		go func() {
+			err := r.RegisterValidator(ctx, validators, state{ds: ds, bc: bc})
+			if err != nil {
+				panic(err)
+			}
+			wg.Done()
+		}()
+	}
 	for i := 0; i < b.N; i++ {
 		go func() {
 			err := r.RegisterValidator(ctx, validators, state{ds: ds, bc: bc})
