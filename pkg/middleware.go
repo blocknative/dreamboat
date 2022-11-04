@@ -3,7 +3,6 @@ package relay
 import (
 	"net/http"
 	"runtime/debug"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/lthibault/log"
@@ -35,36 +34,18 @@ func withLogger(l log.Logger) mux.MiddlewareFunc {
 				}
 			}()
 
-			t0 := time.Now()
-			rw := wrapResponseWriter(w)
+			next.ServeHTTP(w, r)
+			//t0 := time.Now()
+			/*
+				l = l.With(log.F{
+					"method": r.Method,
+					"path":   r.URL.EscapedPath(),
+				})
 
-			l = l.With(log.F{
-				"method": r.Method,
-				"path":   r.URL.EscapedPath(),
-			})
-
-			next.ServeHTTP(rw, r)
-
-			l.With(log.F{
-				"status":   rw.Status,
-				"duration": time.Since(t0).Seconds(),
-			}).Info("request handled")
+					l.With(log.F{
+						"status":   w.Status,
+						"duration": time.Since(t0).Seconds(),
+					}).Info("request handled") */
 		})
-	}
-}
-
-type responseWriter struct {
-	http.ResponseWriter
-	Status int
-}
-
-func wrapResponseWriter(w http.ResponseWriter) *responseWriter {
-	return &responseWriter{ResponseWriter: w}
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	if rw.Status == 0 {
-		rw.Status = code
-		rw.ResponseWriter.WriteHeader(code)
 	}
 }
