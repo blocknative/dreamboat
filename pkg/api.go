@@ -63,7 +63,6 @@ func (a *API) init() {
 
 		router := mux.NewRouter()
 		router.Use(
-			withDrainBody(),
 			mux.CORSMethodMiddleware(router),
 			withContentType("application/json"),
 			withLogger(a.Log)) // set middleware
