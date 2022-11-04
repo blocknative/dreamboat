@@ -128,13 +128,11 @@ func BenchmarkRegisterValidator2Parallel(b *testing.B) {
 		go relay.VerifyParallel(relaySigningDomain)
 	}
 
-	for i := 0; i < 2000; i++ {
+	for i := 0; i < N; i++ {
 		registration, _ := validValidatorRegistration(b, relaySigningDomain)
 		validators = append(validators, *registration)
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
-
-	//bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).Times(b.N * N)
 
 	bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).AnyTimes()
 	var wg sync.WaitGroup
