@@ -1,7 +1,6 @@
 package relay
 
 import (
-	"io"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -9,17 +8,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/lthibault/log"
 )
-
-func withDrainBody() mux.MiddlewareFunc {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer r.Body.Close()
-			defer io.Copy(io.Discard, r.Body)
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
 
 func withContentType(ct string) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
