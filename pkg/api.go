@@ -9,9 +9,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/blocknative/dreamboat/metrics"
+	apimetrics "github.com/blocknative/dreamboat/pkg/metrics"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
 	"github.com/lthibault/log"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Router paths
@@ -53,6 +56,8 @@ type API struct {
 	EnableProfile bool
 	once          sync.Once
 	mux           http.Handler
+
+	m apimetrics.APIMetrics
 }
 
 func (a *API) init() {
@@ -89,7 +94,6 @@ func (a *API) init() {
 
 		a.mux = router
 	})
-
 }
 
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -105,8 +109,6 @@ func handler(f func(http.ResponseWriter, *http.Request) (int, error)) http.Handl
 			status = http.StatusOK
 		}
 
-		// NOTE:  will default to http.StatusOK if f wrote any data to the
-		//        response body.
 		w.WriteHeader(status)
 
 		if err != nil {
@@ -124,9 +126,27 @@ func succeed(status int) http.HandlerFunc {
 	})
 }
 
+// type SignedValidatorRegistrations []SignedValidatorRegistration
+
+type SignedValidatorRegistration struct {
+	types.SignedValidatorRegistration
+	Raw json.RawMessage
+}
+
+func (s *SignedValidatorRegistration) UnmarshalJSON(b []byte) error {
+	sv := types.SignedValidatorRegistration{}
+	err := json.Unmarshal(b, sv)
+	if err != nil {
+		return err
+	}
+	s.SignedValidatorRegistration = sv
+	s.Raw = b
+	return nil
+}
+
 // proposer related handlers
 func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status int, err error) {
-	payload := []types.SignedValidatorRegistration{}
+	payload := []SignedValidatorRegistration{} //[]types.SignedValidatorRegistration{}
 	if err = json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
@@ -404,4 +424,23 @@ func (hr HeaderRequest) pubkey() (PubKey, error) {
 type jsonError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+func (api *API) InitMetrics(m *metrics.Metrics) {
+	api.m.ApiReqCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "dreamboat",
+		Subsystem: "api",
+		Name:      "reqcount",
+		Help:      "Number of requests.",
+	}, []string{"endpoint", "code"})
+
+	api.m.ApiReqTiming = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "dreamboat",
+		Subsystem: "api",
+		Name:      "duration",
+		Help:      "Duration of requests per endpoint",
+	}, []string{"endpoint"})
+
+	m.Register(api.m.ApiReqCounter)
+	m.Register(api.m.ApiReqTiming)
 }

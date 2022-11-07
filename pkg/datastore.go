@@ -65,6 +65,7 @@ type Datastore interface {
 	PutPayload(context.Context, PayloadKey, *BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, PayloadKey) (*BlockBidAndTrace, error)
 	PutRegistration(context.Context, PubKey, types.SignedValidatorRegistration, time.Duration) error
+	PutRegistrationRaw(context.Context, PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, PubKey) (types.SignedValidatorRegistration, error)
 }
 
@@ -320,6 +321,10 @@ func (s *DefaultDatastore) PutRegistration(ctx context.Context, pk PubKey, regis
 		return err
 	}
 	return s.TTLStorage.PutWithTTL(ctx, RegistrationKey(pk), data, ttl)
+}
+
+func (s *DefaultDatastore) PutRegistrationRaw(ctx context.Context, pk PubKey, registration []byte, ttl time.Duration) error {
+	return s.TTLStorage.PutWithTTL(ctx, RegistrationKey(pk), registration, ttl)
 }
 
 func (s *DefaultDatastore) GetRegistration(ctx context.Context, pk PubKey) (types.SignedValidatorRegistration, error) {
