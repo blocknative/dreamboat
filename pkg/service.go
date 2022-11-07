@@ -22,7 +22,7 @@ const (
 
 type RelayService interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	RegisterValidator(context.Context, []types.SignedValidatorRegistration) error
+	RegisterValidator(context.Context, []SignedValidatorRegistration) error
 	GetHeader(context.Context, HeaderRequest) (*types.GetHeaderResponse, error)
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
@@ -356,7 +356,7 @@ func (s *DefaultService) updateKnownValidators(ctx context.Context, client Beaco
 	return nil
 }
 
-func (s *DefaultService) RegisterValidator(ctx context.Context, payload []types.SignedValidatorRegistration) error {
+func (s *DefaultService) RegisterValidator(ctx context.Context, payload []SignedValidatorRegistration) error {
 	return s.Relay.RegisterValidator(ctx, payload, &s.state)
 }
 

@@ -41,7 +41,7 @@ type BeaconState interface {
 
 type Relay interface {
 	// Proposer APIs
-	RegisterValidator(context.Context, []types.SignedValidatorRegistration, State) error
+	RegisterValidator(context.Context, []SignedValidatorRegistration, State) error
 	GetHeader(context.Context, HeaderRequest, State) (*types.GetHeaderResponse, error)
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock, State) (*types.GetPayloadResponse, error)
 
@@ -54,6 +54,7 @@ type DefaultRelay struct {
 	config                Config
 	builderSigningDomain  types.Domain
 	proposerSigningDomain types.Domain
+	regMngr               *RegisteredManager
 }
 
 // NewRelay relay service
@@ -72,11 +73,14 @@ func NewRelay(config Config) (*DefaultRelay, error) {
 		return nil, err
 	}
 
+	rm := NewRegisteredManager(5000)
 	rs := &DefaultRelay{
 		config:                config,
 		builderSigningDomain:  domainBuilder,
 		proposerSigningDomain: domainBeaconProposer,
+		regMngr:               rm,
 	}
+	rm.RunWorkers(1000, domainBeaconProposer)
 	return rs, nil
 }
 
@@ -92,7 +96,7 @@ func verifyTimestamp(timestamp uint64) bool {
 // ***** Builder Domain *****
 
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.SignedValidatorRegistration, state State) error {
+func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []SignedValidatorRegistration, state State) error {
 	logger := rs.Log().WithField("method", "RegisterValidator")
 	timeStart := time.Now()
 
@@ -123,7 +127,7 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []types.S
 	return nil
 }
 
-func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.SignedValidatorRegistration, state State) error {
+func (rs *DefaultRelay) processValidator(ctx context.Context, payload []SignedValidatorRegistration, state State) error {
 	logger := rs.Log().WithField("method", "RegisterValidator")
 	timeStart := time.Now()
 
@@ -191,7 +195,7 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []types.Si
 		}
 
 		// officially register validator
-		if err := state.Datastore().PutRegistration(ctx, pk, registerRequest, rs.config.TTL); err != nil {
+		if err := state.Datastore().PutRegistration(ctx, pk, registerRequest.SignedValidatorRegistration, rs.config.TTL); err != nil {
 			logger.WithField("pubkey", registerRequest.Message.Pubkey).WithError(err).Debug("Error in PutRegistration")
 			return fmt.Errorf("failed to store %s", registerRequest.Message.Pubkey.String())
 		}
@@ -506,7 +510,6 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 	}
 
 	err = state.Datastore().PutHeader(ctx, slot, h, rs.config.TTL)
-
 	if err != nil {
 		logger.WithError(err).Error("PutHeader failed")
 		return err
