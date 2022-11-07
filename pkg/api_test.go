@@ -29,10 +29,9 @@ func TestServerRouting(t *testing.T) {
 
 	t.Run("Status", func(t *testing.T) {
 		t.Parallel()
-
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -49,7 +48,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -68,7 +67,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -87,7 +86,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -106,7 +105,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -125,7 +124,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -144,7 +143,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -166,7 +165,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -190,7 +189,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -213,7 +212,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -236,7 +235,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -259,7 +258,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -281,7 +280,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -306,7 +305,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -329,7 +328,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -352,7 +351,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 
@@ -375,7 +374,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelayService(ctrl)
 		server := relay.API{
-			Log: logger,
+			Log:     logger,
 			Service: service,
 		}
 

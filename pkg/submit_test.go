@@ -38,11 +38,6 @@ func TestRegisterValidator2(t *testing.T) {
 		types.Root{}.String())
 	require.NoError(t, err)
 
-	/*
-		for i := 0; i < 100; i++ {
-			go relay.VerifyParallel(relaySigningDomain)
-		}*/
-
 	knownValidators := make(map[types.PubkeyHex]struct{}, N)
 	registrations := make([]relay.SignedValidatorRegistration, 0, N)
 	for i := 0; i < N; i++ {
@@ -64,7 +59,7 @@ func TestRegisterValidator2(t *testing.T) {
 		key := relay.PubKey{registration.Message.Pubkey}
 		gotRegistration, err := ds.GetRegistration(ctx, key)
 		require.NoError(t, err)
-		require.EqualValues(t, registration, gotRegistration)
+		require.EqualValues(t, registration.SignedValidatorRegistration, gotRegistration)
 	}
 
 }
@@ -125,7 +120,7 @@ func BenchmarkRegisterValidator2Parallel(b *testing.B) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := &relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
-	const N = 10_000
+	const N = 1_500
 
 	config := relay.Config{Log: log.New(), Network: "ropsten"}
 	r, _ := relay.NewRelay(config)
@@ -139,11 +134,7 @@ func BenchmarkRegisterValidator2Parallel(b *testing.B) {
 		types.DomainTypeAppBuilder,
 		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
-	/*
-		for i := 0; i < 1000; i++ {
-			go relay.VerifyParallel(relaySigningDomain)
-		}
-	*/
+
 	for i := 0; i < N; i++ {
 		registration, _ := validValidatorRegistration(b, relaySigningDomain)
 		b, err := json.Marshal(registration)
@@ -151,7 +142,6 @@ func BenchmarkRegisterValidator2Parallel(b *testing.B) {
 			panic(err)
 		}
 		registrations = append(registrations, relay.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
-
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
@@ -168,6 +158,7 @@ func BenchmarkRegisterValidator2Parallel(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
+	b.Logf(" b.N %d", b.N)
 
 	for i := 0; i < b.N; i++ {
 		go func() {

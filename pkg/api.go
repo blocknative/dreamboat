@@ -135,7 +135,7 @@ type SignedValidatorRegistration struct {
 
 func (s *SignedValidatorRegistration) UnmarshalJSON(b []byte) error {
 	sv := types.SignedValidatorRegistration{}
-	err := json.Unmarshal(b, sv)
+	err := json.Unmarshal(b, &sv)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func (s *SignedValidatorRegistration) UnmarshalJSON(b []byte) error {
 
 // proposer related handlers
 func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status int, err error) {
-	payload := []SignedValidatorRegistration{} //[]types.SignedValidatorRegistration{}
+	payload := []SignedValidatorRegistration{}
 	if err = json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
