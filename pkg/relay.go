@@ -73,14 +73,14 @@ func NewRelay(config Config) (*DefaultRelay, error) {
 		return nil, err
 	}
 
-	rm := NewRegisteredManager(5000)
+	rm := NewRegisteredManager(20000)
 	rs := &DefaultRelay{
 		config:                config,
 		builderSigningDomain:  domainBuilder,
 		proposerSigningDomain: domainBeaconProposer,
 		regMngr:               rm,
 	}
-	rm.RunWorkers(1000, domainBeaconProposer)
+	rm.RunWorkers(50)
 	return rs, nil
 }
 

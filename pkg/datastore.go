@@ -420,7 +420,7 @@ func ValidatorKey(pk PubKey) ds.Key {
 }
 
 func RegistrationKey(pk PubKey) ds.Key {
-	return ds.NewKey(fmt.Sprintf("registration-%s", pk.String()))
+	return ds.NewKey(fmt.Sprintf("r-%s", pk.String()))
 }
 
 type TTLDatastoreBatcher struct {
