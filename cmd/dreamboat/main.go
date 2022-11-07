@@ -191,39 +191,10 @@ func run() cli.ActionFunc {
 		g.Go(func() error {
 			return service.Run(ctx)
 		})
-
-		// wait for the relay service to be ready
-		select {
-		case <-service.Ready():
-		case <-ctx.Done():
-			return g.Wait()
-		}
-
-		config.Log.Debug("relay service ready")
-
-		// run the http server
-		g.Go(func() (err error) {
-			svr.BaseContext = func(l net.Listener) context.Context {
-				return ctx
-			}
-
-			svr.Handler = &relay.API{
-				Service:       service,
-				Log:           config.Log,
-				EnableProfile: c.Bool("profile"),
-			}
-
-			config.Log.Info("http server listening")
-			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
-				err = nil
-			}
-
-			return err
-		})
-
+		m := metrics.NewMetrics()
 		// run internal http server
 		g.Go(func() (err error) {
-			m := metrics.NewMetrics()
+
 			internalMux := http.NewServeMux()
 
 			metrics.AttachProfiler(internalMux)
@@ -241,6 +212,36 @@ func run() cli.ActionFunc {
 			if err = internalSrv.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
 			}
+			return err
+		})
+
+		// wait for the relay service to be ready
+		select {
+		case <-service.Ready():
+		case <-ctx.Done():
+			return g.Wait()
+		}
+
+		config.Log.Debug("relay service ready")
+
+		// run the http server
+		g.Go(func() (err error) {
+			svr.BaseContext = func(l net.Listener) context.Context {
+				return ctx
+			}
+			api := &relay.API{
+				Service:       service,
+				Log:           config.Log,
+				EnableProfile: c.Bool("profile"),
+			}
+			api.InitMetrics(m)
+			svr.Handler = api
+
+			config.Log.Info("http server listening")
+			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
+				err = nil
+			}
+
 			return err
 		})
 
