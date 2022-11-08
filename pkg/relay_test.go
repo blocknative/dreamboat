@@ -578,16 +578,10 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	const N = 10_000
+	const N = 1_350
 
-	//	ctrl := gomock.NewController(b)
 	config := relay.Config{Log: log.New(), Network: "ropsten"}
 	r, _ := relay.NewRelay(config)
-	/*
-		ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
-	*/
-	//bc := mock_relay.NewMockBeaconState(ctrl)
-
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := &relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}

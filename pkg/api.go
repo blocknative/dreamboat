@@ -126,8 +126,6 @@ func succeed(status int) http.HandlerFunc {
 	})
 }
 
-// type SignedValidatorRegistrations []SignedValidatorRegistration
-
 type SignedValidatorRegistration struct {
 	types.SignedValidatorRegistration
 	Raw json.RawMessage
