@@ -58,7 +58,7 @@ type DefaultRelay struct {
 }
 
 // NewRelay relay service
-func NewRelay(config Config) (*DefaultRelay, error) {
+func NewRelay(config Config, store Datastore) (*DefaultRelay, error) {
 	if err := config.validate(); err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func NewRelay(config Config) (*DefaultRelay, error) {
 		proposerSigningDomain: domainBeaconProposer,
 		regMngr:               rm,
 	}
-	rm.RunWorkers(50)
+	rm.RunWorkers(store, 300)
 	return rs, nil
 }
 

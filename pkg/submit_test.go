@@ -27,10 +27,11 @@ func TestRegisterValidator2(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	config := relay.Config{Log: log.New(), Network: "ropsten", TTL: time.Minute}
-	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
+
+	config := relay.Config{Log: log.New(), Network: "ropsten", TTL: time.Minute}
+	r, _ := relay.NewRelay(config, ds)
 
 	relaySigningDomain, err := relay.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -72,11 +73,11 @@ func BenchmarkRegisterValidator2(b *testing.B) {
 
 	ctrl := gomock.NewController(b)
 
-	config := relay.Config{Log: log.New(), Network: "ropsten", TTL: 5 * time.Minute}
-	r, _ := relay.NewRelay(config)
-
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
+
+	config := relay.Config{Log: log.New(), Network: "ropsten", TTL: 5 * time.Minute}
+	r, _ := relay.NewRelay(config, ds)
 
 	registrations := make([]relay.SignedValidatorRegistration, 0, N)
 	knownValidators := make(map[types.PubkeyHex]struct{}, N)
@@ -123,7 +124,7 @@ func BenchmarkRegisterValidator2Parallel(b *testing.B) {
 	const N = 10_000
 
 	config := relay.Config{Log: log.New(), Network: "ropsten"}
-	r, _ := relay.NewRelay(config)
+	r, _ := relay.NewRelay(config, ds)
 
 	bc := &FakeBeaconMock{}
 

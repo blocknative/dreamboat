@@ -3,7 +3,6 @@ package relay
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -15,22 +14,34 @@ import (
 )
 
 type RegisteredManager struct {
-	M           map[string]uint64
-	acc         sync.RWMutex
+	M   map[string]uint64
+	acc sync.RWMutex
+
 	VerifyInput chan SVRReq
+
+	StoreCh chan SVRReq
 }
 
 func NewRegisteredManager(queue int) *RegisteredManager {
 	return &RegisteredManager{
 		M:           make(map[string]uint64),
 		VerifyInput: make(chan SVRReq, queue),
+		StoreCh:     make(chan SVRReq, queue),
 	}
 }
 
-func (rm *RegisteredManager) RunWorkers(num int) {
+func (rm *RegisteredManager) RunWorkers(store Datastore, num int) {
 	for i := 0; i < num; i++ {
 		go VerifyParallel(rm.VerifyInput)
 	}
+
+	for i := 0; i < num; i++ {
+		go parallelStoreIfReady(store, rm.StoreCh, time.Minute*40)
+	}
+}
+
+func (rm *RegisteredManager) StoreChan() chan SVRReq {
+	return rm.StoreCh
 }
 
 func (rm *RegisteredManager) Set(k string, value uint64) {
@@ -72,6 +83,7 @@ func (rt *ReadyTable) Has(k int) bool {
 
 type Setter interface {
 	Set(k string, value uint64)
+	StoreChan() chan SVRReq
 }
 
 type SVRReq struct {
@@ -87,90 +99,28 @@ type SVRReqResp struct {
 	Iter   int
 }
 
-/*
-func registerSync(datas Datastore, s Setter, ttl time.Duration, a, b chan SVRReqResp, failure, exit chan struct{}, payload []SignedValidatorRegistration) {
-	rcv := make(map[int]struct{})
-
-	saveCh := make(chan int, 5)
-	go storeIfReady(datas, s, saveCh, payload, ttl)
-	go storeIfReady(datas, s, saveCh, payload, ttl)
-	go storeIfReady(datas, s, saveCh, payload, ttl)
-	defer close(saveCh)
-
-	var numA, numB int
-	var errored bool
-	var item SVRReqResp
-
-	var total = len(payload)
-SyncLoop:
-	for {
-		select {
-		case item = <-a:
-			numA++
-			if item.Err != nil {
-				if !errored {
-					close(failure)
-				}
-			} else {
-				_, ok := rcv[item.Iter]
-				if !ok {
-					rcv[item.Iter] = struct{}{}
-				} else {
-					saveCh <- item.Iter
-					delete(rcv, item.Iter)
-				}
-			}
-
-			if numA == total && numB == total {
-				break SyncLoop
-			}
-		case item = <-b:
-			numB++
-			if item.Err != nil {
-				if !errored {
-					close(failure)
-				}
-			} else if item.Commit {
-				// store only if it has two records from both checks
-				_, ok := rcv[item.Iter]
-				if !ok {
-					rcv[item.Iter] = struct{}{}
-				} else {
-					saveCh <- item.Iter
-					delete(rcv, item.Iter)
-				}
-			}
-
-			if numA == total && numB == total {
-				break SyncLoop
-			}
-		}
-	}
-	close(a)
-	close(b)
-	close(exit)
-	close(failure)
-}
-
-func storeIfReady(datas Datastore, s Setter, in chan int, payload []SignedValidatorRegistration, ttl time.Duration) {
+func parallelStoreIfReady(datas Datastore, in chan SVRReq, ttl time.Duration) {
 	for i := range in {
-		registerRequest := &payload[i]
-		if err := datas.PutRegistrationRaw(context.Background(), PubKey{registerRequest.Message.Pubkey}, registerRequest.Raw, ttl); err != nil {
-			return fmt.Errorf("failed to store %s", registerRequest.Message.Pubkey.String())
+		err := datas.PutRegistrationRaw(context.Background(), PubKey{i.payload.Message.Pubkey}, i.payload.Raw, ttl)
+		i.Response <- SVRReqResp{
+			Iter: i.Iter,
+			Err:  err,
 		}
-
-		s.Set(registerRequest.Message.Pubkey.String(), registerRequest.Message.Timestamp)
 	}
-}*/
+}
 
 func registerSync(datas Datastore, s Setter, ttl time.Duration, a, b chan SVRReqResp, failure, exit chan struct{}, payload []SignedValidatorRegistration) {
 	rcv := make(map[int]struct{})
 
-	var numA, numB int
+	var numA, numB, stored int
 	var errored bool
 	var item SVRReqResp
 
+	saved := make(chan SVRReqResp, len(payload))
+	var sentToStore int
 	var total = len(payload)
+
+	store := s.StoreChan()
 SyncLoop:
 	for {
 		select {
@@ -183,13 +133,22 @@ SyncLoop:
 					close(failure)
 				}
 			} else {
-				err := storeIfReady(datas, s, rcv, item.Iter, payload[item.Iter], ttl)
-				if err != nil {
-					log.Println("err", err)
+				ok := storeIfReady(s, rcv, item.Iter, payload[item.Iter])
+				if ok {
+					select {
+					case <-saved:
+						stored++
+					case store <- SVRReq{
+						payload:  payload[item.Iter],
+						Iter:     item.Iter,
+						Response: saved,
+					}:
+						sentToStore++
+					}
 				}
 			}
 
-			if numA == total && numB == total {
+			if numA == total && numB == total && sentToStore == stored {
 				break SyncLoop
 			}
 		case item = <-b:
@@ -201,12 +160,26 @@ SyncLoop:
 					close(failure)
 				}
 			} else if item.Commit {
-				err := storeIfReady(datas, s, rcv, item.Iter, payload[item.Iter], ttl)
-				if err != nil {
-					log.Println("err", err)
+				ok := storeIfReady(s, rcv, item.Iter, payload[item.Iter])
+				if ok {
+					select {
+					case <-saved:
+						stored++
+					case store <- SVRReq{
+						payload:  payload[item.Iter],
+						Iter:     item.Iter,
+						Response: saved,
+					}:
+						sentToStore++
+					}
 				}
 			}
-			if numA == total && numB == total {
+			if numA == total && numB == total && sentToStore == stored {
+				break SyncLoop
+			}
+		case <-saved:
+			stored++
+			if numA == total && numB == total && sentToStore == stored {
 				break SyncLoop
 			}
 		}
@@ -217,20 +190,19 @@ SyncLoop:
 	close(failure)
 }
 
-func storeIfReady(datas Datastore, s Setter, rcv map[int]struct{}, iter int, registerRequest SignedValidatorRegistration, ttl time.Duration) error {
+func storeIfReady(s Setter, rcv map[int]struct{}, iter int, registerRequest SignedValidatorRegistration) bool {
 	// store only if it has two records from both checks
 	_, ok := rcv[iter]
 	if !ok {
 		rcv[iter] = struct{}{}
-		return nil
+		return false
 	}
-
-	if err := datas.PutRegistrationRaw(context.Background(), PubKey{registerRequest.Message.Pubkey}, registerRequest.Raw, ttl); err != nil {
-		return fmt.Errorf("failed to store %s", registerRequest.Message.Pubkey.String())
-	}
+	//if err := datas.PutRegistrationRaw(context.Background(), PubKey{registerRequest.Message.Pubkey}, registerRequest.Raw, ttl); err != nil {
+	//	return fmt.Errorf("failed to store %s", registerRequest.Message.Pubkey.String())
+	//}
 	delete(rcv, iter)
 	s.Set(registerRequest.Message.Pubkey.String(), registerRequest.Message.Timestamp)
-	return nil
+	return true
 }
 
 // ***** Builder Domain *****
@@ -250,16 +222,10 @@ func (rs *DefaultRelay) RegisterValidator2(ctx context.Context, payload []Signed
 
 	go registerSync(state.Datastore(), rs.regMngr, rs.config.TTL, retSignature, retOther, failure, exit, payload)
 	go checkInMem(state.Beacon(), rs.regMngr, payload, retOther)
+
 	// This gives additional speedup but it's futile for now
 
-	//	VerifyInput := make(chan SVRReq, 20000)
 	var failed bool
-	/*
-		for i := 0; i < 100; i++ {
-			go VerifyParallel(VerifyInput)
-		}
-	*/
-
 	for i := range payload {
 		if failed { // after failure just populate the errors
 			retSignature <- SVRReqResp{Iter: i, Err: errors.New("failed")}
@@ -277,7 +243,7 @@ func (rs *DefaultRelay) RegisterValidator2(ctx context.Context, payload []Signed
 		case rs.regMngr.VerifyInput <- SVRReq{payload[i], msg, i, retSignature}:
 		}
 	}
-	//	log.Println("SentAll ", time.Since(t))
+	log.Println("SentAll ", time.Since(t))
 
 	<-exit
 	log.Println("RegisterValidator2 ", time.Since(t))
@@ -285,7 +251,7 @@ func (rs *DefaultRelay) RegisterValidator2(ctx context.Context, payload []Signed
 }
 
 func checkInMem(state BeaconState, rMgr *RegisteredManager, payload []SignedValidatorRegistration, out chan SVRReqResp) {
-	//checkTime := time.Now()
+	checkTime := time.Now()
 	//	log.Println("check begin", time.Since(checkTime))
 	for i, sp := range payload {
 		if verifyTimestamp(sp.Message.Timestamp) {
@@ -303,7 +269,7 @@ func checkInMem(state BeaconState, rMgr *RegisteredManager, payload []SignedVali
 		previousValidatorTimestamp, ok := rMgr.Get(pk.String())
 		out <- SVRReqResp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), Iter: i}
 	}
-	// log.Println("checkTime", time.Since(checkTime))
+	log.Println("checkTime", time.Since(checkTime))
 }
 
 func VerifyParallel(vInput <-chan SVRReq) {

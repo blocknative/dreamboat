@@ -91,18 +91,6 @@ func (s *DefaultService) Run(ctx context.Context) (err error) {
 		s.Log = log.New().WithField("service", "RelayService")
 	}
 
-	timeRelayStart := time.Now()
-	if s.Relay == nil {
-		s.Relay, err = NewRelay(s.Config)
-		if err != nil {
-			return
-		}
-	}
-	s.Log.WithFields(logrus.Fields{
-		"service":     "relay",
-		"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
-	}).Info("initialized")
-
 	timeDataStoreStart := time.Now()
 	if s.Datastore == nil {
 		if s.Storage == nil {
@@ -123,6 +111,18 @@ func (s *DefaultService) Run(ctx context.Context) (err error) {
 		}).Info("data store initialized")
 
 	s.state.datastore.Store(s.Datastore)
+
+	timeRelayStart := time.Now()
+	if s.Relay == nil {
+		s.Relay, err = NewRelay(s.Config, s.Datastore)
+		if err != nil {
+			return
+		}
+	}
+	s.Log.WithFields(logrus.Fields{
+		"service":     "relay",
+		"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
+	}).Info("initialized")
 
 	if s.NewBeaconClient == nil {
 		s.NewBeaconClient = func() (BeaconClient, error) {
