@@ -120,7 +120,7 @@ func BenchmarkRegisterValidator2Parallel(b *testing.B) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := &relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
-	const N = 1_600
+	const N = 10_000
 
 	config := relay.Config{Log: log.New(), Network: "ropsten"}
 	r, _ := relay.NewRelay(config)
