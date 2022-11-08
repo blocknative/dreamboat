@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -180,6 +179,7 @@ SyncLoop:
 			if item.Err != nil {
 				log.Println("item.Err", item.Err)
 				if !errored {
+					errored = true
 					close(failure)
 				}
 			} else {
@@ -197,6 +197,7 @@ SyncLoop:
 			if item.Err != nil {
 				log.Println("item.Err", item.Err)
 				if !errored {
+					errored = true
 					close(failure)
 				}
 			} else if item.Commit {
@@ -265,7 +266,7 @@ func (rs *DefaultRelay) RegisterValidator2(ctx context.Context, payload []Signed
 			continue
 		}
 
-		msg, _ := types.ComputeSigningRoot(payload[i].Message, rs.proposerSigningDomain)
+		msg, _ := types.ComputeSigningRoot(payload[i].Message, rs.builderSigningDomain)
 		/*if err != nil {
 			return false, err
 		}*/
@@ -274,7 +275,6 @@ func (rs *DefaultRelay) RegisterValidator2(ctx context.Context, payload []Signed
 		case <-failure:
 			failed = true
 		case rs.regMngr.VerifyInput <- SVRReq{payload[i], msg, i, retSignature}:
-			//case VerifyInput <- SVRReq{payload[i], msg, i, retSignature}:
 		}
 	}
 	//	log.Println("SentAll ", time.Since(t))
@@ -309,16 +309,17 @@ func checkInMem(state BeaconState, rMgr *RegisteredManager, payload []SignedVali
 func VerifyParallel(vInput <-chan SVRReq) {
 	for v := range vInput {
 		// TODO(l): Make sure this doesn't Panic!
-		_, err := VerifySignatureBytes(
-			v.Msg,
-			v.payload.Signature[:],
-			v.payload.Message.Pubkey[:],
-		)
+		ok, err := VerifySignatureBytes(v.Msg, v.payload.Signature[:], v.payload.Message.Pubkey[:])
+		if err == nil && !ok {
+			err = bls.ErrInvalidSignature
+		}
 		v.Response <- SVRReqResp{Err: err, Iter: v.Iter}
 	}
 }
 
 var dst = []byte("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_")
+
+const BLST_SUCCESS = 0x0
 
 func VerifySignatureBytes(msg [32]byte, sigBytes, pkBytes []byte) (bool, error) {
 	sig, err := bls.SignatureFromBytes(sigBytes)
@@ -326,56 +327,14 @@ func VerifySignatureBytes(msg [32]byte, sigBytes, pkBytes []byte) (bool, error) 
 		return false, err
 	}
 
-	pubkey, err := bls.PublicKeyFromBytes(pkBytes)
+	pk, err := bls.PublicKeyFromBytes(pkBytes)
 	if err != nil {
 		return false, err
 	}
 
-	return aggregateVerify(sig, true, pubkey, false, blst.Message(msg[:]), dst), nil
-}
-
-func aggregateVerify(sig *blst.P2Affine, sigGroupcheck bool, pks *blst.P1Affine, pksVerify bool, msgs blst.Message, dst []byte) bool {
-	if pks == nil || msgs == nil {
-		return false
+	if pk == nil || len(msg) == 0 || sig == nil {
+		return false, nil
 	}
 
-	return coreAggregateVerifyPkInG1(sig, sigGroupcheck, pks, pksVerify, msgs, dst, true)
-}
-
-const BLST_SUCCESS = 0x0
-
-func coreAggregateVerifyPkInG1(sig *blst.P2Affine, sigGroupcheck bool, pks *blst.P1Affine, pkValidate bool, msgs blst.Message, dst []byte, useHash bool) bool {
-
-	valid := int32(1)
-
-	pairing := blst.PairingCtx(useHash, dst)
-	// Pairing and accumulate
-	ret := blst.PairingAggregatePkInG1(pairing, pks, pkValidate, nil, false, msgs, nil)
-	if ret != BLST_SUCCESS {
-		atomic.StoreInt32(&valid, 0)
-	}
-
-	if atomic.LoadInt32(&valid) > 0 {
-		blst.PairingCommit(pairing)
-	}
-
-	// Uncompress and check signature
-	var gtsig blst.Fp12
-	if sig == nil {
-		atomic.StoreInt32(&valid, 0)
-	}
-
-	if atomic.LoadInt32(&valid) > 0 && sigGroupcheck && !sig.SigValidate(false) {
-		atomic.StoreInt32(&valid, 0)
-	}
-
-	if atomic.LoadInt32(&valid) > 0 {
-		blst.AggregatedInG2(&gtsig, sig)
-	}
-
-	if atomic.LoadInt32(&valid) == 0 || pairing == nil {
-		return false
-	}
-
-	return blst.PairingFinalVerify(pairing, &gtsig)
+	return (blst.CoreVerifyPkInG1(pk, sig, true, msg[:], dst, nil) == BLST_SUCCESS), nil
 }
