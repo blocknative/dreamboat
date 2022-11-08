@@ -123,7 +123,7 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []SignedV
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"numberValidators": len(payload),
 	}).Trace("validator registrations succeeded")
-
+	log.Info("timeStart ", time.Since(timeStart))
 	return nil
 }
 
