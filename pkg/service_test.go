@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	mock_relay "github.com/blocknative/dreamboat/internal/mock/pkg"
 	relay "github.com/blocknative/dreamboat/pkg"
+	mock_relay "github.com/blocknative/dreamboat/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +30,7 @@ func TestServiceRouting(t *testing.T) {
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.DefaultDatastore{TTLStorage: newMockDatastore()},
+			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -49,7 +49,7 @@ func TestServiceRouting(t *testing.T) {
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.DefaultDatastore{TTLStorage: newMockDatastore()},
+			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -69,7 +69,7 @@ func TestServiceRouting(t *testing.T) {
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.DefaultDatastore{TTLStorage: newMockDatastore()},
+			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -88,7 +88,7 @@ func TestServiceRouting(t *testing.T) {
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.DefaultDatastore{TTLStorage: newMockDatastore()},
+			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -107,7 +107,7 @@ func TestServiceRouting(t *testing.T) {
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.DefaultDatastore{TTLStorage: newMockDatastore()},
+			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -126,7 +126,7 @@ func TestServiceRouting(t *testing.T) {
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.DefaultDatastore{TTLStorage: newMockDatastore()},
+			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -152,7 +152,7 @@ func TestBeaconClientState(t *testing.T) {
 		NewBeaconClient: func() (relay.BeaconClient, error) {
 			return beaconMock, nil
 		},
-		Datastore: &relay.DefaultDatastore{TTLStorage: newMockDatastore()},
+		Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 	}
 
 	beaconMock.EXPECT().GetProposerDuties(gomock.Any()).Return(&relay.RegisteredProposersResponse{[]relay.RegisteredProposersResponseData{}}, nil).Times(4)
