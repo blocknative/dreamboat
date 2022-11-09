@@ -209,7 +209,7 @@ func storeIfReady(s Setter, rcv map[int]struct{}, iter int, registerRequest stru
 
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *Relay) RegisterValidator2(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
+func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
 	/* TODO(l): Consider this
 	for _, registerRequest := range payload {
 		if verifyTimestamp(registerRequest.Message.Timestamp) {
