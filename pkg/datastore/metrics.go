@@ -1,4 +1,4 @@
-package metrics
+package datastore
 
 import (
 	met "github.com/blocknative/dreamboat/metrics"
