@@ -14,7 +14,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 	"github.com/lthibault/log"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -83,13 +82,7 @@ func NewService(l log.Logger, c Config, d Datastore, r Relay, as *AtomicState) *
 }
 
 // Run creates a relay, datastore and starts the beacon client event loop
-func (s *Service) Run(ctx context.Context) (err error) {
-	timeRelayStart := time.Now()
-
-	s.Log.WithFields(logrus.Fields{
-		"service":     "relay",
-		"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
-	}).Info("initialized")
+func (s *Service) RunBeacon(ctx context.Context) (err error) {
 
 	if s.NewBeaconClient == nil {
 		s.NewBeaconClient = func() (BeaconClient, error) {

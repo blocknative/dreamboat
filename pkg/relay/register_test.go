@@ -48,7 +48,7 @@ func TestRegisterValidator(t *testing.T) {
 	regMgr.RunStore(ds, 300)
 	regMgr.RunVerify(300)
 
-	r, _ := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -105,7 +105,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	r, _ := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -164,7 +164,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),

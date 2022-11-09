@@ -30,7 +30,6 @@ func (rm *RegisteredManager) initMetrics() {
 }
 
 func (rm *RegisteredManager) AttachMetrics(m *metrics.Metrics) {
-	//m.Register(rm.m.ApiReqCounter)
 	m.Register(rm.m.VerifyTiming)
 }
 
@@ -51,7 +50,5 @@ func (r *Relay) initMetrics() {
 }
 
 func (r *Relay) AttachMetrics(m *metrics.Metrics) {
-	// Temporary
-	r.regMngr.AttachMetrics(m)
 
 }

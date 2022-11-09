@@ -11,5 +11,4 @@ func (ds *Service) initMetrics() {
 }
 
 func (ds *Service) AttachMetrics(m *metrics.Metrics) {
-	ds.Relay.AttachMetrics(m)
 }
