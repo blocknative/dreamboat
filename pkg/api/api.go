@@ -1,4 +1,4 @@
-package relay
+package api
 
 import (
 	"encoding/json"
@@ -6,15 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
-	"sync"
 
-	"github.com/blocknative/dreamboat/metrics"
-	apimetrics "github.com/blocknative/dreamboat/pkg/metrics"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
 // Router paths
@@ -50,6 +48,7 @@ var (
 	ErrParamNotFound = errors.New("not found")
 )
 
+/*
 type API struct {
 	Service       RelayService
 	Log           log.Logger
@@ -57,9 +56,50 @@ type API struct {
 	once          sync.Once
 	mux           http.Handler
 
-	m apimetrics.APIMetrics
+	m APIMetrics
+}*/
+/*
+type Relay interface {
+	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
+	//RegisterValidator(ctx context.Context, headSlot structs.Slot, payload []structs.CheckedSignedValidatorRegistration) error
+	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
+	GetPayload(context.Context, types.PublicKey, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
+
+	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
+	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
+
+	// Data APIs
+	GetPayloadDelivered(context.Context, structs.Slot, structs.TraceQuery) ([]structs.BidTraceExtended, error)
+	GetBlockReceived(context.Context, structs.Slot, structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	Registration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+}
+*/
+type BeaconState interface {
+	KnownValidatorByIndex(uint64) (types.PubkeyHex, bool)
+	IsKnownValidator(types.PubkeyHex) bool
+	HeadSlot() structs.Slot
+	ValidatorsMap() []types.BuilderGetValidatorsResponseEntry
 }
 
+type API struct {
+	relay  Relay
+	bstate BeaconState
+	l      log.Logger
+	m      APIMetrics
+
+	checkKnownValidator bool
+}
+
+/*
+func NewApi(l log.Logger, bstate BeaconState, relay Relay, checkKnownValidator bool) (a *API) {
+	return &API{l: l, bstate: bstate, relay: relay, checkKnownValidator: checkKnownValidator}
+}*/
+
+func NewApi(l log.Logger, relay Relay) (a *API) {
+	return &API{l: l, relay: relay}
+}
+
+/*
 func (a *API) init() {
 	a.once.Do(func() {
 		if a.Log == nil {
@@ -73,10 +113,10 @@ func (a *API) init() {
 			withLogger(a.Log)) // set middleware
 
 		// root returns 200 - nil
-		router.HandleFunc("/", succeed(http.StatusOK))
+		router.HandleFunc("/", status)
 
 		// proposer related
-		router.HandleFunc(PathStatus, succeed(http.StatusOK)).Methods(http.MethodGet)
+		router.HandleFunc(PathStatus, status).Methods(http.MethodGet)
 		router.HandleFunc(PathRegisterValidator, handler(a.registerValidator)).Methods(http.MethodPost)
 		router.HandleFunc(PathGetHeader, handler(a.getHeader)).Methods(http.MethodGet)
 		router.HandleFunc(PathGetPayload, handler(a.getPayload)).Methods(http.MethodPost)
@@ -94,11 +134,35 @@ func (a *API) init() {
 
 		a.mux = router
 	})
-}
+}*/
 
-func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.init()
-	a.mux.ServeHTTP(w, r)
+func (a *API) AttachToHandler(m *http.ServeMux) {
+	router := mux.NewRouter()
+	router.Use(
+		mux.CORSMethodMiddleware(router),
+		withContentType("application/json"),
+		withLogger(a.l)) // set middleware
+
+	// root returns 200 - nil
+	router.HandleFunc("/", status)
+
+	// proposer related
+	router.HandleFunc(PathStatus, status).Methods(http.MethodGet)
+	router.HandleFunc(PathRegisterValidator, handler(a.registerValidator)).Methods(http.MethodPost)
+	router.HandleFunc(PathGetHeader, handler(a.getHeader)).Methods(http.MethodGet)
+	router.HandleFunc(PathGetPayload, handler(a.getPayload)).Methods(http.MethodPost)
+
+	// builder related
+	router.HandleFunc(PathSubmitBlock, handler(a.submitBlock)).Methods(http.MethodPost)
+	router.HandleFunc(PathGetValidators, handler(a.getValidators)).Methods(http.MethodGet)
+
+	// data API related
+	router.HandleFunc(PathProposerPayloadsDelivered, handler(a.proposerPayloadsDelivered)).Methods(http.MethodGet)
+	router.HandleFunc(PathBuilderBlocksReceived, handler(a.builderBlocksReceived)).Methods(http.MethodGet)
+	router.HandleFunc(PathSpecificRegistration, handler(a.specificRegistration)).Methods(http.MethodGet)
+
+	router.Use(mux.CORSMethodMiddleware(router))
+	m.Handle("/", router)
 }
 
 func handler(f func(http.ResponseWriter, *http.Request) (int, error)) http.HandlerFunc {
@@ -120,26 +184,9 @@ func handler(f func(http.ResponseWriter, *http.Request) (int, error)) http.Handl
 	}
 }
 
-func succeed(status int) http.HandlerFunc {
-	return handler(func(http.ResponseWriter, *http.Request) (int, error) {
-		return status, nil
-	})
-}
-
-type SignedValidatorRegistration struct {
-	types.SignedValidatorRegistration
-	Raw json.RawMessage
-}
-
-func (s *SignedValidatorRegistration) UnmarshalJSON(b []byte) error {
-	sv := types.SignedValidatorRegistration{}
-	err := json.Unmarshal(b, &sv)
-	if err != nil {
-		return err
-	}
-	s.SignedValidatorRegistration = sv
-	s.Raw = b
-	return nil
+func status(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	return
 }
 
 // proposer related handlers
@@ -147,7 +194,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("registerValidator"))
 	defer timer.ObserveDuration()
 
-	payload := []SignedValidatorRegistration{}
+	payload := []structs.SignedValidatorRegistration{}
 	if err = json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400").Inc()
 		return http.StatusBadRequest, errors.New("invalid payload")
@@ -173,7 +220,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	if err = json.NewEncoder(w).Encode(response); err != nil {
-		a.Log.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
+		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "500").Inc()
 		return http.StatusInternalServerError, err
 	}
@@ -199,7 +246,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		a.Log.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
+		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "500").Inc()
 		return http.StatusInternalServerError, err
 	}
@@ -234,7 +281,7 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 
 	vs := a.Service.GetValidators()
 	if vs == nil {
-		a.Log.Trace("no registered validators for epoch")
+		a.l.Trace("no registered validators for epoch")
 	}
 
 	if err := json.NewEncoder(w).Encode(vs); err != nil {
@@ -313,7 +360,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		return http.StatusBadRequest, err
 	}
 
-	query := TraceQuery{
+	query := structs.TraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,
@@ -364,7 +411,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 		limit = DataLimit
 	}
 
-	query := TraceQuery{
+	query := structs.TraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,
@@ -390,15 +437,15 @@ func isInvalidParameter(err error) bool {
 	return err != nil && !errors.Is(err, ErrParamNotFound)
 }
 
-func specificSlot(r *http.Request) (Slot, error) {
+func specificSlot(r *http.Request) (structs.Slot, error) {
 	if slotStr := r.URL.Query().Get("slot"); slotStr != "" {
 		slot, err := strconv.ParseUint(slotStr, 10, 64)
 		if err != nil {
-			return Slot(0), err
+			return structs.Slot(0), err
 		}
-		return Slot(slot), nil
+		return structs.Slot(slot), nil
 	}
-	return Slot(0), ErrParamNotFound
+	return structs.Slot(0), ErrParamNotFound
 }
 
 func blockHash(r *http.Request) (types.Hash, error) {
@@ -450,51 +497,11 @@ func cursor(r *http.Request) (uint64, error) {
 	return 0, ErrParamNotFound
 }
 
-type HeaderRequest map[string]string
-
-func ParseHeaderRequest(r *http.Request) HeaderRequest {
+func ParseHeaderRequest(r *http.Request) structs.HeaderRequest {
 	return mux.Vars(r)
-}
-
-func (hr HeaderRequest) Slot() (Slot, error) {
-	slot, err := strconv.Atoi(hr["slot"])
-	return Slot(slot), err
-}
-
-func (hr HeaderRequest) parentHash() (types.Hash, error) {
-	var parentHash types.Hash
-	err := parentHash.UnmarshalText([]byte(strings.ToLower(hr["parent_hash"])))
-	return parentHash, err
-}
-
-func (hr HeaderRequest) pubkey() (PubKey, error) {
-	var pk PubKey
-	if err := pk.UnmarshalText([]byte(strings.ToLower(hr["pubkey"]))); err != nil {
-		return PubKey{}, fmt.Errorf("invalid public key")
-	}
-	return pk, nil
 }
 
 type jsonError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
-}
-
-func (api *API) InitMetrics(m *metrics.Metrics) {
-	api.m.ApiReqCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "dreamboat",
-		Subsystem: "api",
-		Name:      "reqcount",
-		Help:      "Number of requests.",
-	}, []string{"endpoint", "code"})
-
-	api.m.ApiReqTiming = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "dreamboat",
-		Subsystem: "api",
-		Name:      "duration",
-		Help:      "Duration of requests per endpoint",
-	}, []string{"endpoint"})
-
-	m.Register(api.m.ApiReqCounter)
-	m.Register(api.m.ApiReqTiming)
 }

@@ -2,12 +2,11 @@ package relay
 
 import (
 	"errors"
-	"fmt"
 
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
-	ds "github.com/ipfs/go-datastore"
 	"golang.org/x/exp/constraints"
 )
 
@@ -48,35 +47,6 @@ func min[T constraints.Ordered](a, b T) T {
 	return b
 }
 
-type Slot uint64
-
-func (s Slot) Loggable() map[string]any {
-	return map[string]any{
-		"slot":  s,
-		"epoch": s.Epoch(),
-	}
-}
-
-func (s Slot) Epoch() Epoch {
-	return Epoch(s / SlotsPerEpoch)
-}
-
-func (s Slot) HeaderKey() ds.Key {
-	return ds.NewKey(fmt.Sprintf("header-%d", s))
-}
-
-func (s Slot) PayloadKey() ds.Key {
-	return ds.NewKey(fmt.Sprintf("payload-%d", s))
-}
-
-func (pk PubKey) ValidatorKey() ds.Key {
-	return ds.NewKey(fmt.Sprintf("valdator-%s", pk))
-}
-
-func (pk PubKey) RegistrationKey() ds.Key {
-	return ds.NewKey(fmt.Sprintf("registration-%s", pk))
-}
-
 func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) BlockBidAndTrace {
 	getHeaderResponse := types.GetHeaderResponse{
 		Version: "bellatrix",
@@ -100,14 +70,6 @@ func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderB
 	}
 }
 
-type Epoch uint64
-
-func (e Epoch) Loggable() map[string]any {
-	return map[string]any{
-		"epoch": e,
-	}
-}
-
 func (b BuilderGetValidatorsResponseEntrySlice) Loggable() map[string]any {
 	return map[string]any{
 		"numDuties": len(b),
@@ -115,7 +77,7 @@ func (b BuilderGetValidatorsResponseEntrySlice) Loggable() map[string]any {
 }
 
 type ErrBadProposer struct {
-	Want, Got PubKey
+	Want, Got structs.PubKey
 }
 
 func (ErrBadProposer) Error() string { return "peer is not proposer" }

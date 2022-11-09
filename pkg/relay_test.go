@@ -11,6 +11,7 @@ import (
 
 	mock_relay "github.com/blocknative/dreamboat/internal/mock/pkg"
 	relay "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/golang/mock/gomock"
@@ -44,14 +45,14 @@ func TestRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	knownValidators := make(map[types.PubkeyHex]struct{}, N)
-	registrations := make([]relay.SignedValidatorRegistration, 0, N)
+	registrations := make([]structs.SignedValidatorRegistration, 0, N)
 	for i := 0; i < N; i++ {
 		registration, _ := validValidatorRegistration(t, relaySigningDomain)
 		b, err := json.Marshal(registration)
 		if err != nil {
 			panic(err)
 		}
-		registrations = append(registrations, relay.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
+		registrations = append(registrations, structs.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
 
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
@@ -62,7 +63,7 @@ func TestRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, registration := range registrations {
-		key := relay.PubKey{registration.Message.Pubkey}
+		key := structs.PubKey{registration.Message.Pubkey}
 		gotRegistration, err := ds.GetRegistration(ctx, key)
 		require.NoError(t, err)
 		require.EqualValues(t, registration, gotRegistration)
@@ -99,7 +100,7 @@ func TestGetHeader(t *testing.T) {
 	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(t, relaySigningDomain)
 
-	request := relay.HeaderRequest{}
+	request := structs.HeaderRequest{}
 	request["slot"] = strconv.Itoa(int(submitRequest.Message.Slot))
 	request["parent_hash"] = submitRequest.ExecutionPayload.ParentHash.String()
 	request["pubkey"] = registration.Message.Pubkey.String()
@@ -119,7 +120,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
-	err = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
+	err = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
@@ -131,7 +132,7 @@ func TestGetHeader(t *testing.T) {
 		},
 		time.Minute)
 	require.NoError(t, err)
-	err = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	err = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 	require.NoError(t, err)
 
 	response, err := r.GetHeader(ctx, request, state{ds: ds, bc: bc})
@@ -211,11 +212,11 @@ func TestGetPayload(t *testing.T) {
 	key := relay.PayloadKey{
 		BlockHash: request.Message.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  registration.Message.Pubkey,
-		Slot:      relay.Slot(request.Message.Slot),
+		Slot:      structs.Slot(request.Message.Slot),
 	}
 	err = ds.PutPayload(ctx, key, &payload, time.Minute)
 	require.NoError(t, err)
-	err = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
+	err = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
@@ -227,7 +228,7 @@ func TestGetPayload(t *testing.T) {
 		},
 		time.Minute)
 	require.NoError(t, err)
-	err = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	err = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 	require.NoError(t, err)
 
 	bc.EXPECT().KnownValidatorByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
@@ -297,7 +298,7 @@ func TestSubmitBlock(t *testing.T) {
 
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeaders, err := ds.GetHeaders(ctx, relay.Query{Slot: relay.Slot(submitRequest.Message.Slot)})
+	gotHeaders, err := ds.GetHeaders(ctx, relay.Query{Slot: structs.Slot(submitRequest.Message.Slot)})
 	require.NoError(t, err)
 	require.Len(t, gotHeaders, 1)
 	require.EqualValues(t, header, gotHeaders[0].Header)
@@ -548,7 +549,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 
 	r, _ := relay.NewRelay(config, ds)
 
-	registrations := make([]relay.SignedValidatorRegistration, 0, N)
+	registrations := make([]structs.SignedValidatorRegistration, 0, N)
 	knownValidators := make(map[types.PubkeyHex]struct{}, N)
 
 	for i := 0; i < N; i++ {
@@ -562,7 +563,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		registrations = append(registrations, relay.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
+		registrations = append(registrations, structs.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
 
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
@@ -597,7 +598,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	bc := &FakeBeaconMock{}
 
-	registrations := make([]relay.SignedValidatorRegistration, 0, N)
+	registrations := make([]structs.SignedValidatorRegistration, 0, N)
 	knownValidators := make(map[types.PubkeyHex]struct{}, N)
 
 	relaySigningDomain, _ := relay.ComputeDomain(
@@ -611,7 +612,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		registrations = append(registrations, relay.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
+		registrations = append(registrations, structs.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
 		knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 
@@ -689,7 +690,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(b, proposerSigningDomain)
 
-	request := relay.HeaderRequest{}
+	request := structs.HeaderRequest{}
 	request["slot"] = strconv.Itoa(int(submitRequest.Message.Slot))
 	request["parent_hash"] = submitRequest.ExecutionPayload.ParentHash.String()
 	request["pubkey"] = registration.Message.Pubkey.String()
@@ -706,7 +707,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	key := relay.SubmissionToKey(submitRequest)
 	_ = ds.PutPayload(ctx, key, &payload, time.Minute)
 	header, _ := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
-	_ = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
+	_ = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
@@ -717,7 +718,7 @@ func BenchmarkGetHeader(b *testing.B) {
 			},
 		},
 		time.Minute)
-	_ = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -756,7 +757,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(b, proposerSigningDomain)
 
-	request := relay.HeaderRequest{}
+	request := structs.HeaderRequest{}
 	request["slot"] = strconv.Itoa(int(submitRequest.Message.Slot))
 	request["parent_hash"] = submitRequest.ExecutionPayload.ParentHash.String()
 	request["pubkey"] = registration.Message.Pubkey.String()
@@ -773,7 +774,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	key := relay.SubmissionToKey(submitRequest)
 	_ = ds.PutPayload(ctx, key, &payload, time.Minute)
 	header, _ := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
-	_ = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
+	_ = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
@@ -784,7 +785,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 			},
 		},
 		time.Minute)
-	_ = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -869,10 +870,10 @@ func BenchmarkGetPayload(b *testing.B) {
 	key := relay.PayloadKey{
 		BlockHash: request.Message.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  registration.Message.Pubkey,
-		Slot:      relay.Slot(request.Message.Slot),
+		Slot:      structs.Slot(request.Message.Slot),
 	}
 	_ = ds.PutPayload(ctx, key, &payload, time.Minute)
-	_ = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
+	_ = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
@@ -883,7 +884,7 @@ func BenchmarkGetPayload(b *testing.B) {
 			},
 		},
 		time.Minute)
-	_ = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 
 	bc.EXPECT().KnownValidatorByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
 
@@ -963,10 +964,10 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	key := relay.PayloadKey{
 		BlockHash: request.Message.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  registration.Message.Pubkey,
-		Slot:      relay.Slot(request.Message.Slot),
+		Slot:      structs.Slot(request.Message.Slot),
 	}
 	_ = ds.PutPayload(ctx, key, &payload, time.Minute)
-	_ = ds.PutHeader(ctx, relay.Slot(submitRequest.Message.Slot),
+	_ = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
 			Trace: &relay.BidTraceWithTimestamp{
@@ -977,7 +978,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 			},
 		},
 		time.Minute)
-	_ = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 
 	bc.EXPECT().KnownValidatorByIndex(request.Message.ProposerIndex).Return(registration.Message.Pubkey.PubkeyHex(), nil).Times(1)
 
