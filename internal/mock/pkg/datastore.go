@@ -7,6 +7,7 @@ package mock_relay
 import (
 	context "context"
 	relay "github.com/blocknative/dreamboat/pkg"
+	structs "github.com/blocknative/dreamboat/pkg/structs"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
 	datastore "github.com/ipfs/go-datastore"
@@ -38,7 +39,7 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 }
 
 // PutHeader mocks base method
-func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 relay.Slot, arg2 relay.HeaderAndTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 structs.Slot, arg2 relay.HeaderAndTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutHeader", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -82,7 +83,7 @@ func (mr *MockDatastoreMockRecorder) GetHeaderBatch(arg0, arg1 interface{}) *gom
 }
 
 // PutDelivered mocks base method
-func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 relay.Slot, arg2 relay.DeliveredTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 structs.Slot, arg2 relay.DeliveredTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -96,10 +97,10 @@ func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interfa
 }
 
 // GetDelivered mocks base method
-func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 relay.Query) (relay.BidTraceWithTimestamp, error) {
+func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 relay.Query) (structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDelivered", arg0, arg1)
-	ret0, _ := ret[0].(relay.BidTraceWithTimestamp)
+	ret0, _ := ret[0].(structs.BidTraceWithTimestamp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -111,10 +112,10 @@ func (mr *MockDatastoreMockRecorder) GetDelivered(arg0, arg1 interface{}) *gomoc
 }
 
 // GetDeliveredBatch mocks base method
-func (m *MockDatastore) GetDeliveredBatch(arg0 context.Context, arg1 []relay.Query) ([]relay.BidTraceWithTimestamp, error) {
+func (m *MockDatastore) GetDeliveredBatch(arg0 context.Context, arg1 []relay.Query) ([]structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDeliveredBatch", arg0, arg1)
-	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
+	ret0, _ := ret[0].([]structs.BidTraceWithTimestamp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -155,7 +156,7 @@ func (mr *MockDatastoreMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.
 }
 
 // PutRegistration mocks base method
-func (m *MockDatastore) PutRegistration(arg0 context.Context, arg1 relay.PubKey, arg2 types.SignedValidatorRegistration, arg3 time.Duration) error {
+func (m *MockDatastore) PutRegistration(arg0 context.Context, arg1 structs.PubKey, arg2 types.SignedValidatorRegistration, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutRegistration", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -169,7 +170,7 @@ func (mr *MockDatastoreMockRecorder) PutRegistration(arg0, arg1, arg2, arg3 inte
 }
 
 // PutRegistrationRaw mocks base method
-func (m *MockDatastore) PutRegistrationRaw(arg0 context.Context, arg1 relay.PubKey, arg2 []byte, arg3 time.Duration) error {
+func (m *MockDatastore) PutRegistrationRaw(arg0 context.Context, arg1 structs.PubKey, arg2 []byte, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutRegistrationRaw", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -183,7 +184,7 @@ func (mr *MockDatastoreMockRecorder) PutRegistrationRaw(arg0, arg1, arg2, arg3 i
 }
 
 // GetRegistration mocks base method
-func (m *MockDatastore) GetRegistration(arg0 context.Context, arg1 relay.PubKey) (types.SignedValidatorRegistration, error) {
+func (m *MockDatastore) GetRegistration(arg0 context.Context, arg1 structs.PubKey) (types.SignedValidatorRegistration, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRegistration", arg0, arg1)
 	ret0, _ := ret[0].(types.SignedValidatorRegistration)

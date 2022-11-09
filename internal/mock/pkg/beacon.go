@@ -7,6 +7,7 @@ package mock_relay
 import (
 	context "context"
 	relay "github.com/blocknative/dreamboat/pkg"
+	structs "github.com/blocknative/dreamboat/pkg/structs"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
@@ -47,7 +48,7 @@ func (mr *MockBeaconClientMockRecorder) SubscribeToHeadEvents(ctx, slotC interfa
 }
 
 // GetProposerDuties mocks base method
-func (m *MockBeaconClient) GetProposerDuties(arg0 relay.Epoch) (*relay.RegisteredProposersResponse, error) {
+func (m *MockBeaconClient) GetProposerDuties(arg0 structs.Epoch) (*relay.RegisteredProposersResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProposerDuties", arg0)
 	ret0, _ := ret[0].(*relay.RegisteredProposersResponse)
@@ -77,7 +78,7 @@ func (mr *MockBeaconClientMockRecorder) SyncStatus() *gomock.Call {
 }
 
 // KnownValidators mocks base method
-func (m *MockBeaconClient) KnownValidators(arg0 relay.Slot) (relay.AllValidatorsResponse, error) {
+func (m *MockBeaconClient) KnownValidators(arg0 structs.Slot) (relay.AllValidatorsResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "KnownValidators", arg0)
 	ret0, _ := ret[0].(relay.AllValidatorsResponse)
