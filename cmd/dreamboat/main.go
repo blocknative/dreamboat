@@ -183,10 +183,10 @@ func run() cli.ActionFunc {
 			return service.Run(ctx)
 		})
 
-		m := metrics.NewMetrics()
+		api := api.NewApi(config.Log, service)
 
-		api := api.NewApi(config.Log, service) //memoryStore, r, cfg.CheckKnownValidator)
-		api.InitMetrics(m)
+		m := metrics.NewMetrics()
+		api.AttacheMetrics(m)
 
 		// run internal http server
 		g.Go(func() (err error) {

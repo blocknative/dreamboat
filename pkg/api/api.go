@@ -1,3 +1,5 @@
+//go:generate mockgen  -destination=./mocks/relay.go -package=mocks github.com/blocknative/dreamboat/pkg/api Service
+
 package api
 
 import (
@@ -49,33 +51,6 @@ var (
 	ErrParamNotFound = errors.New("not found")
 )
 
-/*
-type API struct {
-	Service       RelayService
-	Log           log.Logger
-	EnableProfile bool
-	once          sync.Once
-	mux           http.Handler
-
-	m APIMetrics
-}*/
-/*
-type Relay interface {
-	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	//RegisterValidator(ctx context.Context, headSlot structs.Slot, payload []structs.CheckedSignedValidatorRegistration) error
-	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-	GetPayload(context.Context, types.PublicKey, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
-
-	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
-
-	// Data APIs
-	GetPayloadDelivered(context.Context, structs.Slot, structs.TraceQuery) ([]structs.BidTraceExtended, error)
-	GetBlockReceived(context.Context, structs.Slot, structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error)
-	Registration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
-}
-*/
-
 type Service interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
 	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
@@ -93,62 +68,17 @@ type Service interface {
 }
 
 type API struct {
-	//relay  Relay
-	//bstate BeaconState
-
 	l log.Logger
 	s Service
 
 	m APIMetrics
-
-	//checkKnownValidator bool
 }
-
-/*
-func NewApi(l log.Logger, bstate BeaconState, relay Relay, checkKnownValidator bool) (a *API) {
-	return &API{l: l, bstate: bstate, relay: relay, checkKnownValidator: checkKnownValidator}
-}*/
 
 func NewApi(l log.Logger, s Service) (a *API) {
-	return &API{l: l, s: s}
+	a = &API{l: l, s: s}
+	a.initMetrics()
+	return a
 }
-
-/*
-func (a *API) init() {
-	a.once.Do(func() {
-		if a.Log == nil {
-			a.Log = log.New()
-		}
-
-		router := mux.NewRouter()
-		router.Use(
-			mux.CORSMethodMiddleware(router),
-			withContentType("application/json"),
-			withLogger(a.Log)) // set middleware
-
-		// root returns 200 - nil
-		router.HandleFunc("/", status)
-
-		// proposer related
-		router.HandleFunc(PathStatus, status).Methods(http.MethodGet)
-		router.HandleFunc(PathRegisterValidator, handler(a.registerValidator)).Methods(http.MethodPost)
-		router.HandleFunc(PathGetHeader, handler(a.getHeader)).Methods(http.MethodGet)
-		router.HandleFunc(PathGetPayload, handler(a.getPayload)).Methods(http.MethodPost)
-
-		// builder related
-		router.HandleFunc(PathSubmitBlock, handler(a.submitBlock)).Methods(http.MethodPost)
-		router.HandleFunc(PathGetValidators, handler(a.getValidators)).Methods(http.MethodGet)
-
-		// data API related
-		router.HandleFunc(PathProposerPayloadsDelivered, handler(a.proposerPayloadsDelivered)).Methods(http.MethodGet)
-		router.HandleFunc(PathBuilderBlocksReceived, handler(a.builderBlocksReceived)).Methods(http.MethodGet)
-		router.HandleFunc(PathSpecificRegistration, handler(a.specificRegistration)).Methods(http.MethodGet)
-
-		router.Use(mux.CORSMethodMiddleware(router))
-
-		a.mux = router
-	})
-}*/
 
 func (a *API) AttachToHandler(m *http.ServeMux) {
 	router := mux.NewRouter()

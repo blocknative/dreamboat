@@ -7,6 +7,7 @@ package mock_relay
 import (
 	context "context"
 	relay "github.com/blocknative/dreamboat/pkg"
+	structs "github.com/blocknative/dreamboat/pkg/structs"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
@@ -117,10 +118,10 @@ func (mr *MockBeaconStateMockRecorder) IsKnownValidator(arg0 interface{}) *gomoc
 }
 
 // HeadSlot mocks base method
-func (m *MockBeaconState) HeadSlot() relay.Slot {
+func (m *MockBeaconState) HeadSlot() structs.Slot {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HeadSlot")
-	ret0, _ := ret[0].(relay.Slot)
+	ret0, _ := ret[0].(structs.Slot)
 	return ret0
 }
 
@@ -131,10 +132,10 @@ func (mr *MockBeaconStateMockRecorder) HeadSlot() *gomock.Call {
 }
 
 // ValidatorsMap mocks base method
-func (m *MockBeaconState) ValidatorsMap() relay.BuilderGetValidatorsResponseEntrySlice {
+func (m *MockBeaconState) ValidatorsMap() structs.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidatorsMap")
-	ret0, _ := ret[0].(relay.BuilderGetValidatorsResponseEntrySlice)
+	ret0, _ := ret[0].(structs.BuilderGetValidatorsResponseEntrySlice)
 	return ret0
 }
 
@@ -168,7 +169,7 @@ func (m *MockRelay) EXPECT() *MockRelayMockRecorder {
 }
 
 // RegisterValidator mocks base method
-func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []relay.SignedValidatorRegistration, arg2 relay.State) error {
+func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []structs.SignedValidatorRegistration, arg2 relay.State) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -182,7 +183,7 @@ func (mr *MockRelayMockRecorder) RegisterValidator(arg0, arg1, arg2 interface{})
 }
 
 // GetHeader mocks base method
-func (m *MockRelay) GetHeader(arg0 context.Context, arg1 relay.HeaderRequest, arg2 relay.State) (*types.GetHeaderResponse, error) {
+func (m *MockRelay) GetHeader(arg0 context.Context, arg1 structs.HeaderRequest, arg2 relay.State) (*types.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*types.GetHeaderResponse)
@@ -226,10 +227,10 @@ func (mr *MockRelayMockRecorder) SubmitBlock(arg0, arg1, arg2 interface{}) *gomo
 }
 
 // GetValidators mocks base method
-func (m *MockRelay) GetValidators(arg0 relay.State) relay.BuilderGetValidatorsResponseEntrySlice {
+func (m *MockRelay) GetValidators(arg0 relay.State) structs.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValidators", arg0)
-	ret0, _ := ret[0].(relay.BuilderGetValidatorsResponseEntrySlice)
+	ret0, _ := ret[0].(structs.BuilderGetValidatorsResponseEntrySlice)
 	return ret0
 }
 
