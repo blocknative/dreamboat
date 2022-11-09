@@ -106,3 +106,32 @@ func (b BuilderGetValidatorsResponseEntrySlice) Loggable() map[string]any {
 		"numDuties": len(b),
 	}
 }
+
+type Query struct {
+	Slot      Slot
+	BlockHash types.Hash
+	BlockNum  uint64
+	PubKey    types.PublicKey
+}
+
+type PayloadKey struct {
+	BlockHash types.Hash
+	Proposer  types.PublicKey
+	Slot      Slot
+}
+
+type DeliveredTrace struct {
+	Trace       BidTraceWithTimestamp
+	BlockNumber uint64
+}
+
+type HeaderAndTrace struct {
+	Header *types.ExecutionPayloadHeader
+	Trace  *BidTraceWithTimestamp
+}
+
+type BlockBidAndTrace struct {
+	Trace   *types.SignedBidTrace
+	Bid     *types.GetHeaderResponse
+	Payload *types.GetPayloadResponse
+}

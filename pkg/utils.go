@@ -45,29 +45,6 @@ func min[T constraints.Ordered](a, b T) T {
 	return b
 }
 
-func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) BlockBidAndTrace {
-	getHeaderResponse := types.GetHeaderResponse{
-		Version: "bellatrix",
-		Data:    signedBuilderBid,
-	}
-
-	getPayloadResponse := types.GetPayloadResponse{
-		Version: "bellatrix",
-		Data:    submitBlockRequest.ExecutionPayload,
-	}
-
-	signedBidTrace := types.SignedBidTrace{
-		Message:   submitBlockRequest.Message,
-		Signature: submitBlockRequest.Signature,
-	}
-
-	return BlockBidAndTrace{
-		Trace:   &signedBidTrace,
-		Bid:     &getHeaderResponse,
-		Payload: &getPayloadResponse,
-	}
-}
-
 type ErrBadProposer struct {
 	Want, Got structs.PubKey
 }

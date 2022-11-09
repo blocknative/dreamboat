@@ -1,12 +1,10 @@
-//go:generate mockgen -source=datastore.go -destination=../internal/mock/pkg/datastore.go -package=mock_relay
-package relay
+package datastore
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -15,51 +13,23 @@ import (
 	ds "github.com/ipfs/go-datastore"
 )
 
-type HeaderAndTrace struct {
-	Header *types.ExecutionPayloadHeader
-	Trace  *structs.BidTraceWithTimestamp
-}
-
-type BlockBidAndTrace struct {
-	Trace   *types.SignedBidTrace
-	Bid     *types.GetHeaderResponse
-	Payload *types.GetPayloadResponse
-}
-
-type Query struct {
-	Slot      structs.Slot
-	BlockHash types.Hash
-	BlockNum  uint64
-	PubKey    types.PublicKey
-}
-
-type PayloadKey struct {
-	BlockHash types.Hash
-	Proposer  types.PublicKey
-	Slot      structs.Slot
-}
-
-type DeliveredTrace struct {
-	Trace       structs.BidTraceWithTimestamp
-	BlockNumber uint64
-}
+/*
 
 type Datastore interface {
-	PutHeader(context.Context, structs.Slot, HeaderAndTrace, time.Duration) error
-	GetHeaders(context.Context, Query) ([]HeaderAndTrace, error)
-	GetMaxProfitHeadersDesc(context.Context, Slot) ([]HeaderAndTrace, error)
-	GetHeaderBatch(context.Context, []Query) ([]HeaderAndTrace, error)
-	PutDelivered(context.Context, structs.Slot, DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, Query) (structs.BidTraceWithTimestamp, error)
-	GetDeliveredBatch(context.Context, []Query) ([]structs.BidTraceWithTimestamp, error)
-	PutPayload(context.Context, PayloadKey, *BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, PayloadKey) (*BlockBidAndTrace, error)
+	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
+	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
+	GetHeaderBatch(context.Context, []structs.Query) ([]structs.HeaderAndTrace, error)
+	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
+	GetDelivered(context.Context, structs.Query) (structs.BidTraceWithTimestamp, error)
+	GetDeliveredBatch(context.Context, []structs.Query) ([]structs.BidTraceWithTimestamp, error)
+	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 	PutRegistration(context.Context, structs.PubKey, types.SignedValidatorRegistration, time.Duration) error
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
-}
+}*/
 
-type DefaultDatastore struct {
+type Datastore struct {
 	TTLStorage
 	mu sync.Mutex
 }
@@ -71,13 +41,13 @@ type TTLStorage interface {
 	Close() error
 }
 
-func (s *DefaultDatastore) PutHeader(ctx context.Context, slot structs.Slot, header HeaderAndTrace, ttl time.Duration) error {
+func (s *Datastore) PutHeader(ctx context.Context, slot structs.Slot, header structs.HeaderAndTrace, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	headers, err := s.getHeaders(ctx, HeaderKey(slot))
 	if errors.Is(err, ds.ErrNotFound) {
-		headers = make([]HeaderAndTrace, 0, 1)
+		headers = make([]structs.HeaderAndTrace, 0, 1)
 	} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
 		return err
 	}
@@ -107,7 +77,7 @@ func (s *DefaultDatastore) PutHeader(ctx context.Context, slot structs.Slot, hea
 	return s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), data, ttl)
 }
 
-func (s *DefaultDatastore) GetHeaders(ctx context.Context, query Query) ([]HeaderAndTrace, error) {
+func (s *Datastore) GetHeaders(ctx context.Context, query structs.Query) ([]structs.HeaderAndTrace, error) {
 	key, err := s.queryToHeaderKey(ctx, query)
 	if err != nil {
 		return nil, err
@@ -120,7 +90,7 @@ func (s *DefaultDatastore) GetHeaders(ctx context.Context, query Query) ([]Heade
 	return s.deduplicateHeaders(headers, query), nil
 }
 
-func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]HeaderAndTrace, error) {
+func (s *Datastore) getHeaders(ctx context.Context, key ds.Key) ([]structs.HeaderAndTrace, error) {
 	data, err := s.TTLStorage.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -129,7 +99,7 @@ func (s *DefaultDatastore) getHeaders(ctx context.Context, key ds.Key) ([]Header
 	return s.unsmarshalHeaders(data)
 }
 
-func (s *DefaultDatastore) deduplicateHeaders(headers []HeaderAndTrace, query Query) []HeaderAndTrace {
+func (s *Datastore) deduplicateHeaders(headers []structs.HeaderAndTrace, query structs.Query) []structs.HeaderAndTrace {
 	filtered := headers[:0]
 	for _, header := range headers {
 		if (query.BlockHash != types.Hash{}) && (query.BlockHash != header.Header.BlockHash) {
@@ -150,43 +120,7 @@ func (s *DefaultDatastore) deduplicateHeaders(headers []HeaderAndTrace, query Qu
 	return filtered
 }
 
-func (s *DefaultDatastore) putMaxProfitHeader(ctx context.Context, slot Slot, header HeaderAndTrace, ttl time.Duration) error {
-	headers, err := s.getHeaders(ctx, HeaderMaxProfitKey(slot))
-	if errors.Is(err, ds.ErrNotFound) {
-		headers = make([]HeaderAndTrace, 0, 1)
-	} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
-		return err
-	}
-
-	// remove submission from same builder
-	i := 0
-	for ; i < len(headers); i++ {
-		if headers[i].Trace.BuilderPubkey == header.Trace.BuilderPubkey {
-			headers[i] = header
-			break
-		}
-	}
-	if i == len(headers) {
-		headers = append(headers, header)
-	}
-
-	// sort by bid value DESC
-	sort.Slice(headers, func(i, j int) bool {
-		return headers[i].Trace.Value.Cmp(&headers[j].Trace.Value) > 0
-	})
-
-	data, err := json.Marshal(headers)
-	if err != nil {
-		return err
-	}
-	return s.TTLStorage.PutWithTTL(ctx, HeaderMaxProfitKey(slot), data, ttl)
-}
-
-func (s *DefaultDatastore) GetMaxProfitHeadersDesc(ctx context.Context, slot Slot) ([]HeaderAndTrace, error) {
-	return s.getHeaders(ctx, HeaderMaxProfitKey(slot))
-}
-
-func (s *DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace DeliveredTrace, ttl time.Duration) error {
+func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace structs.DeliveredTrace, ttl time.Duration) error {
 	if err := s.TTLStorage.PutWithTTL(ctx, DeliveredHashKey(trace.Trace.BlockHash), DeliveredKey(slot).Bytes(), ttl); err != nil {
 		return err
 	}
@@ -207,7 +141,7 @@ func (s *DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace De
 	return s.TTLStorage.PutWithTTL(ctx, DeliveredKey(slot), data, ttl)
 }
 
-func (s *DefaultDatastore) GetDelivered(ctx context.Context, query Query) (structs.BidTraceWithTimestamp, error) {
+func (s *Datastore) GetDelivered(ctx context.Context, query structs.Query) (structs.BidTraceWithTimestamp, error) {
 	key, err := s.queryToDeliveredKey(ctx, query)
 	if err != nil {
 		return structs.BidTraceWithTimestamp{}, err
@@ -215,7 +149,7 @@ func (s *DefaultDatastore) GetDelivered(ctx context.Context, query Query) (struc
 	return s.getDelivered(ctx, key)
 }
 
-func (s *DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (structs.BidTraceWithTimestamp, error) {
+func (s *Datastore) getDelivered(ctx context.Context, key ds.Key) (structs.BidTraceWithTimestamp, error) {
 	data, err := s.TTLStorage.Get(ctx, key)
 	if err != nil {
 		return structs.BidTraceWithTimestamp{}, err
@@ -226,7 +160,7 @@ func (s *DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (struct
 	return trace, err
 }
 
-func (s *DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Query) ([]structs.BidTraceWithTimestamp, error) {
+func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []structs.Query) ([]structs.BidTraceWithTimestamp, error) {
 	keys := make([]ds.Key, 0, len(queries))
 	for _, query := range queries {
 		key, err := s.queryToDeliveredKey(ctx, query)
@@ -253,8 +187,8 @@ func (s *DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Quer
 	return traceBatch, err
 }
 
-func (s *DefaultDatastore) GetHeaderBatch(ctx context.Context, queries []Query) ([]HeaderAndTrace, error) {
-	var batch []HeaderAndTrace
+func (s *Datastore) GetHeaderBatch(ctx context.Context, queries []structs.Query) ([]structs.HeaderAndTrace, error) {
+	var batch []structs.HeaderAndTrace
 
 	for _, query := range queries {
 		key, err := s.queryToHeaderKey(ctx, query)
@@ -275,19 +209,19 @@ func (s *DefaultDatastore) GetHeaderBatch(ctx context.Context, queries []Query) 
 	return batch, nil
 }
 
-func (s *DefaultDatastore) unsmarshalHeaders(data []byte) ([]HeaderAndTrace, error) {
-	var headers []HeaderAndTrace
+func (s *Datastore) unsmarshalHeaders(data []byte) ([]structs.HeaderAndTrace, error) {
+	var headers []structs.HeaderAndTrace
 	if err := json.Unmarshal(data, &headers); err != nil {
-		var header HeaderAndTrace
+		var header structs.HeaderAndTrace
 		if err := json.Unmarshal(data, &header); err != nil {
 			return nil, err
 		}
-		return []HeaderAndTrace{header}, nil
+		return []structs.HeaderAndTrace{header}, nil
 	}
 	return headers, nil
 }
 
-func (s *DefaultDatastore) PutPayload(ctx context.Context, key PayloadKey, payload *BlockBidAndTrace, ttl time.Duration) error {
+func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload *structs.BlockBidAndTrace, ttl time.Duration) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -295,17 +229,17 @@ func (s *DefaultDatastore) PutPayload(ctx context.Context, key PayloadKey, paylo
 	return s.TTLStorage.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
 }
 
-func (s *DefaultDatastore) GetPayload(ctx context.Context, key PayloadKey) (*BlockBidAndTrace, error) {
+func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockBidAndTrace, error) {
 	data, err := s.TTLStorage.Get(ctx, PayloadKeyKey(key))
 	if err != nil {
 		return nil, err
 	}
-	var payload BlockBidAndTrace
+	var payload structs.BlockBidAndTrace
 	err = json.Unmarshal(data, &payload)
 	return &payload, err
 }
 
-func (s *DefaultDatastore) PutRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration, ttl time.Duration) error {
+func (s *Datastore) PutRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration, ttl time.Duration) error {
 	data, err := json.Marshal(registration)
 	if err != nil {
 		return err
@@ -313,11 +247,11 @@ func (s *DefaultDatastore) PutRegistration(ctx context.Context, pk structs.PubKe
 	return s.TTLStorage.PutWithTTL(ctx, RegistrationKey(pk), data, ttl)
 }
 
-func (s *DefaultDatastore) PutRegistrationRaw(ctx context.Context, pk structs.PubKey, registration []byte, ttl time.Duration) error {
+func (s *Datastore) PutRegistrationRaw(ctx context.Context, pk structs.PubKey, registration []byte, ttl time.Duration) error {
 	return s.TTLStorage.PutWithTTL(ctx, RegistrationKey(pk), registration, ttl)
 }
 
-func (s *DefaultDatastore) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
+func (s *Datastore) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
 	data, err := s.TTLStorage.Get(ctx, RegistrationKey(pk))
 	if err != nil {
 		return types.SignedValidatorRegistration{}, err
@@ -327,7 +261,7 @@ func (s *DefaultDatastore) GetRegistration(ctx context.Context, pk structs.PubKe
 	return registration, err
 }
 
-func (s *DefaultDatastore) queryToHeaderKey(ctx context.Context, query Query) (ds.Key, error) {
+func (s *Datastore) queryToHeaderKey(ctx context.Context, query structs.Query) (ds.Key, error) {
 	var (
 		rawKey []byte
 		err    error
@@ -347,7 +281,7 @@ func (s *DefaultDatastore) queryToHeaderKey(ctx context.Context, query Query) (d
 	return ds.NewKey(string(rawKey)), nil
 }
 
-func (s *DefaultDatastore) queryToDeliveredKey(ctx context.Context, query Query) (ds.Key, error) {
+func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.Query) (ds.Key, error) {
 	var (
 		rawKey []byte
 		err    error
@@ -401,7 +335,7 @@ func DeliveredPubkeyKey(pk types.PublicKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("delivered-pk-%s", pk.String()))
 }
 
-func PayloadKeyKey(key PayloadKey) ds.Key {
+func PayloadKeyKey(key structs.PayloadKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot))
 }
 

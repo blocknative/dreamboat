@@ -11,10 +11,11 @@ import (
 	"github.com/blocknative/dreamboat/metrics"
 	relay "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
-	packageMetrics "github.com/blocknative/dreamboat/pkg/metrics"
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
 	blst "github.com/supranational/blst/bindings/go"
@@ -173,10 +174,27 @@ func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
 		g, ctx := errgroup.WithContext(c.Context)
 
+		timeDataStoreStart := time.Now()
+
+		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
+		if err != nil {
+			config.Log.WithError(err).Fatal("failed to initialize datastore")
+			return err
+		}
+
+		ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{storage}}
+
+		config.Log.
+			WithFields(logrus.Fields{
+				"service":     "datastore",
+				"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
+			}).Info("data store initialized")
+
 		// setup the relay service
 		service := &relay.DefaultService{
-			Log:    config.Log,
-			Config: config,
+			Log:       config.Log,
+			Config:    config,
+			Datastore: ds,
 		}
 
 		g.Go(func() error {
@@ -194,7 +212,7 @@ func run() cli.ActionFunc {
 			internalMux := http.NewServeMux()
 
 			metrics.AttachProfiler(internalMux)
-			if err = packageMetrics.InitDatastoreMetrics(m); err != nil {
+			if err = datastore.InitDatastoreMetrics(m); err != nil {
 				return err
 			}
 

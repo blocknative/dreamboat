@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	relay "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	url = "http://localhost:18550" + relay.PathSubmitBlock
+	url = "http://localhost:18550" + api.PathSubmitBlock
 )
 
 var (
