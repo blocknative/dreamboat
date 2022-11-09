@@ -6,7 +6,7 @@ package mock_relay
 
 import (
 	context "context"
-	relay "github.com/blocknative/dreamboat/pkg"
+	structs "github.com/blocknative/dreamboat/pkg/structs"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
@@ -36,7 +36,7 @@ func (m *MockRelayService) EXPECT() *MockRelayServiceMockRecorder {
 }
 
 // RegisterValidator mocks base method
-func (m *MockRelayService) RegisterValidator(arg0 context.Context, arg1 []relay.SignedValidatorRegistration) error {
+func (m *MockRelayService) RegisterValidator(arg0 context.Context, arg1 []structs.SignedValidatorRegistration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -50,7 +50,7 @@ func (mr *MockRelayServiceMockRecorder) RegisterValidator(arg0, arg1 interface{}
 }
 
 // GetHeader mocks base method
-func (m *MockRelayService) GetHeader(arg0 context.Context, arg1 relay.HeaderRequest) (*types.GetHeaderResponse, error) {
+func (m *MockRelayService) GetHeader(arg0 context.Context, arg1 structs.HeaderRequest) (*types.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
 	ret0, _ := ret[0].(*types.GetHeaderResponse)
@@ -94,10 +94,10 @@ func (mr *MockRelayServiceMockRecorder) SubmitBlock(arg0, arg1 interface{}) *gom
 }
 
 // GetValidators mocks base method
-func (m *MockRelayService) GetValidators() relay.BuilderGetValidatorsResponseEntrySlice {
+func (m *MockRelayService) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValidators")
-	ret0, _ := ret[0].(relay.BuilderGetValidatorsResponseEntrySlice)
+	ret0, _ := ret[0].(structs.BuilderGetValidatorsResponseEntrySlice)
 	return ret0
 }
 
@@ -108,10 +108,10 @@ func (mr *MockRelayServiceMockRecorder) GetValidators() *gomock.Call {
 }
 
 // GetPayloadDelivered mocks base method
-func (m *MockRelayService) GetPayloadDelivered(arg0 context.Context, arg1 relay.TraceQuery) ([]relay.BidTraceExtended, error) {
+func (m *MockRelayService) GetPayloadDelivered(arg0 context.Context, arg1 structs.TraceQuery) ([]structs.BidTraceExtended, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayloadDelivered", arg0, arg1)
-	ret0, _ := ret[0].([]relay.BidTraceExtended)
+	ret0, _ := ret[0].([]structs.BidTraceExtended)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -123,10 +123,10 @@ func (mr *MockRelayServiceMockRecorder) GetPayloadDelivered(arg0, arg1 interface
 }
 
 // GetBlockReceived mocks base method
-func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 relay.TraceQuery) ([]relay.BidTraceWithTimestamp, error) {
+func (m *MockRelayService) GetBlockReceived(arg0 context.Context, arg1 structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBlockReceived", arg0, arg1)
-	ret0, _ := ret[0].([]relay.BidTraceWithTimestamp)
+	ret0, _ := ret[0].([]structs.BidTraceWithTimestamp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -10,7 +10,7 @@ type APIMetrics struct {
 	ApiReqTiming  *prometheus.HistogramVec
 }
 
-func (api *API) InitMetrics(m *metrics.Metrics) {
+func (api *API) initMetrics() {
 	api.m.ApiReqCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
 		Subsystem: "api",
@@ -24,7 +24,9 @@ func (api *API) InitMetrics(m *metrics.Metrics) {
 		Name:      "duration",
 		Help:      "Duration of requests per endpoint",
 	}, []string{"endpoint"})
+}
 
+func (api *API) AttacheMetrics(m *metrics.Metrics) {
 	m.Register(api.m.ApiReqCounter)
 	m.Register(api.m.ApiReqTiming)
 }
