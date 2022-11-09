@@ -25,6 +25,10 @@ type TTLStorage interface {
 	Close() error
 }
 
+func NewDatastore(t TTLStorage) *Datastore {
+	return &Datastore{TTLStorage: t}
+}
+
 func (s *Datastore) PutHeader(ctx context.Context, slot structs.Slot, header structs.HeaderAndTrace, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

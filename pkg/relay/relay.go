@@ -11,7 +11,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
-	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
@@ -47,9 +46,6 @@ type RegistrationManager interface {
 	VerifyChan() chan SVRReq
 	Set(k string, value uint64)
 	Get(k string) (value uint64, ok bool)
-
-	// Temporary
-	AttachMetrics(m *metrics.Metrics)
 }
 
 type RelayConfig struct {
@@ -73,7 +69,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, regMngr RegistrationManager) (*Relay, error) {
+func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, regMngr RegistrationManager) *Relay {
 	rs := &Relay{
 		d:           d,
 		l:           l,
@@ -81,7 +77,8 @@ func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, 
 		beaconState: beaconState,
 		regMngr:     regMngr,
 	}
-	return rs, nil
+	rs.initMetrics()
+	return rs
 }
 
 // verifyTimestamp ensures timestamp is not too far in the future
