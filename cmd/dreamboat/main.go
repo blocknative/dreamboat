@@ -173,23 +173,6 @@ func setupKeys(c *cli.Context) (*blst.SecretKey, types.PublicKey, error) {
 
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
-		g, ctx := errgroup.WithContext(c.Context)
-
-		timeDataStoreStart := time.Now()
-
-		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
-		if err != nil {
-			config.Log.WithError(err).Fatal("failed to initialize datastore")
-			return err
-		}
-
-		ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{storage}}
-
-		config.Log.
-			WithFields(logrus.Fields{
-				"service":     "datastore",
-				"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
-			}).Info("data store initialized")
 
 		if err := config.Validate(); err != nil {
 			return err
@@ -205,6 +188,29 @@ func run() cli.ActionFunc {
 			return err
 		}
 
+		timeDataStoreStart := time.Now()
+		m := metrics.NewMetrics()
+
+		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
+		if err != nil {
+			config.Log.WithError(err).Fatal("failed to initialize datastore")
+			return err
+		}
+		config.Log.
+			WithFields(logrus.Fields{
+				"service":     "datastore",
+				"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
+			}).Info("data store initialized")
+
+		timeRelayStart := time.Now()
+
+		as := &pkg.AtomicState{}
+
+		regMgr := relay.NewRegisteredManager(20000, 20000)
+		regMgr.AttachMetrics(m)
+
+		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage})
+
 		cfg := relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
 			ProposerSigningDomain: domainBeaconProposer,
@@ -213,27 +219,27 @@ func run() cli.ActionFunc {
 			TTL:                   config.TTL,
 			CheckKnownValidator:   config.CheckKnownValidator,
 		}
+		r := relay.NewRelay(config.Log, cfg, as, ds, regMgr)
+		r.AttachMetrics(m)
 
-		regMgr := relay.NewRegisteredManager(20000, 20000)
-
-		as := &pkg.AtomicState{}
-		r, err := relay.NewRelay(config.Log, cfg, as, ds, regMgr)
-		if err != nil {
-			return err
-		}
 		service := pkg.NewService(config.Log, config, ds, r, as)
+		service.AttachMetrics(m)
+
+		api := api.NewApi(config.Log, service)
+		api.AttachMetrics(m)
 
 		regMgr.RunStore(ds, 300)
 		regMgr.RunVerify(300)
+
+		config.Log.WithFields(logrus.Fields{
+			"service":     "relay",
+			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
+		}).Info("initialized")
+
+		g, ctx := errgroup.WithContext(c.Context)
 		g.Go(func() error {
-			return service.Run(ctx)
+			return service.RunBeacon(ctx)
 		})
-
-		api := api.NewApi(config.Log, service)
-
-		m := metrics.NewMetrics()
-		api.AttachMetrics(m)
-		service.AttachMetrics(m)
 
 		// run internal http server
 		g.Go(func() (err error) {

@@ -177,8 +177,7 @@ func TestBeaconClientState(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		err := service.Run(ctx)
+		err := service.RunBeacon(ctx)
 		require.Error(t, err, context.Canceled)
 	}()
 	<-service.Ready()

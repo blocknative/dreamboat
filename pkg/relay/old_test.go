@@ -30,7 +30,7 @@ func TestOLDRegisterValidator(t *testing.T) {
 	defer cancel()
 
 	ctrl := gomock.NewController(t)
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	ds := datastore.NewDatastore(newMockDatastore())
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -43,7 +43,7 @@ func TestOLDRegisterValidator(t *testing.T) {
 		TTL:                  time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds, nil)
+	r := relay.NewRelay(log.New(), config, bs, ds, nil)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -86,7 +86,7 @@ func BenchmarkOLDRegisterValidator(b *testing.B) {
 
 	ctrl := gomock.NewController(b)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	ds := datastore.NewDatastore(newMockDatastore())
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
@@ -98,7 +98,7 @@ func BenchmarkOLDRegisterValidator(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds, nil)
+	r := relay.NewRelay(log.New(), config, bs, ds, nil)
 
 	registrations := make([]structs.SignedValidatorRegistration, 0, N)
 	fbn := &structs.BeaconState{
@@ -118,8 +118,6 @@ func BenchmarkOLDRegisterValidator(b *testing.B) {
 		fbn.ValidatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 	bs.EXPECT().Beacon().Return(fbn).AnyTimes()
-
-	// 	bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).Times(b.N * N)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -140,7 +138,7 @@ func BenchmarkOLDRegisterValidatorParallel(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store})
 
 	ctrl := gomock.NewController(b)
 	bs := mock_relay.NewMockState(ctrl)
@@ -156,7 +154,7 @@ func BenchmarkOLDRegisterValidatorParallel(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds, nil)
+	r := relay.NewRelay(log.New(), config, bs, ds, nil)
 
 	registrations := make([]structs.SignedValidatorRegistration, 0, N)
 
@@ -176,7 +174,6 @@ func BenchmarkOLDRegisterValidatorParallel(b *testing.B) {
 		fbn.ValidatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 	bs.EXPECT().Beacon().Return(fbn).AnyTimes()
-	//bc.EXPECT().IsKnownValidator(gomock.Any()).Return(true, nil).AnyTimes() // Times(b.N * N)
 
 	var wg sync.WaitGroup
 	wg.Add(b.N)
