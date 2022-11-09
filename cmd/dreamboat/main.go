@@ -10,6 +10,7 @@ import (
 
 	"github.com/blocknative/dreamboat/metrics"
 	relay "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/api"
 	packageMetrics "github.com/blocknative/dreamboat/pkg/metrics"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -109,8 +110,7 @@ var flags = []cli.Flag{
 }
 
 var (
-	config relay.Config
-	svr    http.Server
+	config = relay.Config{Log: log.New()}
 )
 
 // Main starts the relay
@@ -148,15 +148,6 @@ func setup() cli.BeforeFunc {
 			Datadir:             c.String("datadir"),
 			TTL:                 c.Duration("ttl"),
 			CheckKnownValidator: c.Bool("checkKnownValidator"),
-		}
-
-		svr = http.Server{
-			Addr:         c.String("addr"),
-			ReadTimeout:  c.Duration("timeout"),
-			WriteTimeout: c.Duration("timeout"),
-			IdleTimeout:  time.Second * 2,
-
-			MaxHeaderBytes: 4096,
 		}
 
 		return
@@ -224,19 +215,25 @@ func run() cli.ActionFunc {
 
 		config.Log.Debug("relay service ready")
 
+		api := api.NewApi(config.Log, memoryStore, r, cfg.CheckKnownValidator)
+		mux := http.NewServeMux()
+		api.AttachToHandler(mux)
+		api.InitMetrics(m)
+
+		var svr http.Server
 		// run the http server
 		g.Go(func() (err error) {
-			svr.BaseContext = func(l net.Listener) context.Context {
-				return ctx
+			svr = http.Server{
+				Addr:         c.String("addr"),
+				ReadTimeout:  c.Duration("timeout"),
+				WriteTimeout: c.Duration("timeout"),
+				IdleTimeout:  time.Second * 2,
+				BaseContext: func(l net.Listener) context.Context { // 99% not needed
+					return ctx
+				},
+				Handler:        mux,
+				MaxHeaderBytes: 4096,
 			}
-			api := &relay.API{
-				Service:       service,
-				Log:           config.Log,
-				EnableProfile: c.Bool("profile"),
-			}
-			api.InitMetrics(m)
-			svr.Handler = api
-
 			config.Log.Info("http server listening")
 			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil

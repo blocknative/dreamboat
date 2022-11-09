@@ -13,6 +13,8 @@ import (
 	ds "github.com/ipfs/go-datastore"
 	"github.com/lthibault/log"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
 var (
@@ -34,15 +36,15 @@ type State interface {
 type BeaconState interface {
 	KnownValidatorByIndex(uint64) (types.PubkeyHex, error)
 	IsKnownValidator(types.PubkeyHex) (bool, error)
-	HeadSlot() Slot
 	Genesis() GenesisInfo
+	HeadSlot() structs.Slot
 	ValidatorsMap() BuilderGetValidatorsResponseEntrySlice
 }
 
 type Relay interface {
 	// Proposer APIs
-	RegisterValidator(context.Context, []SignedValidatorRegistration, State) error
-	GetHeader(context.Context, HeaderRequest, State) (*types.GetHeaderResponse, error)
+	RegisterValidator(context.Context, []structs.SignedValidatorRegistration, State) error
+	GetHeader(context.Context, structs.HeaderRequest, State) (*types.GetHeaderResponse, error)
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock, State) (*types.GetPayloadResponse, error)
 
 	// Builder APIs
@@ -96,7 +98,7 @@ func verifyTimestamp(timestamp uint64) bool {
 // ***** Builder Domain *****
 
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []SignedValidatorRegistration, state State) error {
+func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration, state State) error {
 	logger := rs.Log().WithField("method", "RegisterValidator")
 	timeStart := time.Now()
 
@@ -127,7 +129,7 @@ func (rs *DefaultRelay) RegisterValidator(ctx context.Context, payload []SignedV
 	return nil
 }
 
-func (rs *DefaultRelay) processValidator(ctx context.Context, payload []SignedValidatorRegistration, state State) error {
+func (rs *DefaultRelay) processValidator(ctx context.Context, payload []structs.SignedValidatorRegistration, state State) error {
 	logger := rs.Log().WithField("method", "RegisterValidator")
 	timeStart := time.Now()
 
@@ -151,7 +153,7 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []SignedVa
 			return fmt.Errorf("request too far in future for %s", registerRequest.Message.Pubkey.String())
 		}
 
-		pk := PubKey{registerRequest.Message.Pubkey}
+		pk := structs.PubKey{registerRequest.Message.Pubkey}
 
 		ok, err = state.Beacon().IsKnownValidator(pk.PubkeyHex())
 		if err != nil {
@@ -210,7 +212,7 @@ func (rs *DefaultRelay) processValidator(ctx context.Context, payload []SignedVa
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
-func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, state State) (*types.GetHeaderResponse, error) {
+func (rs *DefaultRelay) GetHeader(ctx context.Context, request structs.HeaderRequest, state State) (*types.GetHeaderResponse, error) {
 	logger := rs.Log().WithField("method", "GetHeader")
 	timeStart := time.Now()
 
@@ -219,12 +221,12 @@ func (rs *DefaultRelay) GetHeader(ctx context.Context, request HeaderRequest, st
 		return nil, err
 	}
 
-	parentHash, err := request.parentHash()
+	parentHash, err := request.ParentHash()
 	if err != nil {
 		return nil, err
 	}
 
-	pk, err := request.pubkey()
+	pk, err := request.Pubkey()
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +331,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	key := PayloadKey{
 		BlockHash: payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  pk,
-		Slot:      Slot(payloadRequest.Message.Slot),
+		Slot:      structs.Slot(payloadRequest.Message.Slot),
 	}
 
 	payload, err := state.Datastore().GetPayload(ctx, key)
@@ -379,7 +381,7 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 		BlockNumber: payload.Payload.Data.BlockNumber,
 	}
 
-	if err := state.Datastore().PutDelivered(ctx, Slot(payloadRequest.Message.Slot), trace, rs.config.TTL); err != nil {
+	if err := state.Datastore().PutDelivered(ctx, structs.Slot(payloadRequest.Message.Slot), trace, rs.config.TTL); err != nil {
 		rs.Log().WithError(err).Warn("failed to set payload after delivery")
 	}
 
@@ -468,7 +470,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 		return fmt.Errorf("block submission failed: %w", err)
 	}
 
-	slot := Slot(submitBlockRequest.Message.Slot)
+	slot := structs.Slot(submitBlockRequest.Message.Slot)
 
 	_, err = state.Datastore().GetDelivered(ctx, Query{Slot: slot})
 	if err == nil {
@@ -555,6 +557,6 @@ func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) PayloadKey {
 	return PayloadKey{
 		BlockHash: submission.ExecutionPayload.BlockHash,
 		Proposer:  submission.Message.ProposerPubkey,
-		Slot:      Slot(submission.Message.Slot),
+		Slot:      structs.Slot(submission.Message.Slot),
 	}
 }
