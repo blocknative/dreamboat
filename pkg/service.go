@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/blocknative/dreamboat/metrics"
 	realRelay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
@@ -35,6 +36,8 @@ type Relay interface {
 	// Builder APIs
 	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
 	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
+
+	AttachMetrics(m *metrics.Metrics)
 }
 
 type Datastore interface {

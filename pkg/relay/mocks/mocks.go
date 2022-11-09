@@ -138,20 +138,6 @@ func (mr *MockDatastoreMockRecorder) PutPayload(arg0, arg1, arg2, arg3 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutPayload", reflect.TypeOf((*MockDatastore)(nil).PutPayload), arg0, arg1, arg2, arg3)
 }
 
-// PutRegistration mocks base method
-func (m *MockDatastore) PutRegistration(arg0 context.Context, arg1 structs.PubKey, arg2 types.SignedValidatorRegistration, arg3 time.Duration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutRegistration", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// PutRegistration indicates an expected call of PutRegistration
-func (mr *MockDatastoreMockRecorder) PutRegistration(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutRegistration", reflect.TypeOf((*MockDatastore)(nil).PutRegistration), arg0, arg1, arg2, arg3)
-}
-
 // PutRegistrationRaw mocks base method
 func (m *MockDatastore) PutRegistrationRaw(arg0 context.Context, arg1 structs.PubKey, arg2 []byte, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
