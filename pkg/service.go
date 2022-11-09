@@ -29,11 +29,11 @@ type RelayService interface {
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
-	GetValidators() BuilderGetValidatorsResponseEntrySlice
+	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
-	GetPayloadDelivered(context.Context, structs.TraceQuery) ([]BidTraceExtended, error)
-	GetBlockReceived(context.Context, structs.TraceQuery) ([]BidTraceWithTimestamp, error)
+	GetPayloadDelivered(context.Context, structs.TraceQuery) ([]structs.BidTraceExtended, error)
+	GetBlockReceived(context.Context, structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error)
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
 
@@ -266,7 +266,7 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 	}
 	entries = append(entries, next.Data...)
 
-	state.proposerDutiesResponse = make(BuilderGetValidatorsResponseEntrySlice, 0, len(entries))
+	state.proposerDutiesResponse = make(structs.BuilderGetValidatorsResponseEntrySlice, 0, len(entries))
 	state.currentSlot = headSlot
 
 	for _, e := range entries {
@@ -341,13 +341,13 @@ func (s *DefaultService) SubmitBlock(ctx context.Context, submitBlockRequest *ty
 	return s.Relay.SubmitBlock(ctx, submitBlockRequest, &s.state)
 }
 
-func (s *DefaultService) GetValidators() BuilderGetValidatorsResponseEntrySlice {
+func (s *DefaultService) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
 	return s.Relay.GetValidators(&s.state)
 }
 
-func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query structs.TraceQuery) ([]BidTraceExtended, error) {
+func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query structs.TraceQuery) ([]structs.BidTraceExtended, error) {
 	var (
-		event BidTraceWithTimestamp
+		event structs.BidTraceWithTimestamp
 		err   error
 	)
 
@@ -364,14 +364,14 @@ func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query structs.
 	}
 
 	if err == nil {
-		return []BidTraceExtended{{BidTrace: event.BidTrace, BlockNumber: event.BlockNumber, NumTx: event.NumTx}}, err
+		return []structs.BidTraceExtended{{BidTrace: event.BidTrace, BlockNumber: event.BlockNumber, NumTx: event.NumTx}}, err
 	} else if errors.Is(err, ds.ErrNotFound) {
-		return []BidTraceExtended{}, nil
+		return []structs.BidTraceExtended{}, nil
 	}
 	return nil, err
 }
 
-func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]BidTraceExtended, error) {
+func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]structs.BidTraceExtended, error) {
 	headSlot := s.state.Beacon().HeadSlot()
 	start := headSlot
 	if cursor != 0 {
@@ -380,7 +380,7 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 
 	stop := start - structs.Slot(s.Config.TTL/DurationPerSlot)
 
-	batch := make([]BidTraceWithTimestamp, 0, limit)
+	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
 	queries := make([]Query, 0, limit)
 
 	s.Log.WithField("limit", limit).
@@ -402,14 +402,14 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 		}
 	}
 
-	events := make([]BidTraceExtended, 0, len(batch))
+	events := make([]structs.BidTraceExtended, 0, len(batch))
 	for _, event := range batch {
 		events = append(events, event.BidTraceExtended)
 	}
 	return events, nil
 }
 
-func (s *DefaultService) GetBlockReceived(ctx context.Context, query structs.TraceQuery) ([]BidTraceWithTimestamp, error) {
+func (s *DefaultService) GetBlockReceived(ctx context.Context, query structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error) {
 	var (
 		events []HeaderAndTrace
 		err    error
@@ -426,18 +426,18 @@ func (s *DefaultService) GetBlockReceived(ctx context.Context, query structs.Tra
 	}
 
 	if err == nil {
-		traces := make([]BidTraceWithTimestamp, 0, len(events))
+		traces := make([]structs.BidTraceWithTimestamp, 0, len(events))
 		for _, event := range events {
 			traces = append(traces, *event.Trace)
 		}
 		return traces, err
 	} else if errors.Is(err, ds.ErrNotFound) {
-		return []BidTraceWithTimestamp{}, nil
+		return []structs.BidTraceWithTimestamp{}, nil
 	}
 	return nil, err
 }
 
-func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64) ([]BidTraceWithTimestamp, error) {
+func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64) ([]structs.BidTraceWithTimestamp, error) {
 	batch := make([]HeaderAndTrace, 0, limit)
 	stop := s.state.Beacon().HeadSlot() - structs.Slot(s.Config.TTL/DurationPerSlot)
 	queries := make([]Query, 0)
@@ -461,7 +461,7 @@ func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64)
 		}
 	}
 
-	events := make([]BidTraceWithTimestamp, 0, len(batch))
+	events := make([]structs.BidTraceWithTimestamp, 0, len(batch))
 	for _, event := range batch {
 		events = append(events, *event.Trace)
 	}
@@ -515,7 +515,7 @@ func (s beaconState) HeadSlot() structs.Slot {
 	return s.currentSlot
 }
 
-func (s beaconState) ValidatorsMap() BuilderGetValidatorsResponseEntrySlice {
+func (s beaconState) ValidatorsMap() structs.BuilderGetValidatorsResponseEntrySlice {
 	return s.proposerDutiesResponse
 }
 
@@ -525,7 +525,7 @@ func (s beaconState) Genesis() GenesisInfo {
 
 type dutiesState struct {
 	currentSlot            structs.Slot
-	proposerDutiesResponse BuilderGetValidatorsResponseEntrySlice
+	proposerDutiesResponse structs.BuilderGetValidatorsResponseEntrySlice
 }
 
 type validatorsState struct {

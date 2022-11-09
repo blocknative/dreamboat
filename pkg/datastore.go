@@ -17,24 +17,13 @@ import (
 
 type HeaderAndTrace struct {
 	Header *types.ExecutionPayloadHeader
-	Trace  *BidTraceWithTimestamp
+	Trace  *structs.BidTraceWithTimestamp
 }
 
 type BlockBidAndTrace struct {
 	Trace   *types.SignedBidTrace
 	Bid     *types.GetHeaderResponse
 	Payload *types.GetPayloadResponse
-}
-
-type BidTraceExtended struct {
-	types.BidTrace
-	BlockNumber uint64 `json:"block_number,string"`
-	NumTx       uint64 `json:"num_tx,string"`
-}
-
-type BidTraceWithTimestamp struct {
-	BidTraceExtended
-	Timestamp uint64 `json:"timestamp,string"`
 }
 
 type Query struct {
@@ -51,7 +40,7 @@ type PayloadKey struct {
 }
 
 type DeliveredTrace struct {
-	Trace       BidTraceWithTimestamp
+	Trace       structs.BidTraceWithTimestamp
 	BlockNumber uint64
 }
 
@@ -61,8 +50,8 @@ type Datastore interface {
 	GetMaxProfitHeadersDesc(context.Context, Slot) ([]HeaderAndTrace, error)
 	GetHeaderBatch(context.Context, []Query) ([]HeaderAndTrace, error)
 	PutDelivered(context.Context, structs.Slot, DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, Query) (BidTraceWithTimestamp, error)
-	GetDeliveredBatch(context.Context, []Query) ([]BidTraceWithTimestamp, error)
+	GetDelivered(context.Context, Query) (structs.BidTraceWithTimestamp, error)
+	GetDeliveredBatch(context.Context, []Query) ([]structs.BidTraceWithTimestamp, error)
 	PutPayload(context.Context, PayloadKey, *BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, PayloadKey) (*BlockBidAndTrace, error)
 	PutRegistration(context.Context, structs.PubKey, types.SignedValidatorRegistration, time.Duration) error
@@ -218,26 +207,26 @@ func (s *DefaultDatastore) PutDelivered(ctx context.Context, slot Slot, trace De
 	return s.TTLStorage.PutWithTTL(ctx, DeliveredKey(slot), data, ttl)
 }
 
-func (s *DefaultDatastore) GetDelivered(ctx context.Context, query Query) (BidTraceWithTimestamp, error) {
+func (s *DefaultDatastore) GetDelivered(ctx context.Context, query Query) (structs.BidTraceWithTimestamp, error) {
 	key, err := s.queryToDeliveredKey(ctx, query)
 	if err != nil {
-		return BidTraceWithTimestamp{}, err
+		return structs.BidTraceWithTimestamp{}, err
 	}
 	return s.getDelivered(ctx, key)
 }
 
-func (s *DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (BidTraceWithTimestamp, error) {
+func (s *DefaultDatastore) getDelivered(ctx context.Context, key ds.Key) (structs.BidTraceWithTimestamp, error) {
 	data, err := s.TTLStorage.Get(ctx, key)
 	if err != nil {
-		return BidTraceWithTimestamp{}, err
+		return structs.BidTraceWithTimestamp{}, err
 	}
 
-	var trace BidTraceWithTimestamp
+	var trace structs.BidTraceWithTimestamp
 	err = json.Unmarshal(data, &trace)
 	return trace, err
 }
 
-func (s *DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Query) ([]BidTraceWithTimestamp, error) {
+func (s *DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Query) ([]structs.BidTraceWithTimestamp, error) {
 	keys := make([]ds.Key, 0, len(queries))
 	for _, query := range queries {
 		key, err := s.queryToDeliveredKey(ctx, query)
@@ -252,9 +241,9 @@ func (s *DefaultDatastore) GetDeliveredBatch(ctx context.Context, queries []Quer
 		return nil, err
 	}
 
-	traceBatch := make([]BidTraceWithTimestamp, 0, len(batch))
+	traceBatch := make([]structs.BidTraceWithTimestamp, 0, len(batch))
 	for _, data := range batch {
-		var trace BidTraceWithTimestamp
+		var trace structs.BidTraceWithTimestamp
 		if err = json.Unmarshal(data, &trace); err != nil {
 			return nil, err
 		}

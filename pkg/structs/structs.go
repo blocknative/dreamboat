@@ -87,3 +87,22 @@ func (q TraceQuery) HasCursor() bool {
 func (q TraceQuery) HasLimit() bool {
 	return q.Limit != 0
 }
+
+type BidTraceExtended struct {
+	types.BidTrace
+	BlockNumber uint64 `json:"block_number,string"`
+	NumTx       uint64 `json:"num_tx,string"`
+}
+
+type BidTraceWithTimestamp struct {
+	BidTraceExtended
+	Timestamp uint64 `json:"timestamp,string"`
+}
+
+type BuilderGetValidatorsResponseEntrySlice []types.BuilderGetValidatorsResponseEntry
+
+func (b BuilderGetValidatorsResponseEntrySlice) Loggable() map[string]any {
+	return map[string]any{
+		"numDuties": len(b),
+	}
+}
