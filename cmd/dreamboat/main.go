@@ -204,13 +204,13 @@ func run() cli.ActionFunc {
 		api := api.NewApi(config.Log, service)
 
 		m := metrics.NewMetrics()
-		api.AttacheMetrics(m)
+		api.AttachMetrics(m)
+		service.AttachMetrics(m)
 
 		// run internal http server
 		g.Go(func() (err error) {
 
 			internalMux := http.NewServeMux()
-
 			metrics.AttachProfiler(internalMux)
 			if err = datastore.InitDatastoreMetrics(m); err != nil {
 				return err

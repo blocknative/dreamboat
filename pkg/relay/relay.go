@@ -11,6 +11,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
@@ -46,6 +47,9 @@ type RegistrationManager interface {
 	VerifyChan() chan SVRReq
 	Set(k string, value uint64)
 	Get(k string) (value uint64, ok bool)
+
+	// Temporary
+	AttachMetrics(m *metrics.Metrics)
 }
 
 type RelayConfig struct {

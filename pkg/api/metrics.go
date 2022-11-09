@@ -26,7 +26,7 @@ func (api *API) initMetrics() {
 	}, []string{"endpoint"})
 }
 
-func (api *API) AttacheMetrics(m *metrics.Metrics) {
+func (api *API) AttachMetrics(m *metrics.Metrics) {
 	m.Register(api.m.ApiReqCounter)
 	m.Register(api.m.ApiReqTiming)
 }

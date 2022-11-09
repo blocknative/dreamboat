@@ -15,14 +15,18 @@ type RegisteredManager struct {
 
 	VerifyInputCh chan SVRReq
 	StoreCh       chan SVRReq
+
+	m RegisteredManagerMetrics
 }
 
 func NewRegisteredManager(verifySize, storeSize int) *RegisteredManager {
-	return &RegisteredManager{
+	rm := &RegisteredManager{
 		M:             make(map[string]uint64),
 		VerifyInputCh: make(chan SVRReq, verifySize),
 		StoreCh:       make(chan SVRReq, storeSize),
 	}
+	rm.initMetrics()
+	return rm
 }
 
 func (rm *RegisteredManager) RunVerify(num int) {
