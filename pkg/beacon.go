@@ -1,4 +1,3 @@
-//go:generate mockgen -source=beacon.go -destination=../internal/mock/pkg/beacon.go -package=mock_relay
 package relay
 
 import (

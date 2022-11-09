@@ -25,12 +25,13 @@ func TestServiceRouting(t *testing.T) {
 		t.Parallel()
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
+		databaseMock := mock_relay.NewMockDatastore(ctrl)
 		service := relay.DefaultService{
 			Relay: relayMock,
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+			Datastore: databaseMock, // &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -44,12 +45,14 @@ func TestServiceRouting(t *testing.T) {
 		t.Parallel()
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
+		databaseMock := mock_relay.NewMockDatastore(ctrl)
 		service := relay.DefaultService{
 			Relay: relayMock,
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+			Datastore: databaseMock,
+			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -64,12 +67,14 @@ func TestServiceRouting(t *testing.T) {
 		t.Parallel()
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
+		databaseMock := mock_relay.NewMockDatastore(ctrl)
 		service := relay.DefaultService{
 			Relay: relayMock,
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+			Datastore: databaseMock,
+			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -83,12 +88,14 @@ func TestServiceRouting(t *testing.T) {
 		t.Parallel()
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
+		databaseMock := mock_relay.NewMockDatastore(ctrl)
 		service := relay.DefaultService{
 			Relay: relayMock,
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+			Datastore: databaseMock,
+			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -102,12 +109,14 @@ func TestServiceRouting(t *testing.T) {
 		t.Parallel()
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
+		databaseMock := mock_relay.NewMockDatastore(ctrl)
 		service := relay.DefaultService{
 			Relay: relayMock,
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+			Datastore: databaseMock,
+			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -121,12 +130,14 @@ func TestServiceRouting(t *testing.T) {
 		t.Parallel()
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
+		databaseMock := mock_relay.NewMockDatastore(ctrl)
 		service := relay.DefaultService{
 			Relay: relayMock,
 			NewBeaconClient: func() (relay.BeaconClient, error) {
 				return nil, nil
 			},
-			Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+			Datastore: databaseMock,
+			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 		}
 
 		relayMock.EXPECT().
@@ -146,13 +157,15 @@ func TestBeaconClientState(t *testing.T) {
 	defer cancel()
 
 	relayMock := mock_relay.NewMockRelay(ctrl)
+	databaseMock := mock_relay.NewMockDatastore(ctrl)
 	beaconMock := mock_relay.NewMockBeaconClient(ctrl)
 	service := relay.DefaultService{
 		Relay: relayMock,
 		NewBeaconClient: func() (relay.BeaconClient, error) {
 			return beaconMock, nil
 		},
-		Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+		Datastore: databaseMock,
+		//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
 	}
 
 	beaconMock.EXPECT().GetProposerDuties(gomock.Any()).Return(&relay.RegisteredProposersResponse{[]relay.RegisteredProposersResponseData{}}, nil).Times(4)
