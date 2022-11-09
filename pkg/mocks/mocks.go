@@ -6,6 +6,7 @@ package mocks
 
 import (
 	context "context"
+	metrics "github.com/blocknative/dreamboat/metrics"
 	relay "github.com/blocknative/dreamboat/pkg"
 	structs "github.com/blocknative/dreamboat/pkg/structs"
 	types "github.com/flashbots/go-boost-utils/types"
@@ -35,6 +36,18 @@ func NewMockRelay(ctrl *gomock.Controller) *MockRelay {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockRelay) EXPECT() *MockRelayMockRecorder {
 	return m.recorder
+}
+
+// AttachMetrics mocks base method
+func (m *MockRelay) AttachMetrics(arg0 *metrics.Metrics) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AttachMetrics", arg0)
+}
+
+// AttachMetrics indicates an expected call of AttachMetrics
+func (mr *MockRelayMockRecorder) AttachMetrics(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachMetrics", reflect.TypeOf((*MockRelay)(nil).AttachMetrics), arg0)
 }
 
 // GetHeader mocks base method
@@ -93,20 +106,6 @@ func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []structs.Signe
 func (mr *MockRelayMockRecorder) RegisterValidator(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockRelay)(nil).RegisterValidator), arg0, arg1)
-}
-
-// RegisterValidator2 mocks base method
-func (m *MockRelay) RegisterValidator2(arg0 context.Context, arg1 []structs.SignedValidatorRegistration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterValidator2", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// RegisterValidator2 indicates an expected call of RegisterValidator2
-func (mr *MockRelayMockRecorder) RegisterValidator2(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator2", reflect.TypeOf((*MockRelay)(nil).RegisterValidator2), arg0, arg1)
 }
 
 // SubmitBlock mocks base method
@@ -276,20 +275,6 @@ func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey
 func (mr *MockDatastoreMockRecorder) PutPayload(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutPayload", reflect.TypeOf((*MockDatastore)(nil).PutPayload), arg0, arg1, arg2, arg3)
-}
-
-// PutRegistration mocks base method
-func (m *MockDatastore) PutRegistration(arg0 context.Context, arg1 structs.PubKey, arg2 types.SignedValidatorRegistration, arg3 time.Duration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutRegistration", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// PutRegistration indicates an expected call of PutRegistration
-func (mr *MockDatastoreMockRecorder) PutRegistration(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutRegistration", reflect.TypeOf((*MockDatastore)(nil).PutRegistration), arg0, arg1, arg2, arg3)
 }
 
 // PutRegistrationRaw mocks base method
