@@ -25,8 +25,6 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-type BuilderGetValidatorsResponseEntrySlice []types.BuilderGetValidatorsResponseEntry
-
 type GetValidatorRelayResponse []struct {
 	Slot  uint64 `json:"slot,string"`
 	Entry struct {
@@ -67,12 +65,6 @@ func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderB
 		Trace:   &signedBidTrace,
 		Bid:     &getHeaderResponse,
 		Payload: &getPayloadResponse,
-	}
-}
-
-func (b BuilderGetValidatorsResponseEntrySlice) Loggable() map[string]any {
-	return map[string]any{
-		"numDuties": len(b),
 	}
 }
 

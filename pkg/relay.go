@@ -38,7 +38,7 @@ type BeaconState interface {
 	IsKnownValidator(types.PubkeyHex) (bool, error)
 	Genesis() GenesisInfo
 	HeadSlot() structs.Slot
-	ValidatorsMap() BuilderGetValidatorsResponseEntrySlice
+	ValidatorsMap() structs.BuilderGetValidatorsResponseEntrySlice
 }
 
 type Relay interface {
@@ -49,7 +49,7 @@ type Relay interface {
 
 	// Builder APIs
 	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest, State) error
-	GetValidators(State) BuilderGetValidatorsResponseEntrySlice
+	GetValidators(State) structs.BuilderGetValidatorsResponseEntrySlice
 }
 
 type DefaultRelay struct {
@@ -360,8 +360,8 @@ func (rs *DefaultRelay) GetPayload(ctx context.Context, payloadRequest *types.Si
 	}
 
 	trace := DeliveredTrace{
-		Trace: BidTraceWithTimestamp{
-			BidTraceExtended: BidTraceExtended{
+		Trace: structs.BidTraceWithTimestamp{
+			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 payloadRequest.Message.Slot,
 					ParentHash:           payload.Payload.Data.ParentHash,
@@ -491,8 +491,8 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 
 	h := HeaderAndTrace{
 		Header: header,
-		Trace: &BidTraceWithTimestamp{
-			BidTraceExtended: BidTraceExtended{
+		Trace: &structs.BidTraceWithTimestamp{
+			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 submitBlockRequest.Message.Slot,
 					ParentHash:           payload.Payload.Data.ParentHash,
@@ -525,7 +525,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 }
 
 // GetValidators returns a list of registered block proposers in current and next epoch
-func (rs *DefaultRelay) GetValidators(state State) BuilderGetValidatorsResponseEntrySlice {
+func (rs *DefaultRelay) GetValidators(state State) structs.BuilderGetValidatorsResponseEntrySlice {
 	log := rs.Log().WithField("method", "GetValidators")
 	validators := state.Beacon().ValidatorsMap()
 	log.With(validators).Debug("validatored map sent")

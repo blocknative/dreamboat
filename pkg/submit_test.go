@@ -207,7 +207,7 @@ func (fbm *FakeBeaconMock) HeadSlot() structs.Slot {
 	return structs.Slot(0)
 }
 
-func (fbm *FakeBeaconMock) ValidatorsMap() relay.BuilderGetValidatorsResponseEntrySlice {
+func (fbm *FakeBeaconMock) ValidatorsMap() structs.BuilderGetValidatorsResponseEntrySlice {
 	return nil
 }
 
