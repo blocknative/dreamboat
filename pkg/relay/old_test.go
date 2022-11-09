@@ -43,7 +43,7 @@ func TestOLDRegisterValidator(t *testing.T) {
 		TTL:                  time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds)
+	r, _ := relay.NewRelay(log.New(), config, bs, ds, nil)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -98,7 +98,7 @@ func BenchmarkOLDRegisterValidator(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds)
+	r, _ := relay.NewRelay(log.New(), config, bs, ds, nil)
 
 	registrations := make([]structs.SignedValidatorRegistration, 0, N)
 	fbn := &structs.BeaconState{
@@ -156,7 +156,7 @@ func BenchmarkOLDRegisterValidatorParallel(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds)
+	r, _ := relay.NewRelay(log.New(), config, bs, ds, nil)
 
 	registrations := make([]structs.SignedValidatorRegistration, 0, N)
 
