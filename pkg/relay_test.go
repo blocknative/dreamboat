@@ -123,8 +123,8 @@ func TestGetHeader(t *testing.T) {
 	err = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
-			Trace: &relay.BidTraceWithTimestamp{
-				BidTraceExtended: relay.BidTraceExtended{
+			Trace: &structs.BidTraceWithTimestamp{
+				BidTraceExtended: structs.BidTraceExtended{
 					BidTrace: *submitRequest.Message,
 				},
 				Timestamp: uint64(time.Now().UnixMicro()),
@@ -219,8 +219,8 @@ func TestGetPayload(t *testing.T) {
 	err = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
-			Trace: &relay.BidTraceWithTimestamp{
-				BidTraceExtended: relay.BidTraceExtended{
+			Trace: &structs.BidTraceWithTimestamp{
+				BidTraceExtended: structs.BidTraceExtended{
 					BidTrace: *submitRequest.Message,
 				},
 				Timestamp: uint64(time.Now().UnixMicro()),
@@ -710,8 +710,8 @@ func BenchmarkGetHeader(b *testing.B) {
 	_ = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
-			Trace: &relay.BidTraceWithTimestamp{
-				BidTraceExtended: relay.BidTraceExtended{
+			Trace: &structs.BidTraceWithTimestamp{
+				BidTraceExtended: structs.BidTraceExtended{
 					BidTrace: *submitRequest.Message,
 				},
 				Timestamp: uint64(time.Now().UnixMicro()),
@@ -777,8 +777,8 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	_ = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
-			Trace: &relay.BidTraceWithTimestamp{
-				BidTraceExtended: relay.BidTraceExtended{
+			Trace: &structs.BidTraceWithTimestamp{
+				BidTraceExtended: structs.BidTraceExtended{
 					BidTrace: *submitRequest.Message,
 				},
 				Timestamp: uint64(time.Now().UnixMicro()),
@@ -876,8 +876,8 @@ func BenchmarkGetPayload(b *testing.B) {
 	_ = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
-			Trace: &relay.BidTraceWithTimestamp{
-				BidTraceExtended: relay.BidTraceExtended{
+			Trace: &structs.BidTraceWithTimestamp{
+				BidTraceExtended: structs.BidTraceExtended{
 					BidTrace: *submitRequest.Message,
 				},
 				Timestamp: uint64(time.Now().UnixMicro()),
@@ -970,8 +970,8 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	_ = ds.PutHeader(ctx, structs.Slot(submitRequest.Message.Slot),
 		relay.HeaderAndTrace{
 			Header: header,
-			Trace: &relay.BidTraceWithTimestamp{
-				BidTraceExtended: relay.BidTraceExtended{
+			Trace: &structs.BidTraceWithTimestamp{
+				BidTraceExtended: structs.BidTraceExtended{
 					BidTrace: *submitRequest.Message,
 				},
 				Timestamp: uint64(time.Now().UnixMicro()),

@@ -182,7 +182,12 @@ func run() cli.ActionFunc {
 		g.Go(func() error {
 			return service.Run(ctx)
 		})
+
 		m := metrics.NewMetrics()
+
+		api := api.NewApi(config.Log, service) //memoryStore, r, cfg.CheckKnownValidator)
+		api.InitMetrics(m)
+
 		// run internal http server
 		g.Go(func() (err error) {
 
@@ -215,10 +220,8 @@ func run() cli.ActionFunc {
 
 		config.Log.Debug("relay service ready")
 
-		api := api.NewApi(config.Log, memoryStore, r, cfg.CheckKnownValidator)
 		mux := http.NewServeMux()
 		api.AttachToHandler(mux)
-		api.InitMetrics(m)
 
 		var svr http.Server
 		// run the http server

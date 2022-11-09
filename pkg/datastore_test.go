@@ -274,7 +274,7 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 	const N = 10
 
 	headers := make([]relay.HeaderAndTrace, 0)
-	batch := make([]relay.BidTraceWithTimestamp, 0)
+	batch := make([]structs.BidTraceWithTimestamp, 0)
 	queries := make([]relay.Query, 0)
 
 	for i := 0; i < N; i++ {
@@ -482,8 +482,8 @@ func randomHeaderAndTrace() relay.HeaderAndTrace {
 
 	return relay.HeaderAndTrace{
 		Header: header,
-		Trace: &relay.BidTraceWithTimestamp{
-			BidTraceExtended: relay.BidTraceExtended{
+		Trace: &structs.BidTraceWithTimestamp{
+			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace:    *block.Trace.Message,
 				BlockNumber: header.BlockNumber,
 				NumTx:       999,
