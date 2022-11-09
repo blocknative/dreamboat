@@ -18,7 +18,7 @@ import (
 // ***** Builder Domain *****
 
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
+func (rs *Relay) OLDRegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
 	logger := rs.l.WithField("method", "RegisterValidator")
 	timeStart := time.Now()
 
@@ -30,7 +30,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 			end = len(payload)
 		}
 		g.Go(func() error {
-			return rs.processValidator(ctx, payload[start:end], rs.beaconState)
+			return rs.OLDprocessValidator(ctx, payload[start:end], rs.beaconState)
 		})
 	}
 
@@ -49,7 +49,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	return nil
 }
 
-func (rs *Relay) processValidator(ctx context.Context, payload []structs.SignedValidatorRegistration, state State) error {
+func (rs *Relay) OLDprocessValidator(ctx context.Context, payload []structs.SignedValidatorRegistration, state State) error {
 	logger := rs.l.WithField("method", "RegisterValidator")
 	timeStart := time.Now()
 
