@@ -27,14 +27,14 @@ var (
 
 type Relay interface {
 	// Proposer APIs
-	RegisterValidator(context.Context, []structs.SignedValidatorRegistration, structs.State) error
-	RegisterValidator2(context.Context, []structs.SignedValidatorRegistration, structs.BeaconState) error
-	GetHeader(context.Context, structs.HeaderRequest, structs.State) (*types.GetHeaderResponse, error)
-	GetPayload(context.Context, *types.SignedBlindedBeaconBlock, structs.State) (*types.GetPayloadResponse, error)
+	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
+	RegisterValidator2(context.Context, []structs.SignedValidatorRegistration) error
+	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
+	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs
-	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest, structs.State) error
-	GetValidators(structs.State) structs.BuilderGetValidatorsResponseEntrySlice
+	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
+	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
 }
 
 /*
@@ -124,7 +124,7 @@ func (s *DefaultService) Run(ctx context.Context) (err error) {
 			TTL:                   s.Config.TTL,
 			CheckKnownValidator:   s.Config.CheckKnownValidator,
 		}
-		s.Relay, err = realRelay.NewRelay(s.Log, cfg, s.Datastore)
+		s.Relay, err = realRelay.NewRelay(s.Log, cfg, &s.state, s.Datastore)
 		if err != nil {
 			return err
 		}
@@ -290,7 +290,7 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 
 	timeStart := time.Now()
 
-	state := dutiesState{}
+	state := structs.DutiesState{}
 
 	// Query current epoch
 	current, err := client.GetProposerDuties(epoch)
@@ -307,8 +307,8 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 	}
 	entries = append(entries, next.Data...)
 
-	state.proposerDutiesResponse = make(structs.BuilderGetValidatorsResponseEntrySlice, 0, len(entries))
-	state.currentSlot = headSlot
+	state.ProposerDutiesResponse = make(structs.BuilderGetValidatorsResponseEntrySlice, 0, len(entries))
+	state.CurrentSlot = headSlot
 
 	for _, e := range entries {
 		reg, err := s.Datastore.GetRegistration(ctx, e.PubKey)
@@ -316,7 +316,7 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 			logger.With(e.PubKey).
 				Debug("new proposer duty")
 
-			state.proposerDutiesResponse = append(state.proposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
+			state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
 				Slot:  e.Slot,
 				Entry: &reg,
 			})
@@ -330,7 +330,7 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"receivedDuties":   len(entries),
-	}).With(state.proposerDutiesResponse).Debug("proposer duties updated")
+	}).With(state.ProposerDutiesResponse).Debug("proposer duties updated")
 
 	return nil
 }
@@ -339,7 +339,7 @@ func (s *DefaultService) updateKnownValidators(ctx context.Context, client Beaco
 	logger := s.Log.WithField("method", "UpdateKnownValidators")
 	timeStart := time.Now()
 
-	state := validatorsState{}
+	state := structs.ValidatorsState{}
 	validators, err := client.KnownValidators(current)
 	if err != nil {
 		return err
@@ -352,8 +352,8 @@ func (s *DefaultService) updateKnownValidators(ctx context.Context, client Beaco
 		knownValidatorsByIndex[vs.Index] = types.NewPubkeyHex(vs.Validator.Pubkey)
 	}
 
-	state.knownValidators = knownValidators
-	state.knownValidatorsByIndex = knownValidatorsByIndex
+	state.KnownValidators = knownValidators
+	state.KnownValidatorsByIndex = knownValidatorsByIndex
 
 	s.state.validators.Store(state)
 
@@ -367,23 +367,23 @@ func (s *DefaultService) updateKnownValidators(ctx context.Context, client Beaco
 }
 
 func (s *DefaultService) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
-	return s.Relay.RegisterValidator(ctx, payload, &s.state)
+	return s.Relay.RegisterValidator(ctx, payload)
 }
 
 func (s *DefaultService) GetHeader(ctx context.Context, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
-	return s.Relay.GetHeader(ctx, request, &s.state)
+	return s.Relay.GetHeader(ctx, request)
 }
 
 func (s *DefaultService) GetPayload(ctx context.Context, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) {
-	return s.Relay.GetPayload(ctx, payloadRequest, &s.state)
+	return s.Relay.GetPayload(ctx, payloadRequest)
 }
 
 func (s *DefaultService) SubmitBlock(ctx context.Context, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
-	return s.Relay.SubmitBlock(ctx, submitBlockRequest, &s.state)
+	return s.Relay.SubmitBlock(ctx, submitBlockRequest)
 }
 
 func (s *DefaultService) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
-	return s.Relay.GetValidators(&s.state)
+	return s.Relay.GetValidators()
 }
 
 func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query structs.TraceQuery) ([]structs.BidTraceExtended, error) {
