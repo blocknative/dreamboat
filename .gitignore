@@ -26,5 +26,3 @@ cmd/scratch/*
 # profiling
 *.prof
 *.svg
-
-relay
