@@ -9,6 +9,7 @@ import (
 	relay "github.com/blocknative/dreamboat/pkg"
 	mock_relay "github.com/blocknative/dreamboat/pkg/mocks"
 	"github.com/golang/mock/gomock"
+	"github.com/lthibault/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,12 +27,10 @@ func TestServiceRouting(t *testing.T) {
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
 		databaseMock := mock_relay.NewMockDatastore(ctrl)
-		service := relay.DefaultService{
-			Relay: relayMock,
-			NewBeaconClient: func() (relay.BeaconClient, error) {
-				return nil, nil
-			},
-			Datastore: databaseMock, // &relay.Datastore{TTLStorage: newMockDatastore()},
+		as := &relay.AtomicState{}
+		service := relay.NewService(log.New(), relay.Config{}, databaseMock, relayMock, as)
+		service.NewBeaconClient = func() (relay.BeaconClient, error) {
+			return nil, nil
 		}
 
 		relayMock.EXPECT().
@@ -46,13 +45,11 @@ func TestServiceRouting(t *testing.T) {
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
 		databaseMock := mock_relay.NewMockDatastore(ctrl)
-		service := relay.DefaultService{
-			Relay: relayMock,
-			NewBeaconClient: func() (relay.BeaconClient, error) {
-				return nil, nil
-			},
-			Datastore: databaseMock,
-			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+
+		as := &relay.AtomicState{}
+		service := relay.NewService(log.New(), relay.Config{}, databaseMock, relayMock, as)
+		service.NewBeaconClient = func() (relay.BeaconClient, error) {
+			return nil, nil
 		}
 
 		relayMock.EXPECT().
@@ -68,14 +65,12 @@ func TestServiceRouting(t *testing.T) {
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
 		databaseMock := mock_relay.NewMockDatastore(ctrl)
-		service := relay.DefaultService{
-			Relay: relayMock,
-			NewBeaconClient: func() (relay.BeaconClient, error) {
-				return nil, nil
-			},
-			Datastore: databaseMock,
-			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+		as := &relay.AtomicState{}
+		service := relay.NewService(log.New(), relay.Config{}, databaseMock, relayMock, as)
+		service.NewBeaconClient = func() (relay.BeaconClient, error) {
+			return nil, nil
 		}
+		service.Relay = relayMock
 
 		relayMock.EXPECT().
 			GetHeader(gomock.Any(), gomock.Any()).
@@ -89,14 +84,13 @@ func TestServiceRouting(t *testing.T) {
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
 		databaseMock := mock_relay.NewMockDatastore(ctrl)
-		service := relay.DefaultService{
-			Relay: relayMock,
-			NewBeaconClient: func() (relay.BeaconClient, error) {
-				return nil, nil
-			},
-			Datastore: databaseMock,
-			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+
+		as := &relay.AtomicState{}
+		service := relay.NewService(log.New(), relay.Config{}, databaseMock, relayMock, as)
+		service.NewBeaconClient = func() (relay.BeaconClient, error) {
+			return nil, nil
 		}
+		service.Relay = relayMock
 
 		relayMock.EXPECT().
 			GetPayload(gomock.Any(), gomock.Any()).
@@ -110,14 +104,13 @@ func TestServiceRouting(t *testing.T) {
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
 		databaseMock := mock_relay.NewMockDatastore(ctrl)
-		service := relay.DefaultService{
-			Relay: relayMock,
-			NewBeaconClient: func() (relay.BeaconClient, error) {
-				return nil, nil
-			},
-			Datastore: databaseMock,
-			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+
+		as := &relay.AtomicState{}
+		service := relay.NewService(log.New(), relay.Config{}, databaseMock, relayMock, as)
+		service.NewBeaconClient = func() (relay.BeaconClient, error) {
+			return nil, nil
 		}
+		service.Relay = relayMock
 
 		relayMock.EXPECT().
 			SubmitBlock(gomock.Any(), gomock.Any()).
@@ -131,15 +124,13 @@ func TestServiceRouting(t *testing.T) {
 
 		relayMock := mock_relay.NewMockRelay(ctrl)
 		databaseMock := mock_relay.NewMockDatastore(ctrl)
-		service := relay.DefaultService{
-			Relay: relayMock,
-			NewBeaconClient: func() (relay.BeaconClient, error) {
-				return nil, nil
-			},
-			Datastore: databaseMock,
-			//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
-		}
 
+		as := &relay.AtomicState{}
+		service := relay.NewService(log.New(), relay.Config{}, databaseMock, relayMock, as)
+		service.NewBeaconClient = func() (relay.BeaconClient, error) {
+			return nil, nil
+		}
+		service.Relay = relayMock
 		relayMock.EXPECT().
 			GetValidators().
 			Times(1)
@@ -159,14 +150,13 @@ func TestBeaconClientState(t *testing.T) {
 	relayMock := mock_relay.NewMockRelay(ctrl)
 	databaseMock := mock_relay.NewMockDatastore(ctrl)
 	beaconMock := mock_relay.NewMockBeaconClient(ctrl)
-	service := relay.DefaultService{
-		Relay: relayMock,
-		NewBeaconClient: func() (relay.BeaconClient, error) {
-			return beaconMock, nil
-		},
-		Datastore: databaseMock,
-		//Datastore: &relay.Datastore{TTLStorage: newMockDatastore()},
+
+	as := &relay.AtomicState{}
+	service := relay.NewService(log.New(), relay.Config{}, databaseMock, relayMock, as)
+	service.NewBeaconClient = func() (relay.BeaconClient, error) {
+		return beaconMock, nil
 	}
+	service.Relay = relayMock
 
 	beaconMock.EXPECT().GetProposerDuties(gomock.Any()).Return(&relay.RegisteredProposersResponse{[]relay.RegisteredProposersResponseData{}}, nil).Times(4)
 	beaconMock.EXPECT().SyncStatus().Return(&relay.SyncStatusPayloadData{}, nil).Times(1)

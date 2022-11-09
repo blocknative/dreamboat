@@ -51,12 +51,12 @@ type Config struct {
 
 	// private fields; populated during validation
 	builders              map[structs.PubKey]*builder
-	genesisForkVersion    string
-	genesisValidatorsRoot string
-	bellatrixForkVersion  string
+	GenesisForkVersion    string
+	GenesisValidatorsRoot string
+	BellatrixForkVersion  string
 }
 
-func (c *Config) validate() error {
+func (c *Config) Validate() error {
 	c.builders = make(map[structs.PubKey]*builder)
 
 	if err := c.validateNetwork(); err != nil {
@@ -69,33 +69,33 @@ func (c *Config) validate() error {
 func (c *Config) validateNetwork() error {
 	switch c.Network {
 	case "main", "mainnet":
-		c.genesisForkVersion = GenesisForkVersionMainnet
-		c.genesisValidatorsRoot = GenesisValidatorsRootMainnet
-		c.bellatrixForkVersion = BellatrixForkVersionMainnet
+		c.GenesisForkVersion = GenesisForkVersionMainnet
+		c.GenesisValidatorsRoot = GenesisValidatorsRootMainnet
+		c.BellatrixForkVersion = BellatrixForkVersionMainnet
 	case "kiln":
-		c.genesisForkVersion = GenesisForkVersionKiln
-		c.genesisValidatorsRoot = GenesisValidatorsRootKiln
-		c.bellatrixForkVersion = BellatrixForkVersionKiln
+		c.GenesisForkVersion = GenesisForkVersionKiln
+		c.GenesisValidatorsRoot = GenesisValidatorsRootKiln
+		c.BellatrixForkVersion = BellatrixForkVersionKiln
 	case "ropsten":
-		c.genesisForkVersion = GenesisForkVersionRopsten
-		c.genesisValidatorsRoot = GenesisValidatorsRootRopsten
-		c.bellatrixForkVersion = BellatrixForkVersionRopsten
+		c.GenesisForkVersion = GenesisForkVersionRopsten
+		c.GenesisValidatorsRoot = GenesisValidatorsRootRopsten
+		c.BellatrixForkVersion = BellatrixForkVersionRopsten
 	case "sepolia":
-		c.genesisForkVersion = GenesisForkVersionSepolia
-		c.genesisValidatorsRoot = GenesisValidatorsRootSepolia
-		c.bellatrixForkVersion = BellatrixForkVersionSepolia
+		c.GenesisForkVersion = GenesisForkVersionSepolia
+		c.GenesisValidatorsRoot = GenesisValidatorsRootSepolia
+		c.BellatrixForkVersion = BellatrixForkVersionSepolia
 	case "goerli":
-		c.genesisForkVersion = GenesisForkVersionGoerli
-		c.genesisValidatorsRoot = GenesisValidatorsRootGoerli
-		c.bellatrixForkVersion = BellatrixForkVersionGoerli
+		c.GenesisForkVersion = GenesisForkVersionGoerli
+		c.GenesisValidatorsRoot = GenesisValidatorsRootGoerli
+		c.BellatrixForkVersion = BellatrixForkVersionGoerli
 	default:
 		network, err := c.readNetworkFromConfig(c.Network)
 		if err != nil {
 			return fmt.Errorf("unknown network: %s: %w", c.Network, err)
 		}
-		c.genesisForkVersion = network.GenesisForkVersion
-		c.genesisValidatorsRoot = network.GenesisValidatorsRoot
-		c.bellatrixForkVersion = network.BellatrixForkVersion
+		c.GenesisForkVersion = network.GenesisForkVersion
+		c.GenesisValidatorsRoot = network.GenesisValidatorsRoot
+		c.BellatrixForkVersion = network.BellatrixForkVersion
 	}
 	return nil
 }
