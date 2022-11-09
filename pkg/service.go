@@ -27,8 +27,8 @@ var (
 
 type Relay interface {
 	// Proposer APIs
+	//OLDRegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
 	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
-	RegisterValidator2(context.Context, []structs.SignedValidatorRegistration) error
 	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
@@ -36,34 +36,6 @@ type Relay interface {
 	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
 	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
 }
-
-/*
-	type RelayService interface {
-		// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-		RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
-		GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-		GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
-
-		// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-		SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
-		GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
-
-		// Data APIs
-		GetPayloadDelivered(context.Context, structs.TraceQuery) ([]structs.BidTraceExtended, error)
-		GetBlockReceived(context.Context, structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error)
-		Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
-	}
-*/
-
-/*
-type Datastore interface {
-
-	GetDelivered(context.Context, structs.Query) (structs.BidTraceWithTimestamp, error)
-	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
-	GetDeliveredBatch(context.Context, []structs.Query) ([]structs.BidTraceWithTimestamp, error)
-	GetHeaderBatch(context.Context, []structs.Query) ([]structs.HeaderAndTrace, error)
-	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
-} */
 
 type Datastore interface {
 	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
