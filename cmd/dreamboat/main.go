@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/metrics"
-	relay "github.com/blocknative/dreamboat/pkg"
+	pkg "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/blocknative/dreamboat/pkg/datastore"
+	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -25,7 +26,7 @@ import (
 
 const (
 	shutdownTimeout = 5 * time.Second
-	version         = relay.Version
+	version         = pkg.Version
 )
 
 var flags = []cli.Flag{
@@ -111,7 +112,7 @@ var flags = []cli.Flag{
 }
 
 var (
-	config = relay.Config{Log: log.New()}
+	config = pkg.Config{Log: log.New()}
 )
 
 // Main starts the relay
@@ -137,7 +138,7 @@ func setup() cli.BeforeFunc {
 			return err
 		}
 
-		config = relay.Config{
+		config = pkg.Config{
 			Log:                 logger(c),
 			RelayRequestTimeout: c.Duration("timeout"),
 			Network:             c.String("network"),
@@ -190,13 +191,40 @@ func run() cli.ActionFunc {
 				"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
 			}).Info("data store initialized")
 
-		// setup the relay service
-		service := &relay.DefaultService{
-			Log:       config.Log,
-			Config:    config,
-			Datastore: ds,
+		if err := config.Validate(); err != nil {
+			return err
 		}
 
+		domainBuilder, err := pkg.ComputeDomain(types.DomainTypeAppBuilder, config.GenesisForkVersion, types.Root{}.String())
+		if err != nil {
+			return err
+		}
+
+		domainBeaconProposer, err := pkg.ComputeDomain(types.DomainTypeBeaconProposer, config.BellatrixForkVersion, config.GenesisValidatorsRoot)
+		if err != nil {
+			return err
+		}
+
+		cfg := relay.RelayConfig{
+			BuilderSigningDomain:  domainBuilder,
+			ProposerSigningDomain: domainBeaconProposer,
+			PubKey:                config.PubKey,
+			SecretKey:             config.SecretKey,
+			TTL:                   config.TTL,
+			CheckKnownValidator:   config.CheckKnownValidator,
+		}
+
+		regMgr := relay.NewRegisteredManager(20000, 20000)
+
+		as := &pkg.AtomicState{}
+		r, err := relay.NewRelay(config.Log, cfg, as, ds, regMgr)
+		if err != nil {
+			return err
+		}
+		service := pkg.NewService(config.Log, config, ds, r, as)
+
+		regMgr.RunStore(ds, 300)
+		regMgr.RunVerify(300)
 		g.Go(func() error {
 			return service.Run(ctx)
 		})
