@@ -43,7 +43,12 @@ func TestRegisterValidator(t *testing.T) {
 		TTL:                  time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds)
+
+	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr.RunStore(ds, 300)
+	regMgr.RunVerify(300)
+
+	r, _ := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -86,6 +91,10 @@ func BenchmarkRegisterValidator(b *testing.B) {
 	ds := mock_relay.NewMockDatastore(ctrl)
 	bs := mock_relay.NewMockState(ctrl)
 
+	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr.RunStore(ds, 300)
+	regMgr.RunVerify(300)
+
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
@@ -95,7 +104,8 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds)
+
+	r, _ := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -114,7 +124,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		fbn.ValidatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 	bs.EXPECT().Beacon().Return(fbn).AnyTimes()
-
+	ds.EXPECT().PutRegistrationRaw(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	b.ResetTimer()
 	b.ReportAllocs()
 
@@ -136,10 +146,14 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 
+	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr.RunStore(ds, 300)
+	regMgr.RunVerify(300)
+
 	ctrl := gomock.NewController(b)
 	bs := mock_relay.NewMockState(ctrl)
 
-	const N = 1_000
+	const N = 10_000
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -150,21 +164,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r, _ := relay.NewRelay(log.New(), config, bs, ds)
-
-	/*
-		registrations := make([]structs.SignedValidatorRegistration, 0, N)
-		knownValidators := make(map[types.PubkeyHex]struct{}, N)
-
-		for i := 0; i < N; i++ {
-			registration, _ := validValidatorRegistration(b, relaySigningDomain)
-			b, err := json.Marshal(registration)
-			if err != nil {
-				panic(err)
-			}
-			registrations = append(registrations, structs.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
-			knownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
-		}*/
+	r, _ := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -179,7 +179,6 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 			panic(err)
 		}
 		registrations = append(registrations, structs.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
-
 		fbn.ValidatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 	bs.EXPECT().Beacon().Return(fbn).AnyTimes()
@@ -231,23 +230,4 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		}()
 	}
 
-}
-
-type FakeBeaconMock struct {
-}
-
-func (fbm *FakeBeaconMock) IsKnownValidator(arg0 types.PubkeyHex) (bool, error) {
-	return true, nil
-}
-
-func (fbm *FakeBeaconMock) HeadSlot() structs.Slot {
-	return structs.Slot(0)
-}
-
-func (fbm *FakeBeaconMock) ValidatorsMap() structs.BuilderGetValidatorsResponseEntrySlice {
-	return nil
-}
-
-func (fbm *FakeBeaconMock) KnownValidatorByIndex(uint64) (types.PubkeyHex, error) {
-	return types.PubkeyHex(""), nil
 }

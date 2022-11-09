@@ -46,7 +46,6 @@ type Datastore interface {
 	GetDeliveredBatch(context.Context, []structs.Query) ([]structs.BidTraceWithTimestamp, error)
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
-	PutRegistration(context.Context, structs.PubKey, types.SignedValidatorRegistration, time.Duration) error
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
 }
@@ -96,7 +95,12 @@ func (s *DefaultService) Run(ctx context.Context) (err error) {
 			TTL:                   s.Config.TTL,
 			CheckKnownValidator:   s.Config.CheckKnownValidator,
 		}
-		s.Relay, err = realRelay.NewRelay(s.Log, cfg, &s.state, s.Datastore)
+
+		regMgr := realRelay.NewRegisteredManager(20000, 20000)
+		regMgr.RunStore(s.Datastore, 300)
+		regMgr.RunVerify(300)
+
+		s.Relay, err = realRelay.NewRelay(s.Log, cfg, &s.state, s.Datastore, regMgr)
 		if err != nil {
 			return err
 		}

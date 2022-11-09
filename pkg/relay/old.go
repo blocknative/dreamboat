@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime"
@@ -116,8 +117,12 @@ func (rs *Relay) OLDprocessValidator(ctx context.Context, payload []structs.Sign
 			}
 		}
 
+		data, err := json.Marshal(registerRequest.SignedValidatorRegistration)
+		if err != nil {
+			return err
+		}
 		// officially register validator
-		if err := rs.d.PutRegistration(ctx, pk, registerRequest.SignedValidatorRegistration, rs.config.TTL); err != nil {
+		if err := rs.d.PutRegistrationRaw(ctx, pk, data, rs.config.TTL); err != nil {
 			logger.WithField("pubkey", registerRequest.Message.Pubkey).WithError(err).Debug("Error in PutRegistration")
 			return fmt.Errorf("failed to store %s", registerRequest.Message.Pubkey.String())
 		}

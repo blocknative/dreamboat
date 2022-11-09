@@ -3,8 +3,8 @@ package relay
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -14,78 +14,12 @@ import (
 	blst "github.com/supranational/blst/bindings/go"
 )
 
-type RegisteredManager struct {
-	M   map[string]uint64
-	acc sync.RWMutex
-
-	VerifyInput chan SVRReq
-
-	StoreCh chan SVRReq
-}
-
-func NewRegisteredManager(queue int) *RegisteredManager {
-	return &RegisteredManager{
-		M:           make(map[string]uint64),
-		VerifyInput: make(chan SVRReq, queue),
-		StoreCh:     make(chan SVRReq, queue),
-	}
-}
-
-func (rm *RegisteredManager) RunWorkers(store Datastore, num int) {
-	for i := 0; i < num; i++ {
-		go VerifyParallel(rm.VerifyInput)
-	}
-
-	for i := 0; i < num; i++ {
-		go parallelStoreIfReady(store, rm.StoreCh, time.Minute*40)
-	}
-}
-
-func (rm *RegisteredManager) StoreChan() chan SVRReq {
-	return rm.StoreCh
-}
-
-func (rm *RegisteredManager) Set(k string, value uint64) {
-	rm.acc.Lock()
-	defer rm.acc.Unlock()
-	rm.M[k] = value
-}
-
-func (rm *RegisteredManager) Get(k string) (value uint64, ok bool) {
-	rm.acc.RLock()
-	defer rm.acc.RUnlock()
-	value, ok = rm.M[k]
-	return
-}
-
-/*
-	type ReadyTable struct {
-		RT  map[int]struct{}
-		acc sync.RWMutex
-	}
-
-	func NewReadyTable() *ReadyTable {
-		return &ReadyTable{
-			RT: make(map[int]struct{}),
-		}
-	}
-
-	func (rt *ReadyTable) Set(k int) {
-		rt.acc.Lock()
-		defer rt.acc.Unlock()
-		rt.RT[k] = struct{}{}
-	}
-
-	func (rt *ReadyTable) Has(k int) bool {
-		rt.acc.RLock()
-		defer rt.acc.RUnlock()
-		_, ok := rt.RT[k]
-		return ok
-	}
-*/
 type Setter interface {
 	Set(k string, value uint64)
-	StoreChan() chan SVRReq
+}
+
+type Getter interface {
+	Get(k string) (value uint64, ok bool)
 }
 
 type SVRReq struct {
@@ -101,17 +35,7 @@ type SVRReqResp struct {
 	Iter   int
 }
 
-func parallelStoreIfReady(datas Datastore, in chan SVRReq, ttl time.Duration) {
-	for i := range in {
-		err := datas.PutRegistrationRaw(context.Background(), structs.PubKey{i.payload.Message.Pubkey}, i.payload.Raw, ttl)
-		i.Response <- SVRReqResp{
-			Iter: i.Iter,
-			Err:  err,
-		}
-	}
-}
-
-func registerSync(datas Datastore, s Setter, ttl time.Duration, a, b chan SVRReqResp, failure, exit chan struct{}, payload []structs.SignedValidatorRegistration) {
+func registerSync(s RegistrationManager, ttl time.Duration, a, b chan SVRReqResp, failure, exit chan struct{}, payload []structs.SignedValidatorRegistration) {
 	rcv := make(map[int]struct{})
 
 	var numA, numB, stored int
@@ -122,7 +46,7 @@ func registerSync(datas Datastore, s Setter, ttl time.Duration, a, b chan SVRReq
 	var sentToStore int
 	var total = len(payload)
 
-	store := s.StoreChan()
+	storeCh := s.StoreChan()
 SyncLoop:
 	for {
 		select {
@@ -140,7 +64,7 @@ SyncLoop:
 					select {
 					case <-saved:
 						stored++
-					case store <- SVRReq{
+					case storeCh <- SVRReq{
 						payload:  payload[item.Iter],
 						Iter:     item.Iter,
 						Response: saved,
@@ -167,7 +91,7 @@ SyncLoop:
 					select {
 					case <-saved:
 						stored++
-					case store <- SVRReq{
+					case storeCh <- SVRReq{
 						payload:  payload[item.Iter],
 						Iter:     item.Iter,
 						Response: saved,
@@ -222,28 +146,29 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	failure := make(chan struct{}, 1)
 	exit := make(chan struct{}, 1)
 
-	go registerSync(rs.d, rs.regMngr, rs.config.TTL, retSignature, retOther, failure, exit, payload)
+	go registerSync(rs.regMngr, rs.config.TTL, retSignature, retOther, failure, exit, payload)
 	go checkInMem(rs.beaconState, rs.regMngr, payload, retOther)
 
 	// This gives additional speedup but it's futile for now
-
 	var failed bool
+
+	VInp := rs.regMngr.VerifyChan()
 	for i := range payload {
 		if failed { // after failure just populate the errors
 			retSignature <- SVRReqResp{Iter: i, Err: errors.New("failed")}
 			continue
 		}
 
-		msg, _ := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
-
-		/*if err != nil {
-			return false, err
-		}*/
+		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
+		if err != nil {
+			retSignature <- SVRReqResp{Iter: i, Err: errors.New("failed")}
+			failed = true
+		}
 
 		select {
 		case <-failure:
 			failed = true
-		case rs.regMngr.VerifyInput <- SVRReq{payload[i], msg, i, retSignature}:
+		case VInp <- SVRReq{payload[i], msg, i, retSignature}:
 		}
 	}
 	log.Println("SentAll ", time.Since(t))
@@ -253,7 +178,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	return nil
 }
 
-func checkInMem(state State, rMgr *RegisteredManager, payload []structs.SignedValidatorRegistration, out chan SVRReqResp) {
+func checkInMem(state State, getter Getter, payload []structs.SignedValidatorRegistration, out chan SVRReqResp) {
 	checkTime := time.Now()
 	//	log.Println("check begin", time.Since(checkTime))
 
@@ -271,28 +196,27 @@ func checkInMem(state State, rMgr *RegisteredManager, payload []structs.SignedVa
 			continue
 		}
 
-		previousValidatorTimestamp, ok := rMgr.Get(pk.String())
+		previousValidatorTimestamp, ok := getter.Get(pk.String())
 		out <- SVRReqResp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), Iter: i}
 	}
 	log.Println("checkTime", time.Since(checkTime))
-}
-
-func VerifyParallel(vInput <-chan SVRReq) {
-	for v := range vInput {
-		// TODO(l): Make sure this doesn't Panic!
-		ok, err := VerifySignatureBytes(v.Msg, v.payload.Signature[:], v.payload.Message.Pubkey[:])
-		if err == nil && !ok {
-			err = bls.ErrInvalidSignature
-		}
-		v.Response <- SVRReqResp{Err: err, Iter: v.Iter}
-	}
 }
 
 var dst = []byte("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_")
 
 const BLST_SUCCESS = 0x0
 
-func VerifySignatureBytes(msg [32]byte, sigBytes, pkBytes []byte) (bool, error) {
+func VerifySignatureBytes(msg [32]byte, sigBytes, pkBytes []byte) (ok bool, err error) {
+	defer func() { // better safe than sorry
+		if r := recover(); r != nil {
+			var isErr bool
+			err, isErr = r.(error)
+			if !isErr {
+				err = fmt.Errorf("pkg: %v", r)
+			}
+		}
+	}()
+
 	sig, err := bls.SignatureFromBytes(sigBytes)
 	if err != nil {
 		return false, err
@@ -308,4 +232,13 @@ func VerifySignatureBytes(msg [32]byte, sigBytes, pkBytes []byte) (bool, error) 
 	}
 
 	return (blst.CoreVerifyPkInG1(pk, sig, true, msg[:], dst, nil) == BLST_SUCCESS), nil
+}
+
+func VerifySignature(obj types.HashTreeRoot, d types.Domain, pkBytes, sigBytes []byte) (bool, error) {
+	msg, err := types.ComputeSigningRoot(obj, d)
+	if err != nil {
+		return false, err
+	}
+
+	return VerifySignatureBytes(msg, sigBytes, pkBytes)
 }
