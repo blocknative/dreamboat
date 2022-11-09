@@ -13,22 +13,6 @@ import (
 	ds "github.com/ipfs/go-datastore"
 )
 
-/*
-
-type Datastore interface {
-	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
-	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
-	GetHeaderBatch(context.Context, []structs.Query) ([]structs.HeaderAndTrace, error)
-	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.Query) (structs.BidTraceWithTimestamp, error)
-	GetDeliveredBatch(context.Context, []structs.Query) ([]structs.BidTraceWithTimestamp, error)
-	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
-	PutRegistration(context.Context, structs.PubKey, types.SignedValidatorRegistration, time.Duration) error
-	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
-	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
-}*/
-
 type Datastore struct {
 	TTLStorage
 	mu sync.Mutex
