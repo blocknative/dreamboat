@@ -28,11 +28,6 @@ var (
 )
 
 type Datastore interface {
-	/*
-		GetHeaderBatch(context.Context, []structs.Query) ([]structs.HeaderAndTrace, error)
-		GetDeliveredBatch(context.Context, []structs.Query) ([]structs.BidTraceWithTimestamp, error)
-	*/
-
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.Query) (structs.BidTraceWithTimestamp, error)
 
@@ -42,9 +37,15 @@ type Datastore interface {
 	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
 	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
 
-	PutRegistration(context.Context, structs.PubKey, types.SignedValidatorRegistration, time.Duration) error
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+}
+
+type RegistrationManager interface {
+	StoreChan() chan SVRReq
+	VerifyChan() chan SVRReq
+	Set(k string, value uint64)
+	Get(k string) (value uint64, ok bool)
 }
 
 type RelayConfig struct {
@@ -58,25 +59,24 @@ type RelayConfig struct {
 }
 
 type Relay struct {
-	d       Datastore
-	l       log.Logger
-	regMngr *RegisteredManager
+	d Datastore
+	l log.Logger
+
+	regMngr RegistrationManager
 	config  RelayConfig
 
 	beaconState State
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore) (*Relay, error) {
-	rm := NewRegisteredManager(20000)
+func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, regMngr RegistrationManager) (*Relay, error) {
 	rs := &Relay{
 		d:           d,
 		l:           l,
 		config:      config,
 		beaconState: beaconState,
-		regMngr:     rm,
+		regMngr:     regMngr,
 	}
-	rm.RunWorkers(d, 300)
 	return rs, nil
 }
 
@@ -188,8 +188,15 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		"pubkey":    pk,
 	}).Debug("payload requested")
+	/*
+		ok, err := types.VerifySignature(
+			payloadRequest.Message,
+			rs.config.ProposerSigningDomain,
+			pk[:],
+			payloadRequest.Signature[:],
+		)*/
 
-	ok, err := types.VerifySignature(
+	ok, err := VerifySignature(
 		payloadRequest.Message,
 		rs.config.ProposerSigningDomain,
 		pk[:],
@@ -413,7 +420,8 @@ func (rs *Relay) verifyBlock(SubmitBlockRequest *types.BuilderSubmitBlockRequest
 
 	_ = simulateBlock()
 
-	return types.VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
+	//return types.VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
+	return VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
 }
 
 func simulateBlock() bool {
