@@ -582,61 +582,6 @@ func randomRegistration() types.SignedValidatorRegistration {
 		Signature: types.Signature(random96Bytes()),
 	}
 }
-
-func validValidatorRegistration(t require.TestingT, domain types.Domain) (*types.SignedValidatorRegistration, *bls.SecretKey) {
-	sk, pk, err := bls.GenerateNewKeypair()
-	require.NoError(t, err)
-
-	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
-
-	msg := &types.RegisterValidatorRequestMessage{
-		FeeRecipient: types.Address{0x42},
-		GasLimit:     15_000_000,
-		Timestamp:    1652369368,
-		Pubkey:       pubKey,
-	}
-
-	signature, err := types.SignMessage(msg, domain, sk)
-	require.NoError(t, err)
-	return &types.SignedValidatorRegistration{
-		Message:   msg,
-		Signature: signature,
-	}, sk
-}
-
-func validSubmitBlockRequest(t require.TestingT, domain types.Domain, genesisTime uint64) *types.BuilderSubmitBlockRequest {
-	sk, pk, err := bls.GenerateNewKeypair()
-	require.NoError(t, err)
-
-	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
-
-	slot := rand.Uint64()
-
-	payload := randomPayload()
-	payload.Timestamp = genesisTime + (slot * 12)
-
-	msg := &types.BidTrace{
-		Slot:                 slot,
-		ParentHash:           payload.ParentHash,
-		BlockHash:            payload.BlockHash,
-		BuilderPubkey:        pubKey,
-		ProposerPubkey:       types.PublicKey(random48Bytes()),
-		ProposerFeeRecipient: types.Address(random20Bytes()),
-		Value:                types.IntToU256(rand.Uint64()),
-	}
-
-	signature, err := types.SignMessage(msg, domain, sk)
-	require.NoError(t, err)
-
-	return &types.BuilderSubmitBlockRequest{
-		Signature:        signature,
-		Message:          msg,
-		ExecutionPayload: payload,
-	}
-}
-
 func validSignedBlindedBeaconBlock(t require.TestingT, domain types.Domain) *types.BuilderSubmitBlockRequest {
 	sk, pk, err := bls.GenerateNewKeypair()
 	require.NoError(t, err)

@@ -135,3 +135,43 @@ type BlockBidAndTrace struct {
 	Bid     *types.GetHeaderResponse
 	Payload *types.GetPayloadResponse
 }
+
+type BeaconState struct {
+	DutiesState
+	ValidatorsState
+}
+
+func (s *BeaconState) KnownValidatorByIndex(index uint64) (types.PubkeyHex, error) {
+	pk, ok := s.ValidatorsState.KnownValidatorsByIndex[index]
+	if !ok {
+		return "", ErrUnknownValue
+	}
+	return pk, nil
+}
+
+func (s *BeaconState) IsKnownValidator(pk types.PubkeyHex) (bool, error) {
+	_, ok := s.ValidatorsState.KnownValidators[pk]
+	return ok, nil
+}
+
+func (s *BeaconState) KnownValidators() map[types.PubkeyHex]struct{} {
+	return s.ValidatorsState.KnownValidators
+}
+
+func (s *BeaconState) HeadSlot() Slot {
+	return s.CurrentSlot
+}
+
+func (s *BeaconState) ValidatorsMap() BuilderGetValidatorsResponseEntrySlice {
+	return s.ProposerDutiesResponse
+}
+
+type DutiesState struct {
+	CurrentSlot            Slot
+	ProposerDutiesResponse BuilderGetValidatorsResponseEntrySlice
+}
+
+type ValidatorsState struct {
+	KnownValidatorsByIndex map[uint64]types.PubkeyHex
+	KnownValidators        map[types.PubkeyHex]struct{}
+}

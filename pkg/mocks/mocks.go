@@ -38,89 +38,89 @@ func (m *MockRelay) EXPECT() *MockRelayMockRecorder {
 }
 
 // GetHeader mocks base method
-func (m *MockRelay) GetHeader(arg0 context.Context, arg1 structs.HeaderRequest, arg2 structs.State) (*types.GetHeaderResponse, error) {
+func (m *MockRelay) GetHeader(arg0 context.Context, arg1 structs.HeaderRequest) (*types.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
 	ret0, _ := ret[0].(*types.GetHeaderResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetHeader indicates an expected call of GetHeader
-func (mr *MockRelayMockRecorder) GetHeader(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) GetHeader(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockRelay)(nil).GetHeader), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockRelay)(nil).GetHeader), arg0, arg1)
 }
 
 // GetPayload mocks base method
-func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *types.SignedBlindedBeaconBlock, arg2 structs.State) (*types.GetPayloadResponse, error) {
+func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1)
 	ret0, _ := ret[0].(*types.GetPayloadResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPayload indicates an expected call of GetPayload
-func (mr *MockRelayMockRecorder) GetPayload(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockRelay)(nil).GetPayload), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockRelay)(nil).GetPayload), arg0, arg1)
 }
 
 // GetValidators mocks base method
-func (m *MockRelay) GetValidators(arg0 structs.State) structs.BuilderGetValidatorsResponseEntrySlice {
+func (m *MockRelay) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetValidators", arg0)
+	ret := m.ctrl.Call(m, "GetValidators")
 	ret0, _ := ret[0].(structs.BuilderGetValidatorsResponseEntrySlice)
 	return ret0
 }
 
 // GetValidators indicates an expected call of GetValidators
-func (mr *MockRelayMockRecorder) GetValidators(arg0 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) GetValidators() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidators", reflect.TypeOf((*MockRelay)(nil).GetValidators), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidators", reflect.TypeOf((*MockRelay)(nil).GetValidators))
 }
 
 // RegisterValidator mocks base method
-func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []structs.SignedValidatorRegistration, arg2 structs.State) error {
+func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []structs.SignedValidatorRegistration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RegisterValidator indicates an expected call of RegisterValidator
-func (mr *MockRelayMockRecorder) RegisterValidator(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) RegisterValidator(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockRelay)(nil).RegisterValidator), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockRelay)(nil).RegisterValidator), arg0, arg1)
 }
 
 // RegisterValidator2 mocks base method
-func (m *MockRelay) RegisterValidator2(arg0 context.Context, arg1 []structs.SignedValidatorRegistration, arg2 structs.BeaconState) error {
+func (m *MockRelay) RegisterValidator2(arg0 context.Context, arg1 []structs.SignedValidatorRegistration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterValidator2", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "RegisterValidator2", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RegisterValidator2 indicates an expected call of RegisterValidator2
-func (mr *MockRelayMockRecorder) RegisterValidator2(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) RegisterValidator2(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator2", reflect.TypeOf((*MockRelay)(nil).RegisterValidator2), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator2", reflect.TypeOf((*MockRelay)(nil).RegisterValidator2), arg0, arg1)
 }
 
 // SubmitBlock mocks base method
-func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest, arg2 structs.State) error {
+func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SubmitBlock indicates an expected call of SubmitBlock
-func (mr *MockRelayMockRecorder) SubmitBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) SubmitBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBlock", reflect.TypeOf((*MockRelay)(nil).SubmitBlock), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBlock", reflect.TypeOf((*MockRelay)(nil).SubmitBlock), arg0, arg1)
 }
 
 // MockDatastore is a mock of Datastore interface

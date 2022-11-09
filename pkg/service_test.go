@@ -35,7 +35,7 @@ func TestServiceRouting(t *testing.T) {
 		}
 
 		relayMock.EXPECT().
-			GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).
+			GetHeader(gomock.Any(), gomock.Any()).
 			Times(1)
 
 		service.GetHeader(nil, nil)
@@ -56,7 +56,7 @@ func TestServiceRouting(t *testing.T) {
 		}
 
 		relayMock.EXPECT().
-			RegisterValidator(gomock.Any(), gomock.Any(), gomock.Any()).
+			RegisterValidator(gomock.Any(), gomock.Any()).
 			Times(1)
 
 		service.RegisterValidator(ctx, nil)
@@ -78,7 +78,7 @@ func TestServiceRouting(t *testing.T) {
 		}
 
 		relayMock.EXPECT().
-			GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).
+			GetHeader(gomock.Any(), gomock.Any()).
 			Times(1)
 
 		service.GetHeader(ctx, nil)
@@ -99,7 +99,7 @@ func TestServiceRouting(t *testing.T) {
 		}
 
 		relayMock.EXPECT().
-			GetPayload(gomock.Any(), gomock.Any(), gomock.Any()).
+			GetPayload(gomock.Any(), gomock.Any()).
 			Times(1)
 
 		service.GetPayload(ctx, nil)
@@ -120,7 +120,7 @@ func TestServiceRouting(t *testing.T) {
 		}
 
 		relayMock.EXPECT().
-			SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any()).
+			SubmitBlock(gomock.Any(), gomock.Any()).
 			Times(1)
 
 		service.SubmitBlock(ctx, nil)
@@ -141,7 +141,7 @@ func TestServiceRouting(t *testing.T) {
 		}
 
 		relayMock.EXPECT().
-			GetValidators(gomock.Any()).
+			GetValidators().
 			Times(1)
 
 		service.GetValidators()
@@ -194,7 +194,7 @@ func TestBeaconClientState(t *testing.T) {
 	<-service.Ready()
 
 	relayMock.EXPECT().
-		GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).
+		GetHeader(gomock.Any(), gomock.Any()).
 		Times(1)
 
 	service.GetHeader(nil, nil)
