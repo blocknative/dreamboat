@@ -9,6 +9,7 @@ import (
 	"time"
 
 	relay "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -30,7 +31,7 @@ func TestPutGetHeader(t *testing.T) {
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
-	slot := relay.Slot(slotInt)
+	slot := structs.Slot(slotInt)
 
 	header.Trace.Slot = uint64(slotInt)
 
@@ -69,7 +70,7 @@ func TestPutGetHeaderDuplicate(t *testing.T) {
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
-	slot := relay.Slot(slotInt)
+	slot := structs.Slot(slotInt)
 
 	header.Trace.Slot = uint64(slotInt)
 	for i := 0; i < N; i++ {
@@ -97,14 +98,14 @@ func TestPutGetHeaders(t *testing.T) {
 	ds := relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 
 	headers := make([]relay.HeaderAndTrace, N)
-	slots := make([]relay.Slot, N)
+	slots := make([]structs.Slot, N)
 
 	var wg sync.WaitGroup
 	for i := 0; i < N; i++ {
 		go func(i int) {
 			header := randomHeaderAndTrace()
 			slotInt := rand.Int()
-			slot := relay.Slot(slotInt)
+			slot := structs.Slot(slotInt)
 
 			header.Trace.Slot = uint64(slotInt)
 			err := ds.PutHeader(ctx, slot, header, time.Minute)
@@ -152,7 +153,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
-	slot := relay.Slot(slotInt)
+	slot := structs.Slot(slotInt)
 
 	header.Trace.Slot = uint64(slotInt)
 
@@ -213,7 +214,7 @@ func TestPutGetHeaderBatch(t *testing.T) {
 	for i := 0; i < N; i++ {
 		header := randomHeaderAndTrace()
 		slotInt := rand.Int()
-		slot := relay.Slot(slotInt)
+		slot := structs.Slot(slotInt)
 
 		header.Trace.Slot = uint64(slotInt)
 
@@ -278,7 +279,7 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		header := randomHeaderAndTrace()
-		slot := relay.Slot(header.Trace.Slot)
+		slot := structs.Slot(header.Trace.Slot)
 
 		headers = append(headers, header)
 		batch = append(batch, *header.Trace)
@@ -330,7 +331,7 @@ func TestPutGetPayload(t *testing.T) {
 	key := relay.PayloadKey{
 		BlockHash: payload.Trace.Message.BlockHash,
 		Proposer:  payload.Trace.Message.ProposerPubkey,
-		Slot:      relay.Slot(payload.Trace.Message.Slot),
+		Slot:      structs.Slot(payload.Trace.Message.Slot),
 	}
 	err := ds.PutPayload(ctx, key, payload, time.Minute)
 	require.NoError(t, err)
@@ -351,7 +352,7 @@ func TestPutGetRegistration(t *testing.T) {
 	ds := relay.DefaultDatastore{TTLStorage: store}
 
 	registration := randomRegistration()
-	key := relay.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{registration.Message.Pubkey}
 
 	// put
 	err := ds.PutRegistration(ctx, key, registration, time.Minute)
@@ -373,7 +374,7 @@ func BenchmarkPutRegistration(b *testing.B) {
 	ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	registration := randomRegistration()
-	key := relay.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{registration.Message.Pubkey}
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -396,7 +397,7 @@ func BenchmarkPutRegistrationParallel(b *testing.B) {
 	ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	registration := randomRegistration()
-	key := relay.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{registration.Message.Pubkey}
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -427,7 +428,7 @@ func BenchmarkGetRegistration(b *testing.B) {
 	ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	registration := randomRegistration()
-	key := relay.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{registration.Message.Pubkey}
 
 	_ = ds.PutRegistration(ctx, key, registration, time.Minute)
 
@@ -452,7 +453,7 @@ func BenchmarkGetRegistrationParallel(b *testing.B) {
 	ds := relay.DefaultDatastore{TTLStorage: &relay.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	registration := randomRegistration()
-	key := relay.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{registration.Message.Pubkey}
 
 	_ = ds.PutRegistration(ctx, key, registration, time.Minute)
 

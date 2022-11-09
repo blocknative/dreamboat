@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
@@ -37,7 +38,7 @@ type BidTraceWithTimestamp struct {
 }
 
 type Query struct {
-	Slot      Slot
+	Slot      structs.Slot
 	BlockHash types.Hash
 	BlockNum  uint64
 	PubKey    types.PublicKey
@@ -46,7 +47,7 @@ type Query struct {
 type PayloadKey struct {
 	BlockHash types.Hash
 	Proposer  types.PublicKey
-	Slot      Slot
+	Slot      structs.Slot
 }
 
 type DeliveredTrace struct {
@@ -55,18 +56,18 @@ type DeliveredTrace struct {
 }
 
 type Datastore interface {
-	PutHeader(context.Context, Slot, HeaderAndTrace, time.Duration) error
+	PutHeader(context.Context, structs.Slot, HeaderAndTrace, time.Duration) error
 	GetHeaders(context.Context, Query) ([]HeaderAndTrace, error)
 	GetMaxProfitHeadersDesc(context.Context, Slot) ([]HeaderAndTrace, error)
 	GetHeaderBatch(context.Context, []Query) ([]HeaderAndTrace, error)
-	PutDelivered(context.Context, Slot, DeliveredTrace, time.Duration) error
+	PutDelivered(context.Context, structs.Slot, DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, Query) (BidTraceWithTimestamp, error)
 	GetDeliveredBatch(context.Context, []Query) ([]BidTraceWithTimestamp, error)
 	PutPayload(context.Context, PayloadKey, *BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, PayloadKey) (*BlockBidAndTrace, error)
-	PutRegistration(context.Context, PubKey, types.SignedValidatorRegistration, time.Duration) error
-	PutRegistrationRaw(context.Context, PubKey, []byte, time.Duration) error
-	GetRegistration(context.Context, PubKey) (types.SignedValidatorRegistration, error)
+	PutRegistration(context.Context, structs.PubKey, types.SignedValidatorRegistration, time.Duration) error
+	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
+	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
 }
 
 type DefaultDatastore struct {
@@ -81,7 +82,7 @@ type TTLStorage interface {
 	Close() error
 }
 
-func (s *DefaultDatastore) PutHeader(ctx context.Context, slot Slot, header HeaderAndTrace, ttl time.Duration) error {
+func (s *DefaultDatastore) PutHeader(ctx context.Context, slot structs.Slot, header HeaderAndTrace, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -315,7 +316,7 @@ func (s *DefaultDatastore) GetPayload(ctx context.Context, key PayloadKey) (*Blo
 	return &payload, err
 }
 
-func (s *DefaultDatastore) PutRegistration(ctx context.Context, pk PubKey, registration types.SignedValidatorRegistration, ttl time.Duration) error {
+func (s *DefaultDatastore) PutRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration, ttl time.Duration) error {
 	data, err := json.Marshal(registration)
 	if err != nil {
 		return err
@@ -323,11 +324,11 @@ func (s *DefaultDatastore) PutRegistration(ctx context.Context, pk PubKey, regis
 	return s.TTLStorage.PutWithTTL(ctx, RegistrationKey(pk), data, ttl)
 }
 
-func (s *DefaultDatastore) PutRegistrationRaw(ctx context.Context, pk PubKey, registration []byte, ttl time.Duration) error {
+func (s *DefaultDatastore) PutRegistrationRaw(ctx context.Context, pk structs.PubKey, registration []byte, ttl time.Duration) error {
 	return s.TTLStorage.PutWithTTL(ctx, RegistrationKey(pk), registration, ttl)
 }
 
-func (s *DefaultDatastore) GetRegistration(ctx context.Context, pk PubKey) (types.SignedValidatorRegistration, error) {
+func (s *DefaultDatastore) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
 	data, err := s.TTLStorage.Get(ctx, RegistrationKey(pk))
 	if err != nil {
 		return types.SignedValidatorRegistration{}, err
@@ -379,7 +380,7 @@ func (s *DefaultDatastore) queryToDeliveredKey(ctx context.Context, query Query)
 	return ds.NewKey(string(rawKey)), nil
 }
 
-func HeaderKey(slot Slot) ds.Key {
+func HeaderKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-%d", slot))
 }
 
@@ -395,7 +396,7 @@ func HeaderNumKey(bn uint64) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-num-%d", bn))
 }
 
-func DeliveredKey(slot Slot) ds.Key {
+func DeliveredKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("delivered-%d", slot))
 }
 
@@ -415,12 +416,12 @@ func PayloadKeyKey(key PayloadKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot))
 }
 
-func ValidatorKey(pk PubKey) ds.Key {
+func ValidatorKey(pk structs.PubKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("valdator-%s", pk.String()))
 }
 
-func RegistrationKey(pk PubKey) ds.Key {
-	return ds.NewKey(fmt.Sprintf("r-%s", pk.String()))
+func RegistrationKey(pk structs.PubKey) ds.Key {
+	return ds.NewKey(fmt.Sprintf("registration-%s", pk.String()))
 }
 
 type TTLDatastoreBatcher struct {

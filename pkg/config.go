@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
@@ -34,18 +35,6 @@ const (
 	BellatrixForkVersionGoerli  = "0x02001020"
 )
 
-type PubKey struct{ types.PublicKey }
-
-func (pk PubKey) Loggable() map[string]any {
-	return map[string]any{
-		"pubkey": pk,
-	}
-}
-
-func (pk PubKey) Bytes() []byte {
-	return pk.PublicKey[:]
-}
-
 // Config provides all available options for the default BeaconClient and Relay
 type Config struct {
 	Log                 log.Logger
@@ -61,14 +50,14 @@ type Config struct {
 	CheckKnownValidator bool
 
 	// private fields; populated during validation
-	builders              map[PubKey]*builder
+	builders              map[structs.PubKey]*builder
 	genesisForkVersion    string
 	genesisValidatorsRoot string
 	bellatrixForkVersion  string
 }
 
 func (c *Config) validate() error {
-	c.builders = make(map[PubKey]*builder)
+	c.builders = make(map[structs.PubKey]*builder)
 
 	if err := c.validateNetwork(); err != nil {
 		return err
@@ -129,10 +118,10 @@ func (c *Config) readNetworkFromConfig(network string) (Network, error) {
 	}
 
 	config, ok := networks[network]
-	if !ok{
-		return config, fmt.Errorf("not found in config file: %s", c.Datadir + "/networks.json")
+	if !ok {
+		return config, fmt.Errorf("not found in config file: %s", c.Datadir+"/networks.json")
 	}
-	
+
 	return config, nil
 }
 
@@ -151,7 +140,7 @@ func (c *Config) validateBuilders() (err error) {
 
 // builder represents a builder that the relay service connects to.
 type builder struct {
-	PubKey PubKey
+	PubKey structs.PubKey
 	URL    *url.URL
 }
 
@@ -175,7 +164,7 @@ func newBuilderEntry(relayURL string) (*builder, error) {
 		return nil, errors.New("missing relay public key")
 	}
 
-	var pk PubKey
+	var pk structs.PubKey
 	if err = pk.UnmarshalText([]byte(u.User.Username())); err != nil {
 		return nil, err
 	}

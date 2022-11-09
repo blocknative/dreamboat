@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 
@@ -87,7 +88,7 @@ type Setter interface {
 }
 
 type SVRReq struct {
-	payload  SignedValidatorRegistration
+	payload  structs.SignedValidatorRegistration
 	Msg      [32]byte
 	Iter     int
 	Response chan SVRReqResp
@@ -101,7 +102,7 @@ type SVRReqResp struct {
 
 func parallelStoreIfReady(datas Datastore, in chan SVRReq, ttl time.Duration) {
 	for i := range in {
-		err := datas.PutRegistrationRaw(context.Background(), PubKey{i.payload.Message.Pubkey}, i.payload.Raw, ttl)
+		err := datas.PutRegistrationRaw(context.Background(), structs.PubKey{i.payload.Message.Pubkey}, i.payload.Raw, ttl)
 		i.Response <- SVRReqResp{
 			Iter: i.Iter,
 			Err:  err,
@@ -109,7 +110,7 @@ func parallelStoreIfReady(datas Datastore, in chan SVRReq, ttl time.Duration) {
 	}
 }
 
-func registerSync(datas Datastore, s Setter, ttl time.Duration, a, b chan SVRReqResp, failure, exit chan struct{}, payload []SignedValidatorRegistration) {
+func registerSync(datas Datastore, s Setter, ttl time.Duration, a, b chan SVRReqResp, failure, exit chan struct{}, payload []structs.SignedValidatorRegistration) {
 	rcv := make(map[int]struct{})
 
 	var numA, numB, stored int
@@ -190,7 +191,7 @@ SyncLoop:
 	close(failure)
 }
 
-func storeIfReady(s Setter, rcv map[int]struct{}, iter int, registerRequest SignedValidatorRegistration) bool {
+func storeIfReady(s Setter, rcv map[int]struct{}, iter int, registerRequest structs.SignedValidatorRegistration) bool {
 	// store only if it has two records from both checks
 	_, ok := rcv[iter]
 	if !ok {
@@ -207,7 +208,7 @@ func storeIfReady(s Setter, rcv map[int]struct{}, iter int, registerRequest Sign
 
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *DefaultRelay) RegisterValidator2(ctx context.Context, payload []SignedValidatorRegistration, state State) error {
+func (rs *DefaultRelay) RegisterValidator2(ctx context.Context, payload []structs.SignedValidatorRegistration, state State) error {
 	/* TODO(l): Consider this
 	for _, registerRequest := range payload {
 		if verifyTimestamp(registerRequest.Message.Timestamp) {
@@ -250,7 +251,7 @@ func (rs *DefaultRelay) RegisterValidator2(ctx context.Context, payload []Signed
 	return nil
 }
 
-func checkInMem(state BeaconState, rMgr *RegisteredManager, payload []SignedValidatorRegistration, out chan SVRReqResp) {
+func checkInMem(state BeaconState, rMgr *RegisteredManager, payload []structs.SignedValidatorRegistration, out chan SVRReqResp) {
 	checkTime := time.Now()
 	//	log.Println("check begin", time.Since(checkTime))
 	for i, sp := range payload {
@@ -259,7 +260,7 @@ func checkInMem(state BeaconState, rMgr *RegisteredManager, payload []SignedVali
 			continue
 		}
 
-		pk := PubKey{sp.Message.Pubkey}
+		pk := structs.PubKey{sp.Message.Pubkey}
 		known, _ := state.IsKnownValidator(pk.PubkeyHex())
 		if !known {
 			out <- SVRReqResp{Commit: false, Iter: i}

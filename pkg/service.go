@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 	badger "github.com/ipfs/go-ds-badger2"
@@ -22,8 +23,8 @@ const (
 
 type RelayService interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	RegisterValidator(context.Context, []SignedValidatorRegistration) error
-	GetHeader(context.Context, HeaderRequest) (*types.GetHeaderResponse, error)
+	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
+	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
@@ -31,41 +32,9 @@ type RelayService interface {
 	GetValidators() BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
-	GetPayloadDelivered(context.Context, TraceQuery) ([]BidTraceExtended, error)
-	GetBlockReceived(context.Context, TraceQuery) ([]BidTraceWithTimestamp, error)
+	GetPayloadDelivered(context.Context, structs.TraceQuery) ([]BidTraceExtended, error)
+	GetBlockReceived(context.Context, structs.TraceQuery) ([]BidTraceWithTimestamp, error)
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
-}
-
-type TraceQuery struct {
-	Slot          Slot
-	BlockHash     types.Hash
-	BlockNum      uint64
-	Pubkey        types.PublicKey
-	Cursor, Limit uint64
-}
-
-func (q TraceQuery) HasSlot() bool {
-	return q.Slot != Slot(0)
-}
-
-func (q TraceQuery) HasBlockHash() bool {
-	return q.BlockHash != types.Hash{}
-}
-
-func (q TraceQuery) HasBlockNum() bool {
-	return q.BlockNum != 0
-}
-
-func (q TraceQuery) HasPubkey() bool {
-	return q.Pubkey != types.PublicKey{}
-}
-
-func (q TraceQuery) HasCursor() bool {
-	return q.Cursor != 0
-}
-
-func (q TraceQuery) HasLimit() bool {
-	return q.Limit != 0
 }
 
 type DefaultService struct {
@@ -81,7 +50,7 @@ type DefaultService struct {
 
 	// state
 	state        atomicState
-	headslotSlot Slot
+	headslotSlot structs.Slot
 	updateTime   atomic.Value
 }
 
@@ -182,7 +151,7 @@ func (s *DefaultService) beaconEventLoop(ctx context.Context, client BeaconClien
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	err = s.updateProposerDuties(ctx, client, Slot(syncStatus.HeadSlot))
+	err = s.updateProposerDuties(ctx, client, structs.Slot(syncStatus.HeadSlot))
 	if err != nil {
 		return err
 	}
@@ -213,7 +182,7 @@ func (s *DefaultService) processNewSlot(ctx context.Context, client BeaconClient
 	logger := s.Log.WithField("method", "ProcessNewSlot")
 	timeStart := time.Now()
 
-	received := Slot(event.Slot)
+	received := structs.Slot(event.Slot)
 	if received <= s.headslotSlot {
 		return nil
 	}
@@ -229,7 +198,7 @@ func (s *DefaultService) processNewSlot(ctx context.Context, client BeaconClient
 	logger.With(log.F{
 		"epoch":              s.headslotSlot.Epoch(),
 		"slotHead":           s.headslotSlot,
-		"slotStartNextEpoch": Slot(s.headslotSlot.Epoch()+1) * SlotsPerEpoch,
+		"slotStartNextEpoch": structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
 	},
 	).Debugf("updated headSlot to %d", received)
 
@@ -252,7 +221,7 @@ func (s *DefaultService) processNewSlot(ctx context.Context, client BeaconClient
 	logger.With(log.F{
 		"epoch":              s.headslotSlot.Epoch(),
 		"slotHead":           s.headslotSlot,
-		"slotStartNextEpoch": Slot(s.headslotSlot.Epoch()+1) * SlotsPerEpoch,
+		"slotStartNextEpoch": structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
 		"slot":               uint64(s.headslotSlot),
 		"processingTimeMs":   time.Since(timeStart).Milliseconds(),
 	}).Info("updated head slot")
@@ -268,7 +237,7 @@ func (s *DefaultService) knownValidatorsUpdateTime() time.Time {
 	return updateTime
 }
 
-func (s *DefaultService) updateProposerDuties(ctx context.Context, client BeaconClient, headSlot Slot) error {
+func (s *DefaultService) updateProposerDuties(ctx context.Context, client BeaconClient, headSlot structs.Slot) error {
 	epoch := headSlot.Epoch()
 
 	logger := s.Log.With(log.F{
@@ -325,7 +294,7 @@ func (s *DefaultService) updateProposerDuties(ctx context.Context, client Beacon
 	return nil
 }
 
-func (s *DefaultService) updateKnownValidators(ctx context.Context, client BeaconClient, current Slot) error {
+func (s *DefaultService) updateKnownValidators(ctx context.Context, client BeaconClient, current structs.Slot) error {
 	logger := s.Log.WithField("method", "UpdateKnownValidators")
 	timeStart := time.Now()
 
@@ -356,11 +325,11 @@ func (s *DefaultService) updateKnownValidators(ctx context.Context, client Beaco
 	return nil
 }
 
-func (s *DefaultService) RegisterValidator(ctx context.Context, payload []SignedValidatorRegistration) error {
+func (s *DefaultService) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
 	return s.Relay.RegisterValidator(ctx, payload, &s.state)
 }
 
-func (s *DefaultService) GetHeader(ctx context.Context, request HeaderRequest) (*types.GetHeaderResponse, error) {
+func (s *DefaultService) GetHeader(ctx context.Context, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
 	return s.Relay.GetHeader(ctx, request, &s.state)
 }
 
@@ -376,7 +345,7 @@ func (s *DefaultService) GetValidators() BuilderGetValidatorsResponseEntrySlice 
 	return s.Relay.GetValidators(&s.state)
 }
 
-func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query TraceQuery) ([]BidTraceExtended, error) {
+func (s *DefaultService) GetPayloadDelivered(ctx context.Context, query structs.TraceQuery) ([]BidTraceExtended, error) {
 	var (
 		event BidTraceWithTimestamp
 		err   error
@@ -406,10 +375,10 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 	headSlot := s.state.Beacon().HeadSlot()
 	start := headSlot
 	if cursor != 0 {
-		start = min(headSlot, Slot(cursor))
+		start = min(headSlot, structs.Slot(cursor))
 	}
 
-	stop := start - Slot(s.Config.TTL/DurationPerSlot)
+	stop := start - structs.Slot(s.Config.TTL/DurationPerSlot)
 
 	batch := make([]BidTraceWithTimestamp, 0, limit)
 	queries := make([]Query, 0, limit)
@@ -419,9 +388,9 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 		WithField("stop", stop).
 		Debug("querying delivered payload traces")
 
-	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
+	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= structs.Slot(limit) {
 		queries = queries[:0]
-		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
+		for s := highSlot; highSlot-structs.Slot(limit) < s && stop <= s; s-- {
 			queries = append(queries, Query{Slot: s})
 		}
 
@@ -440,7 +409,7 @@ func (s *DefaultService) getTailDelivered(ctx context.Context, limit, cursor uin
 	return events, nil
 }
 
-func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery) ([]BidTraceWithTimestamp, error) {
+func (s *DefaultService) GetBlockReceived(ctx context.Context, query structs.TraceQuery) ([]BidTraceWithTimestamp, error) {
 	var (
 		events []HeaderAndTrace
 		err    error
@@ -470,7 +439,7 @@ func (s *DefaultService) GetBlockReceived(ctx context.Context, query TraceQuery)
 
 func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64) ([]BidTraceWithTimestamp, error) {
 	batch := make([]HeaderAndTrace, 0, limit)
-	stop := s.state.Beacon().HeadSlot() - Slot(s.Config.TTL/DurationPerSlot)
+	stop := s.state.Beacon().HeadSlot() - structs.Slot(s.Config.TTL/DurationPerSlot)
 	queries := make([]Query, 0)
 
 	s.Log.WithField("limit", limit).
@@ -478,9 +447,9 @@ func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64)
 		WithField("stop", stop).
 		Debug("querying received block traces")
 
-	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= Slot(limit) {
+	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= structs.Slot(limit) {
 		queries = queries[:0]
-		for s := highSlot; highSlot-Slot(limit) < s && stop <= s; s-- {
+		for s := highSlot; highSlot-structs.Slot(limit) < s && stop <= s; s-- {
 			queries = append(queries, Query{Slot: s})
 		}
 
@@ -500,7 +469,7 @@ func (s *DefaultService) getTailBlockReceived(ctx context.Context, limit uint64)
 }
 
 func (s *DefaultService) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
-	return s.Datastore.GetRegistration(ctx, PubKey{pk})
+	return s.Datastore.GetRegistration(ctx, structs.PubKey{pk})
 }
 
 type atomicState struct {
@@ -542,7 +511,7 @@ func (s beaconState) KnownValidators() map[types.PubkeyHex]struct{} {
 	return s.knownValidators
 }
 
-func (s beaconState) HeadSlot() Slot {
+func (s beaconState) HeadSlot() structs.Slot {
 	return s.currentSlot
 }
 
@@ -555,7 +524,7 @@ func (s beaconState) Genesis() GenesisInfo {
 }
 
 type dutiesState struct {
-	currentSlot            Slot
+	currentSlot            structs.Slot
 	proposerDutiesResponse BuilderGetValidatorsResponseEntrySlice
 }
 
