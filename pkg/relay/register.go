@@ -76,7 +76,7 @@ func registerSync(s RegistrationManager, in chan SVRReqResp, failure chan struct
 		}
 
 		if item.Err != nil {
-			if err != nil {
+			if err == nil {
 				if item.Type == ResponseTypeOthers {
 					numOthers = total // this is terminator, so no event will come from here after
 				}
@@ -98,7 +98,7 @@ func registerSync(s RegistrationManager, in chan SVRReqResp, failure chan struct
 		}
 	}
 
-	if err != nil {
+	if err == nil {
 		close(failure)
 	}
 	exit <- err
@@ -209,7 +209,11 @@ func VerifySignatureBytes(msg [32]byte, sigBytes, pkBytes []byte) (ok bool, err 
 		return false, nil
 	}
 
-	return (blst.CoreVerifyPkInG1(pk, sig, true, msg[:], dst, nil) == BLST_SUCCESS), nil
+	if blst.CoreVerifyPkInG1(pk, sig, true, msg[:], dst, nil) != BLST_SUCCESS {
+		return false, bls.ErrInvalidSignature
+	}
+
+	return true, nil
 }
 
 func VerifySignature(obj types.HashTreeRoot, d types.Domain, pkBytes, sigBytes []byte) (bool, error) {
