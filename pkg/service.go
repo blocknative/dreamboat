@@ -68,8 +68,7 @@ type Service struct {
 }
 
 func NewService(l log.Logger, c Config, d Datastore, r Relay, as *AtomicState) *Service {
-
-	s := &Service{
+	return &Service{
 		Log:       l.WithField("service", "RelayService"),
 		Config:    c,
 		Datastore: d,
@@ -77,13 +76,10 @@ func NewService(l log.Logger, c Config, d Datastore, r Relay, as *AtomicState) *
 		state:     as,
 	}
 
-	return s
-
 }
 
 // Run creates a relay, datastore and starts the beacon client event loop
 func (s *Service) RunBeacon(ctx context.Context) (err error) {
-
 	if s.NewBeaconClient == nil {
 		s.NewBeaconClient = func() (BeaconClient, error) {
 			clients := make([]BeaconClient, 0, len(s.Config.BeaconEndpoints))
@@ -334,6 +330,10 @@ func (s *Service) SubmitBlock(ctx context.Context, submitBlockRequest *types.Bui
 
 func (s *Service) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
 	return s.Relay.GetValidators()
+}
+
+func (s *Service) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
+	return s.Datastore.GetRegistration(ctx, structs.PubKey{pk})
 }
 
 func (s *Service) GetPayloadDelivered(ctx context.Context, query structs.TraceQuery) ([]structs.BidTraceExtended, error) {

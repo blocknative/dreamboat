@@ -35,9 +35,9 @@ func (rm *RegisteredManager) RunVerify(num int) {
 	}
 }
 
-func (rm *RegisteredManager) RunStore(store Datastore, num int) {
+func (rm *RegisteredManager) RunStore(store Datastore, ttl time.Duration, num int) {
 	for i := 0; i < num; i++ {
-		go rm.ParallelStoreIfReady(store, time.Minute*40)
+		go rm.ParallelStoreIfReady(store, ttl)
 	}
 }
 
@@ -63,21 +63,28 @@ func (rm *RegisteredManager) Get(k string) (value uint64, ok bool) {
 }
 
 func (rm *RegisteredManager) ParallelStoreIfReady(datas Datastore, ttl time.Duration) {
+	rm.m.RunningWorkers.WithLabelValues("ParallelStoreIfReady").Inc()
+	defer rm.m.RunningWorkers.WithLabelValues("ParallelStoreIfReady").Dec()
+	ctx := context.Background()
+
 	for i := range rm.StoreCh {
-		err := datas.PutRegistrationRaw(context.Background(), structs.PubKey{i.payload.Message.Pubkey}, i.payload.Raw, ttl)
 		i.Response <- SVRReqResp{
+			Type: ResponseTypeStored,
 			Iter: i.Iter,
-			Err:  err,
+			Err:  datas.PutRegistrationRaw(ctx, structs.PubKey{i.payload.Message.Pubkey}, i.payload.Raw, ttl),
 		}
 	}
 }
 
 func (rm *RegisteredManager) VerifyParallel() {
+	rm.m.RunningWorkers.WithLabelValues("VerifyParallel").Inc()
+	defer rm.m.RunningWorkers.WithLabelValues("VerifyParallel").Dec()
+
 	for v := range rm.VerifyInputCh {
 		ok, err := VerifySignatureBytes(v.Msg, v.payload.Signature[:], v.payload.Message.Pubkey[:])
 		if err == nil && !ok {
 			err = bls.ErrInvalidSignature
 		}
-		v.Response <- SVRReqResp{Err: err, Iter: v.Iter}
+		v.Response <- SVRReqResp{Err: err, Iter: v.Iter, Type: ResponseTypeVerify}
 	}
 }
