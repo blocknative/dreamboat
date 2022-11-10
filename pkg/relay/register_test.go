@@ -23,7 +23,7 @@ import (
 func TestRegisterValidator(t *testing.T) {
 	t.Parallel()
 
-	const N = 10
+	const N = 100
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -77,6 +77,75 @@ func TestRegisterValidator(t *testing.T) {
 		gotRegistration, err := ds.GetRegistration(ctx, key)
 		require.NoError(t, err)
 		require.EqualValues(t, registration.SignedValidatorRegistration, gotRegistration)
+	}
+}
+
+func TestBrokenRegisterValidator(t *testing.T) {
+	t.Parallel()
+
+	const N = 10000
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctrl := gomock.NewController(t)
+
+	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	bs := mock_relay.NewMockState(ctrl)
+
+	relaySigningDomain, err := pkg.ComputeDomain(
+		types.DomainTypeAppBuilder,
+		pkg.GenesisForkVersionRopsten,
+		types.Root{}.String())
+	require.NoError(t, err)
+
+	config := relay.RelayConfig{
+		TTL:                  time.Minute,
+		BuilderSigningDomain: relaySigningDomain,
+	}
+
+	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr.RunStore(ds, config.TTL, 300)
+	regMgr.RunVerify(300)
+
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	fbn := &structs.BeaconState{
+		ValidatorsState: structs.ValidatorsState{
+			KnownValidators: make(map[types.PubkeyHex]struct{}),
+		},
+	}
+
+	registrations := make([]structs.SignedValidatorRegistration, 0, N)
+	for i := 0; i < N; i++ {
+		registration, _ := validValidatorRegistration(t, relaySigningDomain)
+		b, err := json.Marshal(registration)
+		if err != nil {
+			panic(err)
+		}
+		registrations = append(registrations, structs.SignedValidatorRegistration{SignedValidatorRegistration: *registration, Raw: b})
+
+		fbn.ValidatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
+	}
+
+	registrations[N/2].Signature = types.Signature{}
+	registrations[N/4].Signature = types.Signature{}
+	registrations[N/4*3].Message.Timestamp = 0
+	bs.EXPECT().Beacon().Return(fbn)
+
+	err = r.RegisterValidator(ctx, registrations)
+	require.Error(t, err)
+	t.Logf("returned %s", err.Error())
+
+	for i, registration := range registrations {
+		key := structs.PubKey{registration.Message.Pubkey}
+
+		gotRegistration, err := ds.GetRegistration(ctx, key)
+		if i != N/2 && i != N/4 && i != N/4*3 {
+			require.NoError(t, err)
+			require.EqualValues(t, registration.SignedValidatorRegistration, gotRegistration)
+		} else {
+			require.Error(t, err)
+		}
 	}
 }
 
