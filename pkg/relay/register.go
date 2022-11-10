@@ -53,7 +53,6 @@ type SVRReqResp struct {
 }
 
 func registerSync(s RegistrationManager, in chan SVRReqResp, failure chan struct{}, exit chan error, payload []structs.SignedValidatorRegistration, sentVerified *uint32) {
-
 	var numVerify, numOthers, stored, sentToStore uint32
 	var total = uint32(len(payload))
 
