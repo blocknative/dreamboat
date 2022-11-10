@@ -8,6 +8,7 @@ import (
 type APIMetrics struct {
 	ApiReqCounter *prometheus.CounterVec
 	ApiReqTiming  *prometheus.HistogramVec
+	ApiReqElCount *prometheus.HistogramVec
 }
 
 func (api *API) initMetrics() {
@@ -24,9 +25,17 @@ func (api *API) initMetrics() {
 		Name:      "duration",
 		Help:      "Duration of requests per endpoint",
 	}, []string{"endpoint"})
+
+	api.m.ApiReqElCount = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "dreamboat",
+		Subsystem: "api",
+		Name:      "reqElCount",
+		Help:      "Counts of elements received per endpoint",
+	}, []string{"endpoint", "type"})
 }
 
 func (api *API) AttachMetrics(m *metrics.Metrics) {
 	m.Register(api.m.ApiReqCounter)
 	m.Register(api.m.ApiReqTiming)
+	m.Register(api.m.ApiReqElCount)
 }

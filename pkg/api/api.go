@@ -202,11 +202,14 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
-
 	var br types.BuilderSubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&br); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400").Inc()
 		return http.StatusBadRequest, err
+	}
+
+	if br.ExecutionPayload != nil && br.ExecutionPayload.Transactions != nil {
+		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transactions").Observe(float64(len(br.ExecutionPayload.Transactions)))
 	}
 
 	if err := a.s.SubmitBlock(r.Context(), &br); err != nil {

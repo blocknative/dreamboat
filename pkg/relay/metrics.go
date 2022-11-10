@@ -5,25 +5,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type SubmitMetrics struct {
-	VerifyTiming *prometheus.HistogramVec
-}
-
 type RegisteredManagerMetrics struct {
 	VerifyTiming prometheus.Histogram
+
+	MapSize prometheus.Gauge
 
 	RunningWorkers *prometheus.GaugeVec
 }
 
 func (rm *RegisteredManager) initMetrics() {
-	/*rm.m.ApiReqCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "dreamboat",
-		Subsystem: "api",
-		Name:      "reqcount",
-		Help:      "Number of requests.",
-	}, []string{"endpoint", "code"})
-	*/
-
 	rm.m.RunningWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relay",
@@ -37,11 +27,24 @@ func (rm *RegisteredManager) initMetrics() {
 		Name:      "registeredVerifyTiming",
 		Help:      "Duration of requests per endpoint",
 	})
+
+	rm.m.MapSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relay",
+		Name:      "registeredMapSize",
+		Help:      "Duration of requests per endpoint",
+	})
 }
 
 func (rm *RegisteredManager) AttachMetrics(m *metrics.Metrics) {
 	m.Register(rm.m.VerifyTiming)
 	m.Register(rm.m.RunningWorkers)
+	m.Register(rm.m.MapSize)
+}
+
+type RelayMetrics struct {
+	VerifyTiming prometheus.Histogram
+	OtherTiming  prometheus.Histogram
 }
 
 func (r *Relay) initMetrics() {
