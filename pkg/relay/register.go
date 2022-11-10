@@ -139,14 +139,17 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	VInp := rs.regMngr.VerifyChan()
 	for i := range payload {
 		if failed { // after failure just populate the errors
+			atomic.AddUint32(&sentVerified, 1)
 			respCh <- SVRReqResp{Iter: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
-			continue
+			break
 		}
 
 		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
 		if err != nil {
+			atomic.AddUint32(&sentVerified, 1)
 			respCh <- SVRReqResp{Iter: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
 			failed = true
+			break
 		}
 
 		select {
