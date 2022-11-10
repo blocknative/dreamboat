@@ -173,7 +173,6 @@ func setupKeys(c *cli.Context) (*blst.SecretKey, types.PublicKey, error) {
 
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
-
 		if err := config.Validate(); err != nil {
 			return err
 		}
@@ -210,16 +209,18 @@ func run() cli.ActionFunc {
 		regMgr.AttachMetrics(m)
 
 		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage})
+		if err = datastore.InitDatastoreMetrics(m); err != nil {
+			return err
+		}
 
-		cfg := relay.RelayConfig{
+		r := relay.NewRelay(config.Log, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
 			ProposerSigningDomain: domainBeaconProposer,
 			PubKey:                config.PubKey,
 			SecretKey:             config.SecretKey,
 			TTL:                   config.TTL,
 			CheckKnownValidator:   config.CheckKnownValidator,
-		}
-		r := relay.NewRelay(config.Log, cfg, as, ds, regMgr)
+		}, as, ds, regMgr)
 		r.AttachMetrics(m)
 
 		service := pkg.NewService(config.Log, config, ds, r, as)
@@ -228,7 +229,7 @@ func run() cli.ActionFunc {
 		api := api.NewApi(config.Log, service)
 		api.AttachMetrics(m)
 
-		regMgr.RunStore(ds, 300)
+		regMgr.RunStore(ds, config.TTL, 300)
 		regMgr.RunVerify(300)
 
 		config.Log.WithFields(logrus.Fields{
@@ -243,12 +244,8 @@ func run() cli.ActionFunc {
 
 		// run internal http server
 		g.Go(func() (err error) {
-
 			internalMux := http.NewServeMux()
 			metrics.AttachProfiler(internalMux)
-			if err = datastore.InitDatastoreMetrics(m); err != nil {
-				return err
-			}
 
 			internalMux.Handle("/metrics", m.Handler())
 			config.Log.Info("internal server listening")

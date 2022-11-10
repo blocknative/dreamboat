@@ -45,7 +45,7 @@ func TestRegisterValidator(t *testing.T) {
 	}
 
 	regMgr := relay.NewRegisteredManager(20000, 20000)
-	regMgr.RunStore(ds, 300)
+	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
@@ -91,10 +91,6 @@ func BenchmarkRegisterValidator(b *testing.B) {
 	ds := mock_relay.NewMockDatastore(ctrl)
 	bs := mock_relay.NewMockState(ctrl)
 
-	regMgr := relay.NewRegisteredManager(20000, 20000)
-	regMgr.RunStore(ds, 300)
-	regMgr.RunVerify(300)
-
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
@@ -104,6 +100,10 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
+
+	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr.RunStore(ds, config.TTL, 300)
+	regMgr.RunVerify(300)
 
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
@@ -146,15 +146,6 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 
-	regMgr := relay.NewRegisteredManager(20000, 20000)
-	regMgr.RunStore(ds, 300)
-	regMgr.RunVerify(300)
-
-	ctrl := gomock.NewController(b)
-	bs := mock_relay.NewMockState(ctrl)
-
-	const N = 10_000
-
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
@@ -164,6 +155,16 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		TTL:                  5 * time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
+
+	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr.RunStore(ds, config.TTL, 300)
+	regMgr.RunVerify(300)
+
+	ctrl := gomock.NewController(b)
+	bs := mock_relay.NewMockState(ctrl)
+
+	const N = 10_000
+
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -200,7 +201,9 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		go func() {
+			t := time.Now()
 			err := r.RegisterValidator(ctx, registrations)
+			b.Logf(" RegisterValidator %s", time.Since(t).String())
 			if err != nil {
 				panic(err)
 			}
@@ -211,7 +214,9 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	wg.Wait()
 	for i := 0; i < b.N; i++ {
 		go func() {
+			t := time.Now()
 			err := r.RegisterValidator(ctx, registrations)
+			b.Logf(" RegisterValidator %s", time.Since(t).String())
 			if err != nil {
 				panic(err)
 			}
@@ -222,7 +227,9 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	wg2.Wait()
 	for i := 0; i < b.N; i++ {
 		go func() {
+			t := time.Now()
 			err := r.RegisterValidator(ctx, registrations)
+			b.Logf(" RegisterValidator %s", time.Since(t).String())
 			if err != nil {
 				panic(err)
 			}

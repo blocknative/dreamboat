@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"time"
+	"sync"
+	"sync/atomic"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -13,6 +13,22 @@ import (
 
 	blst "github.com/supranational/blst/bindings/go"
 )
+
+const (
+	ResponseTypeVerify = iota
+	ResponseTypeOthers
+	ResponseTypeStored
+)
+
+// returnChannelSize is the size of the buffer
+// describing the queue of results before it would be processed by registerSync
+const returnChannelSize = 150_000
+
+var retChannPool = sync.Pool{
+	New: func() any {
+		return make(chan SVRReqResp, returnChannelSize)
+	},
+}
 
 type Setter interface {
 	Set(k string, value uint64)
@@ -30,176 +46,138 @@ type SVRReq struct {
 }
 
 type SVRReqResp struct {
+	Type   int8
 	Err    error
 	Commit bool
 	Iter   int
 }
 
-func registerSync(s RegistrationManager, ttl time.Duration, a, b chan SVRReqResp, failure, exit chan struct{}, payload []structs.SignedValidatorRegistration) {
-	rcv := make(map[int]struct{})
+func registerSync(s RegistrationManager, in chan SVRReqResp, failure chan struct{}, exit chan error, payload []structs.SignedValidatorRegistration, sentVerified *uint32) {
 
-	var numA, numB, stored int
-	var errored bool
-	var item SVRReqResp
-
-	saved := make(chan SVRReqResp, len(payload))
-	var sentToStore int
-	var total = len(payload)
+	var numVerify, numOthers, stored, sentToStore uint32
+	var total = uint32(len(payload))
 
 	storeCh := s.StoreChan()
-SyncLoop:
-	for {
-		select {
-		case item = <-a:
-			numA++
-			if item.Err != nil {
-				log.Println("item.Err", item.Err)
-				if !errored {
-					errored = true
-					close(failure)
-				}
-			} else {
-				ok := storeIfReady(s, rcv, item.Iter, payload[item.Iter])
-				if ok {
-					select {
-					case <-saved:
-						stored++
-					case storeCh <- SVRReq{
-						payload:  payload[item.Iter],
-						Iter:     item.Iter,
-						Response: saved,
-					}:
-						sentToStore++
-					}
-				}
-			}
+	rcv := make(map[int]struct{})
 
-			if numA == total && numB == total && sentToStore == stored {
-				break SyncLoop
-			}
-		case item = <-b:
-			numB++
-			if item.Err != nil {
-				log.Println("item.Err", item.Err)
-				if !errored {
-					errored = true
-					close(failure)
-				}
-			} else if item.Commit {
-				ok := storeIfReady(s, rcv, item.Iter, payload[item.Iter])
-				if ok {
-					select {
-					case <-saved:
-						stored++
-					case storeCh <- SVRReq{
-						payload:  payload[item.Iter],
-						Iter:     item.Iter,
-						Response: saved,
-					}:
-						sentToStore++
-					}
-				}
-			}
-			if numA == total && numB == total && sentToStore == stored {
-				break SyncLoop
-			}
-		case <-saved:
+	var (
+		item SVRReqResp
+		err  error
+	)
+
+	for item = range in {
+		switch item.Type {
+		case ResponseTypeVerify:
+			numVerify++
+		case ResponseTypeOthers:
+			numOthers++
+		case ResponseTypeStored:
 			stored++
-			if numA == total && numB == total && sentToStore == stored {
-				break SyncLoop
+		}
+
+		if item.Err != nil {
+			if err != nil {
+				if item.Type == ResponseTypeOthers {
+					numOthers = total // this is terminator, so no event will come from here after
+				}
+				err = item.Err
+				close(failure)
 			}
+		} else if storeIfReady(s, rcv, item.Iter) {
+			p := payload[item.Iter]
+			s.Set(p.Message.Pubkey.String(), p.Message.Timestamp)
+			storeCh <- SVRReq{
+				payload:  p,
+				Iter:     item.Iter,
+				Response: in}
+
+			sentToStore++
+		}
+		if numVerify == atomic.LoadUint32(sentVerified) && numOthers == total && sentToStore == stored {
+			break
 		}
 	}
-	close(a)
-	close(b)
+
+	if err != nil {
+		close(failure)
+	}
+	exit <- err
 	close(exit)
-	close(failure)
 }
 
-func storeIfReady(s Setter, rcv map[int]struct{}, iter int, registerRequest structs.SignedValidatorRegistration) bool {
+func storeIfReady(s Setter, rcv map[int]struct{}, iter int) bool {
 	// store only if it has two records from both checks
 	_, ok := rcv[iter]
 	if !ok {
 		rcv[iter] = struct{}{}
 		return false
 	}
-	//if err := datas.PutRegistrationRaw(context.Background(), PubKey{registerRequest.Message.Pubkey}, registerRequest.Raw, ttl); err != nil {
-	//	return fmt.Errorf("failed to store %s", registerRequest.Message.Pubkey.String())
-	//}
 	delete(rcv, iter)
-	s.Set(registerRequest.Message.Pubkey.String(), registerRequest.Message.Timestamp)
 	return true
 }
 
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
 func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
-	/* TODO(l): Consider this
-	for _, registerRequest := range payload {
-		if verifyTimestamp(registerRequest.Message.Timestamp) {
-			return fmt.Errorf("request too far in future for %s", registerRequest.Message.Pubkey.String())
-		}
-	}*/
-	t := time.Now()
-	retSignature := make(chan SVRReqResp, 3000)
-	retOther := make(chan SVRReqResp, 3000)
+
+	// This function is limitted to the size of the buffer to prevent deadlocks
+	if len(payload) >= returnChannelSize/3-1 {
+		return fmt.Errorf("total number of validators exceeded: %d ", returnChannelSize/3-1)
+	}
+
+	respCh := retChannPool.Get().(chan SVRReqResp)
+	defer retChannPool.Put(respCh)
+
 	failure := make(chan struct{}, 1)
-	exit := make(chan struct{}, 1)
+	exit := make(chan error, 1)
 
-	go registerSync(rs.regMngr, rs.config.TTL, retSignature, retOther, failure, exit, payload)
-	go checkInMem(rs.beaconState, rs.regMngr, payload, retOther)
+	sentVerified := uint32(0)
+	go registerSync(rs.regMngr, respCh, failure, exit, payload, &sentVerified)
+	go checkInMem(rs.beaconState, rs.regMngr, payload, respCh)
 
-	// This gives additional speedup but it's futile for now
 	var failed bool
-
 	VInp := rs.regMngr.VerifyChan()
 	for i := range payload {
 		if failed { // after failure just populate the errors
-			retSignature <- SVRReqResp{Iter: i, Err: errors.New("failed")}
+			respCh <- SVRReqResp{Iter: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
 			continue
 		}
 
 		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
 		if err != nil {
-			retSignature <- SVRReqResp{Iter: i, Err: errors.New("failed")}
+			respCh <- SVRReqResp{Iter: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
 			failed = true
 		}
 
 		select {
 		case <-failure:
 			failed = true
-		case VInp <- SVRReq{payload[i], msg, i, retSignature}:
+		case VInp <- SVRReq{payload[i], msg, i, respCh}:
+			atomic.AddUint32(&sentVerified, 1)
 		}
 	}
-	log.Println("SentAll ", time.Since(t))
 
-	<-exit
-	log.Println("RegisterValidator2 ", time.Since(t))
-	return nil
+	return <-exit
 }
 
 func checkInMem(state State, getter Getter, payload []structs.SignedValidatorRegistration, out chan SVRReqResp) {
-	checkTime := time.Now()
-	//	log.Println("check begin", time.Since(checkTime))
-
 	beacon := state.Beacon()
 	for i, sp := range payload {
 		if verifyTimestamp(sp.Message.Timestamp) {
-			out <- SVRReqResp{Commit: false, Iter: i} //return fmt.Errorf("request too far in future for %s", registerRequest.Message.Pubkey.String())
-			continue
+			out <- SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}
+			return
 		}
 
 		pk := structs.PubKey{sp.Message.Pubkey}
 		known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
 		if !known {
-			out <- SVRReqResp{Commit: false, Iter: i} // return fmt.Errorf("%s not a known validator", registerRequest.Message.Pubkey.String())
-			continue
+			out <- SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}
+			return
 		}
 
 		previousValidatorTimestamp, ok := getter.Get(pk.String())
-		out <- SVRReqResp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), Iter: i}
+		out <- SVRReqResp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), Iter: i, Type: ResponseTypeOthers}
 	}
-	log.Println("checkTime", time.Since(checkTime))
 }
 
 var dst = []byte("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_")
