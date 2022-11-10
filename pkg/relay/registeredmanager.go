@@ -41,6 +41,30 @@ func (rm *RegisteredManager) RunStore(store Datastore, ttl time.Duration, num in
 	}
 }
 
+func (rm *RegisteredManager) RunCleanup(checkinterval uint64, cleanupInterval time.Duration) {
+	for {
+		time.Sleep(cleanupInterval)
+
+		now := uint64(time.Now().Unix())
+		var keys []string
+		rm.acc.RLock()
+		for k, v := range rm.M {
+			if now-v < checkinterval {
+				keys = append(keys, k)
+			}
+		}
+		rm.acc.RUnlock()
+
+		rm.acc.Lock()
+		for _, k := range keys {
+			delete(rm.M, k)
+		}
+		rm.m.MapSize.Set(float64(len(rm.M)))
+		rm.acc.Unlock()
+
+	}
+}
+
 func (rm *RegisteredManager) StoreChan() chan SVRReq {
 	return rm.StoreCh
 }
@@ -52,6 +76,7 @@ func (rm *RegisteredManager) VerifyChan() chan SVRReq {
 func (rm *RegisteredManager) Set(k string, value uint64) {
 	rm.acc.Lock()
 	defer rm.acc.Unlock()
+	defer rm.m.MapSize.Inc()
 	rm.M[k] = value
 }
 
@@ -71,7 +96,7 @@ func (rm *RegisteredManager) ParallelStoreIfReady(datas Datastore, ttl time.Dura
 		i.Response <- SVRReqResp{
 			Type: ResponseTypeStored,
 			Iter: i.Iter,
-			Err:  datas.PutRegistrationRaw(ctx, structs.PubKey{i.payload.Message.Pubkey}, i.payload.Raw, ttl),
+			Err:  datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.payload.Message.Pubkey}, i.payload.Raw, ttl),
 		}
 	}
 }

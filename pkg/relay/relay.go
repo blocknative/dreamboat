@@ -278,7 +278,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 }
 
 // ***** Relay Domain *****
-
 // SubmitBlockRequestToSignedBuilderBid converts a builders block submission to a bid compatible with mev-boost
 func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) {
 	if req == nil {
@@ -419,16 +418,11 @@ func (rs *Relay) verifyBlock(SubmitBlockRequest *types.BuilderSubmitBlockRequest
 		return false, fmt.Errorf("block empty")
 	}
 
-	_ = simulateBlock()
+	// TODO : Simulate block here once support for external builders
+	// we currently only support a single internally trusted builder
 
 	//return types.VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
 	return VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
-}
-
-func simulateBlock() bool {
-	// TODO : Simulate block here once support for external builders
-	// we currently only support a single internally trusted builder
-	return true
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
