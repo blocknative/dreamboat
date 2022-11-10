@@ -11,6 +11,8 @@ type SubmitMetrics struct {
 
 type RegisteredManagerMetrics struct {
 	VerifyTiming prometheus.Histogram
+
+	RunningWorkers *prometheus.GaugeVec
 }
 
 func (rm *RegisteredManager) initMetrics() {
@@ -21,6 +23,14 @@ func (rm *RegisteredManager) initMetrics() {
 		Help:      "Number of requests.",
 	}, []string{"endpoint", "code"})
 	*/
+
+	rm.m.RunningWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relay",
+		Name:      "registeredRunningWorkers",
+		Help:      "Number of requests.",
+	}, []string{"type"})
+
 	rm.m.VerifyTiming = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relay",
@@ -31,6 +41,7 @@ func (rm *RegisteredManager) initMetrics() {
 
 func (rm *RegisteredManager) AttachMetrics(m *metrics.Metrics) {
 	m.Register(rm.m.VerifyTiming)
+	m.Register(rm.m.RunningWorkers)
 }
 
 func (r *Relay) initMetrics() {
