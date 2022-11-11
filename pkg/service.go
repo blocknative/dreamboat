@@ -515,7 +515,7 @@ func (as *atomicState) Datastore() Datastore { return as.datastore.Load().(Datas
 func (as *atomicState) Beacon() BeaconState {
 	duties := as.duties.Load().(dutiesState)
 	validators := as.validators.Load().(validatorsState)
-	genesis := as.validators.Load().(GenesisInfo)
+	genesis := as.genesis.Load().(GenesisInfo)
 	return beaconState{dutiesState: duties, validatorsState: validators, GenesisInfo: genesis}
 }
 
