@@ -173,7 +173,7 @@ func (s *DefaultService) beaconEventLoop(ctx context.Context, client BeaconClien
 		return ErrBeaconNodeSyncing
 	}
 
-	genesis, err := client.GetGenesis()
+	genesis, err := client.Genesis()
 	if err != nil {
 		return fmt.Errorf("fail to get genesis from beacon: %w", err)
 	}

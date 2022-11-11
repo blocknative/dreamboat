@@ -31,7 +31,7 @@ type BeaconClient interface {
 	GetProposerDuties(Epoch) (*RegisteredProposersResponse, error)
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(Slot) (AllValidatorsResponse, error)
-	GetGenesis() (*GenesisResponse, error)
+	Genesis() (*GenesisResponse, error)
 	Endpoint() string
 }
 
@@ -150,10 +150,10 @@ func (b *MultiBeaconClient) KnownValidators(headSlot Slot) (AllValidatorsRespons
 	return AllValidatorsResponse{}, ErrNodesUnavailable
 }
 
-func (b *MultiBeaconClient) GetGenesis() (genesisInfo *GenesisResponse, err error) {
+func (b *MultiBeaconClient) Genesis() (genesisInfo *GenesisResponse, err error) {
 	clients := b.clientsByLastResponse()
 	for _, client := range clients {
-		if genesisInfo, err = client.GetGenesis(); err != nil {
+		if genesisInfo, err = client.Genesis(); err != nil {
 			b.Log.WithError(err).
 				WithField("endpoint", client.Endpoint()).
 				Warn("failed to get genesis info")
@@ -274,7 +274,7 @@ func (b *beaconClient) KnownValidators(headSlot Slot) (AllValidatorsResponse, er
 	return vd, err
 }
 
-func (b *beaconClient) GetGenesis() (*GenesisResponse, error) {
+func (b *beaconClient) Genesis() (*GenesisResponse, error) {
 	resp := new(GenesisResponse)
 	u := *b.beaconEndpoint
 	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus

@@ -49,19 +49,19 @@ func (mr *MockBeaconClientMockRecorder) Endpoint() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Endpoint", reflect.TypeOf((*MockBeaconClient)(nil).Endpoint))
 }
 
-// GetGenesis mocks base method.
-func (m *MockBeaconClient) GetGenesis() (*relay.GenesisResponse, error) {
+// Genesis mocks base method.
+func (m *MockBeaconClient) Genesis() (*relay.GenesisResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetGenesis")
+	ret := m.ctrl.Call(m, "Genesis")
 	ret0, _ := ret[0].(*relay.GenesisResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetGenesis indicates an expected call of GetGenesis.
-func (mr *MockBeaconClientMockRecorder) GetGenesis() *gomock.Call {
+// Genesis indicates an expected call of Genesis.
+func (mr *MockBeaconClientMockRecorder) Genesis() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGenesis", reflect.TypeOf((*MockBeaconClient)(nil).GetGenesis))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockBeaconClient)(nil).Genesis))
 }
 
 // GetProposerDuties mocks base method.
