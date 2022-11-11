@@ -177,9 +177,9 @@ func (s *DefaultService) beaconEventLoop(ctx context.Context, client BeaconClien
 	if err != nil {
 		return fmt.Errorf("fail to get genesis from beacon: %w", err)
 	}
-	s.state.genesis.Store(genesis.Data)
+	s.state.genesis.Store(genesis)
 	s.Log.
-		WithField("genesis-time", time.Unix(int64(genesis.Data.GenesisTime), 0)).
+		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
 	err = s.updateProposerDuties(ctx, client, Slot(syncStatus.HeadSlot))

@@ -50,10 +50,10 @@ func (mr *MockBeaconClientMockRecorder) Endpoint() *gomock.Call {
 }
 
 // Genesis mocks base method.
-func (m *MockBeaconClient) Genesis() (*relay.GenesisResponse, error) {
+func (m *MockBeaconClient) Genesis() (*relay.GenesisInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Genesis")
-	ret0, _ := ret[0].(*relay.GenesisResponse)
+	ret0, _ := ret[0].(*relay.GenesisInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
