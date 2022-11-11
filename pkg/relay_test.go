@@ -82,7 +82,9 @@ func TestGetHeader(t *testing.T) {
 		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
-	submitRequest := validSubmitBlockRequest(t, relaySigningDomain)
+	
+	genesisTime := uint64(time.Now().Unix())
+	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(t, relaySigningDomain)
 
 	request := relay.HeaderRequest{}
@@ -151,7 +153,8 @@ func TestGetPayload(t *testing.T) {
 		relay.BellatrixForkVersionRopsten,
 		relay.GenesisValidatorsRootRopsten)
 	require.NoError(t, err)
-	submitRequest := validSubmitBlockRequest(t, proposerSigningDomain)
+	genesisTime := uint64(time.Now().Unix())
+	submitRequest := validSubmitBlockRequest(t, proposerSigningDomain, genesisTime)
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
 	registration, sk := validValidatorRegistration(t, proposerSigningDomain)
@@ -258,7 +261,9 @@ func TestSubmitBlock(t *testing.T) {
 		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
-	submitRequest := validSubmitBlockRequest(t, relaySigningDomain)
+	genesisTime := uint64(time.Now().Unix())
+	bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime)
 
 	err = r.SubmitBlock(ctx, submitRequest, state{ds: ds, bc: bc})
 	require.NoError(t, err)
@@ -284,7 +289,7 @@ func TestSubmitBlock(t *testing.T) {
 	require.EqualValues(t, header, gotHeaders[0].Header)
 }
 
-func TestSubmitBlocksTwoBuilders(t *testing.T) {
+func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -303,6 +308,36 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
+	genesisTime := uint64(time.Now().Unix())
+	bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime+1)  // +1 in order to make timestamp invalid
+
+	err = r.SubmitBlock(ctx, submitRequest, state{ds: ds, bc: bc})
+	require.Error(t, err)
+}
+
+func TestSubmitBlocksTwoBuilders(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctrl := gomock.NewController(t)
+
+	sk, _, _ := bls.GenerateNewKeypair()
+	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: sk, TTL: time.Minute}
+	r, _ := relay.NewRelay(config)
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
+	bc := mock_relay.NewMockBeaconState(ctrl)
+
+	genesisTime := uint64(time.Now().Unix())
+	bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+
+	relaySigningDomain, err := relay.ComputeDomain(
+		types.DomainTypeAppBuilder,
+		relay.GenesisForkVersionRopsten,
+		types.Root{}.String())
+	require.NoError(t, err)
 
 	// generate and send 1st block
 	skB1, pkB1, err := bls.GenerateNewKeypair()
@@ -313,6 +348,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 
 	slot := relay.Slot(rand.Uint64())
 	payloadB1 := randomPayload()
+	payloadB1.Timestamp = genesisTime + (uint64(slot) * 12)
 
 	msgB1 := &types.BidTrace{
 		Slot:                 uint64(slot),
@@ -344,6 +380,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	pubKeyB2.FromSlice(pkB2.Compress())
 
 	payloadB2 := randomPayload()
+	payloadB2.Timestamp = genesisTime + (uint64(slot) * 12)
 
 	msgB2 := &types.BidTrace{
 		Slot:                 uint64(slot),
@@ -403,6 +440,9 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	r, _ := relay.NewRelay(config)
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
+	
+	genesisTime := uint64(time.Now().Unix())
+	bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
 
 	relaySigningDomain, err := relay.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -419,6 +459,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 
 	slot := relay.Slot(rand.Uint64())
 	payloadB1 := randomPayload()
+	payloadB1.Timestamp = genesisTime + (uint64(slot) * 12)
 
 	msgB1 := &types.BidTrace{
 		Slot:                 uint64(slot),
@@ -444,6 +485,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 
 	// generate and send 2nd block from same builder
 	payloadB2 := randomPayload()
+	payloadB2.Timestamp = genesisTime + (uint64(slot) * 12)
 
 	msgB2 := &types.BidTrace{
 		Slot:                 uint64(slot),
@@ -584,7 +626,9 @@ func BenchmarkGetHeader(b *testing.B) {
 		types.DomainTypeBeaconProposer,
 		relay.BellatrixForkVersionRopsten,
 		relay.GenesisValidatorsRootRopsten)
-	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain)
+		genesisTime := uint64(time.Now().Unix())
+		bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+		submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(b, proposerSigningDomain)
 
 	request := relay.HeaderRequest{}
@@ -647,7 +691,9 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		types.DomainTypeBeaconProposer,
 		relay.BellatrixForkVersionRopsten,
 		relay.GenesisValidatorsRootRopsten)
-	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain)
+		genesisTime := uint64(time.Now().Unix())
+		bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+		submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(b, proposerSigningDomain)
 
 	request := relay.HeaderRequest{}
@@ -718,7 +764,9 @@ func BenchmarkGetPayload(b *testing.B) {
 		types.DomainTypeBeaconProposer,
 		relay.BellatrixForkVersionRopsten,
 		relay.GenesisValidatorsRootRopsten)
-	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain)
+		genesisTime := uint64(time.Now().Unix())
+		bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+		submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
 	header, _ := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	registration, sk := validValidatorRegistration(b, proposerSigningDomain)
 
@@ -808,7 +856,9 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		types.DomainTypeBeaconProposer,
 		relay.BellatrixForkVersionRopsten,
 		relay.GenesisValidatorsRootRopsten)
-	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain)
+		genesisTime := uint64(time.Now().Unix())
+		bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+		submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
 	header, _ := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	registration, sk := validValidatorRegistration(b, proposerSigningDomain)
 
@@ -903,7 +953,9 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		types.DomainTypeAppBuilder,
 		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
-	submitRequest := validSubmitBlockRequest(b, relaySigningDomain)
+		genesisTime := uint64(time.Now().Unix())
+		bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+		submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -932,7 +984,9 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		types.DomainTypeAppBuilder,
 		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
-	submitRequest := validSubmitBlockRequest(b, relaySigningDomain)
+		genesisTime := uint64(time.Now().Unix())
+		bc.EXPECT().Genesis().AnyTimes().Return(relay.GenesisInfo{GenesisTime: genesisTime})
+		submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()

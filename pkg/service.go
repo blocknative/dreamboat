@@ -173,6 +173,15 @@ func (s *DefaultService) beaconEventLoop(ctx context.Context, client BeaconClien
 		return ErrBeaconNodeSyncing
 	}
 
+	genesis, err := client.Genesis()
+	if err != nil {
+		return fmt.Errorf("fail to get genesis from beacon: %w", err)
+	}
+	s.state.genesis.Store(genesis)
+	s.Log.
+		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
+		Info("genesis retrieved")
+
 	err = s.updateProposerDuties(ctx, client, Slot(syncStatus.HeadSlot))
 	if err != nil {
 		return err
@@ -498,6 +507,7 @@ type atomicState struct {
 	datastore  atomic.Value
 	duties     atomic.Value
 	validators atomic.Value
+	genesis    atomic.Value
 }
 
 func (as *atomicState) Datastore() Datastore { return as.datastore.Load().(Datastore) }
@@ -505,12 +515,14 @@ func (as *atomicState) Datastore() Datastore { return as.datastore.Load().(Datas
 func (as *atomicState) Beacon() BeaconState {
 	duties := as.duties.Load().(dutiesState)
 	validators := as.validators.Load().(validatorsState)
-	return beaconState{dutiesState: duties, validatorsState: validators}
+	genesis := as.genesis.Load().(GenesisInfo)
+	return beaconState{dutiesState: duties, validatorsState: validators, GenesisInfo: genesis}
 }
 
 type beaconState struct {
 	dutiesState
 	validatorsState
+	GenesisInfo
 }
 
 func (s beaconState) KnownValidatorByIndex(index uint64) (types.PubkeyHex, error) {
@@ -536,6 +548,10 @@ func (s beaconState) HeadSlot() Slot {
 
 func (s beaconState) ValidatorsMap() BuilderGetValidatorsResponseEntrySlice {
 	return s.proposerDutiesResponse
+}
+
+func (s beaconState) Genesis() GenesisInfo {
+	return s.GenesisInfo
 }
 
 type dutiesState struct {
