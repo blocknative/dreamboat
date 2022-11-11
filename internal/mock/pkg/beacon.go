@@ -94,6 +94,21 @@ func (mr *MockBeaconClientMockRecorder) KnownValidators(arg0 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockBeaconClient)(nil).KnownValidators), arg0)
 }
 
+// Randao mocks base method.
+func (m *MockBeaconClient) Randao(arg0 relay.Slot) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockBeaconClientMockRecorder) Randao(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockBeaconClient)(nil).Randao), arg0)
+}
+
 // SubscribeToHeadEvents mocks base method.
 func (m *MockBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan relay.HeadEvent) {
 	m.ctrl.T.Helper()

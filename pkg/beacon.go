@@ -32,6 +32,7 @@ type BeaconClient interface {
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(Slot) (AllValidatorsResponse, error)
 	Genesis() (*GenesisInfo, error)
+	Randao(Slot) (string, error)
 	Endpoint() string
 }
 
@@ -166,6 +167,20 @@ func (b *MultiBeaconClient) Genesis() (genesisInfo *GenesisInfo, err error) {
 	return genesisInfo, err
 }
 
+func (b *MultiBeaconClient) Randao(slot Slot) (randao string, err error) {
+	clients := b.clientsByLastResponse()
+	for _, client := range clients {
+		if randao, err = client.Randao(slot); err != nil {
+			b.Log.WithError(err).WithField("slot", slot).WithField("endpoint", client.Endpoint()).Warn("failed to get randao")
+			continue
+		}
+
+		return
+	}
+
+	return
+}
+
 func (b *MultiBeaconClient) Endpoint() string {
 	return b.clientsByLastResponse()[0].Endpoint()
 }
@@ -283,6 +298,14 @@ func (b *beaconClient) Genesis() (*GenesisInfo, error) {
 	return &resp.Data, err
 }
 
+func (b *beaconClient) Randao(slot Slot) (string, error) {
+	resp := new(GetRandaoResponse)
+	u := *b.beaconEndpoint
+	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/randao", slot)
+	err := b.queryBeacon(&u, "GET", &resp)
+	return resp.Data.Randao, err
+}
+
 func (b *beaconClient) Endpoint() string {
 	return b.beaconEndpoint.String()
 }
@@ -394,4 +417,11 @@ type GenesisInfo struct {
 	GenesisTime           uint64 `json:"genesis_time,string"`
 	GenesisValidatorsRoot string `json:"genesis_validators_root"`
 	GenesisForkVersion    string `json:"genesis_fork_version"`
+}
+
+// GetRandaoResponse is the response for querying randao from beacon
+type GetRandaoResponse struct {
+	Data struct {
+		Randao string `json:"randao"`
+	}
 }

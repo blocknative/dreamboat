@@ -233,6 +233,19 @@ func (s *DefaultService) processNewSlot(ctx context.Context, client BeaconClient
 	},
 	).Debugf("updated headSlot to %d", received)
 
+	if err := s.updateProposerDuties(ctx, client, s.headslotSlot); err != nil {
+		return err
+	}
+
+	// update randao
+	randao, err := client.Randao(s.headslotSlot)
+	if err != nil {
+		return fmt.Errorf("fail to update randao: %w", err)
+	}
+
+	s.state.randao.Store(randaoState{randao: randao, slot: s.headslotSlot})
+	logger.WithField("slotHead", s.headslotSlot).Debugf("updated randao to %s", randao)
+
 	// update proposer duties and known validators in the background
 	if (DurationPerEpoch / 2) < time.Since(s.knownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
 		go func() {
@@ -243,10 +256,6 @@ func (s *DefaultService) processNewSlot(ctx context.Context, client BeaconClient
 				s.setReady()
 			}
 		}()
-	}
-
-	if err := s.updateProposerDuties(ctx, client, s.headslotSlot); err != nil {
-		return err
 	}
 
 	logger.With(log.F{
@@ -508,6 +517,7 @@ type atomicState struct {
 	duties     atomic.Value
 	validators atomic.Value
 	genesis    atomic.Value
+	randao     atomic.Value
 }
 
 func (as *atomicState) Datastore() Datastore { return as.datastore.Load().(Datastore) }
@@ -516,13 +526,20 @@ func (as *atomicState) Beacon() BeaconState {
 	duties := as.duties.Load().(dutiesState)
 	validators := as.validators.Load().(validatorsState)
 	genesis := as.genesis.Load().(GenesisInfo)
-	return beaconState{dutiesState: duties, validatorsState: validators, GenesisInfo: genesis}
+	randao := as.genesis.Load().(randaoState)
+	return beaconState{dutiesState: duties, validatorsState: validators, GenesisInfo: genesis, randaoState: randao}
 }
 
 type beaconState struct {
 	dutiesState
 	validatorsState
 	GenesisInfo
+	randaoState
+}
+
+type randaoState struct {
+	randao string
+	slot   Slot
 }
 
 func (s beaconState) KnownValidatorByIndex(index uint64) (types.PubkeyHex, error) {
@@ -552,6 +569,10 @@ func (s beaconState) ValidatorsMap() BuilderGetValidatorsResponseEntrySlice {
 
 func (s beaconState) Genesis() GenesisInfo {
 	return s.GenesisInfo
+}
+
+func (s beaconState) Randao() (string, Slot) {
+	return s.randaoState.randao, s.randaoState.slot
 }
 
 type dutiesState struct {

@@ -145,6 +145,21 @@ func (mr *MockBeaconStateMockRecorder) KnownValidatorByIndex(arg0 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorByIndex", reflect.TypeOf((*MockBeaconState)(nil).KnownValidatorByIndex), arg0)
 }
 
+// Randao mocks base method.
+func (m *MockBeaconState) Randao() (string, relay.Slot) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(relay.Slot)
+	return ret0, ret1
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockBeaconStateMockRecorder) Randao() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockBeaconState)(nil).Randao))
+}
+
 // ValidatorsMap mocks base method.
 func (m *MockBeaconState) ValidatorsMap() relay.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
