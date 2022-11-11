@@ -31,7 +31,7 @@ type BeaconClient interface {
 	GetProposerDuties(Epoch) (*RegisteredProposersResponse, error)
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(Slot) (AllValidatorsResponse, error)
-	Genesis() (*GenesisInfo, error)
+	Genesis() (GenesisInfo, error)
 	Randao(Slot) (string, error)
 	Endpoint() string
 }
@@ -151,7 +151,7 @@ func (b *MultiBeaconClient) KnownValidators(headSlot Slot) (AllValidatorsRespons
 	return AllValidatorsResponse{}, ErrNodesUnavailable
 }
 
-func (b *MultiBeaconClient) Genesis() (genesisInfo *GenesisInfo, err error) {
+func (b *MultiBeaconClient) Genesis() (genesisInfo GenesisInfo, err error) {
 	clients := b.clientsByLastResponse()
 	for _, client := range clients {
 		if genesisInfo, err = client.Genesis(); err != nil {
@@ -289,13 +289,13 @@ func (b *beaconClient) KnownValidators(headSlot Slot) (AllValidatorsResponse, er
 	return vd, err
 }
 
-func (b *beaconClient) Genesis() (*GenesisInfo, error) {
+func (b *beaconClient) Genesis() (GenesisInfo, error) {
 	resp := new(GenesisResponse)
 	u := *b.beaconEndpoint
 	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
 	u.Path = "/eth/v1/beacon/genesis"
 	err := b.queryBeacon(&u, "GET", &resp)
-	return &resp.Data, err
+	return resp.Data, err
 }
 
 func (b *beaconClient) Randao(slot Slot) (string, error) {

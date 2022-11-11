@@ -166,7 +166,8 @@ func TestBeaconClientState(t *testing.T) {
 		},
 	)
 	beaconMock.EXPECT().KnownValidators(gomock.Any()).Return(relay.AllValidatorsResponse{Data: []relay.ValidatorResponseEntry{}}, nil).Times(1)
-	beaconMock.EXPECT().Genesis().Times(1).Return(&relay.GenesisInfo{}, nil)
+	beaconMock.EXPECT().Genesis().Times(1).Return(relay.GenesisInfo{}, nil)
+	beaconMock.EXPECT().Randao(gomock.Any()).Times(1).Return("randao", nil)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
