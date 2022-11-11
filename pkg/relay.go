@@ -35,6 +35,7 @@ type BeaconState interface {
 	KnownValidatorByIndex(uint64) (types.PubkeyHex, error)
 	IsKnownValidator(types.PubkeyHex) (bool, error)
 	HeadSlot() Slot
+	Genesis() GenesisInfo
 	ValidatorsMap() BuilderGetValidatorsResponseEntrySlice
 }
 
@@ -437,7 +438,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 
 	logger.Trace("block submission requested")
 
-	_, err := rs.verifyBlock(submitBlockRequest)
+	_, err := rs.verifyBlock(submitBlockRequest, state)
 	if err != nil {
 		logger.WithError(err).
 			WithField("slot", submitBlockRequest.Message.Slot).
@@ -526,14 +527,19 @@ func (rs *DefaultRelay) GetValidators(state State) BuilderGetValidatorsResponseE
 	return validators
 }
 
-func (rs *DefaultRelay) verifyBlock(SubmitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) {
-	if SubmitBlockRequest == nil {
+func (rs *DefaultRelay) verifyBlock(submitRequest *types.BuilderSubmitBlockRequest, state State) (bool, error) {
+	if submitRequest == nil {
 		return false, fmt.Errorf("block empty")
 	}
 
 	_ = simulateBlock()
 
-	return types.VerifySignature(SubmitBlockRequest.Message, rs.builderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
+	expectedTimestamp := state.Beacon().Genesis().GenesisTime + (submitRequest.Message.Slot * 12)
+	if submitRequest.ExecutionPayload.Timestamp != expectedTimestamp {
+		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitRequest.ExecutionPayload.Timestamp, expectedTimestamp)
+	}
+
+	return types.VerifySignature(submitRequest.Message, rs.builderSigningDomain, submitRequest.Message.BuilderPubkey[:], submitRequest.Signature[:])
 }
 
 func simulateBlock() bool {
