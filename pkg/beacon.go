@@ -31,6 +31,7 @@ type BeaconClient interface {
 	GetProposerDuties(Epoch) (*RegisteredProposersResponse, error)
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(Slot) (AllValidatorsResponse, error)
+	GetGenesis() (*GenesisResponse, error)
 	Endpoint() string
 }
 
@@ -149,6 +150,22 @@ func (b *MultiBeaconClient) KnownValidators(headSlot Slot) (AllValidatorsRespons
 	return AllValidatorsResponse{}, ErrNodesUnavailable
 }
 
+func (b *MultiBeaconClient) GetGenesis() (genesisInfo *GenesisResponse, err error) {
+	clients := b.clientsByLastResponse()
+	for _, client := range clients {
+		if genesisInfo, err = client.GetGenesis(); err != nil {
+			b.Log.WithError(err).
+				WithField("endpoint", client.Endpoint()).
+				Warn("failed to get genesis info")
+			continue
+		}
+
+		return genesisInfo, nil
+	}
+
+	return genesisInfo, err
+}
+
 func (b *MultiBeaconClient) Endpoint() string {
 	return b.clientsByLastResponse()[0].Endpoint()
 }
@@ -257,6 +274,15 @@ func (b *beaconClient) KnownValidators(headSlot Slot) (AllValidatorsResponse, er
 	return vd, err
 }
 
+func (b *beaconClient) GetGenesis() (*GenesisResponse, error) {
+	resp := new(GenesisResponse)
+	u := *b.beaconEndpoint
+	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
+	u.Path = "/eth/v1/beacon/genesis"
+	err := b.queryBeacon(&u, "GET", &resp)
+	return resp, err
+}
+
 func (b *beaconClient) Endpoint() string {
 	return b.beaconEndpoint.String()
 }
@@ -357,4 +383,15 @@ type ValidatorResponseEntry struct {
 
 type ValidatorResponseValidatorData struct {
 	Pubkey string `json:"pubkey"`
+}
+
+// GenesisResponse is the response for querying the genesis
+type GenesisResponse struct {
+	Data GenesisInfo
+}
+
+type GenesisInfo struct {
+	GenesisTime           uint64 `json:"genesis_time,string"`
+	GenesisValidatorsRoot string `json:"genesis_validators_root"`
+	GenesisForkVersion    string `json:"genesis_fork_version"`
 }

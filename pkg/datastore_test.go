@@ -601,17 +601,20 @@ func validValidatorRegistration(t require.TestingT, domain types.Domain) (*types
 	}, sk
 }
 
-func validSubmitBlockRequest(t require.TestingT, domain types.Domain) *types.BuilderSubmitBlockRequest {
+func validSubmitBlockRequest(t require.TestingT, domain types.Domain, genesisTime uint64) *types.BuilderSubmitBlockRequest {
 	sk, pk, err := bls.GenerateNewKeypair()
 	require.NoError(t, err)
 
 	var pubKey types.PublicKey
 	pubKey.FromSlice(pk.Compress())
 
+	slot := rand.Uint64()
+
 	payload := randomPayload()
+	payload.Timestamp = genesisTime + (slot * 12)
 
 	msg := &types.BidTrace{
-		Slot:                 rand.Uint64(),
+		Slot:                 slot,
 		ParentHash:           payload.ParentHash,
 		BlockHash:            payload.BlockHash,
 		BuilderPubkey:        pubKey,
