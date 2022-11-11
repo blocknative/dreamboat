@@ -21,6 +21,8 @@ var (
 	ErrMissingRequest        = errors.New("req is nil")
 	ErrMissingSecretKey      = errors.New("secret key is nil")
 	ErrUnknownValue          = errors.New("value is unknown")
+	ErrInvalidTimestamp      = errors.New("timestamp is invalid")
+	ErrInvalidRandao         = errors.New("randao is invalid")
 	UnregisteredValidatorMsg = "unregistered validator"
 	noBuilderBidMsg          = "no builder bid"
 	badHeaderMsg             = "invalid block header from datastore"
@@ -36,6 +38,7 @@ type BeaconState interface {
 	IsKnownValidator(types.PubkeyHex) (bool, error)
 	HeadSlot() Slot
 	Genesis() GenesisInfo
+	Randao() (string, Slot)
 	ValidatorsMap() BuilderGetValidatorsResponseEntrySlice
 }
 
@@ -534,9 +537,18 @@ func (rs *DefaultRelay) verifyBlock(submitRequest *types.BuilderSubmitBlockReque
 
 	_ = simulateBlock()
 
+	// check timestamp
 	expectedTimestamp := state.Beacon().Genesis().GenesisTime + (submitRequest.Message.Slot * 12)
 	if submitRequest.ExecutionPayload.Timestamp != expectedTimestamp {
-		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitRequest.ExecutionPayload.Timestamp, expectedTimestamp)
+		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, submitRequest.ExecutionPayload.Timestamp, expectedTimestamp)
+	}
+
+	// check randao
+	randao, slot := state.Beacon().Randao()
+	if slot == Slot(submitRequest.Message.Slot) && randao != submitRequest.ExecutionPayload.Random.String() {
+		return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, submitRequest.ExecutionPayload.Random.String(), randao)
+	} else if slot != Slot(submitRequest.Message.Slot) {
+		rs.Log().WithField("slot", submitRequest.Message.Slot).Warn("randao is unknown")
 	}
 
 	return types.VerifySignature(submitRequest.Message, rs.builderSigningDomain, submitRequest.Message.BuilderPubkey[:], submitRequest.Signature[:])
