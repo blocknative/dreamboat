@@ -458,13 +458,3 @@ func (s *Service) getTailBlockReceived(ctx context.Context, limit uint64) ([]str
 	}
 	return events, nil
 }
-
-func (s *Service) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
-	return s.Datastore.GetRegistration(ctx, structs.PubKey{pk})
-}
-
-type AtomicState struct {
-	duties     atomic.Value
-	validators atomic.Value
-	genesis    atomic.Value
-}
