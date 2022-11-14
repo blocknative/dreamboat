@@ -1,6 +1,7 @@
 package datastore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,12 +10,18 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
 
+const (
+	RegistrationPrefix = "registration-"
+)
+
 type Datastore struct {
 	TTLStorage
+	Viewer
 	mu sync.Mutex
 }
 
@@ -22,11 +29,16 @@ type TTLStorage interface {
 	PutWithTTL(context.Context, ds.Key, []byte, time.Duration) error
 	Get(context.Context, ds.Key) ([]byte, error)
 	GetBatch(ctx context.Context, keys []ds.Key) (batch [][]byte, err error)
+
 	Close() error
 }
 
-func NewDatastore(t TTLStorage) *Datastore {
-	return &Datastore{TTLStorage: t}
+type Viewer interface {
+	View(func(txn *badger.Txn) error) error
+}
+
+func NewDatastore(t TTLStorage, v Viewer) *Datastore {
+	return &Datastore{TTLStorage: t, Viewer: v}
 }
 
 func (s *Datastore) PutHeader(ctx context.Context, slot structs.Slot, header structs.HeaderAndTrace, ttl time.Duration) error {
@@ -291,6 +303,38 @@ func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.Query
 	return ds.NewKey(string(rawKey)), nil
 }
 
+func (s *Datastore) GetAllRegistration() (map[string]types.SignedValidatorRegistration, error) {
+	m := make(map[string]types.SignedValidatorRegistration)
+
+	b := bytes.NewReader(nil)
+	nDec := json.NewDecoder(b)
+	err := s.Viewer.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := []byte(RegistrationPrefix)
+		lenP := len(RegistrationPrefix)
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			err := item.Value(func(v []byte) error {
+				b.Reset(v)
+				sgr := types.SignedValidatorRegistration{}
+				if err := nDec.Decode(&sgr); err != nil {
+					return err
+				}
+				m[string(k)[lenP:]] = sgr
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	return m, err
+}
+
 func HeaderKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-%d", slot))
 }
@@ -332,7 +376,7 @@ func ValidatorKey(pk structs.PubKey) ds.Key {
 }
 
 func RegistrationKey(pk structs.PubKey) ds.Key {
-	return ds.NewKey(fmt.Sprintf("registration-%s", pk.String()))
+	return ds.NewKey(fmt.Sprintf("%s%s", RegistrationPrefix, pk.String()))
 }
 
 type TTLDatastoreBatcher struct {

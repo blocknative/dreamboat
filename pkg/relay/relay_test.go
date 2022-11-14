@@ -121,9 +121,13 @@ func TestGetPayload(t *testing.T) {
 		PubKey:                types.PublicKey(random48Bytes()),
 		TTL:                   time.Minute,
 		ProposerSigningDomain: proposerSigningDomain,
+		BuilderSigningDomain:  types.DomainBuilder,
 	}
 
-	r := relay.NewRelay(log.New(), config, bs, ds, nil)
+	regMgr := relay.NewProcessManager(20, 20)
+	regMgr.RunVerify(300)
+
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 	submitRequest := validSubmitBlockRequest(t, proposerSigningDomain)
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
@@ -214,7 +218,10 @@ func TestGetValidators(t *testing.T) {
 		TTL: time.Minute,
 	}
 
-	r := relay.NewRelay(log.New(), config, bs, ds, nil)
+	regMgr := relay.NewProcessManager(20, 20)
+	regMgr.RunVerify(300)
+
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		DutiesState: structs.DutiesState{
 			ProposerDutiesResponse: structs.BuilderGetValidatorsResponseEntrySlice{{
@@ -242,6 +249,9 @@ func TestSubmitBlock(t *testing.T) {
 	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
+	regMgr := relay.NewProcessManager(20, 20)
+	regMgr.RunVerify(300)
+
 	relaySigningDomain, err := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
@@ -252,7 +262,7 @@ func TestSubmitBlock(t *testing.T) {
 		SecretKey:            sk,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, nil)
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 	submitRequest := validSubmitBlockRequest(t, relaySigningDomain)
 
 	err = r.SubmitBlock(ctx, submitRequest)
@@ -444,7 +454,11 @@ func BenchmarkGetPayload(b *testing.B) {
 		PubKey:                types.PublicKey(random48Bytes()),
 		ProposerSigningDomain: proposerSigningDomain,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, nil)
+
+	regMgr := relay.NewProcessManager(20, 20)
+	regMgr.RunVerify(300)
+
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain)
 	header, _ := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
@@ -539,13 +553,16 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		pkg.BellatrixForkVersionRopsten,
 		pkg.GenesisValidatorsRootRopsten)
 
+	regMgr := relay.NewProcessManager(20, 20)
+	regMgr.RunVerify(300)
+
 	config := relay.RelayConfig{
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
 		ProposerSigningDomain: proposerSigningDomain,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, nil)
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain)
 	header, _ := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
@@ -643,6 +660,9 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
+	regMgr := relay.NewProcessManager(20, 20)
+	regMgr.RunVerify(300)
+
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
@@ -654,7 +674,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, nil)
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain)
 
@@ -680,6 +700,9 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
+	regMgr := relay.NewProcessManager(20, 20)
+	regMgr.RunVerify(300)
+
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
@@ -691,7 +714,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, nil)
+	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain)
 
@@ -725,7 +748,7 @@ func BenchmarkSignatureValidation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := types.VerifySignature(
+		_, err := relay.VerifySignature(
 			registration.Message,
 			relaySigningDomain,
 			registration.Message.Pubkey[:],
