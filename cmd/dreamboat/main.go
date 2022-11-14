@@ -136,8 +136,9 @@ var flags = []cli.Flag{
 	},
 }
 
-var (
-	config = pkg.Config{Log: log.New()}
+var ( 
+	config relay.Config
+	svr    http.Server 
 )
 
 // Main starts the relay
@@ -152,7 +153,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		config.Log.Fatal(err)
+		log.Fatal(err)
 	}
 }
 
@@ -395,7 +396,11 @@ func withFormat(c *cli.Context) log.Option {
 	switch c.String("logfmt") {
 	case "none":
 	case "json":
-		fmt = &logrus.JSONFormatter{PrettyPrint: c.Bool("prettyprint")}
+		fmt = &logrus.JSONFormatter{
+			PrettyPrint:     c.Bool("prettyprint"),
+			TimestampFormat: time.RFC3339Nano,
+		}
+
 	default:
 		fmt = new(logrus.TextFormatter)
 	}
