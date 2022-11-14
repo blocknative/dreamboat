@@ -23,7 +23,7 @@ type ProcessManager struct {
 	m ProcessManagerMetrics
 }
 
-func NewProcessManager(verifySize, storeSize int) *ProcessManager {
+func NewProcessManager(verifySize, storeSize uint) *ProcessManager {
 	rm := &ProcessManager{
 		M: make(map[string]uint64),
 
@@ -37,14 +37,14 @@ func NewProcessManager(verifySize, storeSize int) *ProcessManager {
 	return rm
 }
 
-func (rm *ProcessManager) RunVerify(num int) {
-	for i := 0; i < num; i++ {
+func (rm *ProcessManager) RunVerify(num uint) {
+	for i := uint(0); i < num; i++ {
 		go rm.VerifyParallel()
 	}
 }
 
-func (rm *ProcessManager) RunStore(store Datastore, ttl time.Duration, num int) {
-	for i := 0; i < num; i++ {
+func (rm *ProcessManager) RunStore(store Datastore, ttl time.Duration, num uint) {
+	for i := uint(0); i < num; i++ {
 		go rm.ParallelStoreIfReady(store, ttl)
 	}
 }

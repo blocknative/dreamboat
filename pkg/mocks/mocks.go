@@ -108,6 +108,20 @@ func (mr *MockRelayMockRecorder) RegisterValidator(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockRelay)(nil).RegisterValidator), arg0, arg1)
 }
 
+// RegisterValidatorSingular mocks base method
+func (m *MockRelay) RegisterValidatorSingular(arg0 context.Context, arg1 structs.SignedValidatorRegistration) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RegisterValidatorSingular", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RegisterValidatorSingular indicates an expected call of RegisterValidatorSingular
+func (mr *MockRelayMockRecorder) RegisterValidatorSingular(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidatorSingular", reflect.TypeOf((*MockRelay)(nil).RegisterValidatorSingular), arg0, arg1)
+}
+
 // SubmitBlock mocks base method
 func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest) error {
 	m.ctrl.T.Helper()

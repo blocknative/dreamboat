@@ -80,14 +80,14 @@ func (rs *Relay) OLDprocessValidator(ctx context.Context, payload []structs.Sign
 		if err != nil {
 			return err
 		} else if !ok {
-			if rs.config.CheckKnownValidator {
-				return fmt.Errorf("%s not a known validator", registerRequest.Message.Pubkey.String())
-			} else {
+			//if rs.config.CheckKnownValidator { ALWAYS CHECK
+			return fmt.Errorf("%s not a known validator", registerRequest.Message.Pubkey.String())
+			/*} else {
 				logger.
 					WithField("pubkey", pk.PublicKey).
 					WithField("slot", state.Beacon().HeadSlot()).
 					Debug("not a known validator")
-			}
+			}*/
 		}
 
 		// check previous validator registration

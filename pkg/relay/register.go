@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"sync/atomic"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -24,22 +23,6 @@ const (
 	ResponseQueueRegister
 	ResponseQueueOther
 )
-
-// returnChannelSize is the size of the buffer
-// describing the queue of results before it would be processed by registerSync
-const returnChannelSize = 150_000
-
-var retChannPool = sync.Pool{
-	New: func() any {
-		return make(chan SVRReqResp, returnChannelSize)
-	},
-}
-
-var singleRetChannPool = sync.Pool{
-	New: func() any {
-		return make(chan SVRReqResp, 1)
-	},
-}
 
 type Setter interface {
 	Set(k string, value uint64)
@@ -143,12 +126,12 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	defer timer.ObserveDuration()
 
 	// This function is limitted to the size of the buffer to prevent deadlocks
-	if len(payload) >= returnChannelSize/3-1 {
-		return fmt.Errorf("total number of validators exceeded: %d ", returnChannelSize/3-1)
+	if len(payload) >= int(rs.config.RegisterValidatorMaxNum-1) {
+		return fmt.Errorf("total number of validators exceeded: %d ", rs.config.RegisterValidatorMaxNum-1)
 	}
 
-	respCh := retChannPool.Get().(chan SVRReqResp)
-	defer retChannPool.Put(respCh)
+	respCh := rs.retChannPool.Get().(chan SVRReqResp)
+	defer rs.retChannPool.Put(respCh)
 
 	failure := make(chan struct{}, 1)
 	exit := make(chan error, 1)
@@ -233,8 +216,8 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 		return errors.New("invalid signature")
 	}
 
-	respCh := singleRetChannPool.Get().(chan SVRReqResp)
-	defer singleRetChannPool.Put(respCh)
+	respCh := rs.singleRetChannPool.Get().(chan SVRReqResp)
+	defer rs.singleRetChannPool.Put(respCh)
 
 	rs.regMngr.VerifyChanStacks(ResponseQueueRegister) <- SVRReq{
 		Signature: payload.Signature,

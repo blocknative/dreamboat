@@ -40,8 +40,9 @@ func TestRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
-		TTL:                  time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     time.Minute,
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 
 	regMgr := relay.NewProcessManager(20000, 20000)
@@ -100,8 +101,9 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
-		TTL:                  time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     time.Minute,
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 150_000,
 	}
 
 	regMgr := relay.NewProcessManager(20000, 20000)
@@ -173,8 +175,9 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
-		TTL:                  time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     time.Minute,
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 
 	regMgr := relay.NewProcessManager(20000, 20000)
@@ -225,8 +228,9 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  5 * time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     5 * time.Minute,
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 
 	regMgr := relay.NewProcessManager(20000, 20000)
@@ -280,8 +284,9 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  5 * time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     5 * time.Minute,
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 
 	regMgr := relay.NewProcessManager(20000, 20000)
