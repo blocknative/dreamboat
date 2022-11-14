@@ -239,10 +239,16 @@ func run() cli.ActionFunc {
 		regMgr.AttachMetrics(m)
 
 		reg, err := ds.GetAllRegistration()
-		if err != nil {
+		if err == nil {
 			for k, v := range reg {
 				regMgr.Set(k, v.Message.Timestamp)
 			}
+
+			config.Log.
+				WithFields(logrus.Fields{
+					"service":        "registration",
+					"count-elements": len(reg),
+				}).Info("registrations loaded")
 		}
 		go regMgr.RunCleanup(uint64(time.Hour*72), time.Hour)
 
@@ -393,7 +399,6 @@ func withFormat(c *cli.Context) log.Option {
 	default:
 		fmt = new(logrus.TextFormatter)
 	}
-
 	return log.WithFormatter(fmt)
 }
 

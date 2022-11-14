@@ -51,8 +51,6 @@ func (rm *ProcessManager) RunStore(store Datastore, ttl time.Duration, num uint)
 
 func (rm *ProcessManager) RunCleanup(checkinterval uint64, cleanupInterval time.Duration) {
 	for {
-		time.Sleep(cleanupInterval)
-
 		now := uint64(time.Now().Unix())
 		var keys []string
 		rm.acc.RLock()
@@ -69,6 +67,8 @@ func (rm *ProcessManager) RunCleanup(checkinterval uint64, cleanupInterval time.
 		}
 		rm.acc.Unlock()
 		rm.m.MapSize.Set(float64(len(rm.M)))
+
+		time.Sleep(cleanupInterval)
 	}
 }
 

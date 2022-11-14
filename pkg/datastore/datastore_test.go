@@ -446,6 +446,32 @@ func BenchmarkGetRegistration(b *testing.B) {
 	}
 }
 
+func TestGetRegistrationReal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var datadir = "/tmp/" + t.Name() + uuid.New().String()
+
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	ds := datastore.Datastore{
+		TTLStorage: &datastore.TTLDatastoreBatcher{
+			TTLDatastore: store},
+		Viewer: store.DB}
+
+	registration := randomRegistration()
+	key := structs.PubKey{registration.Message.Pubkey}
+
+	err := ds.PutRegistration(ctx, key, registration, time.Minute*2)
+	require.NoError(t, err)
+
+	regs, err := ds.GetAllRegistration()
+	require.NoError(t, err)
+
+	if _, ok := regs[registration.Message.Pubkey.String()]; !ok {
+		t.Error("reqistration doesn't exists")
+	}
+}
+
 func BenchmarkGetRegistrationParallel(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
