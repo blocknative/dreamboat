@@ -9,10 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
-
-	blst "github.com/supranational/blst/bindings/go"
 )
 
 const (
@@ -169,13 +166,11 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
 		if err != nil {
 			atomic.AddUint32(&sentVerified, 1)
-			respCh <- SVRReqResp{Iter: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
+			respCh <- SVRReqResp{Iter: i, Err: errors.New("invalid signature"), Type: ResponseTypeVerify}
 			failed = true
 			break
 		}
 
-		//sig :=
-		//pub := [:]
 		select {
 		case <-failure:
 			failed = true
@@ -195,64 +190,66 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 func checkInMem(state State, getter Getter, payload []structs.SignedValidatorRegistration, out chan SVRReqResp) {
 	beacon := state.Beacon()
 	for i, sp := range payload {
-		if verifyTimestamp(sp.Message.Timestamp) {
-			out <- SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}
+		p, ok := checkOneInMem(beacon, getter, i, sp)
+		out <- p
+		if !ok {
 			return
 		}
-
-		pk := structs.PubKey{PublicKey: sp.Message.Pubkey}
-		known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
-		if !known {
-			out <- SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}
-			return
-		}
-
-		previousValidatorTimestamp, ok := getter.Get(pk.String()) // Do not error on this
-		out <- SVRReqResp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), Iter: i, Type: ResponseTypeOthers}
 	}
 }
 
-var dst = []byte("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_")
-
-const BLST_SUCCESS = 0x0
-
-func VerifySignatureBytes(msg [32]byte, sigBytes, pkBytes []byte) (ok bool, err error) {
-	defer func() { // better safe than sorry
-		if r := recover(); r != nil {
-			var isErr bool
-			err, isErr = r.(error)
-			if !isErr {
-				err = fmt.Errorf("pkg: %v", r)
-			}
-		}
-	}()
-
-	sig, err := bls.SignatureFromBytes(sigBytes)
-	if err != nil {
-		return false, err
+func checkOneInMem(beacon *structs.BeaconState, getter Getter, i int, sp structs.SignedValidatorRegistration) (svresp SVRReqResp, ok bool) {
+	if verifyTimestamp(sp.Message.Timestamp) {
+		return SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
 	}
 
-	pk, err := bls.PublicKeyFromBytes(pkBytes)
-	if err != nil {
-		return false, err
+	pk := structs.PubKey{PublicKey: sp.Message.Pubkey}
+	known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
+	if !known {
+		return SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
 	}
 
-	if pk == nil || len(msg) == 0 || sig == nil {
-		return false, nil
-	}
-
-	if blst.CoreVerifyPkInG1(pk, sig, true, msg[:], dst, nil) != BLST_SUCCESS {
-		return false, bls.ErrInvalidSignature
-	}
-
-	return true, nil
+	previousValidatorTimestamp, ok := getter.Get(pk.String()) // Do not error on this
+	return SVRReqResp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), Iter: i, Type: ResponseTypeOthers}, true
 }
 
-func VerifySignature(obj types.HashTreeRoot, d types.Domain, pkBytes, sigBytes []byte) (bool, error) {
-	msg, err := types.ComputeSigningRoot(obj, d)
-	if err != nil {
-		return false, err
+func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.SignedValidatorRegistration) error {
+	otherChecks, _ := checkOneInMem(rs.beaconState.Beacon(), rs.regMngr, 0, payload)
+	if otherChecks.Err != nil {
+		return otherChecks.Err
+	}
+	if !otherChecks.Commit { // when timestamp is wrong so we don't commit
+		return nil
 	}
 
-	return VerifySignatureBytes(msg, sigBytes, pkBytes)
+	msg, err := types.ComputeSigningRoot(payload.Message, rs.config.BuilderSigningDomain)
+	if err != nil {
+		return errors.New("invalid signature")
+	}
+
+	respCh := singleRetChannPool.Get().(chan SVRReqResp)
+	defer singleRetChannPool.Put(respCh)
+
+	rs.regMngr.VerifyChanStacks(ResponseQueueRegister) <- SVRReq{
+		Signature: payload.Signature,
+		Pubkey:    payload.Message.Pubkey,
+		Msg:       msg,
+		Iter:      0,
+		Response:  respCh,
+	}
+	r := <-respCh
+	if r.Err != nil {
+		return errors.New("invalid signature")
+	}
+
+	storeCh := rs.regMngr.StoreChan()
+	rs.regMngr.Set(payload.Message.Pubkey.String(), payload.Message.Timestamp)
+	storeCh <- SVRStoreReq{
+		Pubkey:     payload.Message.Pubkey,
+		Iter:       0,
+		RawPayload: payload.Raw,
+		Response:   respCh}
+
+	r = <-respCh
+	return r.Err
 }

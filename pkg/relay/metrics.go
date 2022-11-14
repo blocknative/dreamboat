@@ -6,7 +6,7 @@ import (
 )
 
 type ProcessManagerMetrics struct {
-	VerifyTiming prometheus.Histogram
+	VerifyTiming *prometheus.HistogramVec
 
 	MapSize prometheus.Gauge
 
@@ -21,12 +21,12 @@ func (rm *ProcessManager) initMetrics() {
 		Help:      "Number of requests.",
 	}, []string{"type"})
 
-	rm.m.VerifyTiming = prometheus.NewHistogram(prometheus.HistogramOpts{
+	rm.m.VerifyTiming = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relay",
 		Name:      "registeredVerifyTiming",
 		Help:      "Duration of requests per endpoint",
-	})
+	}, []string{"type"})
 
 	rm.m.MapSize = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "dreamboat",
