@@ -23,7 +23,7 @@ import (
 func TestRegisterValidator(t *testing.T) {
 	t.Parallel()
 
-	const N = 10000
+	const N = 100
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

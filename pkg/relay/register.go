@@ -52,8 +52,8 @@ type Getter interface {
 }
 
 type SVRReq struct {
-	Signature [96]byte //types.Signature `json:"signature" ssz-size:"96"`
-	Pubkey    [48]byte //types.PublicKey `json:"pubkey" ssz-size:"48"`
+	Signature [96]byte
+	Pubkey    [48]byte
 
 	Msg      [32]byte
 	Iter     int
@@ -61,7 +61,7 @@ type SVRReq struct {
 }
 type SVRStoreReq struct {
 	RawPayload json.RawMessage
-	Pubkey     types.PublicKey `json:"pubkey" ssz-size:"48"`
+	Pubkey     types.PublicKey
 
 	Iter     int
 	Response chan SVRReqResp
