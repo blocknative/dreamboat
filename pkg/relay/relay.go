@@ -337,7 +337,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 
 	logger.Trace("block submission requested")
 
-	_, err := rs.verifyBlock(submitBlockRequest)
+	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon().GenesisTime)
 	if err != nil {
 		logger.WithError(err).
 			WithField("slot", submitBlockRequest.Message.Slot).
@@ -425,9 +425,14 @@ func (rs *Relay) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice 
 	return validators
 }
 
-func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) { // TODO(l): remove FB type
-	if submitBlockRequest == nil {
+func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, genesisTime uint64) (bool, error) { // TODO(l): remove FB type
+	if submitBlockRequest == nil || submitBlockRequest.Message == nil {
 		return false, fmt.Errorf("block empty")
+	}
+
+	expectedTimestamp := genesisTime + (submitBlockRequest.Message.Slot * 12)
+	if submitBlockRequest.ExecutionPayload.Timestamp != expectedTimestamp {
+		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
 	msg, err := types.ComputeSigningRoot(submitBlockRequest.Message, rs.config.BuilderSigningDomain)
