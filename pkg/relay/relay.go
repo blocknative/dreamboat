@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -57,8 +58,10 @@ type RelayConfig struct {
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
 
-	TTL                 time.Duration
-	CheckKnownValidator bool
+	// RegisterValidatorMaxNum is needed to set size of the buffer queue
+	// describing the queue of results before it would be processed by registerSync
+	RegisterValidatorMaxNum uint64
+	TTL                     time.Duration
 }
 
 type Relay struct {
@@ -69,6 +72,9 @@ type Relay struct {
 	config  RelayConfig
 
 	beaconState State
+
+	retChannPool       sync.Pool
+	singleRetChannPool sync.Pool
 
 	m RelayMetrics
 }
@@ -81,6 +87,16 @@ func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, 
 		config:      config,
 		beaconState: beaconState,
 		regMngr:     regMngr,
+		retChannPool: sync.Pool{
+			New: func() any {
+				return make(chan SVRReqResp, config.RegisterValidatorMaxNum*3)
+			},
+		},
+		singleRetChannPool: sync.Pool{
+			New: func() any {
+				return make(chan SVRReqResp, 1)
+			},
+		},
 	}
 	rs.initMetrics()
 	return rs
@@ -204,14 +220,14 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		return nil, fmt.Errorf("signature invalid") // err
 	}
 
-	respCh := singleRetChannPool.Get().(chan SVRReqResp)
+	respCh := rs.singleRetChannPool.Get().(chan SVRReqResp)
 	rs.regMngr.VerifyChanStacks(ResponseQueueOther) <- SVRReq{
 		Signature: payloadRequest.Signature,
 		Pubkey:    pk,
 		Msg:       msg,
 		Response:  respCh}
 	resp := <-respCh
-	singleRetChannPool.Put(respCh)
+	rs.singleRetChannPool.Put(respCh)
 	timer2.ObserveDuration()
 	if resp.Err != nil {
 		logger.WithField(
@@ -444,14 +460,14 @@ func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest
 		return false, fmt.Errorf("signature invalid")
 	}
 
-	respCh := singleRetChannPool.Get().(chan SVRReqResp)
+	respCh := rs.singleRetChannPool.Get().(chan SVRReqResp)
 	rs.regMngr.VerifyChanStacks(ResponseQueueSubmit) <- SVRReq{
 		Signature: submitBlockRequest.Signature,
 		Pubkey:    submitBlockRequest.Message.BuilderPubkey,
 		Msg:       msg,
 		Response:  respCh}
 	resp := <-respCh
-	singleRetChannPool.Put(respCh)
+	rs.singleRetChannPool.Put(respCh)
 
 	return (resp.Err != nil), resp.Err
 	//return VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
