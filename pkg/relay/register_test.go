@@ -23,7 +23,7 @@ import (
 func TestRegisterValidator(t *testing.T) {
 	t.Parallel()
 
-	const N = 100
+	const N = 10000
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -44,7 +44,7 @@ func TestRegisterValidator(t *testing.T) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr := relay.NewProcessManager(20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
@@ -104,7 +104,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr := relay.NewProcessManager(20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
@@ -177,7 +177,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr := relay.NewProcessManager(20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
@@ -229,7 +229,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr := relay.NewProcessManager(20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
@@ -284,7 +284,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewRegisteredManager(20000, 20000)
+	regMgr := relay.NewProcessManager(20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 

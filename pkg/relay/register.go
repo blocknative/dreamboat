@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -20,6 +21,12 @@ const (
 	ResponseTypeStored
 )
 
+const (
+	ResponseQueueSubmit = iota
+	ResponseQueueRegister
+	ResponseQueueOther
+)
+
 // returnChannelSize is the size of the buffer
 // describing the queue of results before it would be processed by registerSync
 const returnChannelSize = 150_000
@@ -27,6 +34,12 @@ const returnChannelSize = 150_000
 var retChannPool = sync.Pool{
 	New: func() any {
 		return make(chan SVRReqResp, returnChannelSize)
+	},
+}
+
+var singleRetChannPool = sync.Pool{
+	New: func() any {
+		return make(chan SVRReqResp, 1)
 	},
 }
 
@@ -39,8 +52,17 @@ type Getter interface {
 }
 
 type SVRReq struct {
-	payload  structs.SignedValidatorRegistration
+	Signature [96]byte //types.Signature `json:"signature" ssz-size:"96"`
+	Pubkey    [48]byte //types.PublicKey `json:"pubkey" ssz-size:"48"`
+
 	Msg      [32]byte
+	Iter     int
+	Response chan SVRReqResp
+}
+type SVRStoreReq struct {
+	RawPayload json.RawMessage
+	Pubkey     types.PublicKey `json:"pubkey" ssz-size:"48"`
+
 	Iter     int
 	Response chan SVRReqResp
 }
@@ -75,7 +97,7 @@ func registerSync(s RegistrationManager, in chan SVRReqResp, failure chan struct
 		}
 
 		if item.Err != nil {
-			if err == nil {
+			if err == nil { // if there wasn't any error before
 				if item.Type == ResponseTypeOthers {
 					numOthers = total // this is terminator, so no event will come from here after
 				}
@@ -85,10 +107,11 @@ func registerSync(s RegistrationManager, in chan SVRReqResp, failure chan struct
 		} else if storeIfReady(s, rcv, item.Iter) {
 			p := payload[item.Iter]
 			s.Set(p.Message.Pubkey.String(), p.Message.Timestamp)
-			storeCh <- SVRReq{
-				payload:  p,
-				Iter:     item.Iter,
-				Response: in}
+			storeCh <- SVRStoreReq{
+				Pubkey:     p.Message.Pubkey,
+				Iter:       item.Iter,
+				RawPayload: p.Raw,
+				Response:   in}
 
 			sentToStore++
 		}
@@ -135,8 +158,8 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	go checkInMem(rs.beaconState, rs.regMngr, payload, respCh)
 
 	var failed bool
-	VInp := rs.regMngr.VerifyChan()
-	for i := range payload {
+	VInp := rs.regMngr.VerifyChanStacks(ResponseQueueRegister)
+	for i, p := range payload {
 		if failed { // after failure just populate the errors
 			atomic.AddUint32(&sentVerified, 1)
 			respCh <- SVRReqResp{Iter: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
@@ -151,10 +174,17 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 			break
 		}
 
+		//sig :=
+		//pub := [:]
 		select {
 		case <-failure:
 			failed = true
-		case VInp <- SVRReq{payload[i], msg, i, respCh}:
+		case VInp <- SVRReq{
+			Signature: p.Signature,
+			Pubkey:    p.Message.Pubkey,
+			Msg:       msg,
+			Iter:      i,
+			Response:  respCh}:
 			atomic.AddUint32(&sentVerified, 1)
 		}
 	}
@@ -170,14 +200,14 @@ func checkInMem(state State, getter Getter, payload []structs.SignedValidatorReg
 			return
 		}
 
-		pk := structs.PubKey{sp.Message.Pubkey}
+		pk := structs.PubKey{PublicKey: sp.Message.Pubkey}
 		known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
 		if !known {
 			out <- SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}
 			return
 		}
 
-		previousValidatorTimestamp, ok := getter.Get(pk.String())
+		previousValidatorTimestamp, ok := getter.Get(pk.String()) // Do not error on this
 		out <- SVRReqResp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), Iter: i, Type: ResponseTypeOthers}
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type RegisteredManagerMetrics struct {
+type ProcessManagerMetrics struct {
 	VerifyTiming prometheus.Histogram
 
 	MapSize prometheus.Gauge
@@ -13,7 +13,7 @@ type RegisteredManagerMetrics struct {
 	RunningWorkers *prometheus.GaugeVec
 }
 
-func (rm *RegisteredManager) initMetrics() {
+func (rm *ProcessManager) initMetrics() {
 	rm.m.RunningWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relay",
@@ -36,7 +36,7 @@ func (rm *RegisteredManager) initMetrics() {
 	})
 }
 
-func (rm *RegisteredManager) AttachMetrics(m *metrics.Metrics) {
+func (rm *ProcessManager) AttachMetrics(m *metrics.Metrics) {
 	m.Register(rm.m.VerifyTiming)
 	m.Register(rm.m.RunningWorkers)
 	m.Register(rm.m.MapSize)

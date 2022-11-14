@@ -30,7 +30,7 @@ func TestOLDRegisterValidator(t *testing.T) {
 	defer cancel()
 
 	ctrl := gomock.NewController(t)
-	ds := datastore.NewDatastore(newMockDatastore())
+	ds := datastore.NewDatastore(newMockDatastore(), nil)
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -86,7 +86,7 @@ func BenchmarkOLDRegisterValidator(b *testing.B) {
 
 	ctrl := gomock.NewController(b)
 
-	ds := datastore.NewDatastore(newMockDatastore())
+	ds := datastore.NewDatastore(newMockDatastore(), nil)
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
@@ -138,7 +138,7 @@ func BenchmarkOLDRegisterValidatorParallel(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store})
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, nil)
 
 	ctrl := gomock.NewController(b)
 	bs := mock_relay.NewMockState(ctrl)
