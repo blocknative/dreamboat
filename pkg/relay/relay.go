@@ -36,6 +36,7 @@ type Datastore interface {
 
 	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
 	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
+	GetMaxProfitHeadersDesc(context.Context, structs.Slot) ([]structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
@@ -125,13 +126,13 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	headers, err := rs.d.GetHeaders(ctx, structs.Query{Slot: slot})
+	headers, err := rs.d.GetMaxProfitHeadersDesc(ctx, slot)
 	if err != nil || len(headers) < 1 {
 		logger.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 
-	header := headers[len(headers)-1] // choose the received last header
+	header := headers[0] // choose the highest bid, which is index 0
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)
@@ -391,7 +392,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 					BlockHash:            payload.Payload.Data.BlockHash,
 					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
 					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
+					ProposerFeeRecipient: payload.Trace.Message.ProposerFeeRecipient,
 					Value:                submitBlockRequest.Message.Value,
 					GasLimit:             payload.Trace.Message.GasLimit,
 					GasUsed:              payload.Trace.Message.GasUsed,

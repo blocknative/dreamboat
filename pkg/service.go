@@ -333,7 +333,7 @@ func (s *Service) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
 }
 
 func (s *Service) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
-	return s.Datastore.GetRegistration(ctx, structs.PubKey{pk})
+	return s.Datastore.GetRegistration(ctx, structs.PubKey{PublicKey: pk})
 }
 
 func (s *Service) GetPayloadDelivered(ctx context.Context, query structs.TraceQuery) ([]structs.BidTraceExtended, error) {

@@ -37,7 +37,7 @@ func TestServiceRouting(t *testing.T) {
 			GetHeader(gomock.Any(), gomock.Any()).
 			Times(1)
 
-		service.GetHeader(nil, nil)
+		service.GetHeader(context.Background(), nil)
 	})
 
 	t.Run("RegisterValidator", func(t *testing.T) {
@@ -186,7 +186,7 @@ func TestBeaconClientState(t *testing.T) {
 		GetHeader(gomock.Any(), gomock.Any()).
 		Times(1)
 
-	service.GetHeader(nil, nil)
+	service.GetHeader(context.Background(), nil)
 	time.Sleep(time.Second) // give time for the beacon state manager to kick-off
 
 	cancel()

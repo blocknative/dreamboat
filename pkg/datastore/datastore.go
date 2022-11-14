@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -97,6 +98,42 @@ func (s *Datastore) getHeaders(ctx context.Context, key ds.Key) ([]structs.Heade
 	}
 
 	return s.unsmarshalHeaders(data)
+}
+
+func (s *Datastore) putMaxProfitHeader(ctx context.Context, slot structs.Slot, header structs.HeaderAndTrace, ttl time.Duration) error {
+	headers, err := s.getHeaders(ctx, HeaderMaxProfitKey(slot))
+	if errors.Is(err, ds.ErrNotFound) {
+		headers = make([]structs.HeaderAndTrace, 0, 1)
+	} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
+		return err
+	}
+
+	// remove submission from same builder
+	i := 0
+	for ; i < len(headers); i++ {
+		if headers[i].Trace.BuilderPubkey == header.Trace.BuilderPubkey {
+			headers[i] = header
+			break
+		}
+	}
+	if i == len(headers) {
+		headers = append(headers, header)
+	}
+
+	// sort by bid value DESC
+	sort.Slice(headers, func(i, j int) bool {
+		return headers[i].Trace.Value.Cmp(&headers[j].Trace.Value) > 0
+	})
+
+	data, err := json.Marshal(headers)
+	if err != nil {
+		return err
+	}
+	return s.TTLStorage.PutWithTTL(ctx, HeaderMaxProfitKey(slot), data, ttl)
+}
+
+func (s *Datastore) GetMaxProfitHeadersDesc(ctx context.Context, slot structs.Slot) ([]structs.HeaderAndTrace, error) {
+	return s.getHeaders(ctx, HeaderMaxProfitKey(slot))
 }
 
 func (s *Datastore) deduplicateHeaders(headers []structs.HeaderAndTrace, query structs.Query) []structs.HeaderAndTrace {
@@ -377,6 +414,10 @@ func ValidatorKey(pk structs.PubKey) ds.Key {
 
 func RegistrationKey(pk structs.PubKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("%s%s", RegistrationPrefix, pk.String()))
+}
+
+func HeaderMaxProfitKey(slot structs.Slot) ds.Key {
+	return ds.NewKey(fmt.Sprintf("header/max-profit/%d", slot))
 }
 
 type TTLDatastoreBatcher struct {
