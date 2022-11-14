@@ -16,23 +16,23 @@ type ProcessManagerMetrics struct {
 func (rm *ProcessManager) initMetrics() {
 	rm.m.RunningWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "dreamboat",
-		Subsystem: "relay",
-		Name:      "registeredRunningWorkers",
+		Subsystem: "relayprocess",
+		Name:      "runningWorkers",
 		Help:      "Number of requests.",
 	}, []string{"type"})
 
 	rm.m.VerifyTiming = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
-		Subsystem: "relay",
-		Name:      "registeredVerifyTiming",
+		Subsystem: "relayprocess",
+		Name:      "verifyTiming",
 		Help:      "Duration of requests per endpoint",
 	}, []string{"type"})
 
 	rm.m.MapSize = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "dreamboat",
-		Subsystem: "relay",
-		Name:      "registeredMapSize",
-		Help:      "Duration of requests per endpoint",
+		Subsystem: "relayprocess",
+		Name:      "mapSize",
+		Help:      "Size of internal map",
 	})
 }
 
@@ -43,26 +43,18 @@ func (rm *ProcessManager) AttachMetrics(m *metrics.Metrics) {
 }
 
 type RelayMetrics struct {
-	VerifyTiming prometheus.Histogram
-	OtherTiming  prometheus.Histogram
+	Timing *prometheus.HistogramVec
 }
 
 func (r *Relay) initMetrics() {
-	/*rm.m.ApiReqCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "dreamboat",
-		Subsystem: "api",
-		Name:      "reqcount",
-		Help:      "Number of requests.",
-	}, []string{"endpoint", "code"})
-	*/
-	/*rm.m.VerifyTiming = prometheus.NewHistogram(prometheus.HistogramOpts{
+	r.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relay",
-		Name:      "registeredVerifyTiming",
-		Help:      "Duration of requests per endpoint",
-	})*/
+		Name:      "timing",
+		Help:      "Duration of requests per function",
+	}, []string{"function", "type"})
 }
 
 func (r *Relay) AttachMetrics(m *metrics.Metrics) {
-
+	m.Register(r.m.Timing)
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -138,6 +139,8 @@ func storeIfReady(s Setter, rcv map[int]struct{}, iter int) bool {
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
 func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
+	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidator", "all"))
+	defer timer.ObserveDuration()
 
 	// This function is limitted to the size of the buffer to prevent deadlocks
 	if len(payload) >= returnChannelSize/3-1 {
@@ -153,7 +156,6 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	sentVerified := uint32(0)
 	go registerSync(rs.regMngr, respCh, failure, exit, payload, &sentVerified)
 	go checkInMem(rs.beaconState, rs.regMngr, payload, respCh)
-
 	var failed bool
 	VInp := rs.regMngr.VerifyChanStacks(ResponseQueueRegister)
 	for i, p := range payload {
@@ -214,6 +216,9 @@ func checkOneInMem(beacon *structs.BeaconState, getter Getter, i int, sp structs
 }
 
 func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.SignedValidatorRegistration) error {
+	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidatorSingular", "all"))
+	defer timer.ObserveDuration()
+
 	otherChecks, _ := checkOneInMem(rs.beaconState.Beacon(), rs.regMngr, 0, payload)
 	if otherChecks.Err != nil {
 		return otherChecks.Err
@@ -222,6 +227,7 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 		return nil
 	}
 
+	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidatorSingular", "verify"))
 	msg, err := types.ComputeSigningRoot(payload.Message, rs.config.BuilderSigningDomain)
 	if err != nil {
 		return errors.New("invalid signature")
@@ -238,10 +244,13 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 		Response:  respCh,
 	}
 	r := <-respCh
+	timer2.ObserveDuration()
+
 	if r.Err != nil {
 		return errors.New("invalid signature")
 	}
 
+	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidatorSingular", "store"))
 	storeCh := rs.regMngr.StoreChan()
 	rs.regMngr.Set(payload.Message.Pubkey.String(), payload.Message.Timestamp)
 	storeCh <- SVRStoreReq{
@@ -251,5 +260,7 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 		Response:   respCh}
 
 	r = <-respCh
+	timer3.ObserveDuration()
+
 	return r.Err
 }
