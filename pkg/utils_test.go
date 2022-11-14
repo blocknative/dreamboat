@@ -17,17 +17,17 @@ func TestComputeDomain(t *testing.T) {
 	tests := []struct {
 		name       string
 		args       args
-		wantDomain types.Domain
+		wantDomain string
 		wantErr    bool
 	}{
 		{
 			name: "domainBuilder",
 			args: args{
-
 				domainType:               types.DomainTypeAppBuilder,
 				forkVersionHex:           "0x00000000",
 				genesisValidatorsRootHex: types.Root{}.String(),
 			},
+			wantDomain: "0x00000001f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9",
 		},
 		{
 			name: "domainBeaconProposer",
@@ -36,6 +36,7 @@ func TestComputeDomain(t *testing.T) {
 				forkVersionHex:           "0x02000000",
 				genesisValidatorsRootHex: "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95",
 			},
+			wantDomain: "0x000000004a26c58b08add8089b75caa540848881a8d4f0af0be83417a85c0f45",
 		},
 	}
 	for _, tt := range tests {
@@ -45,8 +46,7 @@ func TestComputeDomain(t *testing.T) {
 				t.Errorf("ComputeDomain() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			t.Errorf(hexutil.Encode(gotDomain[:]))
-			if !reflect.DeepEqual(gotDomain, tt.wantDomain) {
+			if !reflect.DeepEqual(hexutil.Encode(gotDomain[:]), tt.wantDomain) {
 				t.Errorf("ComputeDomain() = %v, want %v", gotDomain, tt.wantDomain)
 			}
 		})

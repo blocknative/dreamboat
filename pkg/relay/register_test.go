@@ -134,7 +134,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	err = r.RegisterValidator(ctx, registrations)
 	require.Error(t, err)
-	t.Logf("returned %s", err.Error())
+	//t.Logf("returned %s", err.Error())
 
 	var errored bool
 	for i, registration := range registrations {
@@ -205,7 +205,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	bs.EXPECT().Beacon().Return(fbn)
 	err = r.RegisterValidator(ctx, registrations)
 	require.Error(t, err)
-	t.Logf("returned %s", err.Error())
+	//t.Logf("returned %s", err.Error())
 }
 
 func BenchmarkRegisterValidator(b *testing.B) {
