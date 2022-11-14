@@ -76,7 +76,6 @@ func NewService(l log.Logger, c Config, d Datastore, r Relay, as *AtomicState) *
 		Relay:     r,
 		state:     as,
 	}
-
 }
 
 // Run creates a relay, datastore and starts the beacon client event loop

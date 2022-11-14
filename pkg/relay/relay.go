@@ -236,6 +236,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		return nil, fmt.Errorf("signature invalid")
 	}
 
+	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "getPayload"))
 	key := structs.PayloadKey{
 		BlockHash: payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  pk,
@@ -251,6 +252,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		}).Error("no payload found")
 		return nil, ErrNoPayloadFound
 	}
+	timer3.ObserveDuration()
 	/*
 		logger.With(log.F{
 			"slot":         payloadRequest.Message.Slot,
@@ -263,6 +265,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		}).Info("payload fetched")
 	*/
 
+	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "putDelivered"))
 	response := types.GetPayloadResponse{
 		Version: "bellatrix",
 		Data:    payload.Payload.Data,
@@ -293,6 +296,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	if err := rs.d.PutDelivered(ctx, structs.Slot(payloadRequest.Message.Slot), trace, rs.config.TTL); err != nil {
 		rs.l.WithError(err).Warn("failed to set payload after delivery")
 	}
+	timer4.ObserveDuration()
 	/*
 		logger.With(log.F{
 			"processingTimeMs": time.Since(timeStart).Milliseconds(),
@@ -380,20 +384,23 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("block submission failed: %w", err)
 	}
 
+	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "getDelivered"))
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
-
 	_, err = rs.d.GetDelivered(ctx, structs.Query{Slot: slot})
+	timer3.ObserveDuration()
 	if err == nil {
 		logger.Debug("block submission after payload delivered")
 		return errors.New("the slot payload was already delivered")
 	}
 
+	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
 	payload := SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
-
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &payload, rs.config.TTL); err != nil {
 		return err
 	}
+	timer4.ObserveDuration()
 
+	timer5 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putHeader"))
 	header, err := types.PayloadToPayloadHeader(submitBlockRequest.ExecutionPayload)
 	if err != nil {
 		return err
@@ -426,6 +433,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		logger.WithError(err).Error("PutHeader failed")
 		return err
 	}
+	timer5.ObserveDuration()
 	/*
 		logger.With(log.F{
 			"processingTimeMs": time.Since(timeStart).Milliseconds(),
