@@ -8,6 +8,7 @@ import (
 
 	relay "github.com/blocknative/dreamboat/pkg"
 	mock_relay "github.com/blocknative/dreamboat/pkg/mocks"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/golang/mock/gomock"
 	"github.com/lthibault/log"
 	"github.com/stretchr/testify/require"
@@ -169,8 +170,7 @@ func TestBeaconClientState(t *testing.T) {
 		},
 	)
 	beaconMock.EXPECT().KnownValidators(gomock.Any()).Return(relay.AllValidatorsResponse{Data: []relay.ValidatorResponseEntry{}}, nil).Times(1)
-	beaconMock.EXPECT().Genesis().Times(1).Return(relay.GenesisInfo{}, nil)
-
+	beaconMock.EXPECT().Genesis().Times(1).Return(structs.GenesisInfo{}, nil)
 	var wg sync.WaitGroup
 	defer wg.Wait()
 

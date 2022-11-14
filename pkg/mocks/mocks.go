@@ -328,6 +328,21 @@ func (mr *MockBeaconClientMockRecorder) Endpoint() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Endpoint", reflect.TypeOf((*MockBeaconClient)(nil).Endpoint))
 }
 
+// Genesis mocks base method
+func (m *MockBeaconClient) Genesis() (structs.GenesisInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Genesis")
+	ret0, _ := ret[0].(structs.GenesisInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Genesis indicates an expected call of Genesis
+func (mr *MockBeaconClientMockRecorder) Genesis() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockBeaconClient)(nil).Genesis))
+}
+
 // GetProposerDuties mocks base method
 func (m *MockBeaconClient) GetProposerDuties(arg0 structs.Epoch) (*relay.RegisteredProposersResponse, error) {
 	m.ctrl.T.Helper()
