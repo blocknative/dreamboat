@@ -149,7 +149,7 @@ func (b *MultiBeaconClient) KnownValidators(headSlot structs.Slot) (AllValidator
 	return AllValidatorsResponse{}, ErrNodesUnavailable
 }
 
-func (b *MultiBeaconClient) Genesis() (genesisInfo GenesisInfo, err error) {
+func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err error) {
 	clients := b.clientsByLastResponse()
 	for _, client := range clients {
 		if genesisInfo, err = client.Genesis(); err != nil {
@@ -167,22 +167,6 @@ func (b *MultiBeaconClient) Genesis() (genesisInfo GenesisInfo, err error) {
 
 func (b *MultiBeaconClient) Endpoint() string {
 	return b.clientsByLastResponse()[0].Endpoint()
-}
-
-func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err error) {
-	clients := b.clientsByLastResponse()
-	for _, client := range clients {
-		if genesisInfo, err = client.Genesis(); err != nil {
-			b.Log.WithError(err).
-				WithField("endpoint", client.Endpoint()).
-				Warn("failed to get genesis info")
-			continue
-		}
-
-		return genesisInfo, nil
-	}
-
-	return genesisInfo, err
 }
 
 // beaconInstancesByLastResponse returns a list of beacon clients that has the client
