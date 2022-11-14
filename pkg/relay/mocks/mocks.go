@@ -66,6 +66,21 @@ func (mr *MockDatastoreMockRecorder) GetHeaders(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaders", reflect.TypeOf((*MockDatastore)(nil).GetHeaders), arg0, arg1)
 }
 
+// GetMaxProfitHeadersDesc mocks base method
+func (m *MockDatastore) GetMaxProfitHeadersDesc(arg0 context.Context, arg1 structs.Slot) ([]structs.HeaderAndTrace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMaxProfitHeadersDesc", arg0, arg1)
+	ret0, _ := ret[0].([]structs.HeaderAndTrace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMaxProfitHeadersDesc indicates an expected call of GetMaxProfitHeadersDesc
+func (mr *MockDatastoreMockRecorder) GetMaxProfitHeadersDesc(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxProfitHeadersDesc", reflect.TypeOf((*MockDatastore)(nil).GetMaxProfitHeadersDesc), arg0, arg1)
+}
+
 // GetPayload mocks base method
 func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.PayloadKey) (*structs.BlockBidAndTrace, error) {
 	m.ctrl.T.Helper()

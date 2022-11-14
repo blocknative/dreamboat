@@ -2,7 +2,7 @@ package relay_test
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 
@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	nullLog = log.New(log.WithWriter(ioutil.Discard))
+	nullLog = log.New(log.WithWriter(io.Discard))
 )
 
 func TestMultiSubscribeToHeadEvents(t *testing.T) {
