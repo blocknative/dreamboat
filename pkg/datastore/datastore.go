@@ -345,20 +345,24 @@ func (s *Datastore) GetAllRegistration() (map[string]types.SignedValidatorRegist
 
 	b := bytes.NewReader(nil)
 	nDec := json.NewDecoder(b)
+
 	err := s.Viewer.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		prefix := []byte(RegistrationPrefix)
-		lenP := len(RegistrationPrefix)
+		prefix := []byte("/" + RegistrationPrefix)
+
+		lenP := len(RegistrationPrefix) + 1
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			k := item.Key()
+
 			err := item.Value(func(v []byte) error {
 				b.Reset(v)
 				sgr := types.SignedValidatorRegistration{}
 				if err := nDec.Decode(&sgr); err != nil {
 					return err
 				}
+
 				m[string(k)[lenP:]] = sgr
 				return nil
 			})
