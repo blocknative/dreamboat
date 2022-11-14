@@ -123,6 +123,20 @@ func (mr *MockServiceMockRecorder) RegisterValidator(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockService)(nil).RegisterValidator), arg0, arg1)
 }
 
+// RegisterValidatorSingular mocks base method
+func (m *MockService) RegisterValidatorSingular(arg0 context.Context, arg1 structs.SignedValidatorRegistration) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RegisterValidatorSingular", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RegisterValidatorSingular indicates an expected call of RegisterValidatorSingular
+func (mr *MockServiceMockRecorder) RegisterValidatorSingular(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidatorSingular", reflect.TypeOf((*MockService)(nil).RegisterValidatorSingular), arg0, arg1)
+}
+
 // Registration mocks base method
 func (m *MockService) Registration(arg0 context.Context, arg1 types.PublicKey) (types.SignedValidatorRegistration, error) {
 	m.ctrl.T.Helper()
