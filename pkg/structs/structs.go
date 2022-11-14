@@ -139,6 +139,7 @@ type BlockBidAndTrace struct {
 type BeaconState struct {
 	DutiesState
 	ValidatorsState
+	GenesisInfo
 }
 
 func (s *BeaconState) KnownValidatorByIndex(index uint64) (types.PubkeyHex, error) {
@@ -174,4 +175,10 @@ type DutiesState struct {
 type ValidatorsState struct {
 	KnownValidatorsByIndex map[uint64]types.PubkeyHex
 	KnownValidators        map[types.PubkeyHex]struct{}
+}
+
+type GenesisInfo struct {
+	GenesisTime           uint64 `json:"genesis_time,string"`
+	GenesisValidatorsRoot string `json:"genesis_validators_root"`
+	GenesisForkVersion    string `json:"genesis_fork_version"`
 }
