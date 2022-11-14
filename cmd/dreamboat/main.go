@@ -104,10 +104,35 @@ var flags = []cli.Flag{
 		Value:   24 * time.Hour,
 		EnvVars: []string{"BN_RELAY_TTL"},
 	},
-	&cli.BoolFlag{
-		Name:  "checkKnownValidator",
-		Usage: "rejects validator registration if it's not a known validator from the beacon",
-		Value: false,
+	&cli.Uint64Flag{
+		Name:    "relay-max-request",
+		Usage:   "maximum number of validators in one request",
+		Value:   100_000,
+		EnvVars: []string{"RELAY_MAX_REQ"},
+	},
+	&cli.Uint64Flag{
+		Name:    "relay-workers-verify",
+		Usage:   "number of workers running verify in parallel",
+		Value:   400,
+		EnvVars: []string{"RELAY_WORKERS_VERIFY"},
+	},
+	&cli.Uint64Flag{
+		Name:    "relay-workers-store-validator",
+		Usage:   "number of workers storing validators in parallel",
+		Value:   400,
+		EnvVars: []string{"RELAY_WORKERS_STORE_VALIDATOR"},
+	},
+	&cli.Uint64Flag{
+		Name:    "relay-verify-queue-size",
+		Usage:   "size of verify queue",
+		Value:   20000,
+		EnvVars: []string{"RELAY_VERIFY_QUEUE_SIZE"},
+	},
+	&cli.Uint64Flag{
+		Name:    "relay-store-queue-size",
+		Usage:   "size of store queue",
+		Value:   20000,
+		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
 	},
 }
 
@@ -140,6 +165,7 @@ func setup() cli.BeforeFunc {
 
 		config = pkg.Config{
 			Log:                 logger(c),
+			RelayMaxRequest:     c.Uint64("relay-max-request"),
 			RelayRequestTimeout: c.Duration("timeout"),
 			Network:             c.String("network"),
 			BuilderCheck:        c.Bool("check-builder"),
@@ -149,7 +175,6 @@ func setup() cli.BeforeFunc {
 			SecretKey:           sk,
 			Datadir:             c.String("datadir"),
 			TTL:                 c.Duration("ttl"),
-			CheckKnownValidator: c.Bool("checkKnownValidator"),
 		}
 
 		return
@@ -210,7 +235,7 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		regMgr := relay.NewProcessManager(20000, 20000)
+		regMgr := relay.NewProcessManager(c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
 		regMgr.AttachMetrics(m)
 
 		reg, err := ds.GetAllRegistration()
@@ -222,12 +247,12 @@ func run() cli.ActionFunc {
 		go regMgr.RunCleanup(uint64(time.Hour*72), time.Hour)
 
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
-			BuilderSigningDomain:  domainBuilder,
-			ProposerSigningDomain: domainBeaconProposer,
-			PubKey:                config.PubKey,
-			SecretKey:             config.SecretKey,
-			TTL:                   config.TTL,
-			CheckKnownValidator:   config.CheckKnownValidator,
+			BuilderSigningDomain:    domainBuilder,
+			ProposerSigningDomain:   domainBeaconProposer,
+			PubKey:                  config.PubKey,
+			SecretKey:               config.SecretKey,
+			TTL:                     config.TTL,
+			RegisterValidatorMaxNum: config.RelayMaxRequest,
 		}, as, ds, regMgr)
 		r.AttachMetrics(m)
 
@@ -237,8 +262,8 @@ func run() cli.ActionFunc {
 		api := api.NewApi(config.Log, service)
 		api.AttachMetrics(m)
 
-		regMgr.RunStore(ds, config.TTL, 300)
-		regMgr.RunVerify(300)
+		regMgr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
+		regMgr.RunVerify(c.Uint("relay-workers-verify"))
 
 		config.Log.WithFields(logrus.Fields{
 			"service":     "relay",

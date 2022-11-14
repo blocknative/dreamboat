@@ -47,7 +47,7 @@ type Config struct {
 	SecretKey           *bls.SecretKey
 	Datadir             string
 	TTL                 time.Duration
-	CheckKnownValidator bool
+	RelayMaxRequest     uint64
 
 	// private fields; populated during validation
 	builders              map[structs.PubKey]*builder
@@ -58,7 +58,6 @@ type Config struct {
 
 func (c *Config) Validate() error {
 	c.builders = make(map[structs.PubKey]*builder)
-
 	if err := c.validateNetwork(); err != nil {
 		return err
 	}

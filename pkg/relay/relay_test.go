@@ -43,10 +43,11 @@ func TestGetHeader(t *testing.T) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
-		SecretKey:            sk, // pragma: allowlist secret
-		PubKey:               types.PublicKey(random48Bytes()),
+		TTL:                     time.Minute,
+		BuilderSigningDomain:    relaySigningDomain,
+		SecretKey:               sk, // pragma: allowlist secret
+		RegisterValidatorMaxNum: 50_000,
+		PubKey:                  types.PublicKey(random48Bytes()),
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, nil)
 
@@ -119,11 +120,12 @@ func TestGetPayload(t *testing.T) {
 		pkg.GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
-		SecretKey:             pk, //pragma: allowlist secret
-		PubKey:                types.PublicKey(random48Bytes()),
-		TTL:                   time.Minute,
-		ProposerSigningDomain: proposerSigningDomain,
-		BuilderSigningDomain:  types.DomainBuilder,
+		SecretKey:               pk, //pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		TTL:                     time.Minute,
+		RegisterValidatorMaxNum: 50_000,
+		ProposerSigningDomain:   proposerSigningDomain,
+		BuilderSigningDomain:    types.DomainBuilder,
 	}
 
 	regMgr := relay.NewProcessManager(20, 20)
@@ -221,7 +223,8 @@ func TestGetValidators(t *testing.T) {
 	bs := mock_relay.NewMockState(ctrl)
 
 	config := relay.RelayConfig{
-		TTL: time.Minute,
+		TTL:                     time.Minute,
+		RegisterValidatorMaxNum: 50_000,
 	}
 
 	regMgr := relay.NewProcessManager(20, 20)
@@ -264,9 +267,10 @@ func TestSubmitBlock(t *testing.T) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  time.Minute,
-		SecretKey:            sk,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     time.Minute,
+		SecretKey:               sk,
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
@@ -314,10 +318,11 @@ func BenchmarkGetHeader(b *testing.B) {
 		pkg.GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
-		TTL:                   5 * time.Minute,
-		SecretKey:             pk, // pragma: allowlist secret
-		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               pk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		RegisterValidatorMaxNum: 50_000,
+		ProposerSigningDomain:   proposerSigningDomain,
 	}
 
 	r := relay.NewRelay(log.New(), config, bs, ds, nil)
@@ -384,10 +389,11 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		pkg.GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
-		TTL:                   5 * time.Minute,
-		SecretKey:             pk, // pragma: allowlist secret
-		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               pk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		RegisterValidatorMaxNum: 50_000,
+		ProposerSigningDomain:   proposerSigningDomain,
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, nil)
 
@@ -462,10 +468,11 @@ func BenchmarkGetPayload(b *testing.B) {
 		pkg.GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
-		TTL:                   5 * time.Minute,
-		SecretKey:             pk, // pragma: allowlist secret
-		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               pk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		ProposerSigningDomain:   proposerSigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 
 	regMgr := relay.NewProcessManager(20, 20)
@@ -572,10 +579,11 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	regMgr.RunVerify(300)
 
 	config := relay.RelayConfig{
-		TTL:                   5 * time.Minute,
-		SecretKey:             pk, // pragma: allowlist secret
-		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               pk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		ProposerSigningDomain:   proposerSigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
@@ -686,10 +694,11 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  5 * time.Minute,
-		SecretKey:            pk, // pragma: allowlist secret
-		PubKey:               types.PublicKey(random48Bytes()),
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               pk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
@@ -727,10 +736,11 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  5 * time.Minute,
-		SecretKey:            pk, // pragma: allowlist secret
-		PubKey:               types.PublicKey(random48Bytes()),
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               pk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
@@ -778,10 +788,11 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  5 * time.Minute,
-		SecretKey:            sk, // pragma: allowlist secret
-		PubKey:               types.PublicKey(random48Bytes()),
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               sk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
@@ -971,10 +982,11 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  5 * time.Minute,
-		SecretKey:            sk, // pragma: allowlist secret
-		PubKey:               types.PublicKey(random48Bytes()),
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               sk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
@@ -1090,10 +1102,11 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  5 * time.Minute,
-		SecretKey:            sk, // pragma: allowlist secret
-		PubKey:               types.PublicKey(random48Bytes()),
-		BuilderSigningDomain: relaySigningDomain,
+		TTL:                     5 * time.Minute,
+		SecretKey:               sk, // pragma: allowlist secret
+		PubKey:                  types.PublicKey(random48Bytes()),
+		BuilderSigningDomain:    relaySigningDomain,
+		RegisterValidatorMaxNum: 50_000,
 	}
 	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
 
