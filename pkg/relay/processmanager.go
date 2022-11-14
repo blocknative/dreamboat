@@ -106,7 +106,7 @@ func (rm *ProcessManager) VerifyChanStacks(stack uint) chan SVRReq {
 func (rm *ProcessManager) Set(k string, value uint64) {
 	rm.acc.Lock()
 	defer rm.acc.Unlock()
-	defer rm.m.MapSize.Inc()
+	defer rm.m.MapSize.Set(float64(len(rm.M)))
 	rm.M[k] = value
 }
 
