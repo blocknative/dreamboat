@@ -74,7 +74,7 @@ func (rs *Relay) OLDprocessValidator(ctx context.Context, payload []structs.Sign
 			return fmt.Errorf("request too far in future for %s", registerRequest.Message.Pubkey.String())
 		}
 
-		pk := structs.PubKey{registerRequest.Message.Pubkey}
+		pk := structs.PubKey{PublicKey: registerRequest.Message.Pubkey}
 
 		ok, err = state.Beacon().IsKnownValidator(pk.PubkeyHex())
 		if err != nil {

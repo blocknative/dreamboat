@@ -42,8 +42,9 @@ type Datastore interface {
 }
 
 type RegistrationManager interface {
-	StoreChan() chan SVRReq
-	VerifyChan() chan SVRReq
+	StoreChan() chan SVRStoreReq
+	//VerifyChan() chan SVRReq
+	VerifyChanStacks(stack uint) chan SVRReq
 	Set(k string, value uint64)
 	Get(k string) (value uint64, ok bool)
 }
@@ -165,7 +166,7 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) {
+func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
 	logger := rs.l.WithField("method", "GetPayload")
 	timeStart := time.Now()
 
@@ -189,21 +190,30 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		"pubkey":    pk,
 	}).Debug("payload requested")
+
 	/*
 		ok, err := types.VerifySignature(
 			payloadRequest.Message,
 			rs.config.ProposerSigningDomain,
 			pk[:],
 			payloadRequest.Signature[:],
-		)*/
+		)
+	*/
+	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain)
+	if err != nil {
+		return nil, fmt.Errorf("signature invalid") // err
+	}
 
-	ok, err := VerifySignature(
-		payloadRequest.Message,
-		rs.config.ProposerSigningDomain,
-		pk[:],
-		payloadRequest.Signature[:],
-	)
-	if !ok || err != nil {
+	respCh := singleRetChannPool.Get().(chan SVRReqResp)
+	rs.regMngr.VerifyChanStacks(ResponseQueueOther) <- SVRReq{
+		Signature: payloadRequest.Signature,
+		Pubkey:    pk,
+		Msg:       msg,
+		Response:  respCh}
+	resp := <-respCh
+	singleRetChannPool.Put(respCh)
+
+	if resp.Err != nil {
 		logger.WithField(
 			"pubkey", proposerPubkey,
 		).Error("signature invalid")
@@ -225,16 +235,17 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		}).Error("no payload found")
 		return nil, ErrNoPayloadFound
 	}
-
-	logger.With(log.F{
-		"slot":         payloadRequest.Message.Slot,
-		"blockHash":    payload.Payload.Data.BlockHash,
-		"blockNumber":  payload.Payload.Data.BlockNumber,
-		"stateRoot":    payload.Payload.Data.StateRoot,
-		"feeRecipient": payload.Payload.Data.FeeRecipient,
-		"bid":          payload.Bid.Data.Message.Value,
-		"numTx":        len(payload.Payload.Data.Transactions),
-	}).Info("payload fetched")
+	/*
+		logger.With(log.F{
+			"slot":         payloadRequest.Message.Slot,
+			"blockHash":    payload.Payload.Data.BlockHash,
+			"blockNumber":  payload.Payload.Data.BlockNumber,
+			"stateRoot":    payload.Payload.Data.StateRoot,
+			"feeRecipient": payload.Payload.Data.FeeRecipient,
+			"bid":          payload.Bid.Data.Message.Value,
+			"numTx":        len(payload.Payload.Data.Transactions),
+		}).Info("payload fetched")
+	*/
 
 	response := types.GetPayloadResponse{
 		Version: "bellatrix",
@@ -279,7 +290,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 
 // ***** Relay Domain *****
 // SubmitBlockRequestToSignedBuilderBid converts a builders block submission to a bid compatible with mev-boost
-func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) {
+func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) { // TODO(l): remove FB type
 	if req == nil {
 		return nil, ErrMissingRequest
 	}
@@ -413,16 +424,27 @@ func (rs *Relay) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice 
 	return validators
 }
 
-func (rs *Relay) verifyBlock(SubmitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) {
-	if SubmitBlockRequest == nil {
+func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) { // TODO(l): remove FB type
+	if submitBlockRequest == nil {
 		return false, fmt.Errorf("block empty")
 	}
 
-	// TODO : Simulate block here once support for external builders
-	// we currently only support a single internally trusted builder
+	msg, err := types.ComputeSigningRoot(submitBlockRequest.Message, rs.config.BuilderSigningDomain)
+	if err != nil {
+		return false, fmt.Errorf("signature invalid")
+	}
 
-	//return types.VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
-	return VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
+	respCh := singleRetChannPool.Get().(chan SVRReqResp)
+	rs.regMngr.VerifyChanStacks(ResponseQueueSubmit) <- SVRReq{
+		Signature: submitBlockRequest.Signature,
+		Pubkey:    submitBlockRequest.Message.BuilderPubkey,
+		Msg:       msg,
+		Response:  respCh}
+	resp := <-respCh
+	singleRetChannPool.Put(respCh)
+
+	return (resp.Err != nil), resp.Err
+	//return VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
@@ -433,7 +455,7 @@ func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.Payloa
 	}
 }
 
-func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace {
+func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
 	getHeaderResponse := types.GetHeaderResponse{
 		Version: "bellatrix",
 		Data:    signedBuilderBid,

@@ -143,6 +143,10 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
 
+	if payload != nil {
+		a.m.ApiReqElCount.WithLabelValues("registerValidator", "payload").Observe(float64(len(payload)))
+	}
+
 	if err = a.s.RegisterValidator(r.Context(), payload); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400").Inc()
 		return http.StatusBadRequest, err
@@ -209,7 +213,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	if br.ExecutionPayload != nil && br.ExecutionPayload.Transactions != nil {
-		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transactions").Observe(float64(len(br.ExecutionPayload.Transactions)))
+		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(br.ExecutionPayload.Transactions)))
 	}
 
 	if err := a.s.SubmitBlock(r.Context(), &br); err != nil {
@@ -228,6 +232,11 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	vs := a.s.GetValidators()
 	if vs == nil {
 		a.l.Trace("no registered validators for epoch")
+		vs = structs.BuilderGetValidatorsResponseEntrySlice{}
+	}
+
+	if vs != nil {
+		a.m.ApiReqElCount.WithLabelValues("getValidators", "validator").Observe(float64(len(vs)))
 	}
 
 	if err := json.NewEncoder(w).Encode(vs); err != nil {
@@ -315,13 +324,17 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		Limit:     limit,
 	}
 
-	blocks, err := a.s.GetPayloadDelivered(r.Context(), query)
+	payloads, err := a.s.GetPayloadDelivered(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500").Inc()
 		return http.StatusInternalServerError, err
 	}
 
-	if err := json.NewEncoder(w).Encode(blocks); err != nil {
+	if payloads != nil {
+		a.m.ApiReqElCount.WithLabelValues("proposerPayloadsDelivered", "payload").Observe(float64(len(payloads)))
+	}
+
+	if err := json.NewEncoder(w).Encode(payloads); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500").Inc()
 		return http.StatusInternalServerError, err
 	}
@@ -368,6 +381,10 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500").Inc()
 		return http.StatusInternalServerError, err
+	}
+
+	if blocks != nil {
+		a.m.ApiReqElCount.WithLabelValues("builderBlocksReceived", "block").Observe(float64(len(blocks)))
 	}
 
 	if err := json.NewEncoder(w).Encode(blocks); err != nil {

@@ -205,13 +205,21 @@ func run() cli.ActionFunc {
 
 		as := &pkg.AtomicState{}
 
-		regMgr := relay.NewRegisteredManager(20000, 20000)
-		regMgr.AttachMetrics(m)
-
-		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage})
+		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB)
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
 			return err
 		}
+
+		regMgr := relay.NewProcessManager(20000, 20000)
+		regMgr.AttachMetrics(m)
+
+		reg, err := ds.GetAllRegistration()
+		if err != nil {
+			for k, v := range reg {
+				regMgr.Set(k, v.Message.Timestamp)
+			}
+		}
+		go regMgr.RunCleanup(uint64(time.Hour*72), time.Hour)
 
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
