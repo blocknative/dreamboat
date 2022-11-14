@@ -7,6 +7,7 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type ProcessManager struct {
@@ -87,7 +88,7 @@ func (rm *ProcessManager) StoreChan() chan SVRStoreReq {
 }
 
 func (rm *ProcessManager) VerifyChan() chan SVRReq {
-	return rm.VerifyInputChStackA
+	return rm.VerifyInputChStackC
 }
 
 func (rm *ProcessManager) VerifyChanStacks(stack uint) chan SVRReq {
@@ -134,6 +135,10 @@ func (rm *ProcessManager) VerifyParallel() {
 	rm.m.RunningWorkers.WithLabelValues("VerifyParallel").Inc()
 	defer rm.m.RunningWorkers.WithLabelValues("VerifyParallel").Dec()
 
+	timerA := rm.m.VerifyTiming.WithLabelValues("submitBlock")
+	timerB := rm.m.VerifyTiming.WithLabelValues("registerValidator")
+	timerC := rm.m.VerifyTiming.WithLabelValues("other")
+
 	// Few words of explanation:
 	// Because Relay can only process a limitted number of signatures, it would operate on 3 different channels.
 	// This way we'll randomly pick next from different queues and huge number of request
@@ -144,11 +149,17 @@ func (rm *ProcessManager) VerifyParallel() {
 	for {
 		select {
 		case v := <-rm.VerifyInputChStackA:
+			t := prometheus.NewTimer(timerA)
 			v.Response <- verifyUnit(v.Iter, v.Msg, v.Signature, v.Pubkey)
+			t.ObserveDuration()
 		case v := <-rm.VerifyInputChStackB:
+			t := prometheus.NewTimer(timerB)
 			v.Response <- verifyUnit(v.Iter, v.Msg, v.Signature, v.Pubkey)
+			t.ObserveDuration()
 		case v := <-rm.VerifyInputChStackC:
+			t := prometheus.NewTimer(timerC)
 			v.Response <- verifyUnit(v.Iter, v.Msg, v.Signature, v.Pubkey)
+			t.ObserveDuration()
 		}
 	}
 }

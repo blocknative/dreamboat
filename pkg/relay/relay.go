@@ -192,14 +192,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"pubkey":    pk,
 	}).Debug("payload requested")
 
-	/*
-		ok, err := types.VerifySignature(
-			payloadRequest.Message,
-			rs.config.ProposerSigningDomain,
-			pk[:],
-			payloadRequest.Signature[:],
-		)
-	*/
 	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain)
 	if err != nil {
 		return nil, fmt.Errorf("signature invalid") // err
