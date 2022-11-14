@@ -55,7 +55,7 @@ func (rm *ProcessManager) RunCleanup(checkinterval uint64, cleanupInterval time.
 		var keys []string
 		rm.acc.RLock()
 		for k, v := range rm.M {
-			if now-v < checkinterval {
+			if checkinterval < now-v {
 				keys = append(keys, k)
 			}
 		}
