@@ -376,7 +376,7 @@ func HeaderKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-%d", slot))
 }
 
-func HeaderMaxProfitKey(slot Slot) ds.Key {
+func HeaderMaxProfitKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header/max-profit/%d", slot))
 }
 
@@ -414,10 +414,6 @@ func ValidatorKey(pk structs.PubKey) ds.Key {
 
 func RegistrationKey(pk structs.PubKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("%s%s", RegistrationPrefix, pk.String()))
-}
-
-func HeaderMaxProfitKey(slot structs.Slot) ds.Key {
-	return ds.NewKey(fmt.Sprintf("header/max-profit/%d", slot))
 }
 
 type TTLDatastoreBatcher struct {
