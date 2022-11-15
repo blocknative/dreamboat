@@ -137,7 +137,7 @@ var flags = []cli.Flag{
 }
 
 var (
-	config = pkg.Config{Log: log.New()}
+	config pkg.Config
 )
 
 // Main starts the relay
