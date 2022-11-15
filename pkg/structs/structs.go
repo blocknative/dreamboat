@@ -1,6 +1,7 @@
 package structs
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -181,4 +182,21 @@ type GenesisInfo struct {
 	GenesisTime           uint64 `json:"genesis_time,string"`
 	GenesisValidatorsRoot string `json:"genesis_validators_root"`
 	GenesisForkVersion    string `json:"genesis_fork_version"`
+}
+
+// / extra
+type HR struct {
+	HeaderAndTrace
+	Slot      Slot
+	Marshaled []byte `json:"-"`
+}
+
+func (hr *HR) UnmarshalJSON(b []byte) error {
+	var hnt HeaderAndTrace
+	if err := json.Unmarshal(b, &hnt); err != nil {
+		return err
+	}
+	hr.HeaderAndTrace = hnt
+	hr.Marshaled = b
+	return nil
 }

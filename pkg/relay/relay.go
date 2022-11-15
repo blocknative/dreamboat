@@ -3,6 +3,7 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -37,6 +38,9 @@ type Datastore interface {
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 
 	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
+
+	PutHeaderOptimized(ctx context.Context, hr structs.HR, ttl time.Duration) error
+
 	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
 	GetMaxProfitHeadersDesc(context.Context, structs.Slot) ([]structs.HeaderAndTrace, error)
 
@@ -433,7 +437,18 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		},
 	}
 
-	err = rs.d.PutHeader(ctx, slot, h, rs.config.TTL)
+	b, err := json.Marshal(h)
+	if err != nil {
+		logger.WithError(err).Error("PutHeader failed")
+		return err
+	}
+	err = rs.d.PutHeaderOptimized(ctx, structs.HR{
+		Slot:           slot,
+		Marshaled:      b,
+		HeaderAndTrace: h,
+	}, rs.config.TTL)
+
+	//err = rs.d.PutHeader(ctx, slot, h, rs.config.TTL)
 	if err != nil {
 		logger.WithError(err).Error("PutHeader failed")
 		return err
