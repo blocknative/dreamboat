@@ -16,15 +16,15 @@ import (
 	ds "github.com/ipfs/go-datastore"
 )
 
+var errChPool = sync.Pool{
+	New: func() any {
+		return make(chan error, 1)
+	},
+}
+
 const (
 	RegistrationPrefix = "registration-"
 )
-
-type Datastore struct {
-	TTLStorage
-	Viewer
-	mu sync.Mutex
-}
 
 type TTLStorage interface {
 	PutWithTTL(context.Context, ds.Key, []byte, time.Duration) error
@@ -36,10 +36,104 @@ type TTLStorage interface {
 
 type Viewer interface {
 	View(func(txn *badger.Txn) error) error
+	NewTransaction(bool) *badger.Txn
+}
+
+type Datastore struct {
+	TTLStorage
+	Viewer
+	mu sync.Mutex
+
+	PutHeadersCh chan HRReq
 }
 
 func NewDatastore(t TTLStorage, v Viewer) *Datastore {
-	return &Datastore{TTLStorage: t, Viewer: v}
+	return &Datastore{
+		TTLStorage:   t,
+		Viewer:       v,
+		PutHeadersCh: make(chan HRReq, 1),
+	}
+}
+
+type HRReq struct {
+	hr  structs.HR
+	ttl time.Duration
+	ret chan error
+}
+
+func (s *Datastore) PutHeaderOptimized(ctx context.Context, hr structs.HR, ttl time.Duration) error {
+	errCH := errChPool.Get().(chan error)
+	defer errChPool.Put(errCH)
+	s.PutHeadersCh <- HRReq{
+		ttl: ttl,
+		hr:  hr,
+		ret: errCH,
+	}
+
+	return <-errCH
+}
+
+func (s *Datastore) PutHeaderController() {
+	rm := make(map[uint64]*HNTs)
+	ctx := context.Background()
+
+	for h := range s.PutHeadersCh {
+		dbHeaders, ok := rm[h.hr.Trace.Slot]
+		if !ok {
+			hnt, err := getHNT(ctx, s, h.hr.Slot)
+			if err != nil {
+				h.ret <- err
+				continue
+			}
+			dbHeaders = hnt
+		}
+		dbHeaders.Add(h.hr)
+
+		err := storeHeader(s.Viewer, h.hr, dbHeaders.Serialize(), dbHeaders.SerializeMaxProfit(), h.ttl)
+		if err == nil {
+			rm[h.hr.Trace.Slot] = dbHeaders
+		}
+		h.ret <- err
+	}
+}
+
+func storeHeader(s Viewer, h structs.HR, headersData, maxProfit []byte, ttl time.Duration) error {
+	txn := s.NewTransaction(true)
+	defer txn.Discard()
+
+	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.Header.BlockHash).Bytes(), HeaderKey(h.Slot).Bytes()).WithTTL(ttl)); err != nil {
+		return err
+	}
+
+	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.Header.BlockNumber).Bytes(), HeaderKey(h.Slot).Bytes()).WithTTL(ttl)); err != nil {
+		return err
+	}
+
+	if err := txn.SetEntry(badger.NewEntry(HeaderKey(h.Slot).Bytes(), headersData).WithTTL(ttl)); err != nil {
+		return err
+	}
+
+	if err := txn.SetEntry(badger.NewEntry(HeaderMaxProfitKey(h.Slot).Bytes(), maxProfit).WithTTL(ttl)); err != nil {
+		return err
+	}
+
+	return txn.Commit()
+}
+
+func getHNT(ctx context.Context, s *Datastore, slot structs.Slot) (*HNTs, error) {
+	dbHeaders := NewHNTs()
+	data, err := s.TTLStorage.Get(ctx, HeaderKey(slot))
+	if err != nil {
+		if errors.Is(err, ds.ErrNotFound) {
+			return dbHeaders, nil
+		}
+		return dbHeaders, err
+	}
+	if err := json.Unmarshal(data, &dbHeaders.S); err != nil {
+		return dbHeaders, err
+	}
+	dbHeaders.LoadMaxProfit()
+	return dbHeaders, nil
 }
 
 func (s *Datastore) PutHeader(ctx context.Context, slot structs.Slot, header structs.HeaderAndTrace, ttl time.Duration) error {
@@ -158,24 +252,27 @@ func (s *Datastore) deduplicateHeaders(headers []structs.HeaderAndTrace, query s
 }
 
 func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace structs.DeliveredTrace, ttl time.Duration) error {
-	if err := s.TTLStorage.PutWithTTL(ctx, DeliveredHashKey(trace.Trace.BlockHash), DeliveredKey(slot).Bytes(), ttl); err != nil {
-		return err
-	}
-
-	if err := s.TTLStorage.PutWithTTL(ctx, DeliveredNumKey(trace.BlockNumber), DeliveredKey(slot).Bytes(), ttl); err != nil {
-		return err
-	}
-
-	if err := s.TTLStorage.PutWithTTL(ctx, DeliveredPubkeyKey(trace.Trace.ProposerPubkey), DeliveredKey(slot).Bytes(), ttl); err != nil {
-		return err
-	}
-
 	data, err := json.Marshal(trace.Trace)
 	if err != nil {
 		return err
 	}
 
-	return s.TTLStorage.PutWithTTL(ctx, DeliveredKey(slot), data, ttl)
+	txn := s.Viewer.NewTransaction(true)
+	defer txn.Discard()
+	if err := txn.SetEntry(badger.NewEntry(DeliveredHashKey(trace.Trace.BlockHash).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(ttl)); err != nil {
+		return err
+	}
+	if err := txn.SetEntry(badger.NewEntry(DeliveredNumKey(trace.BlockNumber).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(ttl)); err != nil {
+		return err
+	}
+	if err := txn.SetEntry(badger.NewEntry(DeliveredPubkeyKey(trace.Trace.ProposerPubkey).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(ttl)); err != nil {
+		return err
+	}
+	if err := txn.SetEntry(badger.NewEntry(DeliveredKey(slot).Bytes(), data).WithTTL(ttl)); err != nil {
+		return err
+	}
+
+	return txn.Commit()
 }
 
 func (s *Datastore) GetDelivered(ctx context.Context, query structs.Query) (structs.BidTraceWithTimestamp, error) {
