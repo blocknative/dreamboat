@@ -136,9 +136,8 @@ var flags = []cli.Flag{
 	},
 }
 
-var ( 
-	config relay.Config
-	svr    http.Server 
+var (
+	config pkg.Config
 )
 
 // Main starts the relay
