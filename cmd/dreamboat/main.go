@@ -250,7 +250,7 @@ func run() cli.ActionFunc {
 					"count-elements": len(reg),
 				}).Info("registrations loaded")
 		}
-		go regMgr.RunCleanup(uint64(time.Hour*72), time.Hour)
+		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
 
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
 			BuilderSigningDomain:    domainBuilder,
