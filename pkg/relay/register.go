@@ -143,7 +143,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	go registerSync(rs.regMngr, respCh, failure, exit, payload, &sentVerified)
 	go checkInMem(rs.beaconState, rs.regMngr, payload, respCh)
 	var failed bool
-	VInp := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
+	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
 	for i, p := range payload {
 		if failed { // after failure just populate the errors
 			atomic.AddUint32(&sentVerified, 1)
@@ -162,7 +162,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 		select {
 		case <-failure:
 			failed = true
-		case VInp <- VerifyReq{
+		case verifyChan <- VerifyReq{
 			Signature: p.Signature,
 			Pubkey:    p.Message.Pubkey,
 			Msg:       msg,
