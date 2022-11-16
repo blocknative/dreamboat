@@ -18,12 +18,6 @@ const (
 	ResponseTypeStored
 )
 
-const (
-	ResponseQueueSubmit = iota
-	ResponseQueueRegister
-	ResponseQueueOther
-)
-
 type Setter interface {
 	Set(k string, value uint64)
 }
@@ -32,38 +26,47 @@ type Getter interface {
 	Get(k string) (value uint64, ok bool)
 }
 
-type SVRReq struct {
+// VSReq is a request structure used in communication
+// between api calls and fixed set of worker goroutines
+// it's using return channel pattern, meaning that after
+// sent the sender locks on that channel to get the response
+type VSReq struct {
 	Signature [96]byte
 	Pubkey    [48]byte
-
-	Msg      [32]byte
-	Iter     int
-	Response chan SVRReqResp
+	Msg       [32]byte
+	// Unique identifier of payload
+	// if needed to be passed back in response
+	ID       int
+	Response chan Resp
 }
-type SVRStoreReq struct {
+
+// StoreReq is similar to VSReq jsut for storing payloads
+type StoreReq struct {
 	RawPayload json.RawMessage
 	Pubkey     types.PublicKey
-
-	Iter     int
-	Response chan SVRReqResp
+	ID         int
+	Response   chan Resp
 }
 
-type SVRReqResp struct {
+// Resp respone structure
+// - potential candidate for structure pool
+// as it's almost constant size
+type Resp struct {
+	ID     int
 	Type   int8
-	Err    error
 	Commit bool
-	Iter   int
+	Err    error
 }
 
-func registerSync(s RegistrationManager, in chan SVRReqResp, failure chan struct{}, exit chan error, payload []structs.SignedValidatorRegistration, sentVerified *uint32) {
+func registerSync(s RegistrationManager, in chan Resp, failure chan struct{}, exit chan error, payload []structs.SignedValidatorRegistration, sentVerified *uint32) {
 	var numVerify, numOthers, stored, sentToStore uint32
 	var total = uint32(len(payload))
 
-	storeCh := s.StoreChan()
+	storeCh := s.GetStoreChan()
 	rcv := make(map[int]struct{})
 
 	var (
-		item SVRReqResp
+		item Resp
 		err  error
 	)
 
@@ -85,12 +88,12 @@ func registerSync(s RegistrationManager, in chan SVRReqResp, failure chan struct
 				err = item.Err
 				close(failure)
 			}
-		} else if storeIfReady(s, rcv, item.Iter) {
-			p := payload[item.Iter]
+		} else if storeIfReady(s, rcv, item.ID) {
+			p := payload[item.ID]
 			s.Set(p.Message.Pubkey.String(), p.Message.Timestamp)
-			storeCh <- SVRStoreReq{
+			storeCh <- StoreReq{
 				Pubkey:     p.Message.Pubkey,
-				Iter:       item.Iter,
+				ID:         item.ID,
 				RawPayload: p.Raw,
 				Response:   in}
 
@@ -130,7 +133,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 		return fmt.Errorf("total number of validators exceeded: %d ", rs.config.RegisterValidatorMaxNum-1)
 	}
 
-	respCh := rs.retChannPool.Get().(chan SVRReqResp)
+	respCh := rs.retChannPool.Get().(chan Resp)
 	defer rs.retChannPool.Put(respCh)
 
 	failure := make(chan struct{}, 1)
@@ -140,18 +143,18 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	go registerSync(rs.regMngr, respCh, failure, exit, payload, &sentVerified)
 	go checkInMem(rs.beaconState, rs.regMngr, payload, respCh)
 	var failed bool
-	VInp := rs.regMngr.VerifyChanStacks(ResponseQueueRegister)
+	VInp := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
 	for i, p := range payload {
 		if failed { // after failure just populate the errors
 			atomic.AddUint32(&sentVerified, 1)
-			respCh <- SVRReqResp{Iter: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
+			respCh <- Resp{ID: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
 			break
 		}
 
 		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
 		if err != nil {
 			atomic.AddUint32(&sentVerified, 1)
-			respCh <- SVRReqResp{Iter: i, Err: errors.New("invalid signature"), Type: ResponseTypeVerify}
+			respCh <- Resp{ID: i, Err: errors.New("invalid signature"), Type: ResponseTypeVerify}
 			failed = true
 			break
 		}
@@ -159,11 +162,11 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 		select {
 		case <-failure:
 			failed = true
-		case VInp <- SVRReq{
+		case VInp <- VSReq{
 			Signature: p.Signature,
 			Pubkey:    p.Message.Pubkey,
 			Msg:       msg,
-			Iter:      i,
+			ID:        i,
 			Response:  respCh}:
 			atomic.AddUint32(&sentVerified, 1)
 		}
@@ -172,7 +175,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	return <-exit
 }
 
-func checkInMem(state State, getter Getter, payload []structs.SignedValidatorRegistration, out chan SVRReqResp) {
+func checkInMem(state State, getter Getter, payload []structs.SignedValidatorRegistration, out chan Resp) {
 	beacon := state.Beacon()
 	for i, sp := range payload {
 		p, ok := checkOneInMem(beacon, getter, i, sp)
@@ -183,19 +186,19 @@ func checkInMem(state State, getter Getter, payload []structs.SignedValidatorReg
 	}
 }
 
-func checkOneInMem(beacon *structs.BeaconState, getter Getter, i int, sp structs.SignedValidatorRegistration) (svresp SVRReqResp, ok bool) {
+func checkOneInMem(beacon *structs.BeaconState, getter Getter, i int, sp structs.SignedValidatorRegistration) (svresp Resp, ok bool) {
 	if verifyTimestamp(sp.Message.Timestamp) {
-		return SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
+		return Resp{Commit: false, ID: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
 	}
 
 	pk := structs.PubKey{PublicKey: sp.Message.Pubkey}
 	known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
 	if !known {
-		return SVRReqResp{Commit: false, Iter: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
+		return Resp{Commit: false, ID: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
 	}
 
 	previousValidatorTimestamp, ok := getter.Get(pk.String()) // Do not error on this
-	return SVRReqResp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), Iter: i, Type: ResponseTypeOthers}, true
+	return Resp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), ID: i, Type: ResponseTypeOthers}, true
 }
 
 func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.SignedValidatorRegistration) error {
@@ -216,14 +219,13 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 		return errors.New("invalid signature")
 	}
 
-	respCh := rs.singleRetChannPool.Get().(chan SVRReqResp)
+	respCh := rs.singleRetChannPool.Get().(chan Resp)
 	defer rs.singleRetChannPool.Put(respCh)
 
-	rs.regMngr.VerifyChanStacks(ResponseQueueRegister) <- SVRReq{
+	rs.regMngr.GetVerifyChan(ResponseQueueRegister) <- VSReq{
 		Signature: payload.Signature,
 		Pubkey:    payload.Message.Pubkey,
 		Msg:       msg,
-		Iter:      0,
 		Response:  respCh,
 	}
 	r := <-respCh
@@ -234,11 +236,10 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 	}
 
 	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidatorSingular", "store"))
-	storeCh := rs.regMngr.StoreChan()
+	storeCh := rs.regMngr.GetStoreChan()
 	rs.regMngr.Set(payload.Message.Pubkey.String(), payload.Message.Timestamp)
-	storeCh <- SVRStoreReq{
+	storeCh <- StoreReq{
 		Pubkey:     payload.Message.Pubkey,
-		Iter:       0,
 		RawPayload: payload.Raw,
 		Response:   respCh}
 

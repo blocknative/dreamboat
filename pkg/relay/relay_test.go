@@ -901,7 +901,6 @@ func random256Bytes() (b [256]byte) {
 }
 
 func randomPayload() *types.ExecutionPayload {
-
 	return &types.ExecutionPayload{
 		ParentHash:    types.Hash(random32Bytes()),
 		FeeRecipient:  types.Address(random20Bytes()),

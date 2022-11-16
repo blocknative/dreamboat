@@ -10,28 +10,34 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	ResponseQueueSubmit = iota
+	ResponseQueueRegister
+	ResponseQueueOther
+)
+
 type ProcessManager struct {
-	M   map[string]uint64
-	acc sync.RWMutex
+	LastRegTime map[string]uint64 // [pubkey]timestamp
+	lrtl        sync.RWMutex      // LastRegTime RWLock
 
-	VerifyInputChStackA chan SVRReq
-	VerifyInputChStackB chan SVRReq
-	VerifyInputChStackC chan SVRReq
+	VerifySubmitBlockCh       chan VSReq
+	VerifyRegisterValidatorCh chan VSReq
+	VerifyOtherCh             chan VSReq
 
-	StoreCh chan SVRStoreReq
+	StoreCh chan StoreReq
 
 	m ProcessManagerMetrics
 }
 
 func NewProcessManager(verifySize, storeSize uint) *ProcessManager {
 	rm := &ProcessManager{
-		M: make(map[string]uint64),
+		LastRegTime: make(map[string]uint64),
 
-		VerifyInputChStackA: make(chan SVRReq, verifySize),
-		VerifyInputChStackB: make(chan SVRReq, verifySize),
-		VerifyInputChStackC: make(chan SVRReq, verifySize),
+		VerifySubmitBlockCh:       make(chan VSReq, verifySize),
+		VerifyRegisterValidatorCh: make(chan VSReq, verifySize),
+		VerifyOtherCh:             make(chan VSReq, verifySize),
 
-		StoreCh: make(chan SVRStoreReq, storeSize),
+		StoreCh: make(chan StoreReq, storeSize),
 	}
 	rm.initMetrics()
 	return rm
@@ -53,67 +59,66 @@ func (rm *ProcessManager) RunCleanup(checkinterval uint64, cleanupInterval time.
 	for {
 		now := uint64(time.Now().Unix())
 		var keys []string
-		rm.acc.RLock()
-		for k, v := range rm.M {
+		rm.lrtl.RLock()
+		for k, v := range rm.LastRegTime {
 			if checkinterval < now-v {
 				keys = append(keys, k)
 			}
 		}
-		rm.acc.RUnlock()
+		rm.lrtl.RUnlock()
 
-		rm.acc.Lock()
+		rm.lrtl.Lock()
 		for _, k := range keys {
-			delete(rm.M, k)
+			delete(rm.LastRegTime, k)
 		}
-		rm.acc.Unlock()
-		rm.m.MapSize.Set(float64(len(rm.M)))
+		rm.lrtl.Unlock()
+		rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 
 		time.Sleep(cleanupInterval)
 	}
 }
 
 func (rm *ProcessManager) LoadAll(m map[string]uint64) {
-	rm.acc.Lock()
-	defer rm.acc.Unlock()
+	rm.lrtl.Lock()
+	defer rm.lrtl.Unlock()
 
 	for k, v := range m {
-		rm.M[k] = v
+		rm.LastRegTime[k] = v
 	}
 
-	rm.m.MapSize.Set(float64(len(rm.M)))
+	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 }
 
-func (rm *ProcessManager) StoreChan() chan SVRStoreReq {
+func (rm *ProcessManager) GetStoreChan() chan StoreReq {
 	return rm.StoreCh
 }
 
-func (rm *ProcessManager) VerifyChan() chan SVRReq {
-	return rm.VerifyInputChStackC
+func (rm *ProcessManager) VerifyChan() chan VSReq {
+	return rm.VerifyOtherCh
 }
 
-func (rm *ProcessManager) VerifyChanStacks(stack uint) chan SVRReq {
+func (rm *ProcessManager) GetVerifyChan(stack uint) chan VSReq {
 	switch stack {
-	case 0:
-		return rm.VerifyInputChStackA
-	case 1:
-		return rm.VerifyInputChStackB
-	case 2:
-		return rm.VerifyInputChStackC
+	case ResponseQueueSubmit:
+		return rm.VerifySubmitBlockCh
+	case ResponseQueueRegister:
+		return rm.VerifyRegisterValidatorCh
+	default: // ResponseQueueOther
+		return rm.VerifyOtherCh
 	}
-	return rm.VerifyInputChStackC
 }
 
 func (rm *ProcessManager) Set(k string, value uint64) {
-	rm.acc.Lock()
-	defer rm.acc.Unlock()
-	defer rm.m.MapSize.Set(float64(len(rm.M)))
-	rm.M[k] = value
+	rm.lrtl.Lock()
+	defer rm.lrtl.Unlock()
+	defer rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
+	rm.LastRegTime[k] = value
 }
 
 func (rm *ProcessManager) Get(k string) (value uint64, ok bool) {
-	rm.acc.RLock()
-	defer rm.acc.RUnlock()
-	value, ok = rm.M[k]
+	rm.lrtl.RLock()
+	defer rm.lrtl.RUnlock()
+	value, ok = rm.LastRegTime[k]
 	return
 }
 
@@ -123,9 +128,9 @@ func (rm *ProcessManager) ParallelStoreIfReady(datas Datastore, ttl time.Duratio
 	ctx := context.Background()
 
 	for i := range rm.StoreCh {
-		i.Response <- SVRReqResp{
+		i.Response <- Resp{
 			Type: ResponseTypeStored,
-			Iter: i.Iter,
+			ID:   i.ID,
 			Err:  datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.RawPayload, ttl),
 		}
 	}
@@ -148,26 +153,26 @@ func (rm *ProcessManager) VerifyParallel() {
 	// submitting blocks, registering validators and others.
 	for {
 		select {
-		case v := <-rm.VerifyInputChStackA:
+		case v := <-rm.VerifySubmitBlockCh:
 			t := prometheus.NewTimer(timerA)
-			v.Response <- verifyUnit(v.Iter, v.Msg, v.Signature, v.Pubkey)
+			v.Response <- verifyUnit(v.ID, v.Msg, v.Signature, v.Pubkey)
 			t.ObserveDuration()
-		case v := <-rm.VerifyInputChStackB:
+		case v := <-rm.VerifyRegisterValidatorCh:
 			t := prometheus.NewTimer(timerB)
-			v.Response <- verifyUnit(v.Iter, v.Msg, v.Signature, v.Pubkey)
+			v.Response <- verifyUnit(v.ID, v.Msg, v.Signature, v.Pubkey)
 			t.ObserveDuration()
-		case v := <-rm.VerifyInputChStackC:
+		case v := <-rm.VerifyOtherCh:
 			t := prometheus.NewTimer(timerC)
-			v.Response <- verifyUnit(v.Iter, v.Msg, v.Signature, v.Pubkey)
+			v.Response <- verifyUnit(v.ID, v.Msg, v.Signature, v.Pubkey)
 			t.ObserveDuration()
 		}
 	}
 }
 
-func verifyUnit(iter int, msg [32]byte, sigBytes [96]byte, pkBytes [48]byte) SVRReqResp {
+func verifyUnit(id int, msg [32]byte, sigBytes [96]byte, pkBytes [48]byte) Resp {
 	ok, err := VerifySignatureBytes(msg, sigBytes[:], pkBytes[:])
 	if err == nil && !ok {
 		err = bls.ErrInvalidSignature
 	}
-	return SVRReqResp{Err: err, Iter: iter, Type: ResponseTypeVerify}
+	return Resp{Err: err, ID: id, Type: ResponseTypeVerify}
 }
