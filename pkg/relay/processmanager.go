@@ -20,9 +20,9 @@ type ProcessManager struct {
 	LastRegTime map[string]uint64 // [pubkey]timestamp
 	lrtl        sync.RWMutex      // LastRegTime RWLock
 
-	VerifySubmitBlockCh       chan VSReq
-	VerifyRegisterValidatorCh chan VSReq
-	VerifyOtherCh             chan VSReq
+	VerifySubmitBlockCh       chan VerifyReq
+	VerifyRegisterValidatorCh chan VerifyReq
+	VerifyOtherCh             chan VerifyReq
 
 	StoreCh chan StoreReq
 
@@ -33,9 +33,9 @@ func NewProcessManager(verifySize, storeSize uint) *ProcessManager {
 	rm := &ProcessManager{
 		LastRegTime: make(map[string]uint64),
 
-		VerifySubmitBlockCh:       make(chan VSReq, verifySize),
-		VerifyRegisterValidatorCh: make(chan VSReq, verifySize),
-		VerifyOtherCh:             make(chan VSReq, verifySize),
+		VerifySubmitBlockCh:       make(chan VerifyReq, verifySize),
+		VerifyRegisterValidatorCh: make(chan VerifyReq, verifySize),
+		VerifyOtherCh:             make(chan VerifyReq, verifySize),
 
 		StoreCh: make(chan StoreReq, storeSize),
 	}
@@ -93,11 +93,11 @@ func (rm *ProcessManager) GetStoreChan() chan StoreReq {
 	return rm.StoreCh
 }
 
-func (rm *ProcessManager) VerifyChan() chan VSReq {
+func (rm *ProcessManager) VerifyChan() chan VerifyReq {
 	return rm.VerifyOtherCh
 }
 
-func (rm *ProcessManager) GetVerifyChan(stack uint) chan VSReq {
+func (rm *ProcessManager) GetVerifyChan(stack uint) chan VerifyReq {
 	switch stack {
 	case ResponseQueueSubmit:
 		return rm.VerifySubmitBlockCh

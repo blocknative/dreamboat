@@ -26,11 +26,11 @@ type Getter interface {
 	Get(k string) (value uint64, ok bool)
 }
 
-// VSReq is a request structure used in communication
+// VerifyReq is a request structure used in communication
 // between api calls and fixed set of worker goroutines
 // it's using return channel pattern, meaning that after
 // sent the sender locks on that channel to get the response
-type VSReq struct {
+type VerifyReq struct {
 	Signature [96]byte
 	Pubkey    [48]byte
 	Msg       [32]byte
@@ -40,7 +40,7 @@ type VSReq struct {
 	Response chan Resp
 }
 
-// StoreReq is similar to VSReq jsut for storing payloads
+// StoreReq is similar to VerifyReq jsut for storing payloads
 type StoreReq struct {
 	RawPayload json.RawMessage
 	Pubkey     types.PublicKey
@@ -162,7 +162,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 		select {
 		case <-failure:
 			failed = true
-		case VInp <- VSReq{
+		case VInp <- VerifyReq{
 			Signature: p.Signature,
 			Pubkey:    p.Message.Pubkey,
 			Msg:       msg,
@@ -222,7 +222,7 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 	respCh := rs.singleRetChannPool.Get().(chan Resp)
 	defer rs.singleRetChannPool.Put(respCh)
 
-	rs.regMngr.GetVerifyChan(ResponseQueueRegister) <- VSReq{
+	rs.regMngr.GetVerifyChan(ResponseQueueRegister) <- VerifyReq{
 		Signature: payload.Signature,
 		Pubkey:    payload.Message.Pubkey,
 		Msg:       msg,
