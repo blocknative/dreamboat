@@ -128,13 +128,15 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidator", "all"))
 	defer timer.ObserveDuration()
 
+	var respCh chan Resp
 	// This function is limitted to the size of the buffer to prevent deadlocks
 	if len(payload) >= int(rs.config.RegisterValidatorMaxNum-1) {
-		return fmt.Errorf("total number of validators exceeded: %d ", rs.config.RegisterValidatorMaxNum-1)
+		respCh = make(chan Resp, len(payload))
+		defer close(respCh)
+	} else {
+		respCh = rs.retChannPool.Get().(chan Resp)
+		defer rs.retChannPool.Put(respCh)
 	}
-
-	respCh := rs.retChannPool.Get().(chan Resp)
-	defer rs.retChannPool.Put(respCh)
 
 	failure := make(chan struct{}, 1)
 	exit := make(chan error, 1)
