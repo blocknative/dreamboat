@@ -237,19 +237,8 @@ func run() cli.ActionFunc {
 
 		regMgr := relay.NewProcessManager(c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
 		regMgr.AttachMetrics(m)
+		loadRegistrations(ds, regMgr)
 
-		reg, err := ds.GetAllRegistration()
-		if err == nil {
-			for k, v := range reg {
-				regMgr.Set(k, v.Message.Timestamp)
-			}
-
-			config.Log.
-				WithFields(logrus.Fields{
-					"service":        "registration",
-					"count-elements": len(reg),
-				}).Info("registrations loaded")
-		}
 		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
 
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
@@ -345,6 +334,22 @@ func run() cli.ActionFunc {
 
 		return g.Wait()
 	}
+}
+
+func loadRegistrations(ds *datastore.Datastore, regMgr *relay.ProcessManager) {
+	reg, err := ds.GetAllRegistration()
+	if err == nil {
+		for k, v := range reg {
+			regMgr.Set(k, v.Message.Timestamp)
+		}
+
+		config.Log.
+			WithFields(logrus.Fields{
+				"service":        "registration",
+				"count-elements": len(reg),
+			}).Info("registrations loaded")
+	}
+
 }
 
 func logger(c *cli.Context) log.Logger {
