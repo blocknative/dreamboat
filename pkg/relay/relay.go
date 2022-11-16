@@ -45,9 +45,8 @@ type Datastore interface {
 }
 
 type RegistrationManager interface {
-	StoreChan() chan SVRStoreReq
-	//VerifyChan() chan SVRReq
-	VerifyChanStacks(stack uint) chan SVRReq
+	GetStoreChan() chan StoreReq
+	GetVerifyChan(buffer uint) chan VSReq
 	Set(k string, value uint64)
 	Get(k string) (value uint64, ok bool)
 }
@@ -89,12 +88,12 @@ func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, 
 		regMngr:     regMngr,
 		retChannPool: sync.Pool{
 			New: func() any {
-				return make(chan SVRReqResp, config.RegisterValidatorMaxNum*3)
+				return make(chan Resp, config.RegisterValidatorMaxNum*3)
 			},
 		},
 		singleRetChannPool: sync.Pool{
 			New: func() any {
-				return make(chan SVRReqResp, 1)
+				return make(chan Resp, 1)
 			},
 		},
 	}
@@ -220,8 +219,8 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		return nil, fmt.Errorf("signature invalid") // err
 	}
 
-	respCh := rs.singleRetChannPool.Get().(chan SVRReqResp)
-	rs.regMngr.VerifyChanStacks(ResponseQueueOther) <- SVRReq{
+	respCh := rs.singleRetChannPool.Get().(chan Resp)
+	rs.regMngr.GetVerifyChan(ResponseQueueOther) <- VSReq{
 		Signature: payloadRequest.Signature,
 		Pubkey:    pk,
 		Msg:       msg,
@@ -468,8 +467,8 @@ func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest
 		return false, fmt.Errorf("signature invalid")
 	}
 
-	respCh := rs.singleRetChannPool.Get().(chan SVRReqResp)
-	rs.regMngr.VerifyChanStacks(ResponseQueueSubmit) <- SVRReq{
+	respCh := rs.singleRetChannPool.Get().(chan Resp)
+	rs.regMngr.GetVerifyChan(ResponseQueueSubmit) <- VSReq{
 		Signature: submitBlockRequest.Signature,
 		Pubkey:    submitBlockRequest.Message.BuilderPubkey,
 		Msg:       msg,

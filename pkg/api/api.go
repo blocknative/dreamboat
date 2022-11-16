@@ -34,13 +34,6 @@ const (
 	PathBuilderBlocksReceived     = "/relay/v1/data/bidtraces/builder_blocks_received"
 	PathProposerPayloadsDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
 	PathSpecificRegistration      = "/relay/v1/data/validator_registration"
-
-	// tracing
-	PathPprofIndex   = "/debug/pprof/"
-	PathPprofCmdline = "/debug/pprof/cmdline"
-	PathPprofSymbol  = "/debug/pprof/symbol"
-	PathPprofTrace   = "/debug/pprof/trace"
-	PathPprofProfile = "/debug/pprof/profile"
 )
 
 const (
