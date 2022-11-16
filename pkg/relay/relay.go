@@ -46,7 +46,7 @@ type Datastore interface {
 
 type RegistrationManager interface {
 	GetStoreChan() chan StoreReq
-	GetVerifyChan(buffer uint) chan VSReq
+	GetVerifyChan(buffer uint) chan VerifyReq
 	Set(k string, value uint64)
 	Get(k string) (value uint64, ok bool)
 }
@@ -220,7 +220,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	}
 
 	respCh := rs.singleRetChannPool.Get().(chan Resp)
-	rs.regMngr.GetVerifyChan(ResponseQueueOther) <- VSReq{
+	rs.regMngr.GetVerifyChan(ResponseQueueOther) <- VerifyReq{
 		Signature: payloadRequest.Signature,
 		Pubkey:    pk,
 		Msg:       msg,
@@ -468,7 +468,7 @@ func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest
 	}
 
 	respCh := rs.singleRetChannPool.Get().(chan Resp)
-	rs.regMngr.GetVerifyChan(ResponseQueueSubmit) <- VSReq{
+	rs.regMngr.GetVerifyChan(ResponseQueueSubmit) <- VerifyReq{
 		Signature: submitBlockRequest.Signature,
 		Pubkey:    submitBlockRequest.Message.BuilderPubkey,
 		Msg:       msg,
