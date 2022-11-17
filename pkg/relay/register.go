@@ -252,6 +252,9 @@ type FlowControl struct {
 	failed             bool
 }
 
+// NewFlowControl takes responseChannel that should be big enougth to store *all* the responses
+// So the external channel should be passed here from pool
+// However, if it's not  (nil respCh) the per flow channel is created to handle numElements*3
 func NewFlowControl(respCh chan Resp, numElements int) (fc *FlowControl) {
 
 	if respCh == nil {
