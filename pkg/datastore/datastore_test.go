@@ -43,9 +43,8 @@ func TestPutGetHeader(t *testing.T) {
 	header.Trace.Slot = uint64(slotInt)
 
 	// put
-	//err = ds.PutHeader(ctx, slot, header, time.Minute)
 	jsHeader, _ := json.Marshal(header)
-	err = ds.PutHeaderOptimized(ctx, structs.HR{
+	err = ds.PutHeader(ctx, structs.HR{
 		Slot:           slot,
 		HeaderAndTrace: header,
 		Marshaled:      jsHeader,
@@ -92,13 +91,12 @@ func TestPutGetHeaderDuplicate(t *testing.T) {
 	for i := 0; i < N; i++ {
 		// put
 		jsHeader, _ := json.Marshal(header)
-		err = ds.PutHeaderOptimized(ctx, structs.HR{
+		err = ds.PutHeader(ctx, structs.HR{
 			Slot:           slot,
 			HeaderAndTrace: header,
 			Marshaled:      jsHeader,
 		}, time.Minute)
 
-		//err := ds.PutHeader(ctx, slot, header, time.Minute)
 		require.NoError(t, err)
 	}
 
@@ -138,13 +136,11 @@ func TestPutGetHeaders(t *testing.T) {
 			header.Trace.Slot = uint64(slotInt)
 
 			jsHeader, _ := json.Marshal(header)
-			err = ds.PutHeaderOptimized(ctx, structs.HR{
+			err = ds.PutHeader(ctx, structs.HR{
 				Slot:           slot,
 				HeaderAndTrace: header,
 				Marshaled:      jsHeader,
 			}, time.Minute)
-
-			//			err := ds.PutHeader(ctx, slot, header, time.Minute)
 
 			require.NoError(t, err)
 			headers[i] = header
@@ -202,7 +198,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	// put
 
 	jsHeader, _ := json.Marshal(header)
-	err = d.PutHeaderOptimized(ctx, structs.HR{
+	err = d.PutHeader(ctx, structs.HR{
 		Slot:           slot,
 		HeaderAndTrace: header,
 		Marshaled:      jsHeader,
@@ -279,7 +275,13 @@ func TestPutGetHeaderBatch(t *testing.T) {
 		store := newMockDatastore()
 		ds := datastore.Datastore{TTLStorage: store}
 		for i, payload := range batch {
-			ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
+			jsHeader, _ := json.Marshal(payload)
+			err := ds.PutHeader(ctx, structs.HR{
+				Slot:           queries[i].Slot,
+				HeaderAndTrace: payload,
+				Marshaled:      jsHeader,
+			}, time.Minute)
+			require.NoError(t, err)
 		}
 		// get
 		gotBatch, err := ds.GetHeaderBatch(ctx, queries)
@@ -298,7 +300,13 @@ func TestPutGetHeaderBatch(t *testing.T) {
 		ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 
 		for i, payload := range batch {
-			ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
+			jsHeader, _ := json.Marshal(payload)
+			err := ds.PutHeader(ctx, structs.HR{
+				Slot:           queries[i].Slot,
+				HeaderAndTrace: payload,
+				Marshaled:      jsHeader,
+			}, time.Minute)
+			require.NoError(t, err)
 		}
 		// get
 		gotBatch, err := ds.GetHeaderBatch(ctx, queries)
@@ -343,9 +351,8 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 
 	//ds := datastore.Datastore{TTLStorage: store}
 	for i, header := range headers {
-		//err := ds.PutHeader(ctx, queries[i].Slot, header, time.Minute)
 		jsHeader, _ := json.Marshal(header)
-		err = ds.PutHeaderOptimized(ctx, structs.HR{
+		err = ds.PutHeader(ctx, structs.HR{
 			Slot:           queries[i].Slot,
 			HeaderAndTrace: header,
 			Marshaled:      jsHeader,
@@ -509,7 +516,7 @@ func TestGetRegistrationReal(t *testing.T) {
 	ds := datastore.Datastore{
 		TTLStorage: &datastore.TTLDatastoreBatcher{
 			TTLDatastore: store},
-		Viewer: store.DB}
+		Badger: store.DB}
 
 	registration := randomRegistration()
 	key := structs.PubKey{registration.Message.Pubkey}

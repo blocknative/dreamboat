@@ -40,7 +40,6 @@ type Relay interface {
 }
 
 type Datastore interface {
-	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
 	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
 	GetHeaderBatch(context.Context, []structs.Query) ([]structs.HeaderAndTrace, error)
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
