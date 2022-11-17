@@ -262,9 +262,15 @@ func run() cli.ActionFunc {
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
-		g, ctx := errgroup.WithContext(c.Context)
+		cContext, cancel := context.WithCancel(c.Context)
+
+		g, ctx := errgroup.WithContext(cContext)
 		g.Go(func() error {
-			return service.RunBeacon(ctx)
+			err := service.RunBeacon(ctx)
+			if err != nil {
+				cancel()
+			}
+			return err
 		})
 
 		// run internal http server
@@ -287,6 +293,8 @@ func run() cli.ActionFunc {
 
 		// wait for the relay service to be ready
 		select {
+		case <-cContext.Done():
+			return err
 		case <-service.Ready():
 		case <-ctx.Done():
 			return g.Wait()
