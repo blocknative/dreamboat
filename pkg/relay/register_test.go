@@ -269,12 +269,10 @@ func BenchmarkRegisterValidator(b *testing.B) {
 }
 
 func BenchmarkRegisterValidatorParallel(b *testing.B) {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
-
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 
