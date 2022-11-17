@@ -263,20 +263,6 @@ func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutDelivered", reflect.TypeOf((*MockDatastore)(nil).PutDelivered), arg0, arg1, arg2, arg3)
 }
 
-// PutHeader mocks base method
-func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 structs.Slot, arg2 structs.HeaderAndTrace, arg3 time.Duration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutHeader", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// PutHeader indicates an expected call of PutHeader
-func (mr *MockDatastoreMockRecorder) PutHeader(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutHeader", reflect.TypeOf((*MockDatastore)(nil).PutHeader), arg0, arg1, arg2, arg3)
-}
-
 // PutPayload mocks base method
 func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey, arg2 *structs.BlockBidAndTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
