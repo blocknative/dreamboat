@@ -105,10 +105,10 @@ var flags = []cli.Flag{
 		EnvVars: []string{"BN_RELAY_TTL"},
 	},
 	&cli.Uint64Flag{
-		Name:    "relay-max-request",
-		Usage:   "maximum number of validators in one request",
+		Name:    "relay-validator-queue-size",
+		Usage:   "The size of response queue, should be set to expected number of validators in one request",
 		Value:   100_000,
-		EnvVars: []string{"RELAY_MAX_REQ"},
+		EnvVars: []string{"RELAY_QUEUE_REQ"},
 	},
 	&cli.Uint64Flag{
 		Name:    "relay-workers-verify",
@@ -164,17 +164,17 @@ func setup() cli.BeforeFunc {
 		}
 
 		config = pkg.Config{
-			Log:                 logger(c),
-			RelayMaxRequest:     c.Uint64("relay-max-request"),
-			RelayRequestTimeout: c.Duration("timeout"),
-			Network:             c.String("network"),
-			BuilderCheck:        c.Bool("check-builder"),
-			BuilderURLs:         c.StringSlice("builder"),
-			BeaconEndpoints:     c.StringSlice("beacon"),
-			PubKey:              pk,
-			SecretKey:           sk,
-			Datadir:             c.String("datadir"),
-			TTL:                 c.Duration("ttl"),
+			Log:                      logger(c),
+			RelayQueueProcessingSize: c.Uint64("relay-validator-queue-size"),
+			RelayRequestTimeout:      c.Duration("timeout"),
+			Network:                  c.String("network"),
+			BuilderCheck:             c.Bool("check-builder"),
+			BuilderURLs:              c.StringSlice("builder"),
+			BeaconEndpoints:          c.StringSlice("beacon"),
+			PubKey:                   pk,
+			SecretKey:                sk,
+			Datadir:                  c.String("datadir"),
+			TTL:                      c.Duration("ttl"),
 		}
 
 		return
@@ -217,7 +217,7 @@ func run() cli.ActionFunc {
 
 		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
 		if err != nil {
-			config.Log.WithError(err).Fatal("failed to initialize datastore")
+			config.Log.WithError(err).Error("failed to initialize datastore")
 			return err
 		}
 		config.Log.With(log.F{
@@ -226,9 +226,7 @@ func run() cli.ActionFunc {
 		}).Info("data store initialized")
 
 		timeRelayStart := time.Now()
-
 		as := &pkg.AtomicState{}
-
 		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB)
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
 			return err
@@ -246,7 +244,7 @@ func run() cli.ActionFunc {
 			PubKey:                  config.PubKey,
 			SecretKey:               config.SecretKey,
 			TTL:                     config.TTL,
-			RegisterValidatorMaxNum: config.RelayMaxRequest,
+			RegisterValidatorMaxNum: config.RelayQueueProcessingSize,
 		}, as, ds, regMgr)
 		r.AttachMetrics(m)
 
