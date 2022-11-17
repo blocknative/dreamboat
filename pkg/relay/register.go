@@ -58,95 +58,6 @@ type Resp struct {
 	Err    error
 }
 
-type FlowControl struct {
-	FailureCh chan struct{}
-	ExitCh    chan error
-
-	failed bool
-}
-
-func NewFlowControl() (fc *FlowControl) {
-	return &FlowControl{
-		FailureCh: make(chan struct{}),
-		ExitCh:    make(chan error),
-	}
-}
-
-func (fc *FlowControl) Fail() {
-	if !fc.failed {
-		close(fc.FailureCh)
-	}
-}
-
-func (fc *FlowControl) Exit(err error) {
-	if !fc.failed {
-		close(fc.FailureCh)
-	}
-
-	fc.ExitCh <- err
-	close(fc.ExitCh)
-}
-
-func registerSync(s RegistrationManager, in chan Resp, fc *FlowControl, payload []structs.SignedValidatorRegistration, sentVerified *uint32) {
-	var numVerify, numOthers, stored, sentToStore uint32
-	var total = uint32(len(payload))
-
-	storeCh := s.GetStoreChan()
-	syncMap := make(map[int]struct{})
-
-	var (
-		item Resp
-		err  error
-	)
-
-	for item = range in {
-		switch item.Type {
-		case ResponseTypeVerify:
-			numVerify++
-		case ResponseTypeOthers:
-			numOthers++
-		case ResponseTypeStored:
-			stored++
-		}
-
-		if item.Err != nil {
-			if err == nil { // if there wasn't any error before
-				if item.Type == ResponseTypeOthers {
-					numOthers = total // this is terminator, so no event will come from here after
-				}
-				err = item.Err
-				fc.Fail()
-			}
-		} else if checkStoragePossibility(syncMap, item.ID) {
-			p := payload[item.ID]
-			s.Set(p.Message.Pubkey.String(), p.Message.Timestamp)
-			storeCh <- StoreReq{
-				Pubkey:     p.Message.Pubkey,
-				ID:         item.ID,
-				RawPayload: p.Raw,
-				Response:   in}
-
-			sentToStore++
-		}
-		if numVerify == atomic.LoadUint32(sentVerified) && numOthers == total && sentToStore == stored {
-			break
-		}
-	}
-
-	fc.Exit(err)
-}
-
-func checkStoragePossibility(syncMap map[int]struct{}, id int) bool {
-	// it's possible only if it has two records from both checks
-	_, ok := syncMap[id]
-	if !ok {
-		syncMap[id] = struct{}{}
-		return false
-	}
-	delete(syncMap, id)
-	return true
-}
-
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
 func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
@@ -154,85 +65,55 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	defer timer.ObserveDuration()
 
 	var respCh chan Resp
+
 	// This function is limitted to the size of the buffer to prevent deadlocks
-	if len(payload) >= int(rs.config.RegisterValidatorMaxNum-1) {
-		respCh = make(chan Resp, len(payload))
-		defer close(respCh)
-	} else {
+	if rs.config.RegisterValidatorMaxNum > uint64(len(payload)) {
 		respCh = rs.retChannPool.Get().(chan Resp)
 		defer rs.retChannPool.Put(respCh)
 	}
 
-	//failure := make(chan struct{}, 1)
-	//exit := make(chan error, 1)
-	fc := NewFlowControl()
+	fc := NewFlowControl(respCh, len(payload))
+	defer fc.Close()
 
-	sentVerified := uint32(0)
-	go registerSync(rs.regMngr, respCh, fc, payload, &sentVerified)
-	go checkInMem(rs.beaconState, rs.regMngr, payload, respCh)
-	var failed bool
+	// check other parameters in separate goroutine
+	go checkOthers(rs.beaconState, rs.regMngr, fc, payload)
+
+	// synchronize responses from:
+	//	- verification of signatures
+	//	- other checks of payload validity
+	//	- successfull store
+	go synchronizeResponses(rs.regMngr, fc, payload)
+
 	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
+SendPayloads:
 	for i, p := range payload {
-		if failed { // after failure just populate the errors
-			atomic.AddUint32(&sentVerified, 1)
-			respCh <- Resp{ID: i, Err: errors.New("failed"), Type: ResponseTypeVerify}
-			break
-		}
-
 		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
 		if err != nil {
-			atomic.AddUint32(&sentVerified, 1)
-			respCh <- Resp{ID: i, Err: errors.New("invalid signature"), Type: ResponseTypeVerify}
-			failed = true
-			break
+			fc.SentVerificationInc()
+			fc.RespCh <- Resp{ID: i, Err: errors.New("invalid signature"), Type: ResponseTypeVerify}
+			break SendPayloads
 		}
 
 		select {
 		case <-fc.FailureCh:
-			failed = true
+			break SendPayloads
 		case verifyChan <- VerifyReq{
 			Signature: p.Signature,
 			Pubkey:    p.Message.Pubkey,
 			Msg:       msg,
 			ID:        i,
-			Response:  respCh}:
-			atomic.AddUint32(&sentVerified, 1)
+			Response:  fc.RespCh}:
+			fc.SentVerificationInc()
 		}
 	}
 	return <-fc.ExitCh
-}
-
-func checkInMem(state State, getter Getter, payload []structs.SignedValidatorRegistration, out chan Resp) {
-	beacon := state.Beacon()
-	for i, sp := range payload {
-		p, ok := checkOneInMem(beacon, getter, i, sp)
-		out <- p
-		if !ok {
-			return
-		}
-	}
-}
-
-func checkOneInMem(beacon *structs.BeaconState, getter Getter, i int, sp structs.SignedValidatorRegistration) (svresp Resp, ok bool) {
-	if verifyTimestamp(sp.Message.Timestamp) {
-		return Resp{Commit: false, ID: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
-	}
-
-	pk := structs.PubKey{PublicKey: sp.Message.Pubkey}
-	known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
-	if !known {
-		return Resp{Commit: false, ID: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
-	}
-
-	previousValidatorTimestamp, ok := getter.Get(pk.String()) // Do not error on this
-	return Resp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), ID: i, Type: ResponseTypeOthers}, true
 }
 
 func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.SignedValidatorRegistration) error {
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidatorSingular", "all"))
 	defer timer.ObserveDuration()
 
-	otherChecks, _ := checkOneInMem(rs.beaconState.Beacon(), rs.regMngr, 0, payload)
+	otherChecks, _ := checkOther(rs.beaconState.Beacon(), rs.regMngr, 0, payload)
 	if otherChecks.Err != nil {
 		return otherChecks.Err
 	}
@@ -274,4 +155,145 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 	timer3.ObserveDuration()
 
 	return r.Err
+}
+
+func synchronizeResponses(s RegistrationManager, fc *FlowControl, payload []structs.SignedValidatorRegistration) {
+	var numVerify, numOthers, stored, sentToStore uint32
+	var total = uint32(len(payload))
+
+	storeCh := s.GetStoreChan()
+	syncMap := make(map[int]struct{})
+
+	var (
+		item Resp
+		err  error
+	)
+
+	for item = range fc.RespCh {
+		switch item.Type {
+		case ResponseTypeVerify:
+			numVerify++
+		case ResponseTypeOthers:
+			numOthers++
+		case ResponseTypeStored:
+			stored++
+		}
+
+		if item.Err != nil {
+			if err == nil { // if there wasn't any error before
+				if item.Type == ResponseTypeOthers {
+					numOthers = total // this is terminator, so no event will come from here after
+				}
+				err = item.Err
+				fc.Fail()
+			}
+		} else if checkStoragePossibility(syncMap, item.ID) {
+			p := payload[item.ID]
+			s.Set(p.Message.Pubkey.String(), p.Message.Timestamp)
+			storeCh <- StoreReq{
+				Pubkey:     p.Message.Pubkey,
+				ID:         item.ID,
+				RawPayload: p.Raw,
+				Response:   fc.RespCh}
+			sentToStore++
+		}
+
+		if numVerify == fc.SentVerifications() && numOthers == total && sentToStore == stored {
+			break
+		}
+	}
+
+	fc.Exit(err)
+}
+
+func checkStoragePossibility(syncMap map[int]struct{}, id int) bool {
+	// it's possible only if it has two records from both checks
+	_, ok := syncMap[id]
+	if !ok {
+		syncMap[id] = struct{}{}
+		return false
+	}
+	delete(syncMap, id)
+	return true
+}
+
+func checkOthers(state State, getter Getter, fc *FlowControl, payload []structs.SignedValidatorRegistration) {
+	beacon := state.Beacon()
+	for i, sp := range payload {
+		p, ok := checkOther(beacon, getter, i, sp)
+		fc.RespCh <- p
+		if !ok {
+			return
+		}
+	}
+}
+
+func checkOther(beacon *structs.BeaconState, getter Getter, i int, sp structs.SignedValidatorRegistration) (svresp Resp, ok bool) {
+	if verifyTimestamp(sp.Message.Timestamp) {
+		return Resp{Commit: false, ID: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
+	}
+
+	pk := structs.PubKey{PublicKey: sp.Message.Pubkey}
+	known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
+	if !known {
+		return Resp{Commit: false, ID: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
+	}
+
+	previousValidatorTimestamp, ok := getter.Get(pk.String()) // Do not error on this
+	return Resp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), ID: i, Type: ResponseTypeOthers}, true
+}
+
+type FlowControl struct {
+	RespCh   chan Resp
+	isPooled bool
+
+	FailureCh chan struct{}
+	ExitCh    chan error
+
+	sentToVerification uint32
+	failed             bool
+}
+
+func NewFlowControl(respCh chan Resp, numElements int) (fc *FlowControl) {
+
+	if respCh == nil {
+		respCh = make(chan Resp, numElements*3)
+		fc.isPooled = true
+	}
+
+	return &FlowControl{
+		RespCh:             respCh,
+		FailureCh:          make(chan struct{}),
+		ExitCh:             make(chan error),
+		sentToVerification: 0,
+	}
+}
+
+func (fc *FlowControl) Close() {
+	if !fc.isPooled {
+		close(fc.RespCh)
+	}
+}
+
+func (fc *FlowControl) SentVerificationInc() {
+	atomic.AddUint32(&fc.sentToVerification, 1)
+}
+
+func (fc *FlowControl) SentVerifications() uint32 {
+	return atomic.LoadUint32(&fc.sentToVerification)
+}
+
+func (fc *FlowControl) Fail() {
+	if !fc.failed {
+		close(fc.FailureCh)
+	}
+}
+
+func (fc *FlowControl) Exit(err error) {
+	if !fc.failed {
+		close(fc.FailureCh)
+	}
+
+	fc.ExitCh <- err
+	close(fc.ExitCh)
 }
