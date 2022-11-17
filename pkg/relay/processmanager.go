@@ -51,7 +51,7 @@ func (rm *ProcessManager) RunVerify(num uint) {
 
 func (rm *ProcessManager) RunStore(store Datastore, ttl time.Duration, num uint) {
 	for i := uint(0); i < num; i++ {
-		go rm.ParallelStoreIfReady(store, ttl)
+		go rm.ParallelStore(store, ttl)
 	}
 }
 
@@ -122,9 +122,9 @@ func (rm *ProcessManager) Get(k string) (value uint64, ok bool) {
 	return
 }
 
-func (rm *ProcessManager) ParallelStoreIfReady(datas Datastore, ttl time.Duration) {
-	rm.m.RunningWorkers.WithLabelValues("ParallelStoreIfReady").Inc()
-	defer rm.m.RunningWorkers.WithLabelValues("ParallelStoreIfReady").Dec()
+func (rm *ProcessManager) ParallelStore(datas Datastore, ttl time.Duration) {
+	rm.m.RunningWorkers.WithLabelValues("ParallelStore").Inc()
+	defer rm.m.RunningWorkers.WithLabelValues("ParallelStore").Dec()
 	ctx := context.Background()
 
 	for i := range rm.StoreCh {
