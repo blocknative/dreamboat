@@ -279,7 +279,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 					BlockHash:            payload.Payload.Data.BlockHash,
 					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
 					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: payload.Payload.Data.FeeRecipient,
+					ProposerFeeRecipient: payload.Trace.Message.ProposerFeeRecipient,
 					GasLimit:             payload.Payload.Data.GasLimit,
 					GasUsed:              payload.Payload.Data.GasUsed,
 					Value:                payload.Trace.Message.Value,
