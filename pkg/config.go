@@ -37,17 +37,17 @@ const (
 
 // Config provides all available options for the default BeaconClient and Relay
 type Config struct {
-	Log                 log.Logger
-	BuilderURLs         []string
-	Network             string
-	RelayRequestTimeout time.Duration
-	BuilderCheck        bool
-	BeaconEndpoints     []string
-	PubKey              types.PublicKey
-	SecretKey           *bls.SecretKey
-	Datadir             string
-	TTL                 time.Duration
-	RelayMaxRequest     uint64
+	Log                      log.Logger
+	BuilderURLs              []string
+	Network                  string
+	RelayRequestTimeout      time.Duration
+	BuilderCheck             bool
+	BeaconEndpoints          []string
+	PubKey                   types.PublicKey
+	SecretKey                *bls.SecretKey
+	Datadir                  string
+	TTL                      time.Duration
+	RelayQueueProcessingSize uint64
 
 	// private fields; populated during validation
 	builders              map[structs.PubKey]*builder
