@@ -31,13 +31,9 @@ func HeaderKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-%d", slot))
 }
 
-func HeaderMaxProfitKey(slot structs.Slot) ds.Key {
-	return ds.NewKey(fmt.Sprintf("header/max-profit/%d", slot))
-}
-
 type StoredIndex struct {
 	Index     []IndexEl
-	MaxProfit [][32]byte
+	MaxProfit [32]byte
 }
 
 type IndexEl struct {
@@ -67,10 +63,12 @@ var HRReqPool = sync.Pool{
 	},
 }
 
-func (s *Datastore) PutHeaderController() {
-	rm := make(map[uint64]*HNTs)
-	//ctx := context.Background()
+type HeaderController struct {
+	map[uint64]HNT
+}
 
+func PutHeaderController(hc *HeaderController, s Datastore) {
+	rm := make(map[uint64]*HNTs)
 	for h := range s.PutHeadersCh {
 		dbHeaders, ok := rm[h.Slot]
 		if !ok {
@@ -98,7 +96,14 @@ func (s *Datastore) PutHeaderController() {
 	}
 }
 
-func (s *Datastore) GetMaxProfitHeadersDesc(ctx context.Context, slot structs.Slot) ([]structs.HeaderAndTrace, error) {
+func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot structs.Slot) (structs.HeaderAndTrace, error) {
+
+	// Check memory
+		s.hc.
+	// Check new
+
+	// Check old (until ttl)
+
 	return s.getHeaders(ctx, HeaderMaxProfitKey(slot))
 }
 
