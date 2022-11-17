@@ -240,8 +240,8 @@ func verifyOther(beacon *structs.BeaconState, tsReg TimestampRegistry, i int, sp
 }
 
 type FlowControl struct {
-	RespCh   chan Resp
-	isPooled bool
+	RespCh  chan Resp
+	isLocal bool
 
 	FailureCh chan struct{}
 	ExitCh    chan error
@@ -254,7 +254,7 @@ func NewFlowControl(respCh chan Resp, numElements int) (fc *FlowControl) {
 
 	if respCh == nil {
 		respCh = make(chan Resp, numElements*3)
-		fc.isPooled = true
+		fc.isLocal = true
 	}
 
 	return &FlowControl{
@@ -266,7 +266,7 @@ func NewFlowControl(respCh chan Resp, numElements int) (fc *FlowControl) {
 }
 
 func (fc *FlowControl) Close() {
-	if !fc.isPooled {
+	if fc.isLocal {
 		close(fc.RespCh)
 	}
 }
