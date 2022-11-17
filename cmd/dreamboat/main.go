@@ -220,11 +220,10 @@ func run() cli.ActionFunc {
 			config.Log.WithError(err).Fatal("failed to initialize datastore")
 			return err
 		}
-		config.Log.
-			WithFields(logrus.Fields{
-				"service":     "datastore",
-				"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
-			}).Info("data store initialized")
+		config.Log.With(log.F{
+			"service":     "datastore",
+			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
+		}).Info("data store initialized")
 
 		timeRelayStart := time.Now()
 
@@ -260,7 +259,7 @@ func run() cli.ActionFunc {
 		regMgr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
 		regMgr.RunVerify(c.Uint("relay-workers-verify"))
 
-		config.Log.WithFields(logrus.Fields{
+		config.Log.With(log.F{
 			"service":     "relay",
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
@@ -343,11 +342,10 @@ func loadRegistrations(ds *datastore.Datastore, regMgr *relay.ProcessManager) {
 			regMgr.Set(k, v.Message.Timestamp)
 		}
 
-		config.Log.
-			WithFields(logrus.Fields{
-				"service":        "registration",
-				"count-elements": len(reg),
-			}).Info("registrations loaded")
+		config.Log.With(log.F{
+			"service":        "registration",
+			"count-elements": len(reg),
+		}).Info("registrations loaded")
 	}
 
 }
@@ -404,7 +402,6 @@ func withFormat(c *cli.Context) log.Option {
 			PrettyPrint:     c.Bool("prettyprint"),
 			TimestampFormat: time.RFC3339Nano,
 		}
-
 	default:
 		fmt = new(logrus.TextFormatter)
 	}
