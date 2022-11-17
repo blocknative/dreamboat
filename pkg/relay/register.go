@@ -18,12 +18,8 @@ const (
 	ResponseTypeStored
 )
 
-type Setter interface {
-	Set(k string, value uint64)
-}
-
-type Getter interface {
-	Get(k string) (value uint64, ok bool)
+type TimestampRegistry interface {
+	Get(pubkey string) (timestamp uint64, ok bool)
 }
 
 // VerifyReq is a request structure used in communication
@@ -75,12 +71,12 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	fc := NewFlowControl(respCh, len(payload))
 	defer fc.Close()
 
-	// check other parameters in separate goroutine
-	go checkOthers(rs.beaconState, rs.regMngr, fc, payload)
+	// verify other parameters in separate goroutine
+	go verifyOthers(rs.beaconState, rs.regMngr, fc, payload)
 
 	// synchronize responses from:
 	//	- verification of signatures
-	//	- other checks of payload validity
+	//	- other verifications of payload validity
 	//	- successfull store
 	go synchronizeResponses(rs.regMngr, fc, payload)
 
@@ -113,7 +109,7 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidatorSingular", "all"))
 	defer timer.ObserveDuration()
 
-	otherChecks, _ := checkOther(rs.beaconState.Beacon(), rs.regMngr, 0, payload)
+	otherChecks, _ := verifyOther(rs.beaconState.Beacon(), rs.regMngr, 0, payload)
 	if otherChecks.Err != nil {
 		return otherChecks.Err
 	}
@@ -217,10 +213,10 @@ func checkStoragePossibility(syncMap map[int]struct{}, id int) bool {
 	return true
 }
 
-func checkOthers(state State, getter Getter, fc *FlowControl, payload []structs.SignedValidatorRegistration) {
+func verifyOthers(state State, tsReg TimestampRegistry, fc *FlowControl, payload []structs.SignedValidatorRegistration) {
 	beacon := state.Beacon()
 	for i, sp := range payload {
-		p, ok := checkOther(beacon, getter, i, sp)
+		p, ok := verifyOther(beacon, tsReg, i, sp)
 		fc.RespCh <- p
 		if !ok {
 			return
@@ -228,7 +224,7 @@ func checkOthers(state State, getter Getter, fc *FlowControl, payload []structs.
 	}
 }
 
-func checkOther(beacon *structs.BeaconState, getter Getter, i int, sp structs.SignedValidatorRegistration) (svresp Resp, ok bool) {
+func verifyOther(beacon *structs.BeaconState, tsReg TimestampRegistry, i int, sp structs.SignedValidatorRegistration) (svresp Resp, ok bool) {
 	if verifyTimestamp(sp.Message.Timestamp) {
 		return Resp{Commit: false, ID: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
 	}
@@ -239,7 +235,7 @@ func checkOther(beacon *structs.BeaconState, getter Getter, i int, sp structs.Si
 		return Resp{Commit: false, ID: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String()), Type: ResponseTypeOthers}, false
 	}
 
-	previousValidatorTimestamp, ok := getter.Get(pk.String()) // Do not error on this
+	previousValidatorTimestamp, ok := tsReg.Get(pk.String()) // Do not error on this
 	return Resp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), ID: i, Type: ResponseTypeOthers}, true
 }
 
