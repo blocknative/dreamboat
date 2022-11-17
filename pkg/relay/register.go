@@ -132,6 +132,7 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 		Msg:       msg,
 		Response:  respCh,
 	}
+	// guaranteed to receive
 	r := <-respCh
 	timer2.ObserveDuration()
 
@@ -147,6 +148,7 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 		RawPayload: payload.Raw,
 		Response:   respCh}
 
+	// guaranteed to receive
 	r = <-respCh
 	timer3.ObserveDuration()
 

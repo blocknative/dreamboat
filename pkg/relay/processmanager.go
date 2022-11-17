@@ -57,25 +57,28 @@ func (rm *ProcessManager) RunStore(store Datastore, ttl time.Duration, num uint)
 
 func (rm *ProcessManager) RunCleanup(checkinterval uint64, cleanupInterval time.Duration) {
 	for {
-		now := uint64(time.Now().Unix())
-		var keys []string
-		rm.lrtl.RLock()
-		for k, v := range rm.LastRegTime {
-			if checkinterval < now-v {
-				keys = append(keys, k)
-			}
-		}
-		rm.lrtl.RUnlock()
-
-		rm.lrtl.Lock()
-		for _, k := range keys {
-			delete(rm.LastRegTime, k)
-		}
-		rm.lrtl.Unlock()
 		rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
-
+		rm.cleanupCycle(checkinterval)
 		time.Sleep(cleanupInterval)
 	}
+}
+
+func (rm *ProcessManager) cleanupCycle(checkinterval uint64) {
+	now := uint64(time.Now().Unix())
+	var keys []string
+	rm.lrtl.RLock()
+	for k, v := range rm.LastRegTime {
+		if checkinterval < now-v {
+			keys = append(keys, k)
+		}
+	}
+	defer rm.lrtl.RUnlock()
+
+	rm.lrtl.Lock()
+	for _, k := range keys {
+		delete(rm.LastRegTime, k)
+	}
+	defer rm.lrtl.Unlock()
 }
 
 func (rm *ProcessManager) LoadAll(m map[string]uint64) {
@@ -111,8 +114,9 @@ func (rm *ProcessManager) GetVerifyChan(stack uint) chan VerifyReq {
 func (rm *ProcessManager) Set(k string, value uint64) {
 	rm.lrtl.Lock()
 	defer rm.lrtl.Unlock()
-	defer rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
+
 	rm.LastRegTime[k] = value
+	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 }
 
 func (rm *ProcessManager) Get(k string) (value uint64, ok bool) {
