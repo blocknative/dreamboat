@@ -78,7 +78,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	//	- verification of signatures
 	//	- other verifications of payload validity
 	//	- successfull store
-	go synchronizeResponses(rs.regMngr, fc, payload)
+	go synchAndStore(rs.regMngr, fc, payload)
 
 	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
 SendPayloads:
@@ -153,7 +153,7 @@ func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.
 	return r.Err
 }
 
-func synchronizeResponses(s RegistrationManager, fc *FlowControl, payload []structs.SignedValidatorRegistration) {
+func synchAndStore(s RegistrationManager, fc *FlowControl, payload []structs.SignedValidatorRegistration) {
 	var numVerify, numOthers, stored, sentToStore uint32
 	var total = uint32(len(payload))
 
@@ -281,6 +281,7 @@ func (fc *FlowControl) SentVerifications() uint32 {
 
 func (fc *FlowControl) Fail() {
 	if !fc.failed {
+		fc.failed = true
 		close(fc.FailureCh)
 	}
 }
