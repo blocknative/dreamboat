@@ -1,31 +1,38 @@
 package datastore
 
 import (
-	"bytes"
 	"encoding/gob"
 	"sort"
 	"sync"
+
+	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
 type HNTs struct {
-	S   StoredIndex
-	buf *bytes.Buffer
+	S StoredIndex
+	//buf *bytes.Buffer
 
-	blockHashToContent map[[32]byte][]byte
+	blockHashToContent map[[32]byte]structs.HeaderAndTrace
 	contentLock        sync.RWMutex
 }
 
 func NewHNTs() (h *HNTs) {
 	return &HNTs{
-		buf:                new(bytes.Buffer),
-		blockHashToContent: make(map[[32]byte][]byte),
+		blockHashToContent: make(map[[32]byte]structs.HeaderAndTrace),
 	}
+}
+
+func (h *HNTs) GetMaxProfit() (structs.HeaderAndTrace, bool) {
+	h.contentLock.RLock()
+	defer h.contentLock.RUnlock()
+
+	n, ok := h.blockHashToContent[h.S.MaxProfit.Hash]
+	return n, ok
 }
 
 func (h *HNTs) AddContent(hash [32]byte, content []byte) {
 	h.contentLock.Lock()
 	defer h.contentLock.Unlock()
-
 }
 
 func (h *HNTs) Add(ihr IndexEl, content []byte) {
