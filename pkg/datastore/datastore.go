@@ -32,17 +32,17 @@ type Datastore struct {
 
 	hc *HeaderController
 
-	PutHeadersCh chan *HRReq
+	//	PutHeadersCh chan *HRReq
 
 	mu sync.RWMutex
 }
 
 func NewDatastore(t TTLStorage, v Badger, hc *HeaderController) *Datastore {
 	return &Datastore{
-		TTLStorage:   t,
-		Badger:       v,
-		hc:           hc,
-		PutHeadersCh: make(chan *HRReq, 1),
+		TTLStorage: t,
+		Badger:     v,
+		hc:         hc,
+		//	PutHeadersCh: make(chan *HRReq, 1),
 	}
 }
 

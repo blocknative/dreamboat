@@ -23,17 +23,26 @@ func HeaderNewKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("hi/%d", slot))
 }
 
-func HeaderKeyContent(slot structs.Slot, bh types.Hash) ds.Key {
-	return ds.NewKey(fmt.Sprintf("hc/%d/%s", slot, bh.String()))
+func HeaderKeyContent(slot structs.Slot, blockHash string) ds.Key {
+	return ds.NewKey(fmt.Sprintf("hc/%d/%s", slot, blockHash))
 }
 
+func HeaderMaxNewKey(slot structs.Slot) ds.Key {
+	return ds.NewKey(fmt.Sprintf("hm/%d", slot))
+}
+
+// OLD Entries
 func HeaderKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-%d", slot))
 }
 
+func HeaderMaxProfitKey(slot structs.Slot) ds.Key {
+	return ds.NewKey(fmt.Sprintf("header/max-profit/%d", slot))
+}
+
 type StoredIndex struct {
 	Index     []IndexEl
-	MaxProfit [32]byte
+	MaxProfit IndexEl
 }
 
 type IndexEl struct {
@@ -64,9 +73,36 @@ var HRReqPool = sync.Pool{
 }
 
 type HeaderController struct {
-	map[uint64]HNT
+	content map[uint64]*HNTs
+	cl      sync.RWMutex
 }
 
+func NewHeaderController() *HeaderController {
+	return &HeaderController{
+		content: make(map[uint64]*HNTs),
+	}
+}
+
+func (hc *HeaderController) GetMap(slot uint64) (*HNTs, bool) {
+	hc.cl.RLock()
+	defer hc.cl.RUnlock()
+
+	h, ok := hc.content[slot]
+	return h, ok
+}
+
+func (hc *HeaderController) GetMaxProfit(slot uint64) (hnt structs.HeaderAndTrace, ok bool) {
+	hc.cl.RLock()
+	defer hc.cl.RUnlock()
+	s, ok := hc.content[slot]
+	if !ok {
+		return hnt, false
+	}
+	return s.GetMaxProfit()
+
+}
+
+/*
 func PutHeaderController(hc *HeaderController, s Datastore) {
 	rm := make(map[uint64]*HNTs)
 	for h := range s.PutHeadersCh {
@@ -75,60 +111,108 @@ func PutHeaderController(hc *HeaderController, s Datastore) {
 
 		}
 		dbHeaders.Add(IndexEl{Hash: h.Hash, Value: h.Value, BuilderPubkey: h.BuilderPubkey})
-		/*
-			dbHeaders, ok := rm[h.hr.Trace.Slot]
-			if !ok {
-				hnt, err := getHNT(ctx, s, h.hr.Slot)
-				if err != nil {
-					h.ret <- err
-					continue
-				}
-				dbHeaders = hnt
-			}
-			dbHeaders.Add(h.hr)
 
-			err := storeHeader(s.Badger, h.hr, dbHeaders.Serialize(), dbHeaders.SerializeMaxProfit(), h.ttl)
-			if err == nil {
-				rm[h.hr.Trace.Slot] = dbHeaders
-			}
-			h.ret <- err
-		*/
+			// dbHeaders, ok := rm[h.hr.Trace.Slot]
+			// if !ok {
+			// 	hnt, err := getHNT(ctx, s, h.hr.Slot)
+			// 	if err != nil {
+			// 		h.ret <- err
+			// 		continue
+			// 	}
+			// 	dbHeaders = hnt
+			// }
+			// dbHeaders.Add(h.hr)
+
+			// err := storeHeader(s.Badger, h.hr, dbHeaders.Serialize(), dbHeaders.SerializeMaxProfit(), h.ttl)
+			// if err == nil {
+			// 	rm[h.hr.Trace.Slot] = dbHeaders
+			// }
+			// h.ret <- err
+
 	}
 }
+*/
 
 func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot structs.Slot) (structs.HeaderAndTrace, error) {
-
 	// Check memory
-		s.hc.
+	p, ok := s.hc.GetMaxProfit(uint64(slot))
+	if ok {
+		return p, nil
+	}
+
 	// Check new
+	p, err := s.getMaxHeader(ctx, slot)
+	if err != nil {
+		return p, nil
+	}
 
-	// Check old (until ttl)
+	// Check old (until ttl passes)
+	headers, err := s.getHeaders(ctx, HeaderMaxProfitKey(slot))
+	if err != nil {
+		return p, nil
+	}
 
-	return s.getHeaders(ctx, HeaderMaxProfitKey(slot))
+	if len(headers) == 0 {
+		return p, fmt.Errorf("there is no header")
+	}
+
+	return headers[0], nil
+}
+
+func (s *Datastore) putMaxHeader(ctx, slot structs.Slot) {
+
+}
+
+var ErrNotFound = errors.New("not found")
+
+func (s *Datastore) getMaxHeader(ctx context.Context, slot structs.Slot) (h structs.HeaderAndTrace, err error) {
+	txn := s.Badger.NewTransaction(false)
+	defer txn.Discard()
+	defer txn.Commit()
+
+	item, err := txn.Get(HeaderMaxNewKey(slot).Bytes())
+	if err != nil {
+		return h, err
+	}
+
+	item, err = txn.Get(HeaderKeyContent(slot, item.String()).Bytes())
+	if err != nil {
+		return h, err
+	}
+
+	h = structs.HeaderAndTrace{}
+	err = item.Value(func(val []byte) error {
+		return json.Unmarshal(val, &h)
+	})
+
+	return h, err
 }
 
 func (s *Datastore) PutHeader(ctx context.Context, hr structs.HR, ttl time.Duration) error {
 	// we don't need to lock here, as the value would be always different from different block
-	if err := s.TTLStorage.PutWithTTL(ctx, HeaderKeyContent(hr.Slot, hr.Trace.BlockHash), hr.Marshaled, ttl); err != nil {
+	if err := s.TTLStorage.PutWithTTL(ctx, HeaderKeyContent(hr.Slot, hr.Trace.BlockHash.String()), hr.Marshaled, ttl+time.Minute); err != nil {
 		return err
 	}
 
-	errCH := errChPool.Get().(chan error)
-	defer errChPool.Put(errCH)
+	s.hc.Add(hr.Slot, hr.HeaderAndTrace)
+	/*
+		errCH := errChPool.Get().(chan error)
+		defer errChPool.Put(errCH)
 
-	req := HRReqPool.Get().(*HRReq)
-	defer HRReqPool.Put(req)
+		req := HRReqPool.Get().(*HRReq)
+		defer HRReqPool.Put(req)
+	*/
+	/*
+		req.TTL = ttl
+		req.Ret = errCH
+		req.Slot = req.Slot
+		req.Hash = hr.Trace.BlockHash
+		req.BuilderPubkey = hr.Trace.BuilderPubkey
+		req.Value = hr.Trace.Value
+	*/
+	//s.PutHeadersCh <- req
 
-	req.TTL = ttl
-	req.Ret = errCH
-	req.Slot = req.Slot
-	req.Hash = hr.Trace.BlockHash
-	req.BuilderPubkey = hr.Trace.BuilderPubkey
-	req.Value = hr.Trace.Value
-
-	s.PutHeadersCh <- req
-
-	return <-errCH
+	//return <-errCH
 }
 
 func storeHeader(s Badger, h structs.HR, headersData, maxProfit []byte, ttl time.Duration) error {
