@@ -58,7 +58,36 @@ type Resp struct {
 	Err    error
 }
 
-func registerSync(s RegistrationManager, in chan Resp, failure chan struct{}, exit chan error, payload []structs.SignedValidatorRegistration, sentVerified *uint32) {
+type FlowControl struct {
+	FailureCh chan struct{}
+	ExitCh    chan error
+
+	failed bool
+}
+
+func NewFlowControl() (fc *FlowControl) {
+	return &FlowControl{
+		FailureCh: make(chan struct{}),
+		ExitCh:    make(chan error),
+	}
+}
+
+func (fc *FlowControl) Fail() {
+	if !fc.failed {
+		close(fc.FailureCh)
+	}
+}
+
+func (fc *FlowControl) Exit(err error) {
+	if !fc.failed {
+		close(fc.FailureCh)
+	}
+
+	fc.ExitCh <- err
+	close(fc.ExitCh)
+}
+
+func registerSync(s RegistrationManager, in chan Resp, fc *FlowControl, payload []structs.SignedValidatorRegistration, sentVerified *uint32) {
 	var numVerify, numOthers, stored, sentToStore uint32
 	var total = uint32(len(payload))
 
@@ -86,7 +115,7 @@ func registerSync(s RegistrationManager, in chan Resp, failure chan struct{}, ex
 					numOthers = total // this is terminator, so no event will come from here after
 				}
 				err = item.Err
-				close(failure)
+				fc.Fail()
 			}
 		} else if checkStoragePossibility(syncMap, item.ID) {
 			p := payload[item.ID]
@@ -104,11 +133,7 @@ func registerSync(s RegistrationManager, in chan Resp, failure chan struct{}, ex
 		}
 	}
 
-	if err == nil {
-		close(failure)
-	}
-	exit <- err
-	close(exit)
+	fc.Exit(err)
 }
 
 func checkStoragePossibility(syncMap map[int]struct{}, id int) bool {
@@ -138,11 +163,12 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 		defer rs.retChannPool.Put(respCh)
 	}
 
-	failure := make(chan struct{}, 1)
-	exit := make(chan error, 1)
+	//failure := make(chan struct{}, 1)
+	//exit := make(chan error, 1)
+	fc := NewFlowControl()
 
 	sentVerified := uint32(0)
-	go registerSync(rs.regMngr, respCh, failure, exit, payload, &sentVerified)
+	go registerSync(rs.regMngr, respCh, fc, payload, &sentVerified)
 	go checkInMem(rs.beaconState, rs.regMngr, payload, respCh)
 	var failed bool
 	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
@@ -162,7 +188,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 		}
 
 		select {
-		case <-failure:
+		case <-fc.FailureCh:
 			failed = true
 		case verifyChan <- VerifyReq{
 			Signature: p.Signature,
@@ -173,8 +199,7 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 			atomic.AddUint32(&sentVerified, 1)
 		}
 	}
-
-	return <-exit
+	return <-fc.ExitCh
 }
 
 func checkInMem(state State, getter Getter, payload []structs.SignedValidatorRegistration, out chan Resp) {
