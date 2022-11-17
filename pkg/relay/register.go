@@ -63,7 +63,7 @@ func registerSync(s RegistrationManager, in chan Resp, failure chan struct{}, ex
 	var total = uint32(len(payload))
 
 	storeCh := s.GetStoreChan()
-	rcv := make(map[int]struct{})
+	syncMap := make(map[int]struct{})
 
 	var (
 		item Resp
@@ -88,7 +88,7 @@ func registerSync(s RegistrationManager, in chan Resp, failure chan struct{}, ex
 				err = item.Err
 				close(failure)
 			}
-		} else if storeIfReady(s, rcv, item.ID) {
+		} else if checkStoragePossibility(syncMap, item.ID) {
 			p := payload[item.ID]
 			s.Set(p.Message.Pubkey.String(), p.Message.Timestamp)
 			storeCh <- StoreReq{
@@ -111,14 +111,14 @@ func registerSync(s RegistrationManager, in chan Resp, failure chan struct{}, ex
 	close(exit)
 }
 
-func storeIfReady(s Setter, rcv map[int]struct{}, iter int) bool {
-	// store only if it has two records from both checks
-	_, ok := rcv[iter]
+func checkStoragePossibility(syncMap map[int]struct{}, id int) bool {
+	// it's possible only if it has two records from both checks
+	_, ok := syncMap[id]
 	if !ok {
-		rcv[iter] = struct{}{}
+		syncMap[id] = struct{}{}
 		return false
 	}
-	delete(rcv, iter)
+	delete(syncMap, id)
 	return true
 }
 
