@@ -39,8 +39,9 @@ func TestGetHeader(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+
 	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+	//go ds.PutHeaderController()
 
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -865,28 +866,6 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 
 	err = r.SubmitBlock(ctx, submitRequest)
 	require.Error(t, err)
-}
-
-func BenchmarkSignatureValidation(b *testing.B) {
-	relaySigningDomain, _ := pkg.ComputeDomain(
-		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
-		types.Root{}.String())
-	registration, _ := validValidatorRegistration(b, relaySigningDomain)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		_, err := relay.VerifySignature(
-			registration.Message,
-			relaySigningDomain,
-			registration.Message.Pubkey[:],
-			registration.Signature[:])
-		if err != nil {
-			panic(err)
-		}
-	}
 }
 
 func validValidatorRegistration(t require.TestingT, domain types.Domain) (*types.SignedValidatorRegistration, *bls.SecretKey) {

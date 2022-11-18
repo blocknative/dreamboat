@@ -37,7 +37,7 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 }
 
 // GetDelivered mocks base method
-func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 structs.Query) (structs.BidTraceWithTimestamp, error) {
+func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 structs.PayloadQuery) (structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDelivered", arg0, arg1)
 	ret0, _ := ret[0].(structs.BidTraceWithTimestamp)
