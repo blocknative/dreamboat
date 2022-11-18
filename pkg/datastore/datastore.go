@@ -5,13 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
+)
+
+const (
+	RegistrationPrefix = "registration-"
 )
 
 type TTLStorage interface {
@@ -31,8 +34,6 @@ type Datastore struct {
 	Badger
 
 	hc *HeaderController
-
-	mu sync.RWMutex
 }
 
 func NewDatastore(t TTLStorage, v Badger, hc *HeaderController) *Datastore {

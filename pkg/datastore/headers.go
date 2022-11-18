@@ -1,12 +1,15 @@
 package datastore
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"regexp"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,7 +21,12 @@ import (
 )
 
 const (
-	RegistrationPrefix = "registration-"
+	HeaderPrefix        = "header-"
+	HeaderContentPrefix = "hc/"
+)
+
+var (
+	HeaderPrefixBytes = []byte("header-")
 )
 
 // NEW Indexes
@@ -34,11 +42,11 @@ func HeaderMaxNewKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("hm/%d", slot))
 }
 
-// OLD Entries
-func HeaderKey(slot structs.Slot) ds.Key {
-	return ds.NewKey(fmt.Sprintf("header-%d", slot))
+func HeaderKey(slot uint64) ds.Key {
+	return ds.NewKey(fmt.Sprintf("%s%d", HeaderPrefix, slot))
 }
 
+// OLD Entries
 func HeaderMaxProfitKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header/max-profit/%d", slot))
 }
@@ -137,6 +145,7 @@ func (hc *HeaderController) GetContent(slot uint64, limit int) (elements []struc
 			return elements, lastSlot
 		}
 		slot--
+		// implement step limit
 	}
 
 }
@@ -196,7 +205,7 @@ func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot structs.Slot) (
 	}
 
 	// Check old (until ttl passes)
-	headers, err := s.getHeaders(ctx, HeaderMaxProfitKey(slot))
+	headers, err := s.deprecatedGetHeaders(ctx, HeaderMaxProfitKey(slot))
 	if err != nil {
 		return p, nil
 	}
@@ -275,23 +284,6 @@ func storeHeader(s Badger, h structs.HR, ttl time.Duration) error {
 	return txn.Commit()
 }
 
-/*
-func getHNT(ctx context.Context, s *Datastore, slot structs.Slot) (*HNTs, error) {
-	dbHeaders := NewHNTs()
-	data, err := s.TTLStorage.Get(ctx, HeaderKey(slot))
-	if err != nil {
-		if errors.Is(err, ds.ErrNotFound) {
-			return dbHeaders, nil
-		}
-		return dbHeaders, err
-	}
-	if err := json.Unmarshal(data, &dbHeaders.S); err != nil {
-		return dbHeaders, err
-	}
-	dbHeaders.LoadMaxProfit()
-	return dbHeaders, nil
-}*/
-
 // HeaderKeyContent(slot structs.Slot, blockHash string) ds.Key
 func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error) {
 	el, _ := s.hc.GetContent(slot, 1)
@@ -299,6 +291,17 @@ func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]struct
 		return el, nil
 	}
 
+	data, err := s.TTLStorage.Get(ctx, HeaderKey(slot))
+	if err != nil && errors.Is(err, badger.ErrEmptyKey) {
+		return el, err
+	}
+
+	el = []structs.HeaderAndTrace{}
+	if err = json.Unmarshal(data, &el); err != nil {
+		return el, err
+	}
+
+	return el, err
 }
 
 func (s *Datastore) GetHeadersByBlockNum(ctx context.Context, blockNumber uint64) ([]structs.HeaderAndTrace, error) {
@@ -318,25 +321,142 @@ func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 }
 
 func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]structs.HeaderAndTrace, error) {
-
 	ls := s.hc.GetLatestSlot()
 	el, lastSlot := s.hc.GetContent(ls, int(limit))
-	if el != nil {
-		// all from memory
-		if len(el) >= int(limit) {
-			return el[:limit], nil
-		}
+	if el == nil {
+		el = []structs.HeaderAndTrace{}
+	}
+
+	// all from memory
+	if len(el) >= int(limit) {
+		return el[:limit], nil
 	}
 
 	initialLSlot := lastSlot
+	readr := bytes.NewReader(nil)
+	dec := json.NewDecoder(readr)
 	for {
-		data, err := s.TTLStorage.Get(ctx, HeaderKey(structs.Slot(initialLSlot)))
+		data, err := s.TTLStorage.Get(ctx, HeaderKey(initialLSlot))
 		if err != nil {
+			return el, err
+		}
+		readr.Reset(data)
+		hnt := []structs.HeaderAndTrace{}
+		if err := dec.Decode(&hnt); err != nil {
 			return nil, err
 		}
 
+		el = append(el, hnt...)
+		initialLSlot--
+
+		// introduce limit?
+	}
+}
+
+func (s *Datastore) deprecatedGetHeaders(ctx context.Context, key ds.Key) ([]structs.HeaderAndTrace, error) {
+	data, err := s.TTLStorage.Get(ctx, key)
+	if err != nil {
+		return nil, err
 	}
 
+	return s.deprecatedUnsmarshalHeaders(data)
+}
+
+func (s *Datastore) deprecatedUnsmarshalHeaders(data []byte) ([]structs.HeaderAndTrace, error) {
+	var headers []structs.HeaderAndTrace
+	if err := json.Unmarshal(data, &headers); err != nil {
+		var header structs.HeaderAndTrace
+		if err := json.Unmarshal(data, &header); err != nil {
+			return nil, err
+		}
+		return []structs.HeaderAndTrace{header}, nil
+	}
+	return headers, nil
+}
+
+// SaveHeaders is meant to persist the all the keys under one key
+// As optimization in future this function can operate only on database, so instead from memory it may just reorganize keys
+func (s *Datastore) SaveHeaders(ctx context.Context, slot uint64, hc HNTs, ttl time.Duration) error {
+	buff := bytes.NewBuffer(nil)
+	buff.WriteString("[")
+
+	cont := hc.GetContent()
+	enc := json.NewEncoder(buff)
+
+	for i, c := range cont {
+		if i > 0 {
+			buff.WriteString(",")
+		}
+		if err := enc.Encode(c); err != nil {
+			return err
+		}
+	}
+	buff.WriteString("]")
+	if err := s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
+		return err
+	}
+
+	buff.Truncate(0) // immediately remove
+	return nil
+}
+
+type LoadItem struct {
+	Time    uint64
+	Content []byte
+}
+
+func (s *Datastore) LoadRecentHeaders(hc *HeaderController) error {
+	exists := make(map[uint64][]LoadItem)
+
+	// Get all headers and keys
+	err := s.Badger.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		prefix := []byte("/" + HeaderContentPrefix)
+		re := regexp.MustCompile(`\/hc\/([^\/]+)\/([^\/]+)`)
+
+		//for it.Rewind(); it.Valid(); it.Next() {
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			subM := re.FindSubmatch(item.Key())
+			if len(subM) != 3 {
+				continue
+			}
+			slot, err := strconv.ParseUint(string(subM[2]), 10, 64)
+			if err != nil {
+				continue
+			}
+			is, ok := exists[slot]
+			if !ok {
+				_, err := txn.Get(append(HeaderPrefixBytes, subM[1]...))
+				if err != nil {
+					if !errors.Is(err, badger.ErrEmptyKey) {
+						return err
+					}
+					exists[slot] = nil
+				}
+				is = []LoadItem{}
+				exists[slot] = is
+			}
+
+			if ok && is == nil {
+				continue
+			}
+
+			li := LoadItem{
+				Time:    item.Version(),
+				Content: make([]byte, item.ValueSize())}
+			item.ValueCopy(li.Content)
+			exists[slot] = append(is, li)
+		}
+		return nil
+	})
+
+	return err
 }
 
 /*
@@ -401,18 +521,6 @@ func (s *Datastore) GetHeaderBatch(ctx context.Context, queries []structs.Header
 	}
 
 	return batch, nil
-}
-
-func (s *Datastore) unsmarshalHeaders(data []byte) ([]structs.HeaderAndTrace, error) {
-	var headers []structs.HeaderAndTrace
-	if err := json.Unmarshal(data, &headers); err != nil {
-		var header structs.HeaderAndTrace
-		if err := json.Unmarshal(data, &header); err != nil {
-			return nil, err
-		}
-		return []structs.HeaderAndTrace{header}, nil
-	}
-	return headers, nil
 }
 */
 /*

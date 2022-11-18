@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"math/rand"
-	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -33,8 +32,10 @@ func TestPutGetHeader(t *testing.T) {
 
 	store, err := badger.NewDatastore("/tmp/BadgerBatcher1", &badger.DefaultOptions)
 	require.NoError(t, err)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	//go ds.PutHeaderController()
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -52,19 +53,19 @@ func TestPutGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := ds.GetHeaders(ctx, structs.Query{Slot: slot})
+	gotHeader, err := ds.GetHeadersBySlot(ctx, uint64(slot))
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
 
 	// get by block hash
-	gotHeader, err = ds.GetHeaders(ctx, structs.Query{BlockHash: header.Header.BlockHash})
+	gotHeader, err = ds.GetHeadersByBlockHash(ctx, header.Header.BlockHash)
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
 
 	// get by block number
-	gotHeader, err = ds.GetHeaders(ctx, structs.Query{BlockNum: header.Header.BlockNumber})
+	gotHeader, err = ds.GetHeadersByBlockNum(ctx, header.Header.BlockNumber)
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
@@ -80,8 +81,10 @@ func TestPutGetHeaderDuplicate(t *testing.T) {
 
 	store, err := badger.NewDatastore("/tmp/BadgerBatcher2", &badger.DefaultOptions)
 	require.NoError(t, err)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	//go ds.PutHeaderController()
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -101,7 +104,7 @@ func TestPutGetHeaderDuplicate(t *testing.T) {
 	}
 
 	// get
-	gotHeaders, err := ds.GetHeaders(ctx, structs.Query{Slot: slot})
+	gotHeaders, err := ds.GetHeadersBySlot(ctx, uint64(slot))
 	require.NoError(t, err)
 	require.Len(t, gotHeaders, 1)
 	require.EqualValues(t, header.Trace.Value, gotHeaders[0].Trace.Value)
@@ -120,8 +123,9 @@ func TestPutGetHeaders(t *testing.T) {
 
 	store, err := badger.NewDatastore("/tmp/BadgerBatcher3", &badger.DefaultOptions)
 	require.NoError(t, err)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 
 	headers := make([]structs.HeaderAndTrace, N)
 	slots := make([]structs.Slot, N)
@@ -157,19 +161,19 @@ func TestPutGetHeaders(t *testing.T) {
 		header := headers[i]
 
 		// get
-		gotHeader, err := ds.GetHeaders(ctx, structs.Query{Slot: slot})
+		gotHeader, err := ds.GetHeadersBySlot(ctx, uint64(slot))
 		require.NoError(t, err)
 		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
 		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
 
 		// get by block hash
-		gotHeader, err = ds.GetHeaders(ctx, structs.Query{BlockHash: header.Header.BlockHash})
+		gotHeader, err = ds.GetHeadersByBlockHash(ctx, header.Header.BlockHash)
 		require.NoError(t, err)
 		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
 		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
 
 		// get by block number
-		gotHeader, err = ds.GetHeaders(ctx, structs.Query{BlockNum: header.Header.BlockNumber})
+		gotHeader, err = ds.GetHeadersByBlockNum(ctx, header.Header.BlockNumber)
 		require.NoError(t, err)
 		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
 		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
@@ -186,8 +190,10 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 
 	store, err := badger.NewDatastore("/tmp/BadgerBatcher4", &badger.DefaultOptions)
 	require.NoError(t, err)
-	d := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go d.PutHeaderController()
+
+	hc := datastore.NewHeaderController()
+	d := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	//go d.PutHeaderController()
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -206,18 +212,18 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	_, err = d.GetDelivered(ctx, structs.Query{Slot: slot})
+	_, err = d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block hash
-	_, err = d.GetDelivered(ctx, structs.Query{BlockHash: header.Trace.BlockHash})
+	_, err = d.GetDelivered(ctx, structs.PayloadQuery{BlockHash: header.Trace.BlockHash})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block number
-	_, err = d.GetDelivered(ctx, structs.Query{BlockNum: header.Header.BlockNumber})
+	_, err = d.GetDelivered(ctx, structs.PayloadQuery{BlockNum: header.Header.BlockNumber})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
-	_, err = d.GetDelivered(ctx, structs.Query{PubKey: header.Trace.ProposerPubkey})
+	_, err = d.GetDelivered(ctx, structs.PayloadQuery{PubKey: header.Trace.ProposerPubkey})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// set as delivered and retrieve again
@@ -225,25 +231,26 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := d.GetDelivered(ctx, structs.Query{Slot: slot})
+	gotHeader, err := d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
 	// get by block hash
-	gotHeader, err = d.GetDelivered(ctx, structs.Query{BlockHash: header.Trace.BlockHash})
+	gotHeader, err = d.GetDelivered(ctx, structs.PayloadQuery{BlockHash: header.Trace.BlockHash})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
 	// get by block number
-	gotHeader, err = d.GetDelivered(ctx, structs.Query{BlockNum: header.Header.BlockNumber})
+	gotHeader, err = d.GetDelivered(ctx, structs.PayloadQuery{BlockNum: header.Header.BlockNumber})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
-	gotHeader, err = d.GetDelivered(ctx, structs.Query{PubKey: header.Trace.ProposerPubkey})
+	gotHeader, err = d.GetDelivered(ctx, structs.PayloadQuery{PubKey: header.Trace.ProposerPubkey})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 }
 
+/*
 func TestPutGetHeaderBatch(t *testing.T) {
 	t.Parallel()
 
@@ -378,6 +385,7 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 	require.EqualValues(t, batch, gotBatch)
 
 }
+*/
 
 func TestPutGetPayload(t *testing.T) {
 	t.Parallel()

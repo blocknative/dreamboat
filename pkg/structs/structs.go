@@ -124,13 +124,6 @@ func (q HeaderTraceQuery) HasLimit() bool {
 	return q.Limit != 0
 }
 
-type HeaderQuery struct {
-	Slot      Slot
-	BlockHash types.Hash
-	BlockNum  uint64
-	Limit     uint64
-}
-
 type BidTraceExtended struct {
 	types.BidTrace
 	BlockNumber uint64 `json:"block_number,string"`
