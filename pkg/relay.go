@@ -21,6 +21,7 @@ var (
 	ErrMissingRequest        = errors.New("req is nil")
 	ErrMissingSecretKey      = errors.New("secret key is nil")
 	ErrUnknownValue          = errors.New("value is unknown")
+	ErrWrongFeeRecipient     = errors.New("wrong fee recipient")
 	UnregisteredValidatorMsg = "unregistered validator"
 	noBuilderBidMsg          = "no builder bid"
 	badHeaderMsg             = "invalid block header from datastore"
@@ -437,7 +438,7 @@ func (rs *DefaultRelay) SubmitBlock(ctx context.Context, submitBlockRequest *typ
 
 	logger.Trace("block submission requested")
 
-	_, err := rs.verifyBlock(submitBlockRequest)
+	_, err := rs.verifyBlock(ctx, submitBlockRequest, state)
 	if err != nil {
 		logger.WithError(err).
 			WithField("slot", submitBlockRequest.Message.Slot).
@@ -526,9 +527,21 @@ func (rs *DefaultRelay) GetValidators(state State) BuilderGetValidatorsResponseE
 	return validators
 }
 
-func (rs *DefaultRelay) verifyBlock(SubmitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) {
+func (rs *DefaultRelay) verifyBlock(ctx context.Context, SubmitBlockRequest *types.BuilderSubmitBlockRequest, state State) (bool, error) {
+
 	if SubmitBlockRequest == nil {
 		return false, fmt.Errorf("block empty")
+	}
+
+	pubKey := PubKey{SubmitBlockRequest.Message.ProposerPubkey}
+
+	reg, err := state.Datastore().GetRegistration(ctx, pubKey)
+	if err != nil && !errors.Is(err, ds.ErrNotFound) {
+		rs.Log().Warn(err)
+	}
+
+	if reg.Message.FeeRecipient != SubmitBlockRequest.Message.ProposerFeeRecipient {
+		return false, ErrWrongFeeRecipient
 	}
 
 	_ = simulateBlock()
