@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
@@ -57,6 +58,9 @@ type Resp struct {
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
 func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
+	logger := rs.l.WithField("method", "RegisterValidator")
+	timeStart := time.Now()
+
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidator", "all"))
 	defer timer.ObserveDuration()
 
@@ -102,7 +106,14 @@ SendPayloads:
 			fc.SentVerificationInc()
 		}
 	}
-	return <-fc.ExitCh
+
+	err := <-fc.ExitCh
+
+	logger.
+		WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
+		Trace("validator registrations succeeded")
+
+	return err
 }
 
 func (rs *Relay) RegisterValidatorSingular(ctx context.Context, payload structs.SignedValidatorRegistration) error {
