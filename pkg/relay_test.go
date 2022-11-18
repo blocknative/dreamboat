@@ -722,6 +722,34 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	}
 }
 
+func InvalidSubmitBlockFeeRecipient(b *testing.B) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctrl := gomock.NewController(b)
+
+	pk, _, _ := bls.GenerateNewKeypair()
+	config := relay.Config{Log: log.New(), Network: "ropsten", SecretKey: pk} // pragma: allowlist secret
+	r, _ := relay.NewRelay(config)
+	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
+	bc := mock_relay.NewMockBeaconState(ctrl)
+
+	relaySigningDomain, _ := relay.ComputeDomain(
+		types.DomainTypeAppBuilder,
+		relay.GenesisForkVersionRopsten,
+		types.Root{}.String())
+	submitRequest := validSubmitBlockRequest(b, relaySigningDomain)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	err := r.SubmitBlock(ctx, submitRequest, state{ds: ds, bc: bc})
+	if err == nil {
+		panic(err)
+	}
+
+}
+
 func BenchmarkSubmitBlockParallel(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

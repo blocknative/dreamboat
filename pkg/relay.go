@@ -22,6 +22,7 @@ var (
 	ErrMissingSecretKey      = errors.New("secret key is nil")
 	ErrUnknownValue          = errors.New("value is unknown")
 	ErrWrongFeeRecipient     = errors.New("wrong fee recipient")
+	ErrUnregisteredSlot      = errors.New("no registration for slot")
 	UnregisteredValidatorMsg = "unregistered validator"
 	noBuilderBidMsg          = "no builder bid"
 	badHeaderMsg             = "invalid block header from datastore"
@@ -536,8 +537,11 @@ func (rs *DefaultRelay) verifyBlock(ctx context.Context, SubmitBlockRequest *typ
 	pubKey := PubKey{SubmitBlockRequest.Message.ProposerPubkey}
 
 	reg, err := state.Datastore().GetRegistration(ctx, pubKey)
-	if err != nil && !errors.Is(err, ds.ErrNotFound) {
-		rs.Log().Warn(err)
+	if err != nil {
+		if !errors.Is(err, ds.ErrNotFound) {
+			rs.Log().Warn("unexpected datastore error")
+		}
+		return false, ErrUnregisteredSlot
 	}
 
 	if reg.Message.FeeRecipient != SubmitBlockRequest.Message.ProposerFeeRecipient {
