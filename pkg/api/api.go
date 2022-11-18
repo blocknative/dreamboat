@@ -37,7 +37,7 @@ const (
 )
 
 const (
-	DataLimit = 200
+	DataLimit = 450
 )
 
 var (
@@ -56,8 +56,8 @@ type Service interface {
 	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
-	GetPayloadDelivered(context.Context, structs.TraceQuery) ([]structs.BidTraceExtended, error)
-	GetBlockReceived(context.Context, structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
+	GetBlockReceived(context.Context, structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error)
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
 
@@ -316,7 +316,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		return http.StatusBadRequest, err
 	}
 
-	query := structs.TraceQuery{
+	query := structs.PayloadTraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,
@@ -345,6 +345,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int, error) {
+
 	slot, err := specificSlot(r)
 	if isInvalidParameter(err) {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400").Inc()
@@ -371,7 +372,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 		limit = DataLimit
 	}
 
-	query := structs.TraceQuery{
+	query := structs.HeaderTraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,

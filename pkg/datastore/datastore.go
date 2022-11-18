@@ -32,8 +32,6 @@ type Datastore struct {
 
 	hc *HeaderController
 
-	//	PutHeadersCh chan *HRReq
-
 	mu sync.RWMutex
 }
 
@@ -42,7 +40,6 @@ func NewDatastore(t TTLStorage, v Badger, hc *HeaderController) *Datastore {
 		TTLStorage: t,
 		Badger:     v,
 		hc:         hc,
-		//	PutHeadersCh: make(chan *HRReq, 1),
 	}
 }
 
@@ -70,7 +67,7 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace s
 	return txn.Commit()
 }
 
-func (s *Datastore) GetDelivered(ctx context.Context, query structs.Query) (structs.BidTraceWithTimestamp, error) {
+func (s *Datastore) GetDelivered(ctx context.Context, query structs.PayloadQuery) (structs.BidTraceWithTimestamp, error) {
 	key, err := s.queryToDeliveredKey(ctx, query)
 	if err != nil {
 		return structs.BidTraceWithTimestamp{}, err
@@ -89,7 +86,7 @@ func (s *Datastore) getDelivered(ctx context.Context, key ds.Key) (structs.BidTr
 	return trace, err
 }
 
-func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []structs.Query) ([]structs.BidTraceWithTimestamp, error) {
+func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error) {
 	keys := make([]ds.Key, 0, len(queries))
 	for _, query := range queries {
 		key, err := s.queryToDeliveredKey(ctx, query)
@@ -156,7 +153,7 @@ func (s *Datastore) GetRegistration(ctx context.Context, pk structs.PubKey) (typ
 	return registration, err
 }
 
-func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.Query) (ds.Key, error) {
+func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.PayloadQuery) (ds.Key, error) {
 	var (
 		rawKey []byte
 		err    error

@@ -1,8 +1,6 @@
 package datastore
 
 import (
-	"encoding/gob"
-	"sort"
 	"sync"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -10,83 +8,112 @@ import (
 
 type HNTs struct {
 	S StoredIndex
-	//buf *bytes.Buffer
 
-	blockHashToContent map[[32]byte]structs.HeaderAndTrace
-	contentLock        sync.RWMutex
+	content                    []structs.HeaderAndTrace
+	blockHashToContentPosition map[[32]byte]int
+	contentLock                sync.RWMutex
 }
 
 func NewHNTs() (h *HNTs) {
 	return &HNTs{
-		blockHashToContent: make(map[[32]byte]structs.HeaderAndTrace),
+		blockHashToContentPosition: make(map[[32]byte]int),
 	}
 }
 
-func (h *HNTs) GetMaxProfit() (structs.HeaderAndTrace, bool) {
+func (h *HNTs) GetContent() []structs.HeaderAndTrace {
 	h.contentLock.RLock()
 	defer h.contentLock.RUnlock()
 
-	n, ok := h.blockHashToContent[h.S.MaxProfit.Hash]
-	return n, ok
+	return h.content
 }
 
-func (h *HNTs) AddContent(hash [32]byte, content []byte) {
+func (h *HNTs) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
+	h.contentLock.RLock()
+	defer h.contentLock.RUnlock()
+
+	n, ok := h.blockHashToContentPosition[h.S.MaxProfit.Hash]
+	if !ok {
+		return hnt, ok
+	}
+	return h.content[n], true
+}
+
+func (h *HNTs) AddContent(hnt structs.HeaderAndTrace) error {
+	newEl := IndexEl{
+		Hash:          hnt.Trace.BlockHash,
+		Value:         hnt.Trace.Value.BigInt(),
+		BuilderPubkey: hnt.Trace.BuilderPubkey,
+	}
+
 	h.contentLock.Lock()
 	defer h.contentLock.Unlock()
-}
+	_, ok := h.blockHashToContentPosition[hnt.Trace.BlockHash]
+	if !ok {
+		h.content = append(h.content, hnt)
+		h.blockHashToContentPosition[hnt.Trace.BlockHash] = len(h.content)
+	}
 
-func (h *HNTs) Add(ihr IndexEl, content []byte) {
+	h.S.Index = append(h.S.Index, newEl)
 
-	h.S = append(h.S, &ihr)
-
-	// h.blockHashToIndex[ihr.Trace.BlockHash] = struct{}{}
-	// var exists bool
-	// skip max profit
-	// TODO(l): Make sure we shouldn't check the profit here
-	for i, mp := range h.MaxProfit {
-		if mp.Trace.BuilderPubkey == ihr.Trace.BuilderPubkey {
-			exists = true
-			h.MaxProfit[i] = mp
-			break
+	// we should allow resubmission
+	if h.S.MaxProfit.BuilderPubkey == newEl.BuilderPubkey {
+		// if new value is smaller we should pick new max that is not
+		if h.S.MaxProfit.Value.Cmp(newEl.Value) < 0 {
+			for _, el := range h.S.Index {
+				if (h.S.MaxProfit.Value == nil ||
+					h.S.MaxProfit.Value.Cmp(el.Value) < 0) &&
+					h.S.MaxProfit.BuilderPubkey == newEl.BuilderPubkey {
+					h.S.MaxProfit = el
+				}
+			}
+		}
+	} else {
+		if h.S.MaxProfit.Value == nil ||
+			h.S.MaxProfit.Value.Cmp(newEl.Value) < 0 {
+			h.S.MaxProfit = newEl
 		}
 	}
-	if !exists {
-		h.MaxProfit = append(h.MaxProfit, &ihr)
-	}
 
-	sort.Slice(h.MaxProfit, func(i, j int) bool {
-		return h.MaxProfit[i].Trace.Value.Cmp(&h.MaxProfit[j].Trace.Value) > 0
-	})
+	return nil
 }
 
-func (h *HNTs) LoadMaxProfit() {
-	for i := range h.S.Index {
-		h.MaxProfit = append(h.MaxProfit, h.S[i])
-	}
-	// sort by bid value DESC
-	sort.Slice(h.MaxProfit, func(i, j int) bool {
-		return h.MaxProfit[i].Trace.Value.Cmp(&h.MaxProfit[j].Trace.Value) > 0
-	})
-}
+/*
+	func (h *HNTs) Add(ihr IndexEl, content []byte) {
+		//h.S = append(h.S, &ihr)
+		// h.blockHashToIndex[ihr.Trace.BlockHash] = struct{}{}
+		// var exists bool
+		// skip max profit
+		// TODO(l): Make sure we shouldn't check the profit here
+		for i, mp := range h.MaxProfit {
+			if mp.Trace.BuilderPubkey == ihr.Trace.BuilderPubkey {
+				exists = true
+				h.MaxProfit[i] = mp
+				break
+			}
+		}
+		if !exists {
+			h.MaxProfit = append(h.MaxProfit, &ihr)
+		}
 
+		sort.Slice(h.MaxProfit, func(i, j int) bool {
+			return h.MaxProfit[i].Trace.Value.Cmp(&h.MaxProfit[j].Trace.Value) > 0
+		})
+	}
+*/
+/*
 func (h *HNTs) SerializeIndex() (b []byte, err error) {
-	enc := gob.NewEncoder(h.buf)
+	buf := new(bytes.Buffer)
+	enc := gob.NewEncoder(buf)
 	if err = enc.Encode(h.S); err != nil {
 		return nil, err
 	}
-	defer h.buf.Reset()
-	return h.buf.Bytes(), nil
+	defer buf.Reset()
+	return buf.Bytes(), nil
 }
 
 func (h *HNTs) Serialize() (b []byte) {
 	b = append(b, []byte("[")...)
 
-	/*for i, c := range h.S {
-		if i != 0 {
-			b = append(b, []byte(",")...)
-		}
-		b = append(b, c.Marshaled...)
-	}*/
 
 	for i, c := range h.S.Index {
 		if i != 0 {
@@ -98,7 +125,7 @@ func (h *HNTs) Serialize() (b []byte) {
 	b = append(b, []byte("]")...)
 	return b
 }
-
+*/
 /*
 type HNTs struct {
 	S         []*structs.HR
