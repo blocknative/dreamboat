@@ -539,7 +539,7 @@ func (rs *DefaultRelay) verifyBlock(ctx context.Context, SubmitBlockRequest *typ
 	reg, err := state.Datastore().GetRegistration(ctx, pubKey)
 	if err != nil {
 		if !errors.Is(err, ds.ErrNotFound) {
-			rs.Log().Warn("unexpected datastore error")
+			rs.Log().WithError(err).Warn("unexpected datastore error")
 		}
 		return false, ErrUnregisteredSlot
 	}
