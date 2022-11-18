@@ -108,6 +108,8 @@ func verifyTimestamp(timestamp uint64) bool {
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
 func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
+	timeStart := time.Now()
+
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "all"))
 	defer timer.ObserveDuration()
 
@@ -133,6 +135,8 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		"parentHash": parentHash,
 		"pubkey":     pk,
 	})
+
+	logger.Info("header requested")
 
 	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "getters"))
 	vd, err := rs.d.GetRegistration(ctx, pk)
@@ -170,14 +174,13 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		return nil, fmt.Errorf("internal server error")
 	}
 
-	/*
-		logger.With(log.F{
-			//"processingTimeMs": time.Since(timeStart).Milliseconds(),
-			"bidValue":     bid.Value.String(),
-			"blockHash":    bid.Header.BlockHash.String(),
-			"feeRecipient": bid.Header.FeeRecipient.String(),
-			"slot":         slot,
-		}).Trace("bid sent")*/
+	logger.With(log.F{
+		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"bidValue":         bid.Value.String(),
+		"blockHash":        bid.Header.BlockHash.String(),
+		"feeRecipient":     bid.Header.FeeRecipient.String(),
+		"slot":             slot,
+	}).Info("bid sent")
 
 	return &types.GetHeaderResponse{
 		Version: "bellatrix",
@@ -187,6 +190,7 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
 func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
+	timeStart := time.Now()
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "all"))
 	defer timer.ObserveDuration()
 
@@ -212,7 +216,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"slot":      payloadRequest.Message.Slot,
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		"pubkey":    pk,
-	}).Debug("payload requested")
+	}).Info("payload requested")
 
 	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain)
 	if err != nil {
@@ -252,17 +256,17 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		return nil, ErrNoPayloadFound
 	}
 	timer3.ObserveDuration()
-	/*
-		logger.With(log.F{
-			"slot":         payloadRequest.Message.Slot,
-			"blockHash":    payload.Payload.Data.BlockHash,
-			"blockNumber":  payload.Payload.Data.BlockNumber,
-			"stateRoot":    payload.Payload.Data.StateRoot,
-			"feeRecipient": payload.Payload.Data.FeeRecipient,
-			"bid":          payload.Bid.Data.Message.Value,
-			"numTx":        len(payload.Payload.Data.Transactions),
-		}).Info("payload fetched")
-	*/
+
+	logger.With(log.F{
+		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"slot":             payloadRequest.Message.Slot,
+		"blockHash":        payload.Payload.Data.BlockHash,
+		"blockNumber":      payload.Payload.Data.BlockNumber,
+		"stateRoot":        payload.Payload.Data.StateRoot,
+		"feeRecipient":     payload.Payload.Data.FeeRecipient,
+		"bid":              payload.Bid.Data.Message.Value,
+		"numTx":            len(payload.Payload.Data.Transactions),
+	}).Info("payload fetched")
 
 	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "putDelivered"))
 	response := types.GetPayloadResponse{
@@ -296,14 +300,12 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		rs.l.WithError(err).Warn("failed to set payload after delivery")
 	}
 	timer4.ObserveDuration()
-	/*
-		logger.With(log.F{
-			"processingTimeMs": time.Since(timeStart).Milliseconds(),
-			"slot":             payloadRequest.Message.Slot,
-			"blockHash":        payload.Payload.Data.BlockHash,
-			"bid":              payload.Bid.Data.Message.Value,
-		}).Trace("payload sent")
-	*/
+
+	logger.With(log.F{
+		"slot":      payloadRequest.Message.Slot,
+		"blockHash": payload.Payload.Data.BlockHash,
+		"bid":       payload.Bid.Data.Message.Value,
+	}).Info("payload sent")
 
 	return &response, nil
 }
@@ -343,6 +345,8 @@ func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, 
 
 // SubmitBlock Accepts block from trusted builder and stores
 func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
+	timeStart := time.Now()
+
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "all"))
 	defer timer.ObserveDuration()
 
@@ -354,6 +358,8 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		"proposer":  submitBlockRequest.Message.ProposerPubkey,
 		"bid":       submitBlockRequest.Message.Value.String(),
 	})
+
+	logger.Trace("block submission requested")
 
 	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "verify"))
 	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon().GenesisTime)
@@ -433,11 +439,11 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return err
 	}
 	timer5.ObserveDuration()
-	/*
-		logger.With(log.F{
-			"processingTimeMs": time.Since(timeStart).Milliseconds(),
-		}).Trace("builder block stored")
-	*/
+
+	logger.With(log.F{
+		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+	}).Trace("builder block stored")
+
 	return nil
 }
 
