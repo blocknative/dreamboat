@@ -2,6 +2,7 @@ package relay_test
 
 import (
 	"context"
+	"math/rand"
 	"strconv"
 	"sync"
 	"testing"
@@ -252,12 +253,48 @@ func TestSubmitBlock(t *testing.T) {
 	ds := &relay.DefaultDatastore{TTLStorage: newMockDatastore()}
 	bc := mock_relay.NewMockBeaconState(ctrl)
 
+	proposerSigningDomain, err := relay.ComputeDomain(
+		types.DomainTypeBeaconProposer,
+		relay.BellatrixForkVersionRopsten,
+		relay.GenesisValidatorsRootRopsten)
+	require.NoError(t, err)
+	registration, _ := validValidatorRegistration(t, proposerSigningDomain)
+
 	relaySigningDomain, err := relay.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
-	submitRequest := validSubmitBlockRequest(t, relaySigningDomain)
+
+	sk, pk, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+
+	var pubKey types.PublicKey
+	pubKey.FromSlice(pk.Compress())
+
+	submitPayload := randomPayload()
+
+	msg := &types.BidTrace{
+		Slot:                 rand.Uint64(),
+		ParentHash:           submitPayload.ParentHash,
+		BlockHash:            submitPayload.BlockHash,
+		BuilderPubkey:        pubKey,
+		ProposerPubkey:       registration.Message.Pubkey,
+		ProposerFeeRecipient: registration.Message.FeeRecipient,
+		Value:                types.IntToU256(rand.Uint64()),
+	}
+
+	signature, err := types.SignMessage(msg, relaySigningDomain, sk)
+	require.NoError(t, err)
+
+	submitRequest := &types.BuilderSubmitBlockRequest{
+		Signature:        signature,
+		Message:          msg,
+		ExecutionPayload: submitPayload,
+	}
+
+	err = ds.PutRegistration(ctx, relay.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	require.NoError(t, err)
 
 	err = r.SubmitBlock(ctx, submitRequest, state{ds: ds, bc: bc})
 	require.NoError(t, err)
