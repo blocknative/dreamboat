@@ -32,7 +32,7 @@ var (
 
 type Datastore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.Query) (structs.BidTraceWithTimestamp, error)
+	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
@@ -156,8 +156,6 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 	timer2.ObserveDuration()
-
-	//header := headers[0] // choose the highest bid, which is index 0
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)
@@ -392,7 +390,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 
 	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "getDelivered"))
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
-	_, err = rs.d.GetDelivered(ctx, structs.Query{Slot: slot})
+	_, err = rs.d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
 	timer3.ObserveDuration()
 	if err == nil {
 		logger.Debug("block submission after payload delivered")

@@ -36,7 +36,7 @@ func (m *MockService) EXPECT() *MockServiceMockRecorder {
 }
 
 // GetBlockReceived mocks base method
-func (m *MockService) GetBlockReceived(arg0 context.Context, arg1 structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+func (m *MockService) GetBlockReceived(arg0 context.Context, arg1 structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBlockReceived", arg0, arg1)
 	ret0, _ := ret[0].([]structs.BidTraceWithTimestamp)
@@ -81,7 +81,7 @@ func (mr *MockServiceMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.Ca
 }
 
 // GetPayloadDelivered mocks base method
-func (m *MockService) GetPayloadDelivered(arg0 context.Context, arg1 structs.TraceQuery) ([]structs.BidTraceExtended, error) {
+func (m *MockService) GetPayloadDelivered(arg0 context.Context, arg1 structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayloadDelivered", arg0, arg1)
 	ret0, _ := ret[0].([]structs.BidTraceExtended)
