@@ -227,12 +227,16 @@ func run() cli.ActionFunc {
 
 		timeRelayStart := time.Now()
 		as := &pkg.AtomicState{}
-		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB)
+
+		hc := datastore.NewHeaderController()
+		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB, hc)
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
 			return err
 		}
 
-		go ds.PutHeaderController()
+		if err = ds.FixOrphanHeaders(c.Context, config.TTL); err != nil {
+			return err
+		}
 
 		regMgr := relay.NewProcessManager(c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
 		regMgr.AttachMetrics(m)

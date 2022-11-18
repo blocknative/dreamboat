@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -26,6 +27,7 @@ type TTLStorage interface {
 
 type Badger interface {
 	View(func(txn *badger.Txn) error) error
+	Update(func(txn *badger.Txn) error) error
 	NewTransaction(bool) *badger.Txn
 }
 
@@ -34,6 +36,7 @@ type Datastore struct {
 	Badger
 
 	hc *HeaderController
+	l  sync.Mutex
 }
 
 func NewDatastore(t TTLStorage, v Badger, hc *HeaderController) *Datastore {

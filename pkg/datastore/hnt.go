@@ -9,6 +9,7 @@ import (
 type HNTs struct {
 	S StoredIndex
 
+	rev                        uint64
 	content                    []structs.HeaderAndTrace
 	blockHashToContentPosition map[[32]byte]int
 	contentLock                sync.RWMutex
@@ -20,11 +21,17 @@ func NewHNTs() (h *HNTs) {
 	}
 }
 
-func (h *HNTs) GetContent() []structs.HeaderAndTrace {
+func (h *HNTs) GetRevision() (revision uint64) {
+	h.contentLock.RLock()
+	defer h.contentLock.RUnlock()
+	return h.rev
+}
+
+func (h *HNTs) GetContent() (content []structs.HeaderAndTrace, revision uint64) {
 	h.contentLock.RLock()
 	defer h.contentLock.RUnlock()
 
-	return h.content
+	return h.content, h.rev
 }
 
 func (h *HNTs) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
@@ -47,6 +54,7 @@ func (h *HNTs) AddContent(hnt structs.HeaderAndTrace) error {
 
 	h.contentLock.Lock()
 	defer h.contentLock.Unlock()
+
 	_, ok := h.blockHashToContentPosition[hnt.Trace.BlockHash]
 	if !ok {
 		h.content = append(h.content, hnt)
@@ -73,6 +81,7 @@ func (h *HNTs) AddContent(hnt structs.HeaderAndTrace) error {
 			h.S.MaxProfit = newEl
 		}
 	}
+	h.rev++
 
 	return nil
 }
