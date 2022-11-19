@@ -238,6 +238,8 @@ func run() cli.ActionFunc {
 			return err
 		}
 
+		go ds.MemoryCleanup(c.Context, config.TTL)
+
 		regMgr := relay.NewProcessManager(c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
 		regMgr.AttachMetrics(m)
 		loadRegistrations(ds, regMgr)
