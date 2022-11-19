@@ -255,7 +255,7 @@ func (h *HNTs) AddContent(hnt structs.HeaderAndTrace) error {
 	_, ok := h.blockHashToContentPosition[hnt.Trace.BlockHash]
 	if !ok {
 		h.content = append(h.content, hnt)
-		h.blockHashToContentPosition[hnt.Trace.BlockHash] = len(h.content)
+		h.blockHashToContentPosition[hnt.Trace.BlockHash] = len(h.content) - 1
 	}
 
 	h.S.Index = append(h.S.Index, newEl)
