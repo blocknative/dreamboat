@@ -57,8 +57,8 @@ func (rm *ProcessManager) RunStore(store Datastore, ttl time.Duration, num uint)
 
 func (rm *ProcessManager) RunCleanup(checkinterval uint64, cleanupInterval time.Duration) {
 	for {
-		rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 		rm.cleanupCycle(checkinterval)
+		rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 		time.Sleep(cleanupInterval)
 	}
 }
@@ -72,13 +72,13 @@ func (rm *ProcessManager) cleanupCycle(checkinterval uint64) {
 			keys = append(keys, k)
 		}
 	}
-	defer rm.lrtl.RUnlock()
+	rm.lrtl.RUnlock()
 
 	rm.lrtl.Lock()
 	for _, k := range keys {
 		delete(rm.LastRegTime, k)
 	}
-	defer rm.lrtl.Unlock()
+	rm.lrtl.Unlock()
 }
 
 func (rm *ProcessManager) LoadAll(m map[string]uint64) {
@@ -122,6 +122,7 @@ func (rm *ProcessManager) Set(k string, value uint64) {
 func (rm *ProcessManager) Get(k string) (value uint64, ok bool) {
 	rm.lrtl.RLock()
 	defer rm.lrtl.RUnlock()
+
 	value, ok = rm.LastRegTime[k]
 	return
 }
