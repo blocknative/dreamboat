@@ -259,7 +259,7 @@ type FlowControl struct {
 	FailureCh chan struct{}
 	ExitCh    chan error
 
-	sentToVerification uint32
+	sentToVerification *uint32
 	failed             bool
 }
 
@@ -272,12 +272,12 @@ func NewFlowControl(respCh chan Resp, numElements int) (fc *FlowControl) {
 		respCh = make(chan Resp, numElements*3)
 		fc.isLocal = true
 	}
-
+	s := uint32(0)
 	return &FlowControl{
 		RespCh:             respCh,
 		FailureCh:          make(chan struct{}),
 		ExitCh:             make(chan error),
-		sentToVerification: 0,
+		sentToVerification: &s,
 	}
 }
 
@@ -288,11 +288,11 @@ func (fc *FlowControl) Close() {
 }
 
 func (fc *FlowControl) SentVerificationInc() {
-	atomic.AddUint32(&fc.sentToVerification, 1)
+	atomic.AddUint32(fc.sentToVerification, 1)
 }
 
 func (fc *FlowControl) SentVerifications() uint32 {
-	return atomic.LoadUint32(&fc.sentToVerification)
+	return atomic.LoadUint32(fc.sentToVerification)
 }
 
 func (fc *FlowControl) Fail() {
