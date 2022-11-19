@@ -438,36 +438,3 @@ func (s *Service) GetBlockReceived(ctx context.Context, query structs.HeaderTrac
 	}
 	return nil, err
 }
-
-/*
-func (s *Service) getTailBlockReceived(ctx context.Context, limit uint64) ([]structs.BidTraceWithTimestamp, error) {
-	batch := make([]structs.HeaderAndTrace, 0, limit)
-	stop := s.state.Beacon().HeadSlot() - structs.Slot(s.Config.TTL/DurationPerSlot)
-	queries := make([]structs.HeaderQuery, 0)
-
-	s.Log.WithField("limit", limit).
-		WithField("start", s.state.Beacon().HeadSlot()).
-		WithField("stop", stop).
-		Debug("querying received block traces")
-
-	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= structs.Slot(limit) {
-		queries = queries[:0]
-		for s := highSlot; highSlot-structs.Slot(limit) < s && stop <= s; s-- {
-			queries = append(queries, structs.HeaderQuery{Slot: s})
-		}
-
-		nextBatch, err := s.Datastore.GetHeaderBatch(ctx, queries)
-		if err != nil {
-			s.Log.WithError(err).Warn("failed getting header batch")
-		} else {
-			batch = append(batch, nextBatch[:min(int(limit)-len(batch), len(nextBatch))]...)
-		}
-	}
-
-	events := make([]structs.BidTraceWithTimestamp, 0, len(batch))
-	for _, event := range batch {
-		events = append(events, *event.Trace)
-	}
-	return events, nil
-}
-*/

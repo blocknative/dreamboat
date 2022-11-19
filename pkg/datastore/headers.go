@@ -12,8 +12,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -66,160 +64,6 @@ type IndexEl struct {
 type Info struct {
 	Slot  uint64
 	Added time.Time
-}
-
-type HeaderController struct {
-	content map[uint64]*HNTs
-	ordered []Info
-
-	latestSlot uint64
-	cl         sync.RWMutex
-}
-
-func NewHeaderController() *HeaderController {
-	return &HeaderController{
-		content: make(map[uint64]*HNTs),
-	}
-}
-
-func (hc *HeaderController) CheckForRemoval() (toBeRemoved []uint64, ok bool) {
-	hc.cl.RLock()
-	defer hc.cl.RUnlock()
-	if len(hc.ordered) == 0 {
-		return nil, false
-	}
-
-	l := hc.ordered[len(hc.ordered)-1]
-	for _, v := range hc.ordered {
-		if !(l.Slot-v.Slot > InMemorySlotLag && time.Since(v.Added) > InMemorySlotTimeLag) {
-			return toBeRemoved, ok
-		}
-		toBeRemoved = append(toBeRemoved, v.Slot)
-		ok = true
-	}
-
-	return toBeRemoved, ok
-
-}
-
-// addToOrdered to be run in lock
-func (hc *HeaderController) addToOrdered(i Info) {
-	hc.ordered = append(hc.ordered, i)
-	l := len(hc.ordered)
-	if l > 1 {
-		o := hc.ordered[l-1]
-		if o.Slot >= i.Slot {
-			sort.Slice(hc.ordered, func(i, j int) bool {
-				return hc.ordered[i].Slot < hc.ordered[j].Slot
-			})
-		}
-	}
-}
-
-func (hc *HeaderController) GetLatestSlot() (slot uint64) {
-	return atomic.LoadUint64(&hc.latestSlot)
-}
-
-func (hc *HeaderController) AddMultiple(slot uint64, hnt []structs.HeaderAndTrace) (err error) {
-	hc.cl.Lock()
-	defer hc.cl.Unlock()
-
-	h, ok := hc.content[slot]
-	if !ok {
-		h = NewHNTs()
-		hc.content[slot] = h
-		hc.addToOrdered(Info{
-			Slot:  slot,
-			Added: time.Now(),
-		})
-	}
-
-	for _, s := range hnt {
-		if err := h.AddContent(s); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (hc *HeaderController) Add(slot uint64, hnt structs.HeaderAndTrace) (newCreated bool, err error) {
-	hc.cl.Lock()
-	defer hc.cl.Unlock()
-
-	h, ok := hc.content[slot]
-	if !ok {
-		h = NewHNTs()
-		hc.content[slot] = h
-		hc.addToOrdered(Info{
-			Slot:  slot,
-			Added: time.Now(),
-		})
-		newCreated = true
-	}
-	return newCreated, h.AddContent(hnt)
-}
-
-func (hc *HeaderController) GetContent(startingSlot uint64, limit int) (elements []structs.HeaderAndTrace, lastSlot uint64) {
-	for {
-		hc.cl.RLock()
-		h, ok := hc.content[startingSlot]
-		hc.cl.RUnlock()
-		if !ok {
-			return elements, lastSlot
-		}
-		lastSlot = startingSlot
-		c, _ := h.GetContent()
-		elements = append(elements, c...)
-		if len(elements) >= limit {
-			return elements, lastSlot
-		}
-		startingSlot--
-		// implement step limit
-	}
-}
-
-func (hc *HeaderController) GetSingleSlot(slot uint64) (elements []structs.HeaderAndTrace, revision uint64, err error) {
-	hc.cl.RLock()
-	h, ok := hc.content[slot]
-	hc.cl.RUnlock()
-
-	if !ok {
-		return nil, 0, nil
-	}
-	elements, revision = h.GetContent()
-	return elements, revision, err
-}
-
-func (hc *HeaderController) UnlinkElement(slot, expectedRevision uint64) (success bool) {
-	hc.cl.Lock()
-	defer hc.cl.Unlock()
-
-	s, ok := hc.content[slot]
-	if !ok {
-		return true
-	}
-
-	if expectedRevision != s.GetRevision() {
-		return false
-	}
-
-	// we're only unlinking from map here
-	// it should be later on eligible for GC
-	delete(hc.content, slot)
-	return true
-}
-
-func (hc *HeaderController) GetMaxProfit(slot uint64) (hnt structs.HeaderAndTrace, ok bool) {
-	hc.cl.RLock()
-	defer hc.cl.RUnlock()
-
-	s, ok := hc.content[slot]
-	if !ok {
-		return hnt, false
-	}
-	return s.GetMaxProfit()
-
 }
 
 func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot structs.Slot) (structs.HeaderAndTrace, error) {
@@ -298,7 +142,7 @@ func (s *Datastore) loadKeysAndCleanup(ctx context.Context, slot uint64) error {
 	// need to load keys to memory
 	data, err := s.TTLStorage.Get(ctx, HeaderKey(slot))
 	if err != nil {
-		if errors.Is(err, badger.ErrEmptyKey) {
+		if errors.Is(err, ds.ErrNotFound) {
 			return nil // success - key is empty, nothing to load
 		}
 		return err
@@ -336,13 +180,13 @@ func storeHeader(s Badger, h structs.HR, ttl time.Duration) error {
 }
 
 func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error) {
-	el, _ := s.hc.GetContent(slot, 1)
+	el, _ := s.hc.GetContent(slot, slot, 1)
 	if el != nil {
 		return el, nil
 	}
 
 	data, err := s.TTLStorage.Get(ctx, HeaderKey(slot))
-	if err != nil && errors.Is(err, badger.ErrEmptyKey) {
+	if err != nil && errors.Is(err, ds.ErrNotFound) {
 		return el, err
 	}
 
@@ -372,7 +216,9 @@ func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 
 func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]structs.HeaderAndTrace, error) {
 	ls := s.hc.GetLatestSlot()
-	el, lastSlot := s.hc.GetContent(ls, int(limit))
+	stop := ls - uint64(24*time.Hour/time.Second*12)
+	el, lastSlot := s.hc.GetContent(ls, stop, int(limit))
+
 	if el == nil {
 		el = []structs.HeaderAndTrace{}
 	}
@@ -388,6 +234,9 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]struc
 	for {
 		data, err := s.TTLStorage.Get(ctx, HeaderKey(initialLSlot))
 		if err != nil {
+			if errors.Is(err, ds.ErrNotFound) {
+				return el, nil
+			}
 			return el, err
 		}
 		readr.Reset(data)
@@ -398,7 +247,6 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]struc
 
 		el = append(el, hnt...)
 		initialLSlot--
-
 		// introduce limit?
 	}
 }
@@ -425,13 +273,23 @@ func (s *Datastore) deprecatedUnsmarshalHeaders(data []byte) ([]structs.HeaderAn
 
 // SaveHeaders is meant to persist the all the keys under one key
 // As optimization in future this function can operate only on database, so instead from memory it may just reorganize keys
-func (s *Datastore) SaveHeaders(ctx context.Context, slot uint64, ttl time.Duration) error {
+func (s *Datastore) SaveHeaders(ctx context.Context, slots []uint64, ttl time.Duration) error {
+	for _, slot := range slots {
+		if err := s.saveHeader(ctx, slot, ttl); err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
+func (s *Datastore) saveHeader(ctx context.Context, slot uint64, ttl time.Duration) error {
 	el, rev, err := s.hc.GetSingleSlot(slot)
 	if err != nil {
 		return err
 	}
 
-	if err = saveHeaders(ctx, s, slot, el, ttl); err != nil {
+	if err = putHeaders(ctx, s, slot, el, ttl); err != nil {
 		return err
 	}
 
@@ -447,7 +305,7 @@ func (s *Datastore) SaveHeaders(ctx context.Context, slot uint64, ttl time.Durat
 	return errors.New("revision changed")
 }
 
-func saveHeaders(ctx context.Context, s *Datastore, slot uint64, cont []structs.HeaderAndTrace, ttl time.Duration) error {
+func putHeaders(ctx context.Context, s *Datastore, slot uint64, cont []structs.HeaderAndTrace, ttl time.Duration) error {
 	buff := bytes.NewBuffer(nil)
 	buff.WriteString("[")
 
@@ -564,164 +422,7 @@ func (s *Datastore) MemoryCleanup(ctx context.Context, ttl time.Duration) error 
 			continue
 		}
 
-		for _, slot := range slots {
-			s.SaveHeaders(ctx, slot, ttl)
-		}
+		s.SaveHeaders(ctx, slots, ttl)
 
 	}
 }
-
-/*
-func (s *Datastore) GetHeaders(ctx context.Context, query structs.HeaderQuery) ([]structs.HeaderAndTrace, error) {
-	//key, err := s.queryToHeaderKey(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	headers, err := s.getHeaders(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.deduplicateHeaders(headers, query), nil
-}
-*/
-/*
-func (s *Datastore) getHeaders(ctx context.Context, key ds.Key) ([]structs.HeaderAndTrace, error) {
-
-	return s.unsmarshalHeaders(data)
-}*/
-
-/*
-func (s *Datastore) deduplicateHeaders(headers []structs.HeaderAndTrace, query structs.HeaderQuery) []structs.HeaderAndTrace {
-	filtered := headers[:0]
-	for _, header := range headers {
-		if (query.BlockHash != types.Hash{}) && (query.BlockHash != header.Header.BlockHash) {
-			continue
-		}
-		if (query.BlockNum != 0) && (query.BlockNum != header.Header.BlockNumber) {
-			continue
-		}
-		if (query.Slot != 0) && (uint64(query.Slot) != header.Trace.Slot) {
-			continue
-		}
-
-		filtered = append(filtered, header)
-	}
-
-	return filtered
-}
-*/
-
-/*
-func (s *Datastore) GetHeaderBatch(ctx context.Context, queries []structs.HeaderQuery) ([]structs.HeaderAndTrace, error) {
-	var batch []structs.HeaderAndTrace
-
-	for _, query := range queries {
-		key, err := s.queryToHeaderKey(ctx, query)
-		if err != nil {
-			return nil, err
-		}
-
-		headers, err := s.getHeaders(ctx, key)
-		if errors.Is(err, ds.ErrNotFound) {
-			continue
-		} else if err != nil {
-			return nil, err
-		}
-
-		batch = append(batch, headers...)
-	}
-
-	return batch, nil
-}
-*/
-/*
-func (s *Datastore) queryToHeaderKey(ctx context.Context, query structs.HeaderQuery) (ds.Key, error) {
-	var (
-		rawKey []byte
-		err    error
-	)
-
-	if (query.BlockHash != types.Hash{}) {
-		rawKey, err = s.TTLStorage.Get(ctx, HeaderHashKey(query.BlockHash))
-	} else if query.BlockNum != 0 {
-		rawKey, err = s.TTLStorage.Get(ctx, HeaderNumKey(query.BlockNum))
-	} else {
-		rawKey = HeaderKey(query.Slot).Bytes()
-	}
-
-	if err != nil {
-		return ds.Key{}, err
-	}
-	return ds.NewKey(string(rawKey)), nil
-}
-*/
-/*
-func (s *Datastore) PutHeader(ctx context.Context, slot structs.Slot, header structs.HeaderAndTrace, ttl time.Duration) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	headers, err := s.getHeaders(ctx, HeaderKey(slot))
-	if errors.Is(err, ds.ErrNotFound) {
-		headers = make([]structs.HeaderAndTrace, 0, 1)
-	} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
-		return err
-	}
-
-	if 0 < len(headers) && headers[len(headers)-1].Header.BlockHash == header.Header.BlockHash {
-		return nil // deduplicate
-	}
-
-	headers = append(headers, header)
-
-	if err := s.TTLStorage.PutWithTTL(ctx, HeaderHashKey(header.Header.BlockHash), HeaderKey(slot).Bytes(), ttl); err != nil {
-		return err
-	}
-
-	if err := s.TTLStorage.PutWithTTL(ctx, HeaderNumKey(header.Header.BlockNumber), HeaderKey(slot).Bytes(), ttl); err != nil {
-		return err
-	}
-
-	if err := s.putMaxProfitHeader(ctx, slot, header, ttl); err != nil {
-		return fmt.Errorf("failed to set header in max profit list: %w", err)
-	}
-
-	data, err := json.Marshal(headers)
-	if err != nil {
-		return err
-	}
-	return s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), data, ttl)
-
-
-func (s *Datastore) putMaxProfitHeader(ctx context.Context, slot structs.Slot, header structs.HeaderAndTrace, ttl time.Duration) error {
-	headers, err := s.getHeaders(ctx, HeaderMaxProfitKey(slot))
-	if errors.Is(err, ds.ErrNotFound) {
-		headers = make([]structs.HeaderAndTrace, 0, 1)
-	} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
-		return err
-	}
-
-	// remove submission from same builder
-	i := 0
-	for ; i < len(headers); i++ {
-		if headers[i].Trace.BuilderPubkey == header.Trace.BuilderPubkey {
-			headers[i] = header
-			break
-		}
-	}
-	if i == len(headers) {
-		headers = append(headers, header)
-	}
-
-	// sort by bid value DESC
-	sort.Slice(headers, func(i, j int) bool {
-		return headers[i].Trace.Value.Cmp(&headers[j].Trace.Value) > 0
-	})
-
-	data, err := json.Marshal(headers)
-	if err != nil {
-		return err
-	}
-	return s.TTLStorage.PutWithTTL(ctx, HeaderMaxProfitKey(slot), data, ttl)
-}
-}*/
