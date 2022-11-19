@@ -25,6 +25,10 @@ import (
 const (
 	HeaderPrefix        = "header-"
 	HeaderContentPrefix = "hc/"
+
+	InMemorySlotLag        = 200
+	InMemorySlotPurgeCheck = time.Duration(time.Second * 10)
+	InMemorySlotTimeLag    = time.Duration(time.Minute * 1)
 )
 
 var (
@@ -59,23 +63,61 @@ type IndexEl struct {
 	BuilderPubkey [48]byte
 }
 
+type Info struct {
+	Slot  uint64
+	Added time.Time
+}
+
 type HeaderController struct {
-	content    map[uint64]*HNTs
-	latestSlot *uint64
+	content map[uint64]*HNTs
+	ordered []Info
+
+	latestSlot uint64
 	cl         sync.RWMutex
 }
 
 func NewHeaderController() *HeaderController {
-	u := uint64(0)
 	return &HeaderController{
-		content:    make(map[uint64]*HNTs),
-		latestSlot: &u,
+		content: make(map[uint64]*HNTs),
 	}
 }
 
-// top level lock
+func (hc *HeaderController) CheckForRemoval() (toBeRemoved []uint64, ok bool) {
+	hc.cl.RLock()
+	defer hc.cl.RUnlock()
+	if len(hc.ordered) == 0 {
+		return nil, false
+	}
+
+	l := hc.ordered[len(hc.ordered)-1]
+	for _, v := range hc.ordered {
+		if !(l.Slot-v.Slot > InMemorySlotLag && time.Since(v.Added) > InMemorySlotTimeLag) {
+			return toBeRemoved, ok
+		}
+		toBeRemoved = append(toBeRemoved, v.Slot)
+		ok = true
+	}
+
+	return toBeRemoved, ok
+
+}
+
+// addToOrdered to be run in lock
+func (hc *HeaderController) addToOrdered(i Info) {
+	hc.ordered = append(hc.ordered, i)
+	l := len(hc.ordered)
+	if l > 1 {
+		o := hc.ordered[l-1]
+		if o.Slot >= i.Slot {
+			sort.Slice(hc.ordered, func(i, j int) bool {
+				return hc.ordered[i].Slot < hc.ordered[j].Slot
+			})
+		}
+	}
+}
+
 func (hc *HeaderController) GetLatestSlot() (slot uint64) {
-	return atomic.LoadUint64(hc.latestSlot)
+	return atomic.LoadUint64(&hc.latestSlot)
 }
 
 func (hc *HeaderController) AddMultiple(slot uint64, hnt []structs.HeaderAndTrace) (err error) {
@@ -86,6 +128,10 @@ func (hc *HeaderController) AddMultiple(slot uint64, hnt []structs.HeaderAndTrac
 	if !ok {
 		h = NewHNTs()
 		hc.content[slot] = h
+		hc.addToOrdered(Info{
+			Slot:  slot,
+			Added: time.Now(),
+		})
 	}
 
 	for _, s := range hnt {
@@ -105,6 +151,10 @@ func (hc *HeaderController) Add(slot uint64, hnt structs.HeaderAndTrace) (newCre
 	if !ok {
 		h = NewHNTs()
 		hc.content[slot] = h
+		hc.addToOrdered(Info{
+			Slot:  slot,
+			Added: time.Now(),
+		})
 		newCreated = true
 	}
 	return newCreated, h.AddContent(hnt)
@@ -236,11 +286,12 @@ func (s *Datastore) PutHeader(ctx context.Context, hr structs.HR, ttl time.Durat
 	if !newlyCreated {
 		return // success
 	}
+
 	// check and load keys if exists
-	return s.loadKeys(ctx, uint64(hr.Slot))
+	return s.loadKeysAndCleanup(ctx, uint64(hr.Slot))
 }
 
-func (s *Datastore) loadKeys(ctx context.Context, slot uint64) error {
+func (s *Datastore) loadKeysAndCleanup(ctx context.Context, slot uint64) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -503,6 +554,21 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 		}
 	}
 	return err
+}
+
+func (s *Datastore) MemoryCleanup(ctx context.Context, ttl time.Duration) error {
+	for {
+		time.Sleep(InMemorySlotPurgeCheck)
+		slots, ok := s.hc.CheckForRemoval()
+		if !ok {
+			continue
+		}
+
+		for _, slot := range slots {
+			s.SaveHeaders(ctx, slot, ttl)
+		}
+
+	}
 }
 
 /*
