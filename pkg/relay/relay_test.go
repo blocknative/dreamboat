@@ -40,8 +40,8 @@ func TestGetHeader(t *testing.T) {
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	//go ds.PutHeaderController()
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -126,8 +126,8 @@ func TestGetPayload(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -278,7 +278,11 @@ func TestSubmitBlock(t *testing.T) {
 
 	sk, _, _ := bls.GenerateNewKeypair()
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	var datadir = "/tmp/" + t.Name() + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 	bs := mock_relay.NewMockState(ctrl)
 
 	regMgr := relay.NewProcessManager(20, 20)
@@ -319,7 +323,7 @@ func TestSubmitBlock(t *testing.T) {
 
 	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeaders, err := ds.GetHeaders(ctx, structs.Query{Slot: structs.Slot(submitRequest.Message.Slot)})
+	gotHeaders, err := ds.GetHeadersBySlot(ctx, submitRequest.Message.Slot)
 	require.NoError(t, err)
 	require.Len(t, gotHeaders, 1)
 	require.EqualValues(t, header, gotHeaders[0].Header)
@@ -335,8 +339,8 @@ func BenchmarkGetHeader(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -417,8 +421,9 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 	bs := mock_relay.NewMockState(ctrl)
 
 	proposerSigningDomain, _ := pkg.ComputeDomain(
@@ -506,8 +511,8 @@ func BenchmarkGetPayload(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 	bs := mock_relay.NewMockState(ctrl)
 
 	proposerSigningDomain, _ := pkg.ComputeDomain(
@@ -623,8 +628,8 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 	bs := mock_relay.NewMockState(ctrl)
 
 	proposerSigningDomain, _ := pkg.ComputeDomain(
@@ -1010,8 +1015,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 	bs := mock_relay.NewMockState(ctrl)
 
 	genesisTime := uint64(time.Now().Unix())
@@ -1115,11 +1120,11 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 
 	header, err := types.PayloadToPayloadHeader(submitRequestTwo.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeaders, err := ds.GetMaxProfitHeadersDesc(ctx, slot)
+	gotHeaders, err := ds.GetMaxProfitHeader(ctx, slot)
 
 	require.NoError(t, err)
 	require.Len(t, gotHeaders, 2)
-	require.EqualValues(t, header, gotHeaders[0].Header)
+	require.EqualValues(t, header, gotHeaders.Header)
 }
 
 func TestSubmitBlocksCancel(t *testing.T) {
@@ -1134,8 +1139,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB)
-	go ds.PutHeaderController()
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -1221,9 +1226,9 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	// check that payload served from relay is 2nd block with lower value
 	header, err := types.PayloadToPayloadHeader(submitRequestTwo.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeaders, err := ds.GetMaxProfitHeadersDesc(ctx, slot)
+	gotHeaders, err := ds.GetMaxProfitHeader(ctx, slot)
 
 	require.NoError(t, err)
 	require.Len(t, gotHeaders, 1)
-	require.EqualValues(t, header, gotHeaders[0].Header)
+	require.EqualValues(t, header, gotHeaders.Header)
 }
