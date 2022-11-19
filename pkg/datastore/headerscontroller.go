@@ -236,6 +236,9 @@ func (h *HNTs) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
 	if !ok {
 		return hnt, ok
 	}
+	if len(h.content) < n {
+		return hnt, false
+	}
 	return h.content[n], true
 }
 
