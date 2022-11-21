@@ -51,8 +51,15 @@ func HeaderMaxProfitKey(slot structs.Slot) ds.Key {
 }
 
 type StoredIndex struct {
-	Index     []IndexEl
-	MaxProfit IndexEl
+	Index                []IndexEl
+	MaxProfit            IndexEl
+	SubmissionsByPubKeys map[[48]byte]IndexEl
+}
+
+func NewStoreIndex() StoredIndex {
+	return StoredIndex{
+		SubmissionsByPubKeys: make(map[[48]byte]IndexEl),
+	}
 }
 
 type IndexEl struct {
@@ -278,7 +285,6 @@ func (s *Datastore) SaveHeaders(ctx context.Context, slots []uint64, ttl time.Du
 		if err := s.saveHeader(ctx, slot, ttl); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
