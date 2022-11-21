@@ -32,17 +32,14 @@ var (
 
 type Datastore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.Query) (structs.BidTraceWithTimestamp, error)
+	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 
-	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
+	PutHeader(ctx context.Context, hr structs.HR, ttl time.Duration) error
 
-	PutHeaderOptimized(ctx context.Context, hr structs.HR, ttl time.Duration) error
-
-	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
-	GetMaxProfitHeadersDesc(context.Context, structs.Slot) ([]structs.HeaderAndTrace, error)
+	GetMaxProfitHeader(context.Context, structs.Slot) (structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
@@ -153,14 +150,12 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	headers, err := rs.d.GetMaxProfitHeadersDesc(ctx, slot)
-	if err != nil || len(headers) < 1 {
+	header, err := rs.d.GetMaxProfitHeader(ctx, slot)
+	if err != nil {
 		logger.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 	timer2.ObserveDuration()
-
-	header := headers[0] // choose the highest bid, which is index 0
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)
@@ -395,7 +390,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 
 	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "getDelivered"))
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
-	_, err = rs.d.GetDelivered(ctx, structs.Query{Slot: slot})
+	_, err = rs.d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
 	timer3.ObserveDuration()
 	if err == nil {
 		logger.Debug("block submission after payload delivered")
@@ -442,13 +437,11 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		logger.WithError(err).Error("PutHeader failed")
 		return err
 	}
-	err = rs.d.PutHeaderOptimized(ctx, structs.HR{
+	err = rs.d.PutHeader(ctx, structs.HR{
 		Slot:           slot,
 		Marshaled:      b,
 		HeaderAndTrace: h,
 	}, rs.config.TTL)
-
-	//err = rs.d.PutHeader(ctx, slot, h, rs.config.TTL)
 	if err != nil {
 		logger.WithError(err).Error("PutHeader failed")
 		return err

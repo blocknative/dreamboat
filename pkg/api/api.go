@@ -37,7 +37,7 @@ const (
 )
 
 const (
-	DataLimit = 200
+	DataLimit = 450
 )
 
 var (
@@ -56,8 +56,8 @@ type Service interface {
 	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
-	GetPayloadDelivered(context.Context, structs.TraceQuery) ([]structs.BidTraceExtended, error)
-	GetBlockReceived(context.Context, structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
+	GetBlockReceived(context.Context, structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error)
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
 
@@ -133,7 +133,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 
 	payload := []structs.SignedValidatorRegistration{}
 	if err = json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "input decoding").Inc()
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
 
@@ -143,17 +143,21 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 
 	if len(payload) == 1 { // We don't need complex sync for just one payload
 		if err = a.s.RegisterValidatorSingular(r.Context(), payload[0]); err != nil {
-			a.m.ApiReqCounter.WithLabelValues("registerValidator", "200").Inc()
-			return http.StatusOK, err
+			a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register (single) validator").Inc()
+			return http.StatusBadRequest, err
+
 		}
+		a.m.ApiReqCounter.WithLabelValues("registerValidator", "200", "").Inc()
+		return http.StatusOK, err
+
 	}
 
 	if err = a.s.RegisterValidator(r.Context(), payload); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		return http.StatusBadRequest, err
 	}
 
-	a.m.ApiReqCounter.WithLabelValues("registerValidator", "200").Inc()
+	a.m.ApiReqCounter.WithLabelValues("registerValidator", "200", "").Inc()
 	return http.StatusOK, err
 }
 
@@ -163,17 +167,17 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	response, err := a.s.GetHeader(r.Context(), ParseHeaderRequest(r))
 	if err != nil {
-		a.m.ApiReqCounter.WithLabelValues("getHeader", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	if err = json.NewEncoder(w).Encode(response); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
-		a.m.ApiReqCounter.WithLabelValues("getHeader", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("getHeader", "500", "response encode").Inc()
 		return http.StatusInternalServerError, err
 	}
 
-	a.m.ApiReqCounter.WithLabelValues("getHeader", "200").Inc()
+	a.m.ApiReqCounter.WithLabelValues("getHeader", "200", "").Inc()
 	return http.StatusOK, nil
 }
 
@@ -183,23 +187,23 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	var block types.SignedBlindedBeaconBlock
 	if err := json.NewDecoder(r.Body).Decode(&block); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("getPayload", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
 
 	payload, err := a.s.GetPayload(r.Context(), &block)
 	if err != nil {
-		a.m.ApiReqCounter.WithLabelValues("getPayload", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
-		a.m.ApiReqCounter.WithLabelValues("getPayload", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("getPayload", "500", "encode response").Inc()
 		return http.StatusInternalServerError, err
 	}
 
-	a.m.ApiReqCounter.WithLabelValues("getPayload", "200").Inc()
+	a.m.ApiReqCounter.WithLabelValues("getPayload", "200", "").Inc()
 	return http.StatusOK, nil
 }
 
@@ -209,7 +213,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	defer timer.ObserveDuration()
 	var br types.BuilderSubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&br); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 		return http.StatusBadRequest, err
 	}
 
@@ -218,11 +222,11 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	if err := a.s.SubmitBlock(r.Context(), &br); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
 		return http.StatusBadRequest, err
 	}
 
-	a.m.ApiReqCounter.WithLabelValues("submitBlock", "200").Inc()
+	a.m.ApiReqCounter.WithLabelValues("submitBlock", "200", "").Inc()
 	return http.StatusOK, nil
 }
 
@@ -241,11 +245,11 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	}
 
 	if err := json.NewEncoder(w).Encode(vs); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("getValidators", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("getValidators", "500", "response encode").Inc()
 		return http.StatusInternalServerError, err
 	}
 
-	a.m.ApiReqCounter.WithLabelValues("getValidators", "200").Inc()
+	a.m.ApiReqCounter.WithLabelValues("getValidators", "200", "").Inc()
 	return http.StatusOK, nil
 }
 
@@ -258,53 +262,53 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) (int,
 
 	var pk types.PublicKey
 	if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "400", "unmarshaling pk").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	registration, err := a.s.Registration(r.Context(), pk)
 	if err != nil {
-		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "registration").Inc()
 		return http.StatusInternalServerError, err
 	}
 
 	if err := json.NewEncoder(w).Encode(registration); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "encode response").Inc()
 		return http.StatusInternalServerError, err
 	}
 
-	a.m.ApiReqCounter.WithLabelValues("specificRegistration", "200").Inc()
+	a.m.ApiReqCounter.WithLabelValues("specificRegistration", "200", "").Inc()
 	return http.StatusOK, nil
 }
 
 func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) (int, error) {
 	slot, err := specificSlot(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad slot").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	bh, err := blockHash(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad hash").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	bn, err := blockNumber(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad number").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	pk, err := publickKey(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad key").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	limit, err := limit(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad limit").Inc()
 		return http.StatusBadRequest, err
 	} else if errors.Is(err, ErrParamNotFound) {
 		limit = DataLimit
@@ -312,11 +316,11 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 
 	cursor, err := cursor(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad cursor").Inc()
 		return http.StatusBadRequest, err
 	}
 
-	query := structs.TraceQuery{
+	query := structs.PayloadTraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,
@@ -327,7 +331,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 
 	payloads, err := a.s.GetPayloadDelivered(r.Context(), query)
 	if err != nil {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
 		return http.StatusInternalServerError, err
 	}
 
@@ -336,42 +340,43 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := json.NewEncoder(w).Encode(payloads); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "encode response").Inc()
 		return http.StatusInternalServerError, err
 	}
 
-	a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "200").Inc()
+	a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "200", "").Inc()
 	return http.StatusOK, nil
 }
 
 func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int, error) {
+
 	slot, err := specificSlot(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad slot").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	bh, err := blockHash(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad hash").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	bn, err := blockNumber(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad number").Inc()
 		return http.StatusBadRequest, err
 	}
 
 	limit, err := limit(r)
 	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400").Inc()
+		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad limit").Inc()
 		return http.StatusBadRequest, err
 	} else if errors.Is(err, ErrParamNotFound) {
 		limit = DataLimit
 	}
 
-	query := structs.TraceQuery{
+	query := structs.HeaderTraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,
@@ -380,7 +385,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 
 	blocks, err := a.s.GetBlockReceived(r.Context(), query)
 	if err != nil {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
 		return http.StatusInternalServerError, err
 	}
 
@@ -389,11 +394,11 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 	}
 
 	if err := json.NewEncoder(w).Encode(blocks); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500").Inc()
+		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "encode response").Inc()
 		return http.StatusInternalServerError, err
 	}
 
-	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200").Inc()
+	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200", "").Inc()
 	return http.StatusOK, nil
 }
 

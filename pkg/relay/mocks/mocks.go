@@ -37,7 +37,7 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 }
 
 // GetDelivered mocks base method
-func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 structs.Query) (structs.BidTraceWithTimestamp, error) {
+func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 structs.PayloadQuery) (structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDelivered", arg0, arg1)
 	ret0, _ := ret[0].(structs.BidTraceWithTimestamp)
@@ -51,34 +51,19 @@ func (mr *MockDatastoreMockRecorder) GetDelivered(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDelivered", reflect.TypeOf((*MockDatastore)(nil).GetDelivered), arg0, arg1)
 }
 
-// GetHeaders mocks base method
-func (m *MockDatastore) GetHeaders(arg0 context.Context, arg1 structs.Query) ([]structs.HeaderAndTrace, error) {
+// GetMaxProfitHeader mocks base method
+func (m *MockDatastore) GetMaxProfitHeader(arg0 context.Context, arg1 structs.Slot) (structs.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeaders", arg0, arg1)
-	ret0, _ := ret[0].([]structs.HeaderAndTrace)
+	ret := m.ctrl.Call(m, "GetMaxProfitHeader", arg0, arg1)
+	ret0, _ := ret[0].(structs.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetHeaders indicates an expected call of GetHeaders
-func (mr *MockDatastoreMockRecorder) GetHeaders(arg0, arg1 interface{}) *gomock.Call {
+// GetMaxProfitHeader indicates an expected call of GetMaxProfitHeader
+func (mr *MockDatastoreMockRecorder) GetMaxProfitHeader(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaders", reflect.TypeOf((*MockDatastore)(nil).GetHeaders), arg0, arg1)
-}
-
-// GetMaxProfitHeadersDesc mocks base method
-func (m *MockDatastore) GetMaxProfitHeadersDesc(arg0 context.Context, arg1 structs.Slot) ([]structs.HeaderAndTrace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaxProfitHeadersDesc", arg0, arg1)
-	ret0, _ := ret[0].([]structs.HeaderAndTrace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMaxProfitHeadersDesc indicates an expected call of GetMaxProfitHeadersDesc
-func (mr *MockDatastoreMockRecorder) GetMaxProfitHeadersDesc(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxProfitHeadersDesc", reflect.TypeOf((*MockDatastore)(nil).GetMaxProfitHeadersDesc), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxProfitHeader", reflect.TypeOf((*MockDatastore)(nil).GetMaxProfitHeader), arg0, arg1)
 }
 
 // GetPayload mocks base method
@@ -126,31 +111,17 @@ func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interfa
 }
 
 // PutHeader mocks base method
-func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 structs.Slot, arg2 structs.HeaderAndTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 structs.HR, arg2 time.Duration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutHeader", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "PutHeader", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PutHeader indicates an expected call of PutHeader
-func (mr *MockDatastoreMockRecorder) PutHeader(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockDatastoreMockRecorder) PutHeader(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutHeader", reflect.TypeOf((*MockDatastore)(nil).PutHeader), arg0, arg1, arg2, arg3)
-}
-
-// PutHeaderOptimized mocks base method
-func (m *MockDatastore) PutHeaderOptimized(arg0 context.Context, arg1 structs.HR, arg2 time.Duration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutHeaderOptimized", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// PutHeaderOptimized indicates an expected call of PutHeaderOptimized
-func (mr *MockDatastoreMockRecorder) PutHeaderOptimized(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutHeaderOptimized", reflect.TypeOf((*MockDatastore)(nil).PutHeaderOptimized), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutHeader", reflect.TypeOf((*MockDatastore)(nil).PutHeader), arg0, arg1, arg2)
 }
 
 // PutPayload mocks base method
