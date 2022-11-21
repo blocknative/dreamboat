@@ -392,7 +392,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	timer3.ObserveDuration()
 	if err == nil {
 		logger.Debug("block submission after payload delivered")
-		return errors.New("the slot payload was already delivered")
+		return structs.ErrPayloadAlreadyDelivered
 	}
 
 	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
