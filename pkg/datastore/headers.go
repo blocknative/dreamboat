@@ -104,7 +104,6 @@ var ErrNotFound = errors.New("not found")
 func (s *Datastore) getMaxHeader(ctx context.Context, slot uint64) (h structs.HeaderAndTrace, err error) {
 	txn := s.Badger.NewTransaction(false)
 	defer txn.Discard()
-	defer txn.Commit()
 
 	item, err := txn.Get(HeaderMaxNewKey(slot).Bytes())
 	if err != nil {
@@ -115,7 +114,6 @@ func (s *Datastore) getMaxHeader(ctx context.Context, slot uint64) (h structs.He
 	if err != nil {
 		return h, err
 	}
-
 	item, err = txn.Get(HeaderKeyContent(slot, string(v)).Bytes())
 	if err != nil {
 		return h, err
@@ -172,7 +170,7 @@ func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
 	defer txn.Discard()
 
 	// we don't need to lock here, as the value would be always different from different block
-	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Trace.BlockHash.String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Header.BlockHash.String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
 		return err
 	}
 
@@ -389,9 +387,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 				continue
 			}
 
-			li := LoadItem{
-				Time: item.Version(),
-			}
+			li := LoadItem{Time: item.Version()}
 			li.Content, err = item.ValueCopy(nil)
 			if err != nil {
 				return err
@@ -407,6 +403,8 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 	buff := new(bytes.Buffer)
 	for slot, v := range exists {
 		if v != nil {
+			tempHC := NewHeaderController()
+
 			buff.Reset()
 			sort.Slice(v, func(i, j int) bool {
 				return v[i].Time > v[j].Time
@@ -418,10 +416,26 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 					buff.WriteString(",")
 				}
 				io.Copy(buff, bytes.NewReader(payload.Content))
+				hnt := structs.HeaderAndTrace{}
+				if err := json.Unmarshal(payload.Content, &hnt); err != nil {
+					return err
+				}
+
+				if _, err := tempHC.Add(slot, hnt); err != nil {
+					return err
+				}
+
 			}
 			buff.WriteString("]")
-
 			if err := s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
+				return err
+			}
+
+			maxProfit, ok := tempHC.GetMaxProfit(slot)
+			if !ok {
+				return errors.New("max profit from records not calculated")
+			}
+			if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace.BlockHash.String()), ttl); err != nil {
 				return err
 			}
 		}
