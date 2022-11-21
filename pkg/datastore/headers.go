@@ -235,11 +235,11 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]struc
 		return el[:limit], nil
 	}
 
-	initialLSlot := lastSlot
+	initialSlot := lastSlot
 	readr := bytes.NewReader(nil)
 	dec := json.NewDecoder(readr)
 	for {
-		data, err := s.TTLStorage.Get(ctx, HeaderKey(initialLSlot))
+		data, err := s.TTLStorage.Get(ctx, HeaderKey(initialSlot))
 		if err != nil {
 			if errors.Is(err, ds.ErrNotFound) {
 				return el, nil
@@ -253,7 +253,7 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]struc
 		}
 
 		el = append(el, hnt...)
-		initialLSlot--
+		initialSlot--
 		// introduce limit?
 	}
 }

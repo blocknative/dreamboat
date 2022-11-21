@@ -76,10 +76,7 @@ func NewApi(l log.Logger, s Service) (a *API) {
 
 func (a *API) AttachToHandler(m *http.ServeMux) {
 	router := mux.NewRouter()
-	router.Use(
-		mux.CORSMethodMiddleware(router),
-		withContentType("application/json"),
-		withLogger(a.l)) // set middleware
+	router.Use(mux.CORSMethodMiddleware(router), withAddons(a.l))
 
 	// root returns 200 - nil
 	router.HandleFunc("/", status)
@@ -144,6 +141,12 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 	if len(payload) == 1 { // We don't need complex sync for just one payload
 		if err = a.s.RegisterValidatorSingular(r.Context(), payload[0]); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register (single) validator").Inc()
+			a.l.With(log.F{
+				"code":     400,
+				"endpoint": "registerValidator",
+				"type":     "single",
+				"payload":  payload,
+			}).WithError(err).Debug("failed registerValidator")
 			return http.StatusBadRequest, err
 
 		}
@@ -154,6 +157,12 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 
 	if err = a.s.RegisterValidator(r.Context(), payload); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
+		a.l.With(log.F{
+			"code":     400,
+			"endpoint": "registerValidator",
+			"type":     "single",
+			"payload":  payload,
+		}).WithError(err).Debug("failed registerValidator")
 		return http.StatusBadRequest, err
 	}
 
@@ -165,9 +174,15 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getHeader"))
 	defer timer.ObserveDuration()
 
-	response, err := a.s.GetHeader(r.Context(), ParseHeaderRequest(r))
+	req := ParseHeaderRequest(r)
+	response, err := a.s.GetHeader(r.Context(), req)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
+		a.l.With(log.F{
+			"code":     400,
+			"endpoint": "getHeader",
+			"payload":  req,
+		}).WithError(err).Debug("failed getHeader")
 		return http.StatusBadRequest, err
 	}
 
@@ -211,6 +226,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
+
 	var br types.BuilderSubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&br); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
@@ -223,6 +239,11 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	if err := a.s.SubmitBlock(r.Context(), &br); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
+		a.l.With(log.F{
+			"code":     400,
+			"endpoint": "submitBlock",
+			"payload":  br,
+		}).WithError(err).Debug("failed block submission")
 		return http.StatusBadRequest, err
 	}
 
