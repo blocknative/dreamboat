@@ -33,11 +33,11 @@ var (
 	HeaderPrefixBytes = []byte("header-")
 )
 
-func HeaderKeyContent(slot structs.Slot, blockHash string) ds.Key {
+func HeaderKeyContent(slot uint64, blockHash string) ds.Key {
 	return ds.NewKey(fmt.Sprintf("hc/%d/%s", slot, blockHash))
 }
 
-func HeaderMaxNewKey(slot structs.Slot) ds.Key {
+func HeaderMaxNewKey(slot uint64) ds.Key {
 	return ds.NewKey(fmt.Sprintf("hm/%d", slot))
 }
 
@@ -46,7 +46,7 @@ func HeaderKey(slot uint64) ds.Key {
 }
 
 // OLD Entries
-func HeaderMaxProfitKey(slot structs.Slot) ds.Key {
+func HeaderMaxProfitKey(slot uint64) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header/max-profit/%d", slot))
 }
 
@@ -68,12 +68,12 @@ type IndexEl struct {
 	BuilderPubkey [48]byte
 }
 
-type Info struct {
+type SlotInfo struct {
 	Slot  uint64
 	Added time.Time
 }
 
-func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot structs.Slot) (structs.HeaderAndTrace, error) {
+func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error) {
 	// Check memory
 	p, ok := s.hc.GetMaxProfit(uint64(slot))
 	if ok {
@@ -101,7 +101,7 @@ func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot structs.Slot) (
 
 var ErrNotFound = errors.New("not found")
 
-func (s *Datastore) getMaxHeader(ctx context.Context, slot structs.Slot) (h structs.HeaderAndTrace, err error) {
+func (s *Datastore) getMaxHeader(ctx context.Context, slot uint64) (h structs.HeaderAndTrace, err error) {
 	txn := s.Badger.NewTransaction(false)
 	defer txn.Discard()
 	defer txn.Commit()
@@ -167,7 +167,7 @@ func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
 	defer txn.Discard()
 
 	// we don't need to lock here, as the value would be always different from different block
-	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(h.Slot, h.Trace.BlockHash.String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Trace.BlockHash.String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
 		return err
 	}
 
@@ -290,7 +290,7 @@ func (s *Datastore) SaveHeaders(ctx context.Context, slots []uint64, ttl time.Du
 }
 
 func (s *Datastore) saveHeader(ctx context.Context, slot uint64, ttl time.Duration) error {
-	el, rev, err := s.hc.GetSingleSlot(slot)
+	el, maxP, rev, err := s.hc.GetSingleSlot(slot)
 	if err != nil {
 		return err
 	}
@@ -299,7 +299,11 @@ func (s *Datastore) saveHeader(ctx context.Context, slot uint64, ttl time.Durati
 		return err
 	}
 
-	if s.hc.UnlinkElement(slot, rev) {
+	if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(types.Hash(maxP).String()), ttl); err != nil {
+		return err
+	}
+
+	if s.hc.RemoveSlot(slot, rev) {
 		return nil // success
 	}
 
@@ -426,8 +430,6 @@ func (s *Datastore) MemoryCleanup(ctx context.Context, ttl time.Duration) error 
 		if !ok {
 			continue
 		}
-
 		s.SaveHeaders(ctx, slots, ttl)
-
 	}
 }
