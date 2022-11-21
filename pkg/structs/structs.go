@@ -49,16 +49,6 @@ func (pk PubKey) Bytes() []byte {
 	return pk.PublicKey[:]
 }
 
-func (pk PubKey) ValidatorKey() ds.Key {
-	return ds.NewKey(fmt.Sprintf("valdator-%s", pk))
-}
-
-/*
-func (pk PubKey) RegistrationKey() ds.Key {
-	return ds.NewKey(fmt.Sprintf("registration-%s", pk))
-}
-*/
-
 // PayloadTraceQuery structure used to query payloads only
 type PayloadTraceQuery struct {
 	Slot          Slot
