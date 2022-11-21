@@ -359,10 +359,30 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	})
 
 	logger.Trace("block submission requested")
-
-	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "verify"))
 	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon().GenesisTime)
+	if err != nil {
+		logger.WithError(err).
+			WithField("slot", submitBlockRequest.Message.Slot).
+			WithField("builder", submitBlockRequest.Message.BuilderPubkey).
+			Debug("block verification failed")
+		return fmt.Errorf("verify block: %w", err)
+	}
+
+	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "checkDelivered"))
+	slot := structs.Slot(submitBlockRequest.Message.Slot)
+	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
 	timer2.ObserveDuration()
+	if ok {
+		logger.Debug("block submission after payload delivered")
+		return structs.ErrPayloadAlreadyDelivered
+	}
+	if err != nil {
+		return err
+	}
+
+	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "verify"))
+	_, err = rs.verifySubmitSignature(submitBlockRequest)
+	timer3.ObserveDuration()
 	if err != nil {
 		logger.WithError(err).
 			WithField("slot", submitBlockRequest.Message.Slot).
@@ -385,19 +405,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 			}).Debug("signature failed")
 
 		return fmt.Errorf("block submission failed: %w", err)
-	}
-
-	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "getDelivered"))
-	slot := structs.Slot(submitBlockRequest.Message.Slot)
-	//_, err = rs.d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
-	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
-	timer3.ObserveDuration()
-	if ok {
-		logger.Debug("block submission after payload delivered")
-		return structs.ErrPayloadAlreadyDelivered
-	}
-	if err != nil {
-		return err
 	}
 
 	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
@@ -479,6 +486,10 @@ func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest
 		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
+	return true, nil
+}
+
+func (rs *Relay) verifySubmitSignature(submitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) { // TODO(l): remove FB type
 	msg, err := types.ComputeSigningRoot(submitBlockRequest.Message, rs.config.BuilderSigningDomain)
 	if err != nil {
 		return false, fmt.Errorf("signature invalid")
