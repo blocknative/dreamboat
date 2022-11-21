@@ -238,12 +238,16 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	if err := a.s.SubmitBlock(r.Context(), &br); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
-		a.l.With(log.F{
-			"code":     400,
-			"endpoint": "submitBlock",
-			"payload":  br,
-		}).WithError(err).Debug("failed block submission")
+		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
+		} else {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
+			a.l.With(log.F{
+				"code":     400,
+				"endpoint": "submitBlock",
+				"payload":  br,
+			}).WithError(err).Debug("failed block submission")
+		}
 		return http.StatusBadRequest, err
 	}
 
