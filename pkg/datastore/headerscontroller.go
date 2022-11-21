@@ -124,7 +124,7 @@ func (hc *HeaderController) Add(slot uint64, hnt structs.HeaderAndTrace) (newCre
 	return newCreated, h.AddContent(hnt)
 }
 
-func (hc *HeaderController) GetContent(startingSlot, stopSlot uint64, limit int) (elements []structs.HeaderAndTrace, lastSlot uint64) {
+func (hc *HeaderController) GetHeaders(startingSlot, stopSlot uint64, limit int) (elements []structs.HeaderAndTrace, lastSlot uint64) {
 	for _, o := range hc.getOrderedDesc() {
 		if o > startingSlot || o < stopSlot {
 			continue
