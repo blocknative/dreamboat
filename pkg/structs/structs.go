@@ -203,18 +203,18 @@ type GenesisInfo struct {
 }
 
 // / extra
-type HR struct {
+type HeaderData struct {
 	HeaderAndTrace
 	Slot      Slot
 	Marshaled []byte `json:"-"`
 }
 
-func (hr *HR) UnmarshalJSON(b []byte) error {
+func (hd *HeaderData) UnmarshalJSON(b []byte) error {
 	var hnt HeaderAndTrace
 	if err := json.Unmarshal(b, &hnt); err != nil {
 		return err
 	}
-	hr.HeaderAndTrace = hnt
-	hr.Marshaled = b
+	hd.HeaderAndTrace = hnt
+	hd.Marshaled = b
 	return nil
 }
