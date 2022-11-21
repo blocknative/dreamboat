@@ -29,7 +29,9 @@ type Relay interface {
 	//OLDRegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
 	RegisterValidatorSingular(context.Context, structs.SignedValidatorRegistration) error
 	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
+
 	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
+
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs
@@ -40,12 +42,17 @@ type Relay interface {
 }
 
 type Datastore interface {
-	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
-	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
-	GetHeaderBatch(context.Context, []structs.Query) ([]structs.HeaderAndTrace, error)
+	//GetHeaders(context.Context, structs.HeaderQuery) ([]structs.HeaderAndTrace, error)
+	//GetHeaderBatch(context.Context, []structs.HeaderQuery) ([]structs.HeaderAndTrace, error)
+
+	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
+	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
+	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
+	GetLatestHeaders(ctx context.Context, limit uint64) ([]structs.HeaderAndTrace, error)
+
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.Query) (structs.BidTraceWithTimestamp, error)
-	GetDeliveredBatch(context.Context, []structs.Query) ([]structs.BidTraceWithTimestamp, error)
+	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
+	GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
@@ -340,20 +347,20 @@ func (s *Service) Registration(ctx context.Context, pk types.PublicKey) (types.S
 	return s.Datastore.GetRegistration(ctx, structs.PubKey{PublicKey: pk})
 }
 
-func (s *Service) GetPayloadDelivered(ctx context.Context, query structs.TraceQuery) ([]structs.BidTraceExtended, error) {
+func (s *Service) GetPayloadDelivered(ctx context.Context, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
 	var (
 		event structs.BidTraceWithTimestamp
 		err   error
 	)
 
 	if query.HasSlot() {
-		event, err = s.Datastore.GetDelivered(ctx, structs.Query{Slot: query.Slot})
+		event, err = s.Datastore.GetDelivered(ctx, structs.PayloadQuery{Slot: query.Slot})
 	} else if query.HasBlockHash() {
-		event, err = s.Datastore.GetDelivered(ctx, structs.Query{BlockHash: query.BlockHash})
+		event, err = s.Datastore.GetDelivered(ctx, structs.PayloadQuery{BlockHash: query.BlockHash})
 	} else if query.HasBlockNum() {
-		event, err = s.Datastore.GetDelivered(ctx, structs.Query{BlockNum: query.BlockNum})
+		event, err = s.Datastore.GetDelivered(ctx, structs.PayloadQuery{BlockNum: query.BlockNum})
 	} else if query.HasPubkey() {
-		event, err = s.Datastore.GetDelivered(ctx, structs.Query{PubKey: query.Pubkey})
+		event, err = s.Datastore.GetDelivered(ctx, structs.PayloadQuery{PubKey: query.Pubkey})
 	} else {
 		return s.getTailDelivered(ctx, query.Limit, query.Cursor)
 	}
@@ -376,7 +383,7 @@ func (s *Service) getTailDelivered(ctx context.Context, limit, cursor uint64) ([
 	stop := start - structs.Slot(s.Config.TTL/DurationPerSlot)
 
 	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
-	queries := make([]structs.Query, 0, limit)
+	queries := make([]structs.PayloadQuery, 0, limit)
 
 	s.Log.WithField("limit", limit).
 		WithField("start", start).
@@ -386,7 +393,7 @@ func (s *Service) getTailDelivered(ctx context.Context, limit, cursor uint64) ([
 	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= structs.Slot(limit) {
 		queries = queries[:0]
 		for s := highSlot; highSlot-structs.Slot(limit) < s && stop <= s; s-- {
-			queries = append(queries, structs.Query{Slot: s})
+			queries = append(queries, structs.PayloadQuery{Slot: s})
 		}
 
 		nextBatch, err := s.Datastore.GetDeliveredBatch(ctx, queries)
@@ -404,20 +411,20 @@ func (s *Service) getTailDelivered(ctx context.Context, limit, cursor uint64) ([
 	return events, nil
 }
 
-func (s *Service) GetBlockReceived(ctx context.Context, query structs.TraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+func (s *Service) GetBlockReceived(ctx context.Context, query structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
 	var (
 		events []structs.HeaderAndTrace
 		err    error
 	)
 
 	if query.HasSlot() {
-		events, err = s.Datastore.GetHeaders(ctx, structs.Query{Slot: query.Slot})
+		events, err = s.Datastore.GetHeadersBySlot(ctx, uint64(query.Slot))
 	} else if query.HasBlockHash() {
-		events, err = s.Datastore.GetHeaders(ctx, structs.Query{BlockHash: query.BlockHash})
+		events, err = s.Datastore.GetHeadersByBlockHash(ctx, query.BlockHash)
 	} else if query.HasBlockNum() {
-		events, err = s.Datastore.GetHeaders(ctx, structs.Query{BlockNum: query.BlockNum})
+		events, err = s.Datastore.GetHeadersByBlockNum(ctx, query.BlockNum)
 	} else {
-		return s.getTailBlockReceived(ctx, query.Limit)
+		events, err = s.Datastore.GetLatestHeaders(ctx, query.Limit)
 	}
 
 	if err == nil {
@@ -430,35 +437,4 @@ func (s *Service) GetBlockReceived(ctx context.Context, query structs.TraceQuery
 		return []structs.BidTraceWithTimestamp{}, nil
 	}
 	return nil, err
-}
-
-func (s *Service) getTailBlockReceived(ctx context.Context, limit uint64) ([]structs.BidTraceWithTimestamp, error) {
-	batch := make([]structs.HeaderAndTrace, 0, limit)
-	stop := s.state.Beacon().HeadSlot() - structs.Slot(s.Config.TTL/DurationPerSlot)
-	queries := make([]structs.Query, 0)
-
-	s.Log.WithField("limit", limit).
-		WithField("start", s.state.Beacon().HeadSlot()).
-		WithField("stop", stop).
-		Debug("querying received block traces")
-
-	for highSlot := s.state.Beacon().HeadSlot(); len(batch) < int(limit) && stop <= highSlot; highSlot -= structs.Slot(limit) {
-		queries = queries[:0]
-		for s := highSlot; highSlot-structs.Slot(limit) < s && stop <= s; s-- {
-			queries = append(queries, structs.Query{Slot: s})
-		}
-
-		nextBatch, err := s.Datastore.GetHeaderBatch(ctx, queries)
-		if err != nil {
-			s.Log.WithError(err).Warn("failed getting header batch")
-		} else {
-			batch = append(batch, nextBatch[:min(int(limit)-len(batch), len(nextBatch))]...)
-		}
-	}
-
-	events := make([]structs.BidTraceWithTimestamp, 0, len(batch))
-	for _, event := range batch {
-		events = append(events, *event.Trace)
-	}
-	return events, nil
 }
