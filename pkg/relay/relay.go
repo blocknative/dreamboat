@@ -31,6 +31,7 @@ var (
 )
 
 type Datastore interface {
+	CheckSlotDelivered(context.Context, uint64) (bool, error)
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
@@ -388,11 +389,15 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 
 	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "getDelivered"))
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
-	_, err = rs.d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
+	//_, err = rs.d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
+	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
 	timer3.ObserveDuration()
-	if err == nil {
+	if ok {
 		logger.Debug("block submission after payload delivered")
 		return structs.ErrPayloadAlreadyDelivered
+	}
+	if err != nil {
+		return err
 	}
 
 	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
