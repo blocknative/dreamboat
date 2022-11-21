@@ -187,7 +187,7 @@ func storeHeader(s Badger, h structs.HR, ttl time.Duration) error {
 }
 
 func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error) {
-	el, _ := s.hc.GetContent(slot, slot, 1)
+	el, _ := s.hc.GetHeaders(slot, slot, 1)
 	if el != nil {
 		return el, nil
 	}
@@ -224,7 +224,7 @@ func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]structs.HeaderAndTrace, error) {
 	ls := s.hc.GetLatestSlot()
 	stop := ls - uint64(24*time.Hour/time.Second*12)
-	el, lastSlot := s.hc.GetContent(ls, stop, int(limit))
+	el, lastSlot := s.hc.GetHeaders(ls, stop, int(limit))
 
 	if el == nil {
 		el = []structs.HeaderAndTrace{}
