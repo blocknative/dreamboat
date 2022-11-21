@@ -211,6 +211,7 @@ type HNTs struct {
 
 func NewHNTs() (h *HNTs) {
 	return &HNTs{
+		S:                          NewStoreIndex(),
 		blockHashToContentPosition: make(map[[32]byte]int),
 	}
 }
@@ -259,17 +260,13 @@ func (h *HNTs) AddContent(hnt structs.HeaderAndTrace) error {
 	}
 
 	h.S.Index = append(h.S.Index, newEl)
+	h.S.SubmissionsByPubKeys[newEl.BuilderPubkey] = newEl
 
 	// we should allow resubmission
 	if h.S.MaxProfit.BuilderPubkey == newEl.BuilderPubkey {
-		// if new value is smaller we should pick new max that is not
-		if h.S.MaxProfit.Value.Cmp(newEl.Value) < 0 {
-			for _, el := range h.S.Index {
-				if (h.S.MaxProfit.Value == nil ||
-					h.S.MaxProfit.Value.Cmp(el.Value) < 0) &&
-					h.S.MaxProfit.BuilderPubkey == newEl.BuilderPubkey {
-					h.S.MaxProfit = el
-				}
+		for _, submission := range h.S.SubmissionsByPubKeys {
+			if h.S.MaxProfit.Value == nil || h.S.MaxProfit.Value.Cmp(submission.Value) <= 0 {
+				h.S.MaxProfit = submission
 			}
 		}
 	} else {
@@ -278,6 +275,7 @@ func (h *HNTs) AddContent(hnt structs.HeaderAndTrace) error {
 			h.S.MaxProfit = newEl
 		}
 	}
+
 	h.rev++
 
 	return nil
