@@ -74,7 +74,11 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace s
 func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, error) {
 	tx := s.Badger.NewTransaction(false)
 	defer tx.Discard()
+
 	_, err := tx.Get(DeliveredKey(structs.Slot(slot)).Bytes())
+	if err == badger.ErrKeyNotFound {
+		return false, nil
+	}
 	return (err == nil), err
 }
 
