@@ -39,7 +39,7 @@ type Datastore interface {
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
-	GetMaxProfitHeader(context.Context, structs.Slot) (structs.HeaderAndTrace, error)
+	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
@@ -150,7 +150,7 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	header, err := rs.d.GetMaxProfitHeader(ctx, slot)
+	header, err := rs.d.GetMaxProfitHeader(ctx, uint64(slot))
 	if err != nil {
 		logger.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)

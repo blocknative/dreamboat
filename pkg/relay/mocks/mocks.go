@@ -36,6 +36,21 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 	return m.recorder
 }
 
+// CheckSlotDelivered mocks base method
+func (m *MockDatastore) CheckSlotDelivered(arg0 context.Context, arg1 uint64) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckSlotDelivered", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckSlotDelivered indicates an expected call of CheckSlotDelivered
+func (mr *MockDatastoreMockRecorder) CheckSlotDelivered(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckSlotDelivered", reflect.TypeOf((*MockDatastore)(nil).CheckSlotDelivered), arg0, arg1)
+}
+
 // GetDelivered mocks base method
 func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 structs.PayloadQuery) (structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
@@ -52,7 +67,7 @@ func (mr *MockDatastoreMockRecorder) GetDelivered(arg0, arg1 interface{}) *gomoc
 }
 
 // GetMaxProfitHeader mocks base method
-func (m *MockDatastore) GetMaxProfitHeader(arg0 context.Context, arg1 structs.Slot) (structs.HeaderAndTrace, error) {
+func (m *MockDatastore) GetMaxProfitHeader(arg0 context.Context, arg1 uint64) (structs.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMaxProfitHeader", arg0, arg1)
 	ret0, _ := ret[0].(structs.HeaderAndTrace)
