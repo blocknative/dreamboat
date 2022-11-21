@@ -30,14 +30,11 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	//	d := datastore.Datastore{TTLStorage: newMockDatastore()}
-
 	store, err := badger.NewDatastore("/tmp/BadgerBatcher4", &badger.DefaultOptions)
 	require.NoError(t, err)
 
 	hc := datastore.NewHeaderController()
 	d := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
-	//go d.PutHeaderController()
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -46,7 +43,6 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	header.Trace.Slot = uint64(slotInt)
 
 	// put
-
 	jsHeader, _ := json.Marshal(header)
 	err = d.PutHeader(ctx, structs.HR{
 		Slot:           slot,

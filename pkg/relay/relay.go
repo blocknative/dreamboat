@@ -38,7 +38,6 @@ type Datastore interface {
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 
 	PutHeader(ctx context.Context, hr structs.HR, ttl time.Duration) error
-
 	GetMaxProfitHeader(context.Context, structs.Slot) (structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error

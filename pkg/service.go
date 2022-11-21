@@ -26,7 +26,6 @@ var (
 
 type Relay interface {
 	// Proposer APIs
-	//OLDRegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
 	RegisterValidatorSingular(context.Context, structs.SignedValidatorRegistration) error
 	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
 
@@ -42,9 +41,6 @@ type Relay interface {
 }
 
 type Datastore interface {
-	//GetHeaders(context.Context, structs.HeaderQuery) ([]structs.HeaderAndTrace, error)
-	//GetHeaderBatch(context.Context, []structs.HeaderQuery) ([]structs.HeaderAndTrace, error)
-
 	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
 	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
 	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
