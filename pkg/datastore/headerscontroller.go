@@ -45,7 +45,7 @@ func (hc *HeaderController) CheckForRemoval() (toBeRemoved []uint64, ok bool) {
 
 }
 
-func (hc *HeaderController) GetOrderedDesc() (info []uint64) {
+func (hc *HeaderController) getOrderedDesc() (info []uint64) {
 	hc.cl.RLock()
 	defer hc.cl.RUnlock()
 	info = make([]uint64, len(hc.ordered))
@@ -125,7 +125,7 @@ func (hc *HeaderController) Add(slot uint64, hnt structs.HeaderAndTrace) (newCre
 }
 
 func (hc *HeaderController) GetContent(startingSlot, stopSlot uint64, limit int) (elements []structs.HeaderAndTrace, lastSlot uint64) {
-	for _, o := range hc.GetOrderedDesc() {
+	for _, o := range hc.getOrderedDesc() {
 		if o > startingSlot || o < stopSlot {
 			continue
 		}
