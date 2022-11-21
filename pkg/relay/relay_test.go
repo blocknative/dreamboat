@@ -1120,7 +1120,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 
 	header, err := types.PayloadToPayloadHeader(submitRequestTwo.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeaders, err := ds.GetMaxProfitHeader(ctx, slot)
+	gotHeaders, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
 
 	require.NoError(t, err)
 	require.Len(t, gotHeaders, 2)
@@ -1226,7 +1226,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	// check that payload served from relay is 2nd block with lower value
 	header, err := types.PayloadToPayloadHeader(submitRequestTwo.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeaders, err := ds.GetMaxProfitHeader(ctx, slot)
+	gotHeaders, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
 
 	require.NoError(t, err)
 	require.Len(t, gotHeaders, 1)
