@@ -124,12 +124,12 @@ func (s *Datastore) getMaxHeader(ctx context.Context, slot structs.Slot) (h stru
 	return h, err
 }
 
-func (s *Datastore) PutHeader(ctx context.Context, hr structs.HR, ttl time.Duration) (err error) {
-	if err := storeHeader(s.Badger, hr, ttl); err != nil {
+func (s *Datastore) PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) (err error) {
+	if err := storeHeader(s.Badger, hd, ttl); err != nil {
 		return err
 	}
 
-	newlyCreated, err := s.hc.Add(uint64(hr.Slot), hr.HeaderAndTrace)
+	newlyCreated, err := s.hc.Add(uint64(hd.Slot), hd.HeaderAndTrace)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,7 @@ func (s *Datastore) PutHeader(ctx context.Context, hr structs.HR, ttl time.Durat
 	}
 
 	// check and load keys if exists
-	return s.loadKeysAndCleanup(ctx, uint64(hr.Slot))
+	return s.loadKeysAndCleanup(ctx, uint64(hd.Slot))
 }
 
 func (s *Datastore) loadKeysAndCleanup(ctx context.Context, slot uint64) error {
@@ -162,7 +162,7 @@ func (s *Datastore) loadKeysAndCleanup(ctx context.Context, slot uint64) error {
 	return s.hc.AddMultiple(slot, h)
 }
 
-func storeHeader(s Badger, h structs.HR, ttl time.Duration) error {
+func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
 	txn := s.NewTransaction(true)
 	defer txn.Discard()
 

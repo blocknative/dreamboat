@@ -44,7 +44,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 
 	// put
 	jsHeader, _ := json.Marshal(header)
-	err = d.PutHeader(ctx, structs.HR{
+	err = d.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		HeaderAndTrace: header,
 		Marshaled:      jsHeader,
