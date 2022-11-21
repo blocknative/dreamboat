@@ -23,13 +23,13 @@ import (
 const (
 	HeaderPrefix        = "header-"
 	HeaderContentPrefix = "hc/"
-
-	InMemorySlotLag        = 200
-	InMemorySlotPurgeCheck = time.Duration(time.Second * 10)
-	InMemorySlotTimeLag    = time.Duration(time.Minute * 1)
 )
 
 var (
+	InMemorySlotLag        = uint64(200)
+	InMemorySlotPurgeCheck = time.Duration(time.Second * 10)
+	InMemorySlotTimeLag    = time.Duration(time.Minute * 1)
+
 	HeaderPrefixBytes = []byte("header-")
 )
 
@@ -82,7 +82,7 @@ func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot uint64) (struct
 
 	// Check new
 	p, err := s.getMaxHeader(ctx, slot)
-	if err != nil {
+	if err == nil {
 		return p, nil
 	}
 
@@ -111,7 +111,12 @@ func (s *Datastore) getMaxHeader(ctx context.Context, slot uint64) (h structs.He
 		return h, err
 	}
 
-	item, err = txn.Get(HeaderKeyContent(slot, item.String()).Bytes())
+	v, err := item.ValueCopy(nil)
+	if err != nil {
+		return h, err
+	}
+
+	item, err = txn.Get(HeaderKeyContent(slot, string(v)).Bytes())
 	if err != nil {
 		return h, err
 	}
@@ -320,7 +325,6 @@ func putHeaders(ctx context.Context, s *Datastore, slot uint64, cont []structs.H
 	buff.WriteString("[")
 
 	enc := json.NewEncoder(buff)
-
 	for i, c := range cont {
 		if i > 0 {
 			buff.WriteString(",")
@@ -364,7 +368,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 			if len(subM) != 3 {
 				continue
 			}
-			slot, err := strconv.ParseUint(string(subM[2]), 10, 64)
+			slot, err := strconv.ParseUint(string(subM[1]), 10, 64)
 			if err != nil {
 				continue
 			}
@@ -372,7 +376,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 			if !ok {
 				_, err := txn.Get(append(HeaderPrefixBytes, subM[1]...))
 				if err != nil {
-					if !errors.Is(err, badger.ErrEmptyKey) {
+					if !errors.Is(err, badger.ErrKeyNotFound) {
 						return err
 					}
 					exists[slot] = nil
@@ -386,9 +390,12 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 			}
 
 			li := LoadItem{
-				Time:    item.Version(),
-				Content: make([]byte, item.ValueSize())}
-			item.ValueCopy(li.Content)
+				Time: item.Version(),
+			}
+			li.Content, err = item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
 			exists[slot] = append(is, li)
 		}
 		return nil
@@ -411,7 +418,6 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 					buff.WriteString(",")
 				}
 				io.Copy(buff, bytes.NewReader(payload.Content))
-
 			}
 			buff.WriteString("]")
 
