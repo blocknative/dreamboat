@@ -3,6 +3,7 @@ package datastore_test
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 	"math/rand"
 	"sort"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	datastore "github.com/blocknative/dreamboat/pkg/datastore"
+	"github.com/flashbots/go-boost-utils/types"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	badger "github.com/ipfs/go-ds-badger2"
@@ -304,5 +306,184 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 	})
 	require.Len(t, gotBatch, len(batch))
 	require.EqualValues(t, batch, gotBatch)
+
+}
+
+func TestGetPutComplex(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	store, err := badger.NewDatastore("/tmp/Badger1", &badger.DefaultOptions)
+	require.NoError(t, err)
+
+	hc := datastore.NewHeaderController()
+	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+
+	header := randomHeaderAndTrace()
+	slotInt := rand.Int()
+	slot := structs.Slot(slotInt)
+
+	BPk := header.Trace.BuilderPubkey
+
+	// put first element
+	v1 := &types.U256Str{}
+	v1.FromBig(big.NewInt(10))
+	header.Trace.Value = *v1
+	header.Trace.Slot = uint64(slotInt)
+	jsHeader, _ := json.Marshal(header)
+	err = ds.PutHeader(ctx, structs.HeaderData{
+		Slot:           slot,
+		HeaderAndTrace: header,
+		Marshaled:      jsHeader,
+	}, time.Minute)
+	require.NoError(t, err)
+
+	// put second element
+	header2 := randomHeaderAndTrace()
+	header2.Trace.Slot = uint64(slotInt)
+	v2 := &types.U256Str{}
+	v2.FromBig(big.NewInt(12))
+	header2.Trace.Value = *v2
+	jsHeader, _ = json.Marshal(header2)
+	err = ds.PutHeader(ctx, structs.HeaderData{
+		Slot:           slot,
+		HeaderAndTrace: header2,
+		Marshaled:      jsHeader,
+	}, time.Minute)
+	require.NoError(t, err)
+
+	// put third element
+	header3 := randomHeaderAndTrace()
+	header3.Trace.Slot = uint64(slotInt)
+	header3.Trace.BuilderPubkey = BPk
+	v3 := &types.U256Str{}
+	err = v3.FromBig(big.NewInt(14))
+	require.NoError(t, err)
+	header3.Trace.Value = *v3
+	jsHeader, _ = json.Marshal(header3)
+	err = ds.PutHeader(ctx, structs.HeaderData{
+		Slot:           slot,
+		HeaderAndTrace: header3,
+		Marshaled:      jsHeader,
+	}, time.Minute)
+	require.NoError(t, err)
+
+	// put fourth element
+	header4 := randomHeaderAndTrace()
+	header4.Trace.Slot = uint64(slotInt)
+	header4.Trace.BuilderPubkey = BPk
+	v4 := &types.U256Str{}
+	v4.FromBig(big.NewInt(3))
+	header4.Trace.Value = *v4
+	jsHeader, _ = json.Marshal(header4)
+	err = ds.PutHeader(ctx, structs.HeaderData{
+		Slot:           slot,
+		HeaderAndTrace: header4,
+		Marshaled:      jsHeader,
+	}, time.Minute)
+	require.NoError(t, err)
+
+	// get
+	gotHeader, err := ds.GetHeadersBySlot(ctx, uint64(slot))
+	require.NoError(t, err)
+
+	require.EqualValues(t, *v1, gotHeader[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+
+	require.EqualValues(t, *v2, gotHeader[1].Trace.Value)
+	require.EqualValues(t, *header2.Header, *gotHeader[1].Header)
+
+	require.EqualValues(t, *v3, gotHeader[2].Trace.Value)
+	require.EqualValues(t, *header3.Header, *gotHeader[2].Header)
+
+	require.EqualValues(t, *v4, gotHeader[3].Trace.Value)
+	require.EqualValues(t, *header4.Header, *gotHeader[3].Header)
+
+	// get by block hash
+	gotHeader, err = ds.GetHeadersByBlockHash(ctx, header.Header.BlockHash)
+	require.NoError(t, err)
+	require.EqualValues(t, *v1, gotHeader[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+
+	// get by block number
+	gotHeader, err = ds.GetHeadersByBlockNum(ctx, header.Header.BlockNumber)
+	require.NoError(t, err)
+	require.EqualValues(t, *v1, gotHeader[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+
+	//check right profit
+	hnt, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
+	require.NoError(t, err)
+	require.EqualValues(t, *v3, hnt.Trace.Value)
+	require.EqualValues(t, *header3.Header, *hnt.Header)
+
+	// purged from memory
+	hnt2, ok := hc.GetMaxProfit(uint64(slot))
+	require.True(t, ok)
+	require.EqualValues(t, *v3, hnt2.Trace.Value)
+
+	el, max, rev, err := hc.GetSingleSlot(uint64(slot))
+	require.NoError(t, err)
+	require.Len(t, el, 4)
+	require.EqualValues(t, gotHeader[2].Trace.BlockHash, max)
+	require.Equal(t, uint64(4), rev)
+
+	datastore.InMemorySlotLag = 0
+	datastore.InMemorySlotTimeLag = 0
+	time.Sleep(time.Second * 2)
+	//InitiateClenup
+	slots, ok := hc.CheckForRemoval()
+	require.True(t, ok)
+	require.Contains(t, slots, uint64(slot))
+
+	err = ds.SaveHeaders(ctx, slots, time.Hour)
+	require.NoError(t, err)
+
+	gotHeader, err = ds.GetHeadersBySlot(ctx, uint64(slot))
+	require.NoError(t, err)
+
+	require.EqualValues(t, *v1, gotHeader[0].Trace.Value)
+	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+
+	require.EqualValues(t, *v2, gotHeader[1].Trace.Value)
+	require.EqualValues(t, *header2.Header, *gotHeader[1].Header)
+
+	require.EqualValues(t, *v3, gotHeader[2].Trace.Value)
+	require.EqualValues(t, *header3.Header, *gotHeader[2].Header)
+
+	require.EqualValues(t, *v4, gotHeader[3].Trace.Value)
+	require.EqualValues(t, *header4.Header, *gotHeader[3].Header)
+
+	// purged from memory
+	_, ok = hc.GetMaxProfit(uint64(slot))
+	require.False(t, ok)
+
+	el, max, rev, err = hc.GetSingleSlot(uint64(slot))
+	require.NoError(t, err)
+	require.Len(t, el, 0)
+	empty := [32]byte{}
+	require.Equal(t, max, empty)
+	require.Equal(t, rev, uint64(0))
+
+	// check corect max after turn off
+	h, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
+	require.NoError(t, err)
+	require.EqualValues(t, hnt2, h)
+
+	// remove wraps
+	err = store.Delete(ctx, datastore.HeaderKey(uint64(slot)))
+	require.NoError(t, err)
+
+	_, err = ds.GetHeadersBySlot(ctx, uint64(slot))
+	require.Error(t, datastore.ErrNotFound, err)
+
+	err = ds.FixOrphanHeaders(ctx, time.Hour)
+	require.NoError(t, err)
+
+	har, err := ds.GetHeadersBySlot(ctx, uint64(slot))
+	require.NoError(t, err)
+	require.Len(t, har, 4)
 
 }

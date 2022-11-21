@@ -34,7 +34,7 @@ func (hc *HeaderController) CheckForRemoval() (toBeRemoved []uint64, ok bool) {
 
 	l := hc.ordered[len(hc.ordered)-1]
 	for _, v := range hc.ordered {
-		if !(l.Slot-v.Slot > InMemorySlotLag && time.Since(v.Added) > InMemorySlotTimeLag) {
+		if !(l.Slot-v.Slot >= InMemorySlotLag && time.Since(v.Added) > InMemorySlotTimeLag) {
 			return toBeRemoved, ok
 		}
 		toBeRemoved = append(toBeRemoved, v.Slot)
