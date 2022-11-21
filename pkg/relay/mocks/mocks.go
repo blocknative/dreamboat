@@ -111,7 +111,7 @@ func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interfa
 }
 
 // PutHeader mocks base method
-func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 structs.HR, arg2 time.Duration) error {
+func (m *MockDatastore) PutHeader(arg0 context.Context, arg1 structs.HeaderData, arg2 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutHeader", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)

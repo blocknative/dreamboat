@@ -97,7 +97,7 @@ func TestGetHeader(t *testing.T) {
 	}
 
 	jsHeader, _ := json.Marshal(pHeader)
-	err = ds.PutHeader(ctx, structs.HR{
+	err = ds.PutHeader(ctx, structs.HeaderData{
 		Slot:           structs.Slot(submitRequest.Message.Slot),
 		HeaderAndTrace: pHeader,
 		Marshaled:      jsHeader,
@@ -210,7 +210,7 @@ func TestGetPayload(t *testing.T) {
 	}
 
 	jsHeader, _ := json.Marshal(pHeader)
-	err = ds.PutHeader(ctx, structs.HR{
+	err = ds.PutHeader(ctx, structs.HeaderData{
 		Slot:           structs.Slot(submitRequest.Message.Slot),
 		HeaderAndTrace: pHeader,
 		Marshaled:      jsHeader,
@@ -392,7 +392,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	}
 
 	jsHeader, _ := json.Marshal(pHeader)
-	_ = ds.PutHeader(ctx, structs.HR{
+	_ = ds.PutHeader(ctx, structs.HeaderData{
 		Slot:           structs.Slot(submitRequest.Message.Slot),
 		HeaderAndTrace: pHeader,
 		Marshaled:      jsHeader,
@@ -474,7 +474,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	}
 
 	jsHeader, _ := json.Marshal(pHeader)
-	_ = ds.PutHeader(ctx, structs.HR{
+	_ = ds.PutHeader(ctx, structs.HeaderData{
 		Slot:           structs.Slot(submitRequest.Message.Slot),
 		HeaderAndTrace: pHeader,
 		Marshaled:      jsHeader,
@@ -589,7 +589,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		},
 	}
 	jsHeader, _ := json.Marshal(pHeader)
-	_ = ds.PutHeader(ctx, structs.HR{
+	_ = ds.PutHeader(ctx, structs.HeaderData{
 		Slot:           structs.Slot(submitRequest.Message.Slot),
 		HeaderAndTrace: pHeader,
 		Marshaled:      jsHeader,
@@ -707,7 +707,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	}
 
 	jsHeader, _ := json.Marshal(pHeader)
-	_ = ds.PutHeader(ctx, structs.HR{
+	_ = ds.PutHeader(ctx, structs.HeaderData{
 		Slot:           structs.Slot(submitRequest.Message.Slot),
 		HeaderAndTrace: pHeader,
 		Marshaled:      jsHeader,

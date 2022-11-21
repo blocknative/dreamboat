@@ -38,7 +38,7 @@ type Datastore interface {
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 
-	PutHeader(ctx context.Context, hr structs.HR, ttl time.Duration) error
+	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	GetMaxProfitHeader(context.Context, structs.Slot) (structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
@@ -440,7 +440,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		logger.WithError(err).Error("PutHeader marshal failed")
 		return err
 	}
-	err = rs.d.PutHeader(ctx, structs.HR{
+	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		Marshaled:      b,
 		HeaderAndTrace: h,
