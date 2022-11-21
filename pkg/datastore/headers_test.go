@@ -337,7 +337,7 @@ func TestGetPutComplex(t *testing.T) {
 		Slot:           slot,
 		HeaderAndTrace: header,
 		Marshaled:      jsHeader,
-	}, time.Minute)
+	}, time.Hour)
 	require.NoError(t, err)
 
 	// put second element
@@ -351,23 +351,25 @@ func TestGetPutComplex(t *testing.T) {
 		Slot:           slot,
 		HeaderAndTrace: header2,
 		Marshaled:      jsHeader,
-	}, time.Minute)
+	}, time.Hour)
 	require.NoError(t, err)
 
 	// put third element
 	header3 := randomHeaderAndTrace()
 	header3.Trace.Slot = uint64(slotInt)
+	header3.Trace.BlockHash = header3.Header.BlockHash
 	header3.Trace.BuilderPubkey = BPk
 	v3 := &types.U256Str{}
 	err = v3.FromBig(big.NewInt(14))
 	require.NoError(t, err)
 	header3.Trace.Value = *v3
 	jsHeader, _ = json.Marshal(header3)
+
 	err = ds.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		HeaderAndTrace: header3,
 		Marshaled:      jsHeader,
-	}, time.Minute)
+	}, time.Hour)
 	require.NoError(t, err)
 
 	// put fourth element
@@ -382,7 +384,7 @@ func TestGetPutComplex(t *testing.T) {
 		Slot:           slot,
 		HeaderAndTrace: header4,
 		Marshaled:      jsHeader,
-	}, time.Minute)
+	}, time.Hour)
 	require.NoError(t, err)
 
 	// get
@@ -476,6 +478,9 @@ func TestGetPutComplex(t *testing.T) {
 	err = store.Delete(ctx, datastore.HeaderKey(uint64(slot)))
 	require.NoError(t, err)
 
+	err = store.Delete(ctx, datastore.HeaderMaxNewKey(uint64(slot)))
+	require.NoError(t, err)
+
 	_, err = ds.GetHeadersBySlot(ctx, uint64(slot))
 	require.Error(t, datastore.ErrNotFound, err)
 
@@ -486,4 +491,44 @@ func TestGetPutComplex(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, har, 4)
 
+	// check corect max after turn off
+	h, err = ds.GetMaxProfitHeader(ctx, uint64(slot))
+	require.NoError(t, err)
+	require.EqualValues(t, hnt2, h)
+
+	// put fifth element
+	header5 := randomHeaderAndTrace()
+	header5.Trace.Slot = uint64(slotInt) + 1
+	header5.Trace.BuilderPubkey = BPk
+	v5 := &types.U256Str{}
+	v5.FromBig(big.NewInt(3))
+	header5.Trace.Value = *v5
+	jsHeader, _ = json.Marshal(header5)
+	err = ds.PutHeader(ctx, structs.HeaderData{
+		Slot:           slot + 1,
+		HeaderAndTrace: header5,
+		Marshaled:      jsHeader,
+	}, time.Hour)
+	require.NoError(t, err)
+
+	// put sixth element  // should load the state from memory
+	header6 := randomHeaderAndTrace()
+	header6.Trace.Slot = uint64(slotInt)
+	header6.Trace.BuilderPubkey = BPk
+	v6 := &types.U256Str{}
+	v6.FromBig(big.NewInt(7689))
+	header6.Trace.Value = *v6
+	jsHeader, _ = json.Marshal(header6)
+	err = ds.PutHeader(ctx, structs.HeaderData{
+		Slot:           slot,
+		HeaderAndTrace: header6,
+		Marshaled:      jsHeader,
+	}, time.Hour)
+	require.NoError(t, err)
+
+	el, max, rev, err = hc.GetSingleSlot(uint64(slot))
+	require.NoError(t, err)
+	require.Len(t, el, 5)
+	require.EqualValues(t, header6.Trace.BlockHash, max)
+	require.Equal(t, rev, uint64(5))
 }
