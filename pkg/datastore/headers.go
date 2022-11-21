@@ -51,18 +51,18 @@ func HeaderMaxProfitKey(slot uint64) ds.Key {
 }
 
 type StoredIndex struct {
-	Index                []IndexEl
-	MaxProfit            IndexEl
-	SubmissionsByPubKeys map[[48]byte]IndexEl
+	Index                []IndexMeta
+	MaxProfit            IndexMeta
+	SubmissionsByPubKeys map[[48]byte]IndexMeta
 }
 
 func NewStoreIndex() StoredIndex {
 	return StoredIndex{
-		SubmissionsByPubKeys: make(map[[48]byte]IndexEl),
+		SubmissionsByPubKeys: make(map[[48]byte]IndexMeta),
 	}
 }
 
-type IndexEl struct {
+type IndexMeta struct {
 	Hash          [32]byte
 	Value         *big.Int
 	BuilderPubkey [48]byte

@@ -244,7 +244,7 @@ func (h *IndexedHeaders) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
 }
 
 func (h *IndexedHeaders) AddContent(hnt structs.HeaderAndTrace) error {
-	newEl := IndexEl{
+	newEl := IndexMeta{
 		Hash:          hnt.Trace.BlockHash,
 		Value:         hnt.Trace.Value.BigInt(),
 		BuilderPubkey: hnt.Trace.BuilderPubkey,
