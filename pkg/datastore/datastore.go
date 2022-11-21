@@ -71,6 +71,13 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace s
 	return txn.Commit()
 }
 
+func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, error) {
+	tx := s.Badger.NewTransaction(false)
+	defer tx.Discard()
+	_, err := tx.Get(DeliveredKey(structs.Slot(slot)).Bytes())
+	return (err == nil), err
+}
+
 func (s *Datastore) GetDelivered(ctx context.Context, query structs.PayloadQuery) (structs.BidTraceWithTimestamp, error) {
 	key, err := s.queryToDeliveredKey(ctx, query)
 	if err != nil {
