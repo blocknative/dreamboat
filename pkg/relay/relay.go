@@ -376,7 +376,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		&rs.config.PubKey,
 		rs.config.BuilderSigningDomain,
 	)
-
 	if err != nil {
 		logger.WithError(err).
 			With(log.F{
@@ -433,7 +432,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 
 	b, err := json.Marshal(h)
 	if err != nil {
-		logger.WithError(err).Error("PutHeader failed")
+		logger.WithError(err).Error("PutHeader marshal failed")
 		return err
 	}
 	err = rs.d.PutHeader(ctx, structs.HR{
