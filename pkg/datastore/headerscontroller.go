@@ -10,8 +10,8 @@ import (
 )
 
 type HeaderController struct {
-	content map[uint64]*HNTs
-	ordered []Info
+	headers map[uint64]*IndexedHeaders
+	ordered []SlotInfo
 
 	latestSlot *uint64
 	cl         sync.RWMutex
@@ -21,7 +21,7 @@ func NewHeaderController() *HeaderController {
 	latestSlot := uint64(0)
 	return &HeaderController{
 		latestSlot: &latestSlot,
-		content:    make(map[uint64]*HNTs),
+		headers:    make(map[uint64]*IndexedHeaders),
 	}
 }
 
@@ -57,7 +57,7 @@ func (hc *HeaderController) getOrderedDesc() (info []uint64) {
 }
 
 // addToOrdered to be run in lock
-func (hc *HeaderController) addToOrdered(i Info) {
+func (hc *HeaderController) addToOrdered(i SlotInfo) {
 	hc.ordered = append(hc.ordered, i)
 	l := len(hc.ordered)
 	if l > 1 {
@@ -78,11 +78,11 @@ func (hc *HeaderController) AddMultiple(slot uint64, hnt []structs.HeaderAndTrac
 	hc.cl.Lock()
 	defer hc.cl.Unlock()
 
-	h, ok := hc.content[slot]
+	h, ok := hc.headers[slot]
 	if !ok {
-		h = NewHNTs()
-		hc.content[slot] = h
-		hc.addToOrdered(Info{
+		h = NewIndexedHeaders()
+		hc.headers[slot] = h
+		hc.addToOrdered(SlotInfo{
 			Slot:  slot,
 			Added: time.Now(),
 		})
@@ -106,11 +106,11 @@ func (hc *HeaderController) Add(slot uint64, hnt structs.HeaderAndTrace) (newCre
 	hc.cl.Lock()
 	defer hc.cl.Unlock()
 
-	h, ok := hc.content[slot]
+	h, ok := hc.headers[slot]
 	if !ok {
-		h = NewHNTs()
-		hc.content[slot] = h
-		hc.addToOrdered(Info{
+		h = NewIndexedHeaders()
+		hc.headers[slot] = h
+		hc.addToOrdered(SlotInfo{
 			Slot:  slot,
 			Added: time.Now(),
 		})
@@ -130,13 +130,13 @@ func (hc *HeaderController) GetHeaders(startingSlot, stopSlot uint64, limit int)
 			continue
 		}
 		hc.cl.RLock()
-		h, ok := hc.content[o]
+		h, ok := hc.headers[o]
 		hc.cl.RUnlock()
 		if !ok || h == nil {
 			continue
 		}
 		lastSlot = o
-		c, _ := h.GetContent()
+		c, _, _ := h.GetContent()
 		elements = append(elements, c...)
 		if len(elements) >= limit {
 			return elements, lastSlot
@@ -146,23 +146,23 @@ func (hc *HeaderController) GetHeaders(startingSlot, stopSlot uint64, limit int)
 	return elements, lastSlot
 }
 
-func (hc *HeaderController) GetSingleSlot(slot uint64) (elements []structs.HeaderAndTrace, revision uint64, err error) {
+func (hc *HeaderController) GetSingleSlot(slot uint64) (elements []structs.HeaderAndTrace, maxProfitHash [32]byte, revision uint64, err error) {
 	hc.cl.RLock()
-	h, ok := hc.content[slot]
+	h, ok := hc.headers[slot]
 	hc.cl.RUnlock()
 
 	if !ok {
-		return nil, 0, nil
+		return nil, maxProfitHash, 0, nil
 	}
-	elements, revision = h.GetContent()
-	return elements, revision, err
+	elements, maxProfitHash, revision = h.GetContent()
+	return elements, maxProfitHash, revision, err
 }
 
-func (hc *HeaderController) UnlinkElement(slot, expectedRevision uint64) (success bool) {
+func (hc *HeaderController) RemoveSlot(slot, expectedRevision uint64) (success bool) {
 	hc.cl.Lock()
 	defer hc.cl.Unlock()
 
-	s, ok := hc.content[slot]
+	s, ok := hc.headers[slot]
 	if !ok {
 		return true
 	}
@@ -173,7 +173,7 @@ func (hc *HeaderController) UnlinkElement(slot, expectedRevision uint64) (succes
 
 	// we're only unlinking from map here
 	// it should be later on eligible for GC
-	delete(hc.content, slot)
+	delete(hc.headers, slot)
 
 	// removed element should be first on the left
 	if len(hc.ordered) > 0 {
@@ -192,7 +192,7 @@ func (hc *HeaderController) GetMaxProfit(slot uint64) (hnt structs.HeaderAndTrac
 	hc.cl.RLock()
 	defer hc.cl.RUnlock()
 
-	s, ok := hc.content[slot]
+	s, ok := hc.headers[slot]
 	if !ok {
 		return hnt, false
 	}
@@ -200,7 +200,7 @@ func (hc *HeaderController) GetMaxProfit(slot uint64) (hnt structs.HeaderAndTrac
 
 }
 
-type HNTs struct {
+type IndexedHeaders struct {
 	S StoredIndex
 
 	rev                        uint64
@@ -209,27 +209,27 @@ type HNTs struct {
 	contentLock                sync.RWMutex
 }
 
-func NewHNTs() (h *HNTs) {
-	return &HNTs{
+func NewIndexedHeaders() (h *IndexedHeaders) {
+	return &IndexedHeaders{
 		S:                          NewStoreIndex(),
 		blockHashToContentPosition: make(map[[32]byte]int),
 	}
 }
 
-func (h *HNTs) GetRevision() (revision uint64) {
+func (h *IndexedHeaders) GetRevision() (revision uint64) {
 	h.contentLock.RLock()
 	defer h.contentLock.RUnlock()
 	return h.rev
 }
 
-func (h *HNTs) GetContent() (content []structs.HeaderAndTrace, revision uint64) {
+func (h *IndexedHeaders) GetContent() (content []structs.HeaderAndTrace, maxProfitHash [32]byte, revision uint64) {
 	h.contentLock.RLock()
 	defer h.contentLock.RUnlock()
 
-	return h.content, h.rev
+	return h.content, h.S.MaxProfit.Hash, h.rev
 }
 
-func (h *HNTs) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
+func (h *IndexedHeaders) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
 	h.contentLock.RLock()
 	defer h.contentLock.RUnlock()
 
@@ -243,7 +243,7 @@ func (h *HNTs) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
 	return h.content[n], true
 }
 
-func (h *HNTs) AddContent(hnt structs.HeaderAndTrace) error {
+func (h *IndexedHeaders) AddContent(hnt structs.HeaderAndTrace) error {
 	newEl := IndexEl{
 		Hash:          hnt.Trace.BlockHash,
 		Value:         hnt.Trace.Value.BigInt(),
