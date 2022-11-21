@@ -57,7 +57,7 @@ type StoredIndex struct {
 
 type IndexEl struct {
 	Hash          [32]byte
-	Value         *big.Int //[32]byte
+	Value         *big.Int
 	BuilderPubkey [48]byte
 }
 
@@ -348,7 +348,6 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 		prefix := []byte("/" + HeaderContentPrefix)
 		re := regexp.MustCompile(`\/hc\/([^\/]+)\/([^\/]+)`)
 
-		//for it.Rewind(); it.Valid(); it.Next() {
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			subM := re.FindSubmatch(item.Key())

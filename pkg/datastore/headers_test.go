@@ -27,7 +27,6 @@ func TestPutGetHeader(t *testing.T) {
 
 	hc := datastore.NewHeaderController()
 	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
-	//go ds.PutHeaderController()
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -76,7 +75,6 @@ func TestPutGetHeaderDuplicate(t *testing.T) {
 
 	hc := datastore.NewHeaderController()
 	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
-	//go ds.PutHeaderController()
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -110,8 +108,6 @@ func TestPutGetHeaders(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	//ds := datastore.Datastore{TTLStorage: newMockDatastore()}
 
 	store, err := badger.NewDatastore("/tmp/BadgerBatcher3", &badger.DefaultOptions)
 	require.NoError(t, err)
@@ -186,7 +182,6 @@ func TestPutGetHeaderBatch(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		header := randomHeaderAndTrace()
-		//slotInt := rand.Int()
 		slotInt := slotA + i*1000
 		slot := structs.Slot(slotInt)
 
@@ -243,7 +238,6 @@ func TestPutGetHeaderBatch(t *testing.T) {
 		}
 
 		//get
-		//gotBatch, err := ds.GetHeaderBatch(ctx, queries)
 		gotBatch, err := ds.GetLatestHeaders(ctx, 500)
 		require.NoError(t, err)
 		sort.Slice(gotBatch, func(i, j int) bool {
@@ -284,7 +278,6 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 	hc := datastore.NewHeaderController()
 	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 
-	//ds := datastore.Datastore{TTLStorage: store}
 	for i, header := range headers {
 		jsHeader, _ := json.Marshal(header)
 		err = ds.PutHeader(ctx, structs.HR{
