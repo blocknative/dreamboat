@@ -221,7 +221,41 @@ func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 	if err != nil {
 		return nil, err
 	}
-	return s.GetHeadersBySlot(ctx, binary.LittleEndian.Uint64(slot))
+
+	newContent, err := s.TTLStorage.Get(ctx, HeaderKeyContent(binary.LittleEndian.Uint64(slot), hash.String()))
+	if err != nil {
+		if !errors.Is(err, badger.ErrKeyNotFound) { // do not fail on not found try others
+			return nil, err
+		}
+		// old code fallback - to be removed
+		if true {
+			newContent, err = s.TTLStorage.Get(ctx, HeaderKey(binary.LittleEndian.Uint64(slot)))
+			if err != nil {
+				return nil, err
+			}
+
+			el := []structs.HeaderAndTrace{}
+			if err = json.Unmarshal(newContent, &el); err != nil {
+				return el, err
+			}
+
+			newEl := []structs.HeaderAndTrace{}
+			for _, v := range el {
+				if v.Header.BlockHash == hash {
+					elem := v
+					newEl = append(newEl, elem)
+				}
+			}
+			return newEl, nil
+		}
+
+	}
+
+	el := structs.HeaderAndTrace{}
+	if err = json.Unmarshal(newContent, &el); err != nil {
+		return nil, err
+	}
+	return []structs.HeaderAndTrace{el}, nil
 }
 
 func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]structs.HeaderAndTrace, error) {

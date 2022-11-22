@@ -56,6 +56,8 @@ func TestPutGetHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
 	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
+	require.Len(t, gotHeader, 1)
+	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
 
 	// get by block number
 	gotHeader, err = ds.GetHeadersByBlockNum(ctx, header.Header.BlockNumber)
