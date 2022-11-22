@@ -377,7 +377,9 @@ type LoadItem struct {
 
 // FixOrphanHeaders is reading all the orphan headers from
 func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) error {
-	exists := make(map[uint64][]LoadItem)
+	slotDoesNotExist := make(map[uint64][]LoadItem)
+
+	slotExists := make(map[uint64]struct{})
 
 	// Get all headers, rebuild
 	err := s.Badger.View(func(txn *badger.Txn) error {
@@ -400,21 +402,28 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 			if err != nil {
 				continue
 			}
-			is, ok := exists[slot]
-			if !ok {
-				_, err := txn.Get(append(HeaderPrefixBytes, subM[1]...))
-				if err != nil {
-					if !errors.Is(err, badger.ErrKeyNotFound) {
-						return err
-					}
-					exists[slot] = nil
-				}
-				is = []LoadItem{}
-				exists[slot] = is
+
+			if _, ok := slotExists[slot]; ok { // we know it already exists
+				continue
 			}
 
-			if ok && is == nil {
+			if content, ok := slotDoesNotExist[slot]; ok { // we know it doesn't exists
+				li := LoadItem{Time: item.Version()}
+				li.Content, err = item.ValueCopy(nil)
+				if err != nil {
+					return err
+				}
+				slotDoesNotExist[slot] = append(content, li)
 				continue
+			}
+
+			_, err = txn.Get(HeaderKey(slot).Bytes())
+			if err == nil {
+				slotExists[slot] = struct{}{}
+				continue
+			}
+			if !errors.Is(err, badger.ErrKeyNotFound) {
+				return err
 			}
 
 			li := LoadItem{Time: item.Version()}
@@ -422,7 +431,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 			if err != nil {
 				return err
 			}
-			exists[slot] = append(is, li)
+			slotDoesNotExist[slot] = append([]LoadItem{}, li)
 		}
 		return nil
 	})
@@ -431,8 +440,8 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 	}
 
 	buff := new(bytes.Buffer)
-	for slot, v := range exists {
-		if v != nil {
+	for slot, v := range slotDoesNotExist {
+		if v != nil || len(v) != 0 {
 			tempHC := NewHeaderController(100, time.Hour) // params doesn't matter here
 
 			buff.Reset()
@@ -454,7 +463,6 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 				if _, err := tempHC.Add(slot, hnt); err != nil {
 					return err
 				}
-
 			}
 			buff.WriteString("]")
 			if err := s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
