@@ -1,4 +1,3 @@
-//go:generate mockgen -source=beacon.go -destination=../internal/mock/pkg/beacon.go -package=mock_relay
 package relay
 
 import (
@@ -12,15 +11,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/lthibault/log"
 	"github.com/r3labs/sse/v2"
 	uberatomic "go.uber.org/atomic"
 )
 
 var (
-	SlotsPerEpoch        Slot         = 32
 	DurationPerSlot                   = time.Second * 12
-	DurationPerEpoch                  = DurationPerSlot * time.Duration(SlotsPerEpoch)
+	DurationPerEpoch                  = DurationPerSlot * time.Duration(structs.SlotsPerEpoch)
 	_                    BeaconClient = (*beaconClient)(nil) // type constraint
 	ErrHTTPErrorResponse              = errors.New("got an HTTP error response")
 	ErrNodesUnavailable               = errors.New("beacon nodes are unavailable")
@@ -28,10 +27,10 @@ var (
 
 type BeaconClient interface {
 	SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent)
-	GetProposerDuties(Epoch) (*RegisteredProposersResponse, error)
+	GetProposerDuties(structs.Epoch) (*RegisteredProposersResponse, error)
 	SyncStatus() (*SyncStatusPayloadData, error)
-	KnownValidators(Slot) (AllValidatorsResponse, error)
-	Genesis() (GenesisInfo, error)
+	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
+	Genesis() (structs.GenesisInfo, error)
 	Endpoint() string
 }
 
@@ -55,7 +54,7 @@ func (b *MultiBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC cha
 	}
 }
 
-func (b *MultiBeaconClient) GetProposerDuties(epoch Epoch) (*RegisteredProposersResponse, error) {
+func (b *MultiBeaconClient) GetProposerDuties(epoch structs.Epoch) (*RegisteredProposersResponse, error) {
 	// return the first successful beacon node response
 	clients := b.clientsByLastResponse()
 
@@ -128,7 +127,7 @@ func (b *MultiBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
 	return bestSyncStatus, nil
 }
 
-func (b *MultiBeaconClient) KnownValidators(headSlot Slot) (AllValidatorsResponse, error) {
+func (b *MultiBeaconClient) KnownValidators(headSlot structs.Slot) (AllValidatorsResponse, error) {
 	// return the first successful beacon node response
 	clients := b.clientsByLastResponse()
 
@@ -150,7 +149,7 @@ func (b *MultiBeaconClient) KnownValidators(headSlot Slot) (AllValidatorsRespons
 	return AllValidatorsResponse{}, ErrNodesUnavailable
 }
 
-func (b *MultiBeaconClient) Genesis() (genesisInfo GenesisInfo, err error) {
+func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err error) {
 	clients := b.clientsByLastResponse()
 	for _, client := range clients {
 		if genesisInfo, err = client.Genesis(); err != nil {
@@ -239,7 +238,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 }
 
 // Returns proposer duties for every slot in this epoch
-func (b *beaconClient) GetProposerDuties(epoch Epoch) (*RegisteredProposersResponse, error) {
+func (b *beaconClient) GetProposerDuties(epoch structs.Epoch) (*RegisteredProposersResponse, error) {
 	u := *b.beaconEndpoint
 	// https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties
 	u.Path = fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch)
@@ -261,7 +260,7 @@ func (b *beaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
 	return &resp.Data, nil
 }
 
-func (b *beaconClient) KnownValidators(headSlot Slot) (AllValidatorsResponse, error) {
+func (b *beaconClient) KnownValidators(headSlot structs.Slot) (AllValidatorsResponse, error) {
 	u := *b.beaconEndpoint
 	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/validators", headSlot)
 	q := u.Query()
@@ -274,7 +273,7 @@ func (b *beaconClient) KnownValidators(headSlot Slot) (AllValidatorsResponse, er
 	return vd, err
 }
 
-func (b *beaconClient) Genesis() (GenesisInfo, error) {
+func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 	resp := new(GenesisResponse)
 	u := *b.beaconEndpoint
 	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
@@ -365,8 +364,8 @@ type RegisteredProposersResponse struct {
 }
 
 type RegisteredProposersResponseData struct {
-	PubKey PubKey `json:"pubkey"`
-	Slot   uint64 `json:"slot,string"`
+	PubKey structs.PubKey `json:"pubkey"`
+	Slot   uint64         `json:"slot,string"`
 }
 
 // AllValidatorsResponse is the response for querying active validators
@@ -385,13 +384,6 @@ type ValidatorResponseValidatorData struct {
 	Pubkey string `json:"pubkey"`
 }
 
-// GenesisResponse is the response for querying the genesis
 type GenesisResponse struct {
-	Data GenesisInfo
-}
-
-type GenesisInfo struct {
-	GenesisTime           uint64 `json:"genesis_time,string"`
-	GenesisValidatorsRoot string `json:"genesis_validators_root"`
-	GenesisForkVersion    string `json:"genesis_fork_version"`
+	Data structs.GenesisInfo
 }

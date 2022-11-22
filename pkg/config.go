@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
@@ -34,42 +35,33 @@ const (
 	BellatrixForkVersionGoerli  = "0x02001020"
 )
 
-type PubKey struct{ types.PublicKey }
-
-func (pk PubKey) Loggable() map[string]any {
-	return map[string]any{
-		"pubkey": pk,
-	}
-}
-
-func (pk PubKey) Bytes() []byte {
-	return pk.PublicKey[:]
-}
-
 // Config provides all available options for the default BeaconClient and Relay
 type Config struct {
-	Log                 log.Logger
-	BuilderURLs         []string
-	Network             string
-	RelayRequestTimeout time.Duration
-	BuilderCheck        bool
-	BeaconEndpoints     []string
-	PubKey              types.PublicKey
-	SecretKey           *bls.SecretKey
-	Datadir             string
-	TTL                 time.Duration
-	CheckKnownValidator bool
+	Log                      log.Logger
+	BuilderURLs              []string
+	Network                  string
+	RelayRequestTimeout      time.Duration
+	BuilderCheck             bool
+	BeaconEndpoints          []string
+	PubKey                   types.PublicKey
+	SecretKey                *bls.SecretKey
+	Datadir                  string
+	TTL                      time.Duration
+	RelayQueueProcessingSize uint64
+
+	RelayHeaderMemorySlotLag       uint64
+	RelayHeaderMemorySlotTimeLag   time.Duration
+	RelayHeaderMemoryPurgeInterval time.Duration
 
 	// private fields; populated during validation
-	builders              map[PubKey]*builder
-	genesisForkVersion    string
-	genesisValidatorsRoot string
-	bellatrixForkVersion  string
+	builders              map[structs.PubKey]*builder
+	GenesisForkVersion    string
+	GenesisValidatorsRoot string
+	BellatrixForkVersion  string
 }
 
-func (c *Config) validate() error {
-	c.builders = make(map[PubKey]*builder)
-
+func (c *Config) Validate() error {
+	c.builders = make(map[structs.PubKey]*builder)
 	if err := c.validateNetwork(); err != nil {
 		return err
 	}
@@ -80,33 +72,33 @@ func (c *Config) validate() error {
 func (c *Config) validateNetwork() error {
 	switch c.Network {
 	case "main", "mainnet":
-		c.genesisForkVersion = GenesisForkVersionMainnet
-		c.genesisValidatorsRoot = GenesisValidatorsRootMainnet
-		c.bellatrixForkVersion = BellatrixForkVersionMainnet
+		c.GenesisForkVersion = GenesisForkVersionMainnet
+		c.GenesisValidatorsRoot = GenesisValidatorsRootMainnet
+		c.BellatrixForkVersion = BellatrixForkVersionMainnet
 	case "kiln":
-		c.genesisForkVersion = GenesisForkVersionKiln
-		c.genesisValidatorsRoot = GenesisValidatorsRootKiln
-		c.bellatrixForkVersion = BellatrixForkVersionKiln
+		c.GenesisForkVersion = GenesisForkVersionKiln
+		c.GenesisValidatorsRoot = GenesisValidatorsRootKiln
+		c.BellatrixForkVersion = BellatrixForkVersionKiln
 	case "ropsten":
-		c.genesisForkVersion = GenesisForkVersionRopsten
-		c.genesisValidatorsRoot = GenesisValidatorsRootRopsten
-		c.bellatrixForkVersion = BellatrixForkVersionRopsten
+		c.GenesisForkVersion = GenesisForkVersionRopsten
+		c.GenesisValidatorsRoot = GenesisValidatorsRootRopsten
+		c.BellatrixForkVersion = BellatrixForkVersionRopsten
 	case "sepolia":
-		c.genesisForkVersion = GenesisForkVersionSepolia
-		c.genesisValidatorsRoot = GenesisValidatorsRootSepolia
-		c.bellatrixForkVersion = BellatrixForkVersionSepolia
+		c.GenesisForkVersion = GenesisForkVersionSepolia
+		c.GenesisValidatorsRoot = GenesisValidatorsRootSepolia
+		c.BellatrixForkVersion = BellatrixForkVersionSepolia
 	case "goerli":
-		c.genesisForkVersion = GenesisForkVersionGoerli
-		c.genesisValidatorsRoot = GenesisValidatorsRootGoerli
-		c.bellatrixForkVersion = BellatrixForkVersionGoerli
+		c.GenesisForkVersion = GenesisForkVersionGoerli
+		c.GenesisValidatorsRoot = GenesisValidatorsRootGoerli
+		c.BellatrixForkVersion = BellatrixForkVersionGoerli
 	default:
 		network, err := c.readNetworkFromConfig(c.Network)
 		if err != nil {
 			return fmt.Errorf("unknown network: %s: %w", c.Network, err)
 		}
-		c.genesisForkVersion = network.GenesisForkVersion
-		c.genesisValidatorsRoot = network.GenesisValidatorsRoot
-		c.bellatrixForkVersion = network.BellatrixForkVersion
+		c.GenesisForkVersion = network.GenesisForkVersion
+		c.GenesisValidatorsRoot = network.GenesisValidatorsRoot
+		c.BellatrixForkVersion = network.BellatrixForkVersion
 	}
 	return nil
 }
@@ -129,10 +121,10 @@ func (c *Config) readNetworkFromConfig(network string) (Network, error) {
 	}
 
 	config, ok := networks[network]
-	if !ok{
-		return config, fmt.Errorf("not found in config file: %s", c.Datadir + "/networks.json")
+	if !ok {
+		return config, fmt.Errorf("not found in config file: %s", c.Datadir+"/networks.json")
 	}
-	
+
 	return config, nil
 }
 
@@ -151,7 +143,7 @@ func (c *Config) validateBuilders() (err error) {
 
 // builder represents a builder that the relay service connects to.
 type builder struct {
-	PubKey PubKey
+	PubKey structs.PubKey
 	URL    *url.URL
 }
 
@@ -175,7 +167,7 @@ func newBuilderEntry(relayURL string) (*builder, error) {
 		return nil, errors.New("missing relay public key")
 	}
 
-	var pk PubKey
+	var pk structs.PubKey
 	if err = pk.UnmarshalText([]byte(u.User.Username())); err != nil {
 		return nil, err
 	}
