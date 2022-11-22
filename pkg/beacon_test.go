@@ -2,12 +2,13 @@ package relay_test
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 
-	mock_relay "github.com/blocknative/dreamboat/internal/mock/pkg"
 	relay "github.com/blocknative/dreamboat/pkg"
+	mock_relay "github.com/blocknative/dreamboat/pkg/mocks"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/golang/mock/gomock"
 	"github.com/lthibault/log"
 	"github.com/stretchr/testify/require"
@@ -15,7 +16,7 @@ import (
 )
 
 var (
-	nullLog = log.New(log.WithWriter(ioutil.Discard))
+	nullLog = log.New(log.WithWriter(io.Discard))
 )
 
 func TestMultiSubscribeToHeadEvents(t *testing.T) {
@@ -58,7 +59,7 @@ func TestMultiGetProposerDuties(t *testing.T) {
 
 		duties := relay.RegisteredProposersResponse{}
 
-		epoch := relay.Epoch(rand.Uint64())
+		epoch := structs.Epoch(rand.Uint64())
 
 		connected.EXPECT().Endpoint().Times(1)
 		connected.EXPECT().
@@ -84,7 +85,7 @@ func TestMultiGetProposerDuties(t *testing.T) {
 
 		duties := relay.RegisteredProposersResponse{}
 
-		epoch := relay.Epoch(rand.Uint64())
+		epoch := structs.Epoch(rand.Uint64())
 
 		disconnected.EXPECT().Endpoint().Times(1)
 		disconnected.EXPECT().
@@ -188,7 +189,7 @@ func TestMultiKnownValidators(t *testing.T) {
 
 		validators := relay.AllValidatorsResponse{}
 
-		slot := relay.Slot(rand.Uint64())
+		slot := structs.Slot(rand.Uint64())
 
 		connected.EXPECT().Endpoint().Times(1)
 		connected.EXPECT().
@@ -215,7 +216,7 @@ func TestMultiKnownValidators(t *testing.T) {
 		validators := relay.AllValidatorsResponse{Data: []relay.ValidatorResponseEntry{}}
 		disconnectedValidators := relay.AllValidatorsResponse{Data: nil}
 
-		slot := relay.Slot(rand.Uint64())
+		slot := structs.Slot(rand.Uint64())
 
 		disconnected.EXPECT().Endpoint().Times(1)
 		disconnected.EXPECT().

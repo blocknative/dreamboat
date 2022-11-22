@@ -8,10 +8,15 @@ import (
 
 	"time"
 
-	relay "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/metrics"
+	pkg "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/api"
+	"github.com/blocknative/dreamboat/pkg/datastore"
+	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
 	blst "github.com/supranational/blst/bindings/go"
@@ -21,7 +26,7 @@ import (
 
 const (
 	shutdownTimeout = 5 * time.Second
-	version         = relay.Version
+	version         = pkg.Version
 )
 
 var flags = []cli.Flag{
@@ -47,6 +52,12 @@ var flags = []cli.Flag{
 		Usage:   "server listen address",
 		Value:   "localhost:18550",
 		EnvVars: []string{"RELAY_ADDR"},
+	},
+	&cli.StringFlag{
+		Name:    "internalAddr",
+		Usage:   "server listen address",
+		Value:   "0.0.0.0:19550",
+		EnvVars: []string{"RELAY_INTERNAL_ADDR"},
 	},
 	&cli.DurationFlag{
 		Name:    "timeout",
@@ -93,16 +104,60 @@ var flags = []cli.Flag{
 		Value:   24 * time.Hour,
 		EnvVars: []string{"BN_RELAY_TTL"},
 	},
-	&cli.BoolFlag{
-		Name:  "checkKnownValidator",
-		Usage: "rejects validator registration if it's not a known validator from the beacon",
-		Value: false,
+	&cli.Uint64Flag{
+		Name:    "relay-validator-queue-size",
+		Usage:   "The size of response queue, should be set to expected number of validators in one request",
+		Value:   100_000,
+		EnvVars: []string{"RELAY_QUEUE_REQ"},
+	},
+	&cli.Uint64Flag{
+		Name:    "relay-workers-verify",
+		Usage:   "number of workers running verify in parallel",
+		Value:   400,
+		EnvVars: []string{"RELAY_WORKERS_VERIFY"},
+	},
+	&cli.Uint64Flag{
+		Name:    "relay-workers-store-validator",
+		Usage:   "number of workers storing validators in parallel",
+		Value:   400,
+		EnvVars: []string{"RELAY_WORKERS_STORE_VALIDATOR"},
+	},
+	&cli.Uint64Flag{
+		Name:    "relay-verify-queue-size",
+		Usage:   "size of verify queue",
+		Value:   20000,
+		EnvVars: []string{"RELAY_VERIFY_QUEUE_SIZE"},
+	},
+	&cli.Uint64Flag{
+		Name:    "relay-store-queue-size",
+		Usage:   "size of store queue",
+		Value:   20000,
+		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
+	},
+
+	&cli.Uint64Flag{
+		Name:    "relay-header-memory-slot-lag",
+		Usage:   "how many slots from the head relay should keep in memory",
+		Value:   200,
+		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_LAG"},
+	},
+
+	&cli.DurationFlag{
+		Name:    "relay-header-memory-slot-time-lag",
+		Usage:   "how log should it take for lagged slot to be eligible fot purge",
+		Value:   time.Minute * 5,
+		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_TIME_LAG"},
+	},
+	&cli.DurationFlag{
+		Name:    "relay-header-memory-purge-interval",
+		Usage:   "how often memory should be purged",
+		Value:   time.Minute * 10,
+		EnvVars: []string{"RELAY_HEADER_MEMORY_PURGE_INTERVAL"},
 	},
 }
 
 var (
-	config relay.Config
-	svr    http.Server
+	config pkg.Config
 )
 
 // Main starts the relay
@@ -128,8 +183,14 @@ func setup() cli.BeforeFunc {
 			return err
 		}
 
-		config = relay.Config{
-			Log:                 logger(c),
+		config = pkg.Config{
+			Log:                      logger(c),
+			RelayQueueProcessingSize: c.Uint64("relay-validator-queue-size"),
+
+			RelayHeaderMemorySlotLag:       c.Uint64("relay-header-memory-slot-lag"),
+			RelayHeaderMemorySlotTimeLag:   c.Duration("relay-header-memory-slot-time-lag"),
+			RelayHeaderMemoryPurgeInterval: c.Duration("relay-header-memory-purge-interval"),
+
 			RelayRequestTimeout: c.Duration("timeout"),
 			Network:             c.String("network"),
 			BuilderCheck:        c.Bool("check-builder"),
@@ -139,16 +200,6 @@ func setup() cli.BeforeFunc {
 			SecretKey:           sk,
 			Datadir:             c.String("datadir"),
 			TTL:                 c.Duration("ttl"),
-			CheckKnownValidator: c.Bool("checkKnownValidator"),
-		}
-
-		svr = http.Server{
-			Addr:         c.String("addr"),
-			ReadTimeout:  c.Duration("timeout"),
-			WriteTimeout: c.Duration("timeout"),
-			IdleTimeout:  time.Second * 2,
-
-			MaxHeaderBytes: 4096,
 		}
 
 		return
@@ -172,20 +223,111 @@ func setupKeys(c *cli.Context) (*blst.SecretKey, types.PublicKey, error) {
 
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
-		g, ctx := errgroup.WithContext(c.Context)
-
-		// setup the relay service
-		service := &relay.DefaultService{
-			Log:    config.Log,
-			Config: config,
+		if err := config.Validate(); err != nil {
+			return err
 		}
 
+		domainBuilder, err := pkg.ComputeDomain(types.DomainTypeAppBuilder, config.GenesisForkVersion, types.Root{}.String())
+		if err != nil {
+			return err
+		}
+
+		domainBeaconProposer, err := pkg.ComputeDomain(types.DomainTypeBeaconProposer, config.BellatrixForkVersion, config.GenesisValidatorsRoot)
+		if err != nil {
+			return err
+		}
+
+		timeDataStoreStart := time.Now()
+		m := metrics.NewMetrics()
+
+		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
+		if err != nil {
+			config.Log.WithError(err).Error("failed to initialize datastore")
+			return err
+		}
+		config.Log.With(log.F{
+			"service":     "datastore",
+			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
+		}).Info("data store initialized")
+
+		timeRelayStart := time.Now()
+		as := &pkg.AtomicState{}
+
+		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
+		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB, hc)
+		if err = datastore.InitDatastoreMetrics(m); err != nil {
+			return err
+		}
+
+		if err = ds.FixOrphanHeaders(c.Context, config.TTL); err != nil {
+			return err
+		}
+
+		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
+
+		regMgr := relay.NewProcessManager(c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
+		regMgr.AttachMetrics(m)
+		loadRegistrations(ds, regMgr)
+
+		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
+
+		r := relay.NewRelay(config.Log, relay.RelayConfig{
+			BuilderSigningDomain:    domainBuilder,
+			ProposerSigningDomain:   domainBeaconProposer,
+			PubKey:                  config.PubKey,
+			SecretKey:               config.SecretKey,
+			TTL:                     config.TTL,
+			RegisterValidatorMaxNum: config.RelayQueueProcessingSize,
+		}, as, ds, regMgr)
+		r.AttachMetrics(m)
+
+		service := pkg.NewService(config.Log, config, ds, r, as)
+		service.AttachMetrics(m)
+
+		api := api.NewApi(config.Log, service)
+		api.AttachMetrics(m)
+
+		regMgr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
+		regMgr.RunVerify(c.Uint("relay-workers-verify"))
+
+		config.Log.With(log.F{
+			"service":     "relay",
+			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
+		}).Info("initialized")
+
+		cContext, cancel := context.WithCancel(c.Context)
+
+		g, ctx := errgroup.WithContext(cContext)
 		g.Go(func() error {
-			return service.Run(ctx)
+			err := service.RunBeacon(ctx)
+			if err != nil {
+				cancel()
+			}
+			return err
+		})
+
+		// run internal http server
+		g.Go(func() (err error) {
+			internalMux := http.NewServeMux()
+			metrics.AttachProfiler(internalMux)
+
+			internalMux.Handle("/metrics", m.Handler())
+			config.Log.Info("internal server listening")
+			internalSrv := http.Server{
+				Addr:    c.String("internalAddr"),
+				Handler: internalMux,
+			}
+
+			if err = internalSrv.ListenAndServe(); err == http.ErrServerClosed {
+				err = nil
+			}
+			return err
 		})
 
 		// wait for the relay service to be ready
 		select {
+		case <-cContext.Done():
+			return err
 		case <-service.Ready():
 		case <-ctx.Done():
 			return g.Wait()
@@ -193,18 +335,23 @@ func run() cli.ActionFunc {
 
 		config.Log.Debug("relay service ready")
 
+		mux := http.NewServeMux()
+		api.AttachToHandler(mux)
+
+		var svr http.Server
 		// run the http server
 		g.Go(func() (err error) {
-			svr.BaseContext = func(l net.Listener) context.Context {
-				return ctx
+			svr = http.Server{
+				Addr:         c.String("addr"),
+				ReadTimeout:  c.Duration("timeout"),
+				WriteTimeout: c.Duration("timeout"),
+				IdleTimeout:  time.Second * 2,
+				BaseContext: func(l net.Listener) context.Context { // 99% not needed
+					return ctx
+				},
+				Handler:        mux,
+				MaxHeaderBytes: 4096,
 			}
-
-			svr.Handler = &relay.API{
-				Service:       service,
-				Log:           config.Log,
-				EnableProfile: c.Bool("profile"),
-			}
-
 			config.Log.Info("http server listening")
 			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
@@ -225,6 +372,21 @@ func run() cli.ActionFunc {
 
 		return g.Wait()
 	}
+}
+
+func loadRegistrations(ds *datastore.Datastore, regMgr *relay.ProcessManager) {
+	reg, err := ds.GetAllRegistration()
+	if err == nil {
+		for k, v := range reg {
+			regMgr.Set(k, v.Message.Timestamp)
+		}
+
+		config.Log.With(log.F{
+			"service":        "registration",
+			"count-elements": len(reg),
+		}).Info("registrations loaded")
+	}
+
 }
 
 func logger(c *cli.Context) log.Logger {
@@ -279,11 +441,9 @@ func withFormat(c *cli.Context) log.Option {
 			PrettyPrint:     c.Bool("prettyprint"),
 			TimestampFormat: time.RFC3339Nano,
 		}
-
 	default:
 		fmt = new(logrus.TextFormatter)
 	}
-
 	return log.WithFormatter(fmt)
 }
 

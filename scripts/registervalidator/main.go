@@ -8,13 +8,15 @@ import (
 	"net/http"
 
 	relay "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/api"
+
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/pkg/errors"
 )
 
 const (
-	url = "http://localhost:18550" + relay.PathRegisterValidator
+	url = "http://localhost:18550" + api.PathRegisterValidator
 )
 
 func main() {
