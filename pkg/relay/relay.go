@@ -300,9 +300,10 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	timer4.ObserveDuration()
 
 	logger.With(log.F{
-		"slot":      payloadRequest.Message.Slot,
-		"blockHash": payload.Payload.Data.BlockHash,
-		"bid":       payload.Bid.Data.Message.Value,
+		"slot":             payloadRequest.Message.Slot,
+		"blockHash":        payload.Payload.Data.BlockHash,
+		"bid":              payload.Bid.Data.Message.Value,
+		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 	}).Info("payload sent")
 
 	return &response, nil
