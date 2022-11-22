@@ -26,10 +26,6 @@ const (
 )
 
 var (
-	InMemorySlotLag        = uint64(200)
-	InMemorySlotPurgeCheck = time.Duration(time.Second * 10)
-	InMemorySlotTimeLag    = time.Duration(time.Minute * 1)
-
 	HeaderPrefixBytes = []byte("header-")
 )
 
@@ -258,9 +254,9 @@ func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 	return []structs.HeaderAndTrace{el}, nil
 }
 
-func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64) ([]structs.HeaderAndTrace, error) {
+func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error) {
 	ls := s.hc.GetLatestSlot()
-	stop := ls - uint64(24*time.Hour/time.Second*12)
+	stop := ls - stopLag
 	el, lastSlot := s.hc.GetHeaders(ls, stop, int(limit))
 
 	if el == nil {
@@ -437,7 +433,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 	buff := new(bytes.Buffer)
 	for slot, v := range exists {
 		if v != nil {
-			tempHC := NewHeaderController()
+			tempHC := NewHeaderController(100, time.Hour) // params doesn't matter here
 
 			buff.Reset()
 			sort.Slice(v, func(i, j int) bool {
@@ -477,9 +473,9 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 	return err
 }
 
-func (s *Datastore) MemoryCleanup(ctx context.Context, ttl time.Duration) error {
+func (s *Datastore) MemoryCleanup(ctx context.Context, slotPurgeDuration time.Duration, ttl time.Duration) error {
 	for {
-		time.Sleep(InMemorySlotPurgeCheck)
+		time.Sleep(slotPurgeDuration)
 		slots, ok := s.hc.CheckForRemoval()
 		if !ok {
 			continue

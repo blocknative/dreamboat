@@ -13,13 +13,19 @@ type HeaderController struct {
 	headers map[uint64]*IndexedHeaders
 	ordered []SlotInfo
 
+	slotLag     uint64
+	slotTimeLag time.Duration
+
 	latestSlot *uint64
 	cl         sync.RWMutex
 }
 
-func NewHeaderController() *HeaderController {
+func NewHeaderController(slotLag uint64, slotTimeLag time.Duration) *HeaderController {
 	latestSlot := uint64(0)
 	return &HeaderController{
+		slotLag:     slotLag,
+		slotTimeLag: slotTimeLag,
+
 		latestSlot: &latestSlot,
 		headers:    make(map[uint64]*IndexedHeaders),
 	}
@@ -34,7 +40,7 @@ func (hc *HeaderController) CheckForRemoval() (toBeRemoved []uint64, ok bool) {
 
 	l := hc.ordered[len(hc.ordered)-1]
 	for _, v := range hc.ordered {
-		if !(l.Slot-v.Slot >= InMemorySlotLag && time.Since(v.Added) > InMemorySlotTimeLag) {
+		if !(l.Slot-v.Slot >= hc.slotLag && time.Since(v.Added) > hc.slotTimeLag) {
 			return toBeRemoved, ok
 		}
 		toBeRemoved = append(toBeRemoved, v.Slot)
