@@ -1,6 +1,7 @@
 package structs
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/flashbots/go-boost-utils/types"
@@ -48,15 +49,8 @@ func (pk PubKey) Bytes() []byte {
 	return pk.PublicKey[:]
 }
 
-func (pk PubKey) ValidatorKey() ds.Key {
-	return ds.NewKey(fmt.Sprintf("valdator-%s", pk))
-}
-
-func (pk PubKey) RegistrationKey() ds.Key {
-	return ds.NewKey(fmt.Sprintf("registration-%s", pk))
-}
-
-type TraceQuery struct {
+// PayloadTraceQuery structure used to query payloads only
+type PayloadTraceQuery struct {
 	Slot          Slot
 	BlockHash     types.Hash
 	BlockNum      uint64
@@ -64,27 +58,59 @@ type TraceQuery struct {
 	Cursor, Limit uint64
 }
 
-func (q TraceQuery) HasSlot() bool {
+func (q PayloadTraceQuery) HasSlot() bool {
 	return q.Slot != Slot(0)
 }
 
-func (q TraceQuery) HasBlockHash() bool {
+func (q PayloadTraceQuery) HasBlockHash() bool {
 	return q.BlockHash != types.Hash{}
 }
 
-func (q TraceQuery) HasBlockNum() bool {
+func (q PayloadTraceQuery) HasBlockNum() bool {
 	return q.BlockNum != 0
 }
 
-func (q TraceQuery) HasPubkey() bool {
+func (q PayloadTraceQuery) HasPubkey() bool {
 	return q.Pubkey != types.PublicKey{}
 }
 
-func (q TraceQuery) HasCursor() bool {
+func (q PayloadTraceQuery) HasCursor() bool {
 	return q.Cursor != 0
 }
 
-func (q TraceQuery) HasLimit() bool {
+func (q PayloadTraceQuery) HasLimit() bool {
+	return q.Limit != 0
+}
+
+type PayloadQuery struct {
+	Slot      Slot
+	BlockHash types.Hash
+	BlockNum  uint64
+	PubKey    types.PublicKey
+	Limit     uint64
+}
+
+// HeaderTraceQuery structure used to query header structure
+type HeaderTraceQuery struct {
+	Slot      Slot
+	BlockHash types.Hash
+	BlockNum  uint64
+	Limit     uint64
+}
+
+func (q HeaderTraceQuery) HasSlot() bool {
+	return q.Slot != Slot(0)
+}
+
+func (q HeaderTraceQuery) HasBlockHash() bool {
+	return q.BlockHash != types.Hash{}
+}
+
+func (q HeaderTraceQuery) HasBlockNum() bool {
+	return q.BlockNum != 0
+}
+
+func (q HeaderTraceQuery) HasLimit() bool {
 	return q.Limit != 0
 }
 
@@ -105,13 +131,6 @@ func (b BuilderGetValidatorsResponseEntrySlice) Loggable() map[string]any {
 	return map[string]any{
 		"numDuties": len(b),
 	}
-}
-
-type Query struct {
-	Slot      Slot
-	BlockHash types.Hash
-	BlockNum  uint64
-	PubKey    types.PublicKey
 }
 
 type PayloadKey struct {
@@ -181,4 +200,21 @@ type GenesisInfo struct {
 	GenesisTime           uint64 `json:"genesis_time,string"`
 	GenesisValidatorsRoot string `json:"genesis_validators_root"`
 	GenesisForkVersion    string `json:"genesis_fork_version"`
+}
+
+// / extra
+type HeaderData struct {
+	HeaderAndTrace
+	Slot      Slot
+	Marshaled []byte `json:"-"`
+}
+
+func (hd *HeaderData) UnmarshalJSON(b []byte) error {
+	var hnt HeaderAndTrace
+	if err := json.Unmarshal(b, &hnt); err != nil {
+		return err
+	}
+	hd.HeaderAndTrace = hnt
+	hd.Marshaled = b
+	return nil
 }

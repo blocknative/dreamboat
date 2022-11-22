@@ -2,8 +2,8 @@ package datastore_test
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand"
-	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -24,135 +24,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPutGetHeader(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ds := datastore.Datastore{TTLStorage: newMockDatastore()}
-
-	header := randomHeaderAndTrace()
-	slotInt := rand.Int()
-	slot := structs.Slot(slotInt)
-
-	header.Trace.Slot = uint64(slotInt)
-
-	// put
-	err := ds.PutHeader(ctx, slot, header, time.Minute)
-	require.NoError(t, err)
-
-	// get
-	gotHeader, err := ds.GetHeaders(ctx, structs.Query{Slot: slot})
-	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
-
-	// get by block hash
-	gotHeader, err = ds.GetHeaders(ctx, structs.Query{BlockHash: header.Header.BlockHash})
-	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
-
-	// get by block number
-	gotHeader, err = ds.GetHeaders(ctx, structs.Query{BlockNum: header.Header.BlockNumber})
-	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeader[0].Header)
-}
-
-func TestPutGetHeaderDuplicate(t *testing.T) {
-	t.Parallel()
-
-	const N = 10
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ds := datastore.Datastore{TTLStorage: newMockDatastore()}
-
-	header := randomHeaderAndTrace()
-	slotInt := rand.Int()
-	slot := structs.Slot(slotInt)
-
-	header.Trace.Slot = uint64(slotInt)
-	for i := 0; i < N; i++ {
-		// put
-		err := ds.PutHeader(ctx, slot, header, time.Minute)
-		require.NoError(t, err)
-	}
-
-	// get
-	gotHeaders, err := ds.GetHeaders(ctx, structs.Query{Slot: slot})
-	require.NoError(t, err)
-	require.Len(t, gotHeaders, 1)
-	require.EqualValues(t, header.Trace.Value, gotHeaders[0].Trace.Value)
-	require.EqualValues(t, *header.Header, *gotHeaders[0].Header)
-}
-
-func TestPutGetHeaders(t *testing.T) {
-	t.Parallel()
-
-	const N = 100
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ds := datastore.Datastore{TTLStorage: newMockDatastore()}
-
-	headers := make([]structs.HeaderAndTrace, N)
-	slots := make([]structs.Slot, N)
-
-	var wg sync.WaitGroup
-	for i := 0; i < N; i++ {
-		go func(i int) {
-			header := randomHeaderAndTrace()
-			slotInt := rand.Int()
-			slot := structs.Slot(slotInt)
-
-			header.Trace.Slot = uint64(slotInt)
-			err := ds.PutHeader(ctx, slot, header, time.Minute)
-			require.NoError(t, err)
-			headers[i] = header
-			slots[i] = slot
-			wg.Done()
-		}(i)
-		wg.Add(1)
-	}
-
-	wg.Wait()
-
-	for i := 0; i < N; i++ {
-		slot := slots[i]
-		header := headers[i]
-
-		// get
-		gotHeader, err := ds.GetHeaders(ctx, structs.Query{Slot: slot})
-		require.NoError(t, err)
-		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
-		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
-
-		// get by block hash
-		gotHeader, err = ds.GetHeaders(ctx, structs.Query{BlockHash: header.Header.BlockHash})
-		require.NoError(t, err)
-		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
-		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
-
-		// get by block number
-		gotHeader, err = ds.GetHeaders(ctx, structs.Query{BlockNum: header.Header.BlockNumber})
-		require.NoError(t, err)
-		require.EqualValues(t, header.Trace.Value, gotHeader[0].Trace.Value)
-		require.EqualValues(t, *header.Header, *gotHeader[0].Header)
-	}
-}
-
 func TestPutGetHeaderDelivered(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d := datastore.Datastore{TTLStorage: newMockDatastore()}
+	store, err := badger.NewDatastore("/tmp/BadgerBatcher4", &badger.DefaultOptions)
+	require.NoError(t, err)
+
+	hc := datastore.NewHeaderController()
+	d := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -161,22 +43,27 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	header.Trace.Slot = uint64(slotInt)
 
 	// put
-	err := d.PutHeader(ctx, slot, header, time.Minute)
+	jsHeader, _ := json.Marshal(header)
+	err = d.PutHeader(ctx, structs.HeaderData{
+		Slot:           slot,
+		HeaderAndTrace: header,
+		Marshaled:      jsHeader,
+	}, time.Minute)
 	require.NoError(t, err)
 
 	// get
-	_, err = d.GetDelivered(ctx, structs.Query{Slot: slot})
+	_, err = d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block hash
-	_, err = d.GetDelivered(ctx, structs.Query{BlockHash: header.Trace.BlockHash})
+	_, err = d.GetDelivered(ctx, structs.PayloadQuery{BlockHash: header.Trace.BlockHash})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block number
-	_, err = d.GetDelivered(ctx, structs.Query{BlockNum: header.Header.BlockNumber})
+	_, err = d.GetDelivered(ctx, structs.PayloadQuery{BlockNum: header.Header.BlockNumber})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
-	_, err = d.GetDelivered(ctx, structs.Query{PubKey: header.Trace.ProposerPubkey})
+	_, err = d.GetDelivered(ctx, structs.PayloadQuery{PubKey: header.Trace.ProposerPubkey})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// set as delivered and retrieve again
@@ -184,139 +71,23 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.NoError(t, err)
 
 	// get
-	gotHeader, err := d.GetDelivered(ctx, structs.Query{Slot: slot})
+	gotHeader, err := d.GetDelivered(ctx, structs.PayloadQuery{Slot: slot})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
 	// get by block hash
-	gotHeader, err = d.GetDelivered(ctx, structs.Query{BlockHash: header.Trace.BlockHash})
+	gotHeader, err = d.GetDelivered(ctx, structs.PayloadQuery{BlockHash: header.Trace.BlockHash})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
 	// get by block number
-	gotHeader, err = d.GetDelivered(ctx, structs.Query{BlockNum: header.Header.BlockNumber})
+	gotHeader, err = d.GetDelivered(ctx, structs.PayloadQuery{BlockNum: header.Header.BlockNumber})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
 
-	gotHeader, err = d.GetDelivered(ctx, structs.Query{PubKey: header.Trace.ProposerPubkey})
+	gotHeader, err = d.GetDelivered(ctx, structs.PayloadQuery{PubKey: header.Trace.ProposerPubkey})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader.BidTrace.Value)
-}
-
-func TestPutGetHeaderBatch(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	const N = 10
-
-	batch := make([]structs.HeaderAndTrace, 0)
-	queries := make([]structs.Query, 0)
-
-	for i := 0; i < N; i++ {
-		header := randomHeaderAndTrace()
-		slotInt := rand.Int()
-		slot := structs.Slot(slotInt)
-
-		header.Trace.Slot = uint64(slotInt)
-
-		batch = append(batch, header)
-		queries = append(queries, structs.Query{Slot: slot})
-	}
-
-	sort.Slice(batch, func(i, j int) bool {
-		return batch[i].Trace.Slot < batch[j].Trace.Slot
-	})
-
-	t.Run("Mock", func(t *testing.T) {
-		t.Parallel()
-
-		store := newMockDatastore()
-		ds := datastore.Datastore{TTLStorage: store}
-		for i, payload := range batch {
-			ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
-		}
-		// get
-		gotBatch, err := ds.GetHeaderBatch(ctx, queries)
-		require.NoError(t, err)
-		sort.Slice(gotBatch, func(i, j int) bool {
-			return gotBatch[i].Trace.Slot < gotBatch[j].Trace.Slot
-		})
-		require.Len(t, gotBatch, len(batch))
-		require.EqualValues(t, batch, gotBatch)
-	})
-
-	t.Run("DatastoreBatcher", func(t *testing.T) {
-		t.Parallel()
-
-		store, err := badger.NewDatastore("/tmp/BadgerBatcher", &badger.DefaultOptions)
-		require.NoError(t, err)
-		ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
-
-		for i, payload := range batch {
-			ds.PutHeader(ctx, queries[i].Slot, payload, time.Minute)
-		}
-		// get
-		gotBatch, err := ds.GetHeaderBatch(ctx, queries)
-		require.NoError(t, err)
-		sort.Slice(gotBatch, func(i, j int) bool {
-			return gotBatch[i].Trace.Slot < gotBatch[j].Trace.Slot
-		})
-		require.Len(t, gotBatch, len(batch))
-		require.EqualValues(t, batch, gotBatch)
-	})
-}
-
-func TestPutGetHeaderBatchDelivered(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	const N = 10
-
-	headers := make([]structs.HeaderAndTrace, 0)
-	batch := make([]structs.BidTraceWithTimestamp, 0)
-	queries := make([]structs.Query, 0)
-
-	for i := 0; i < N; i++ {
-		header := randomHeaderAndTrace()
-		slot := structs.Slot(header.Trace.Slot)
-
-		headers = append(headers, header)
-		batch = append(batch, *header.Trace)
-		queries = append(queries, structs.Query{Slot: slot})
-	}
-
-	sort.Slice(batch, func(i, j int) bool {
-		return batch[i].Slot < batch[j].Slot
-	})
-
-	store := newMockDatastore()
-	ds := datastore.Datastore{TTLStorage: store}
-	for i, header := range headers {
-		err := ds.PutHeader(ctx, queries[i].Slot, header, time.Minute)
-		require.NoError(t, err)
-	}
-	// get
-	gotBatch, _ := ds.GetDeliveredBatch(ctx, queries)
-	require.Len(t, gotBatch, 0)
-
-	for i, header := range headers {
-		trace := structs.DeliveredTrace{Trace: *header.Trace, BlockNumber: header.Header.BlockNumber}
-		err := ds.PutDelivered(ctx, queries[i].Slot, trace, time.Minute)
-		require.NoError(t, err)
-	}
-
-	gotBatch, err := ds.GetDeliveredBatch(ctx, queries)
-	require.NoError(t, err)
-	sort.Slice(gotBatch, func(i, j int) bool {
-		return gotBatch[i].BidTrace.Slot < gotBatch[j].BidTrace.Slot
-	})
-	require.Len(t, gotBatch, len(batch))
-	require.EqualValues(t, batch, gotBatch)
-
 }
 
 func TestPutGetPayload(t *testing.T) {
@@ -456,7 +227,7 @@ func TestGetRegistrationReal(t *testing.T) {
 	ds := datastore.Datastore{
 		TTLStorage: &datastore.TTLDatastoreBatcher{
 			TTLDatastore: store},
-		Viewer: store.DB}
+		Badger: store.DB}
 
 	registration := randomRegistration()
 	key := structs.PubKey{registration.Message.Pubkey}

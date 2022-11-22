@@ -3,6 +3,7 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -30,15 +31,15 @@ var (
 )
 
 type Datastore interface {
+	CheckSlotDelivered(context.Context, uint64) (bool, error)
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.Query) (structs.BidTraceWithTimestamp, error)
+	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 
-	PutHeader(context.Context, structs.Slot, structs.HeaderAndTrace, time.Duration) error
-	GetHeaders(context.Context, structs.Query) ([]structs.HeaderAndTrace, error)
-	GetMaxProfitHeadersDesc(context.Context, structs.Slot) ([]structs.HeaderAndTrace, error)
+	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
+	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
@@ -149,14 +150,12 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		return nil, fmt.Errorf("unknown validator")
 	}
 
-	headers, err := rs.d.GetMaxProfitHeadersDesc(ctx, slot)
-	if err != nil || len(headers) < 1 {
+	header, err := rs.d.GetMaxProfitHeader(ctx, uint64(slot))
+	if err != nil {
 		logger.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 	timer2.ObserveDuration()
-
-	header := headers[0] // choose the highest bid, which is index 0
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		log.Debug(badHeaderMsg)
@@ -360,10 +359,30 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	})
 
 	logger.Trace("block submission requested")
-
-	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "verify"))
 	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon().GenesisTime)
+	if err != nil {
+		logger.WithError(err).
+			WithField("slot", submitBlockRequest.Message.Slot).
+			WithField("builder", submitBlockRequest.Message.BuilderPubkey).
+			Debug("block verification failed")
+		return fmt.Errorf("verify block: %w", err)
+	}
+
+	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "checkDelivered"))
+	slot := structs.Slot(submitBlockRequest.Message.Slot)
+	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
 	timer2.ObserveDuration()
+	if ok {
+		logger.Debug("block submission after payload delivered")
+		return structs.ErrPayloadAlreadyDelivered
+	}
+	if err != nil {
+		return err
+	}
+
+	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "verify"))
+	_, err = rs.verifySubmitSignature(submitBlockRequest)
+	timer3.ObserveDuration()
 	if err != nil {
 		logger.WithError(err).
 			WithField("slot", submitBlockRequest.Message.Slot).
@@ -378,7 +397,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		&rs.config.PubKey,
 		rs.config.BuilderSigningDomain,
 	)
-
 	if err != nil {
 		logger.WithError(err).
 			With(log.F{
@@ -387,15 +405,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 			}).Debug("signature failed")
 
 		return fmt.Errorf("block submission failed: %w", err)
-	}
-
-	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "getDelivered"))
-	slot := structs.Slot(submitBlockRequest.Message.Slot)
-	_, err = rs.d.GetDelivered(ctx, structs.Query{Slot: slot})
-	timer3.ObserveDuration()
-	if err == nil {
-		logger.Debug("block submission after payload delivered")
-		return errors.New("the slot payload was already delivered")
 	}
 
 	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
@@ -433,7 +442,16 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		},
 	}
 
-	err = rs.d.PutHeader(ctx, slot, h, rs.config.TTL)
+	b, err := json.Marshal(h)
+	if err != nil {
+		logger.WithError(err).Error("PutHeader marshal failed")
+		return err
+	}
+	err = rs.d.PutHeader(ctx, structs.HeaderData{
+		Slot:           slot,
+		Marshaled:      b,
+		HeaderAndTrace: h,
+	}, rs.config.TTL)
 	if err != nil {
 		logger.WithError(err).Error("PutHeader failed")
 		return err
@@ -468,6 +486,10 @@ func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest
 		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
+	return true, nil
+}
+
+func (rs *Relay) verifySubmitSignature(submitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) { // TODO(l): remove FB type
 	msg, err := types.ComputeSigningRoot(submitBlockRequest.Message, rs.config.BuilderSigningDomain)
 	if err != nil {
 		return false, fmt.Errorf("signature invalid")

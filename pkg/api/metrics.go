@@ -17,7 +17,7 @@ func (api *API) initMetrics() {
 		Subsystem: "api",
 		Name:      "reqcount",
 		Help:      "Number of requests.",
-	}, []string{"endpoint", "code"})
+	}, []string{"endpoint", "code", "type"})
 
 	api.m.ApiReqTiming = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
