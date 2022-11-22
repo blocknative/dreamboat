@@ -44,7 +44,7 @@ type Datastore interface {
 	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
 	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
 	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
-	GetLatestHeaders(ctx context.Context, limit uint64) ([]structs.HeaderAndTrace, error)
+	GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
 
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
@@ -420,7 +420,7 @@ func (s *Service) GetBlockReceived(ctx context.Context, query structs.HeaderTrac
 	} else if query.HasBlockNum() {
 		events, err = s.Datastore.GetHeadersByBlockNum(ctx, query.BlockNum)
 	} else {
-		events, err = s.Datastore.GetLatestHeaders(ctx, query.Limit)
+		events, err = s.Datastore.GetLatestHeaders(ctx, query.Limit, uint64(s.Config.TTL/DurationPerSlot))
 	}
 
 	if err == nil {

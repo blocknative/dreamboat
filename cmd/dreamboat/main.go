@@ -134,6 +134,26 @@ var flags = []cli.Flag{
 		Value:   20000,
 		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
 	},
+
+	&cli.Uint64Flag{
+		Name:    "relay-header-memory-slot-lag",
+		Usage:   "how many slots from the head relay should keep in memory",
+		Value:   200,
+		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_LAG"},
+	},
+
+	&cli.DurationFlag{
+		Name:    "relay-header-memory-slot-time-lag",
+		Usage:   "how log should it take for lagged slot to be eligible fot purge",
+		Value:   time.Minute * 5,
+		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_TIME_LAG"},
+	},
+	&cli.DurationFlag{
+		Name:    "relay-header-memory-purge-interval",
+		Usage:   "how often memory should be purged",
+		Value:   time.Minute * 10,
+		EnvVars: []string{"RELAY_HEADER_MEMORY_PURGE_INTERVAL"},
+	},
 }
 
 var (
@@ -166,15 +186,20 @@ func setup() cli.BeforeFunc {
 		config = pkg.Config{
 			Log:                      logger(c),
 			RelayQueueProcessingSize: c.Uint64("relay-validator-queue-size"),
-			RelayRequestTimeout:      c.Duration("timeout"),
-			Network:                  c.String("network"),
-			BuilderCheck:             c.Bool("check-builder"),
-			BuilderURLs:              c.StringSlice("builder"),
-			BeaconEndpoints:          c.StringSlice("beacon"),
-			PubKey:                   pk,
-			SecretKey:                sk,
-			Datadir:                  c.String("datadir"),
-			TTL:                      c.Duration("ttl"),
+
+			RelayHeaderMemorySlotLag:       c.Uint64("relay-header-memory-slot-lag"),
+			RelayHeaderMemorySlotTimeLag:   c.Duration("relay-header-memory-slot-time-lag"),
+			RelayHeaderMemoryPurgeInterval: c.Duration("relay-header-memory-purge-interval"),
+
+			RelayRequestTimeout: c.Duration("timeout"),
+			Network:             c.String("network"),
+			BuilderCheck:        c.Bool("check-builder"),
+			BuilderURLs:         c.StringSlice("builder"),
+			BeaconEndpoints:     c.StringSlice("beacon"),
+			PubKey:              pk,
+			SecretKey:           sk,
+			Datadir:             c.String("datadir"),
+			TTL:                 c.Duration("ttl"),
 		}
 
 		return
@@ -228,7 +253,7 @@ func run() cli.ActionFunc {
 		timeRelayStart := time.Now()
 		as := &pkg.AtomicState{}
 
-		hc := datastore.NewHeaderController()
+		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB, hc)
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
 			return err
@@ -238,7 +263,7 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		go ds.MemoryCleanup(c.Context, config.TTL)
+		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 
 		regMgr := relay.NewProcessManager(c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
 		regMgr.AttachMetrics(m)
