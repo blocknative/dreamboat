@@ -49,6 +49,10 @@ type Config struct {
 	TTL                      time.Duration
 	RelayQueueProcessingSize uint64
 
+	RelayHeaderMemorySlotLag       uint64
+	RelayHeaderMemorySlotTimeLag   time.Duration
+	RelayHeaderMemoryPurgeInterval time.Duration
+
 	// private fields; populated during validation
 	builders              map[structs.PubKey]*builder
 	GenesisForkVersion    string
