@@ -254,6 +254,8 @@ func run() cli.ActionFunc {
 		as := &pkg.AtomicState{}
 
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
+		hc.AttachMetrics(m)
+
 		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB, hc)
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
 			return err

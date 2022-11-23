@@ -18,17 +18,21 @@ type HeaderController struct {
 
 	latestSlot *uint64
 	cl         sync.RWMutex
+
+	m *HeaderControllerMetrics
 }
 
 func NewHeaderController(slotLag uint64, slotTimeLag time.Duration) *HeaderController {
 	latestSlot := uint64(0)
-	return &HeaderController{
+	hc := &HeaderController{
 		slotLag:     slotLag,
 		slotTimeLag: slotTimeLag,
 
 		latestSlot: &latestSlot,
 		headers:    make(map[uint64]*IndexedHeaders),
 	}
+	hc.initMetrics()
+	return hc
 }
 
 func (hc *HeaderController) CheckForRemoval() (toBeRemoved []uint64, ok bool) {
@@ -46,7 +50,7 @@ func (hc *HeaderController) CheckForRemoval() (toBeRemoved []uint64, ok bool) {
 		toBeRemoved = append(toBeRemoved, v.Slot)
 		ok = true
 	}
-
+	hc.m.RemovalChecks.Inc()
 	return toBeRemoved, ok
 
 }
@@ -96,10 +100,12 @@ func (hc *HeaderController) AddMultiple(slot uint64, hnt []structs.HeaderAndTrac
 		ls := atomic.LoadUint64(hc.latestSlot)
 		if ls == 0 || slot > ls {
 			atomic.StoreUint64(hc.latestSlot, slot)
+			hc.m.LatestSlot.Set(float64(slot))
 		}
 	}
 
 	for _, s := range hnt {
+		hc.m.HeadersAdded.Inc()
 		if err := h.AddContent(s); err != nil {
 			return err
 		}
@@ -125,8 +131,10 @@ func (hc *HeaderController) Add(slot uint64, hnt structs.HeaderAndTrace) (newCre
 		ls := atomic.LoadUint64(hc.latestSlot)
 		if ls == 0 || slot > ls {
 			atomic.StoreUint64(hc.latestSlot, slot)
+			hc.m.LatestSlot.Set(float64(slot))
 		}
 	}
+	hc.m.HeadersAdded.Inc()
 	return newCreated, h.AddContent(hnt)
 }
 
@@ -180,6 +188,7 @@ func (hc *HeaderController) RemoveSlot(slot, expectedRevision uint64) (success b
 	// we're only unlinking from map here
 	// it should be later on eligible for GC
 	delete(hc.headers, slot)
+	hc.m.HeadersSize.Set(float64(len(hc.headers)))
 
 	// removed element should be first on the left
 	if len(hc.ordered) > 0 {
