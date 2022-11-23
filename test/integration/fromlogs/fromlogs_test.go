@@ -44,14 +44,14 @@ func Test_payoads(t *testing.T) {
 			require.NoError(t, err)
 
 			// Just Logs
-			//usecaseCorrectMaxProfit(t, tt.networkType, parsed)
-			usecaseCorrectPayloadDelivered(t, tt.networkType, parsed)
-			usecaseNoSubmissionNoBids(t, tt.networkType, parsed)
-			usecasePayloadNotFoundOnlyAfterNoBid(t, tt.networkType, parsed)
+			usecaseCorrectMaxProfit(t, tt.networkType, parsed)
+			/*		usecaseCorrectPayloadDelivered(t, tt.networkType, parsed)
+					usecaseNoSubmissionNoBids(t, tt.networkType, parsed)
+					usecasePayloadNotFoundOnlyAfterNoBid(t, tt.networkType, parsed)
 
-			// Data API
-			usecaseBlockSubmissionsOnDataAPI(t, tt.networkType, parsed, tt.domain)
-			usecasePayloadDeliveredOnDataAPI(t, tt.networkType, parsed, tt.domain)
+					// Data API
+					usecaseBlockSubmissionsOnDataAPI(t, tt.networkType, parsed, tt.domain)
+					usecasePayloadDeliveredOnDataAPI(t, tt.networkType, parsed, tt.domain)*/
 		})
 	}
 }
@@ -121,8 +121,10 @@ BIDLOOP:
 			continue
 		}
 
+		var headerRequested RecordBid
+
 		for _, bid := range bids {
-			headerRequested := hreq[0]
+			headerRequested = hreq[0]
 			if len(hreq) > 1 {
 				for _, h := range hreq {
 					if h.Time.Before(bid.Time) {
@@ -145,22 +147,24 @@ BIDLOOP:
 
 			var maxRequested RecordPayload
 			maxSent := recreateMax(maxCandidatesSent)
-
-			if bid.Bid.Cmp(maxSent.Bid) != 0 {
-				// check if the record was not submitted in log
-				// with literally the same time
-				if maxSent.Time.UnixMicro() == bid.Time.UnixMicro() {
-					continue BIDLOOP
-				}
-
-				maxRequested = recreateMax(maxCandidatesRequested)
-				if bid.Bid.Cmp(maxRequested.Bid) == 0 {
-					continue BIDLOOP
-				} else if bid.Time.UnixMicro() >= maxRequested.Time.UnixMicro() &&
-					bid.Time.UnixMicro() >= maxSent.Time.UnixMicro() {
-					continue BIDLOOP
-				}
+			if bid.Bid.Cmp(maxSent.Bid) == 0 {
+				continue BIDLOOP
 			}
+
+			// check if the record was not submitted in log
+			// with literally the same time
+			if maxSent.Time.UnixMicro() == bid.Time.UnixMicro() {
+				continue BIDLOOP
+			}
+
+			maxRequested = recreateMax(maxCandidatesRequested)
+			if bid.Bid.Cmp(maxRequested.Bid) == 0 {
+				continue BIDLOOP
+			} else if bid.Time.UnixMicro() >= maxRequested.Time.UnixMicro() &&
+				bid.Time.UnixMicro() >= maxSent.Time.UnixMicro() {
+				continue BIDLOOP
+			}
+
 			var info []struct {
 				Value uint64
 				Time  int64
