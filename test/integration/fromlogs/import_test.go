@@ -20,10 +20,10 @@ func Test_parseCSV(t *testing.T) {
 
 			require.NoError(t, err)
 
-			r, b, err := parseCSV(o)
+			r, err := parseCSV(o)
 			require.NoError(t, err)
-			require.Len(t, r, 77)
-			require.Len(t, b, 115)
+			require.Len(t, r.Bids, 77)
+			require.Len(t, r.BuilderBlockStored, 115)
 		})
 	}
 }
