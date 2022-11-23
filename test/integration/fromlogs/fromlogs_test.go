@@ -2,7 +2,6 @@ package fromlogs
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,7 +18,8 @@ func localOrEnv(local string) string {
 	}
 	return local
 }
-func Test_bids(t *testing.T) {
+
+func Test_payoads(t *testing.T) {
 	tests := []struct {
 		name        string
 		domain      string
@@ -48,10 +48,10 @@ func Test_bids(t *testing.T) {
 				if k.NetworkType != tt.networkType {
 					continue
 				}
-
 				toTest := pickPayload(v)
 				for _, p := range toTest {
-					preAddress := fmt.Sprintf("http://%s/relay/v1/data/bidtraces/builder_blocks_received?slot=%d", tt.domain, p.Slot)
+					t.Logf("Querying builder blocks for: %d, block: %s", p.Slot, p.Blockhash)
+					preAddress := fmt.Sprintf("http://%s/relay/v1/data/bidtraces/builder_blocks_received?block_hash=%s", tt.domain, p.Blockhash)
 					req, err := http.NewRequestWithContext(ctx, http.MethodGet, preAddress, nil)
 					require.NoError(t, err)
 
@@ -62,11 +62,10 @@ func Test_bids(t *testing.T) {
 					dec := json.NewDecoder(resp.Body)
 					err = dec.Decode(&bbR)
 					resp.Body.Close()
-					//b, err := io.ReadAll(resp.Body)
+
 					require.NoError(t, err)
 					require.NotEmpty(t, bbR)
 
-					// relay-eth-devnet-0
 					address := fmt.Sprintf("http://%s/eth/v1/builder/header/%d/%s/%s", tt.domain, p.Slot, bbR[0].ParentHash, bbR[0].ProposerPubkey)
 					t.Logf("Testing: %d - address: %s", p.Slot, address)
 					req, err = http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
@@ -80,17 +79,11 @@ func Test_bids(t *testing.T) {
 					err = dec.Decode(&ghR)
 					require.NoError(t, err)
 					resp.Body.Close()
-					log.Println("ghR", ghR)
-					//f, err := io.ReadAll(resp.Body)
-					//require.NoError(t, err)
 
-					//log.Println("toTest", string(f))
-					break
+					require.Equal(t, p.Bid.String(), ghR.Data.Message.Value)
+					require.Equal(t, p.Blockhash, ghR.Data.Message.Header.BlockHash)
 				}
-				break
-				//log.Println("toTest", toTest)
 			}
-
 		})
 	}
 }
@@ -100,8 +93,8 @@ type GetHeaderResponse struct {
 		Message struct {
 			Header struct {
 				BlockHash string `json:"block_hash"`
-				Value     string `json:"value"`
 			} `json:"header"`
+			Value string `json:"value"`
 		} `json:"message"`
 	} `json:"data"`
 }
@@ -117,10 +110,6 @@ func pickBid(in []RecordBid) []RecordBid {
 }
 
 func pickPayload(in []RecordPayload) []RecordPayload {
+	log.Println("len", len(in))
 	return in
-}
-
-func random48Bytes() (b [48]byte) {
-	rand.Read(b[:])
-	return b
 }
