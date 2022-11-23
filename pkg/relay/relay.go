@@ -157,7 +157,7 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	timer2.ObserveDuration()
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
-		log.Debug(badHeaderMsg)
+		logger.Debug(badHeaderMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 
