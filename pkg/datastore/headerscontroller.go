@@ -19,7 +19,7 @@ type HeaderController struct {
 	latestSlot *uint64
 	cl         sync.RWMutex
 
-	m *HeaderControllerMetrics
+	m HeaderControllerMetrics
 }
 
 func NewHeaderController(slotLag uint64, slotTimeLag time.Duration) *HeaderController {
@@ -27,9 +27,8 @@ func NewHeaderController(slotLag uint64, slotTimeLag time.Duration) *HeaderContr
 	hc := &HeaderController{
 		slotLag:     slotLag,
 		slotTimeLag: slotTimeLag,
-
-		latestSlot: &latestSlot,
-		headers:    make(map[uint64]*IndexedHeaders),
+		latestSlot:  &latestSlot,
+		headers:     make(map[uint64]*IndexedHeaders),
 	}
 	hc.initMetrics()
 	return hc
