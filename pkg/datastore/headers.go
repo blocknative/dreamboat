@@ -85,7 +85,7 @@ func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot uint64) (struct
 	// Check old (until ttl passes)
 	headers, err := s.deprecatedGetHeaders(ctx, HeaderMaxProfitKey(slot))
 	if err != nil {
-		return p, nil
+		return p, err
 	}
 
 	if len(headers) == 0 {
