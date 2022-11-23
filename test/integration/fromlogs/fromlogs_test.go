@@ -2,6 +2,7 @@ package fromlogs
 
 import (
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -122,7 +123,11 @@ func pickPayload(in []RecordPayload) []RecordPayload {
 // Check the max profit bid is being sent on GetHeader
 func usecaseCorrectMaxProfit(t *testing.T, env int, pr *ParsedResult) {
 	// Get all bid sent logs
-	// For all logs, get all builder block stored logs for the same slot, which were previous to the bid sent log
+	// For all logs, get all builder block stored logs for the same slot, which were previous or equal to the bid sent log
+	// Calculate a list of candidate max profit blocks for that slot by:
+	// - Calculate the what blocks have been max profit in the following time window [header requested, bid sent], including both timestamps
+	// Confirm the bid that is sent has been "flaged" as max profit at certain moment in the aforementioned timestamps
+
 	// Calculate the max profit for that slot using the block stored logs
 	// Confirm the bid that is sent is the expected max profit
 
@@ -131,6 +136,7 @@ func usecaseCorrectMaxProfit(t *testing.T, env int, pr *ParsedResult) {
 		return
 	}
 
+BIDLOOP:
 	for k, bids := range pr.Bids {
 		if k.NetworkType != env {
 			continue
@@ -142,33 +148,68 @@ func usecaseCorrectMaxProfit(t *testing.T, env int, pr *ParsedResult) {
 			// should we fail here
 			continue
 		}
+		hreq, ok := pr.HeaderRequested[k]
+		if !ok {
+			t.Logf("[WARN] no 'header requested' logs for slot (%d)", k.Slot)
+			// should we fail here
+			continue
+		}
 
 		for _, bid := range bids {
-			var maxCandidates []RecordPayload
-			for _, v := range bbs {
-				if v.Time.Unix() <= bid.Time.Unix() {
-					m := v
-					maxCandidates = append(maxCandidates, m)
+			headerRequested := hreq[0]
+			if len(hreq) > 1 {
+				for _, h := range hreq {
+					if h.Time.Before(bid.Time) {
+						headerRequested = h
+					}
 				}
 			}
 
-			max := recreateMax(maxCandidates)
-			if bid.Bid.Cmp(max.Bid) != 0 {
-				var info []struct {
+			var maxCandidatesSent, maxCandidatesRequested []RecordPayload
+			for _, v := range bbs {
+				m := v
+				if v.Time.UnixMicro() <= bid.Time.UnixMicro() {
+					maxCandidatesSent = append(maxCandidatesSent, m)
+				}
+
+				if v.Time.UnixMicro() <= headerRequested.Time.UnixMicro() {
+					maxCandidatesRequested = append(maxCandidatesRequested, m)
+				}
+			}
+
+			var maxRequested RecordPayload
+			maxSent := recreateMax(maxCandidatesSent)
+
+			if bid.Bid.Cmp(maxSent.Bid) != 0 {
+				// check if the record was not submitted in log
+				// with literally the same time
+				if maxSent.Time.UnixMicro() == bid.Time.UnixMicro() {
+					continue BIDLOOP
+				}
+
+				maxRequested = recreateMax(maxCandidatesRequested)
+				if bid.Bid.Cmp(maxRequested.Bid) == 0 {
+					continue BIDLOOP
+				} else if bid.Time.UnixMicro() >= maxRequested.Time.UnixMicro() &&
+					bid.Time.UnixMicro() >= maxSent.Time.UnixMicro() {
+					continue BIDLOOP
+				}
+			}
+			var info []struct {
+				Value uint64
+				Time  int64
+			}
+			for _, i := range maxCandidatesSent {
+				info = append(info, struct {
 					Value uint64
 					Time  int64
-				}
-				for _, i := range maxCandidates {
-					info = append(info, struct {
-						Value uint64
-						Time  int64
-					}{
-						i.Bid.Uint64(),
-						i.Time.Unix(),
-					})
-				}
-				t.Errorf("Maximum payload is different for slot (%d): %+v , returned( %+v) , all (%+v) ", k.Slot, max.Bid, bid.Bid, info)
+				}{
+					i.Bid.Uint64(),
+					i.Time.UnixMicro(),
+				})
 			}
+			//t.Errorf("Maximum payload is different for slot (%d): %+v , returned( %+v) , ", k.Slot, max.Bid, bid.Bid)
+			t.Errorf("Maximum payload is different for slot (%d) - requested: %+v sent: %+v , returned( %+v) , all (%+v) ", k.Slot, maxRequested, maxSent, bid, info)
 		}
 	}
 }
@@ -257,9 +298,12 @@ func recreateMax(r []RecordPayload) RecordPayload {
 	submissionsByPubKeys := make(map[string]RecordPayload)
 
 	// sort by timestamp
+	sort.Slice(r, func(i, j int) bool {
+		return r[i].Time.UnixMicro() > r[j].Time.UnixMicro()
+	})
+
 	var maxProfit RecordPayload
 	for _, newEl := range r {
-
 		submissionsByPubKeys[newEl.Builder] = newEl
 
 		// we should allow resubmission

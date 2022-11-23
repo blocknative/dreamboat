@@ -94,6 +94,8 @@ type ParsedResult struct {
 	Bids map[Key][]RecordBid
 	// "no builder bid":
 	NoBids map[Key][]RecordBid
+	// "header requested":
+	HeaderRequested map[Key][]RecordBid
 	// "payload sent":
 	Payloads map[Key][]RecordPayload
 	// "builder block stored":
@@ -108,6 +110,7 @@ func NewParsedResult() *ParsedResult {
 	return &ParsedResult{
 		Bids:               make(map[Key][]RecordBid),
 		NoBids:             make(map[Key][]RecordBid),
+		HeaderRequested:    make(map[Key][]RecordBid),
 		Payloads:           make(map[Key][]RecordPayload),
 		BuilderBlockStored: make(map[Key][]RecordPayload),
 		PayloadRequested:   make(map[Key][]RecordPayload),
@@ -115,7 +118,7 @@ func NewParsedResult() *ParsedResult {
 	}
 }
 
-// Query : `Service:relay AND ("payload sent" OR "bid sent" OR "builder block stored" OR "payload requested" OR "no builder bid" OR "no payload found")`
+// Query : `Service:relay AND ("payload sent" OR "bid sent" OR "builder block stored" OR "payload requested" OR "no builder bid" OR "no payload found" OR "header requested")
 func parseCSV(readr io.ReadCloser) (*ParsedResult, error) {
 	r := csv.NewReader(readr)
 	pR := NewParsedResult()
@@ -141,6 +144,7 @@ func parseCSV(readr io.ReadCloser) (*ParsedResult, error) {
 		}
 
 		switch record[rp.Message] {
+
 		case "bid sent":
 			pb, err := parseBid(record, rp)
 			if err != nil {
@@ -164,7 +168,17 @@ func parseCSV(readr io.ReadCloser) (*ParsedResult, error) {
 			}
 			v = append(v, pb)
 			pR.NoBids[Key{pb.Slot, pb.NetworkType}] = v
-
+		case "header requested":
+			pb, err := parseBid(record, rp)
+			if err != nil {
+				return nil, err
+			}
+			v, ok := pR.HeaderRequested[Key{pb.Slot, pb.NetworkType}]
+			if !ok {
+				v = []RecordBid{}
+			}
+			v = append(v, pb)
+			pR.HeaderRequested[Key{pb.Slot, pb.NetworkType}] = v
 		case "builder block stored":
 			pb, err := parsePayload(record, rp)
 			if err != nil {
@@ -233,14 +247,14 @@ func parseCSV(readr io.ReadCloser) (*ParsedResult, error) {
 func sortPayloads(p map[Key][]RecordPayload) {
 	for _, v := range p {
 		sort.Slice(v, func(i, j int) bool {
-			return v[i].Time.After(v[j].Time)
+			return v[i].Time.UnixMicro() > v[j].Time.UnixMicro()
 		})
 	}
 }
 func sortBids(p map[Key][]RecordBid) {
 	for _, v := range p {
 		sort.Slice(v, func(i, j int) bool {
-			return v[i].Time.After(v[j].Time)
+			return v[i].Time.UnixMicro() > v[j].Time.UnixMicro()
 		})
 	}
 }
@@ -284,12 +298,17 @@ func parsePayload(record []string, rp RecordPosition) (rPay RecordPayload, err e
 		b = strings.ReplaceAll(record[rp.Builder], `"`, "")
 	}
 
+	var blockhash string
+	if record[rp.Blockhash] != "" {
+		blockhash = strings.ReplaceAll(record[rp.Blockhash], `"`, "")
+	}
+
 	return RecordPayload{
 		NetworkType: networkType,
 		Time:        time,
 		Slot:        slot,
 		Builder:     b,
-		Blockhash:   strings.ReplaceAll(record[rp.Blockhash], `"`, ""),
+		Blockhash:   blockhash,
 		Bid:         a,
 	}, nil
 }
@@ -319,15 +338,27 @@ func parseBid(record []string, rp RecordPosition) (rBid RecordBid, err error) {
 		return rBid, fmt.Errorf("error parsing slot: %+v", record[rp.Slot])
 	}
 
-	a, ok := big.NewInt(0).SetString(strings.ReplaceAll(record[rp.BidValue], `"`, ""), 10)
-	if !ok {
-		return rBid, fmt.Errorf("error parsing bid: %+v", record[rp.BidValue])
+	var blockhash string
+	if record[rp.Blockhash] != "" {
+		blockhash = strings.ReplaceAll(record[rp.Blockhash], `"`, "")
 	}
+
+	var a *big.Int
+	if record[rp.BidValue] != "" {
+		var ok bool
+		a, ok = big.NewInt(0).SetString(strings.ReplaceAll(record[rp.BidValue], `"`, ""), 10)
+		if !ok {
+			return rBid, fmt.Errorf("error parsing bid: %+v", record[rp.BidValue])
+		}
+	} else {
+		a = big.NewInt(0)
+	}
+
 	return RecordBid{
 		NetworkType: networkType,
 		Time:        time,
 		Slot:        slot,
-		Blockhash:   strings.ReplaceAll(record[rp.Blockhash], `"`, ""),
+		Blockhash:   blockhash,
 		Bid:         a,
 	}, nil
 }
