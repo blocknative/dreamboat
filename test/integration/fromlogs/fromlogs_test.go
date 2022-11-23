@@ -45,13 +45,13 @@ func Test_payoads(t *testing.T) {
 
 			// Just Logs
 			usecaseCorrectMaxProfit(t, tt.networkType, parsed)
-			/*		usecaseCorrectPayloadDelivered(t, tt.networkType, parsed)
-					usecaseNoSubmissionNoBids(t, tt.networkType, parsed)
-					usecasePayloadNotFoundOnlyAfterNoBid(t, tt.networkType, parsed)
+			usecaseCorrectPayloadDelivered(t, tt.networkType, parsed)
+			usecaseNoSubmissionNoBids(t, tt.networkType, parsed)
+			usecasePayloadNotFoundOnlyAfterNoBid(t, tt.networkType, parsed)
 
-					// Data API
-					usecaseBlockSubmissionsOnDataAPI(t, tt.networkType, parsed, tt.domain)
-					usecasePayloadDeliveredOnDataAPI(t, tt.networkType, parsed, tt.domain)*/
+			// Data API
+			usecaseBlockSubmissionsOnDataAPI(t, tt.networkType, parsed, tt.domain)
+			usecasePayloadDeliveredOnDataAPI(t, tt.networkType, parsed, tt.domain)
 		})
 	}
 }
