@@ -109,9 +109,12 @@ SendPayloads:
 
 	err := <-fc.ExitCh
 
-	logger.
-		WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
-		Trace("validator registrations succeeded")
+	if err != nil {
+		logger.
+			WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
+			WithField("numberValidators", len(payload)).
+			Trace("validator registrations succeeded")
+	}
 
 	return err
 }
