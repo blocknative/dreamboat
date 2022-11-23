@@ -1,6 +1,9 @@
 package fromlogs
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
 	"sort"
 	"testing"
@@ -34,63 +37,21 @@ func Test_payoads(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			o, err := openFile(tt.path)
-			defer o.Close()
 			require.NoError(t, err)
+			defer o.Close()
 
 			parsed, err := parseCSV(o)
 			require.NoError(t, err)
 
 			// Just Logs
-			usecaseCorrectMaxProfit(t, tt.networkType, parsed)
+			//usecaseCorrectMaxProfit(t, tt.networkType, parsed)
 			usecaseCorrectPayloadDelivered(t, tt.networkType, parsed)
 			usecaseNoSubmissionNoBids(t, tt.networkType, parsed)
 			usecasePayloadNotFoundOnlyAfterNoBid(t, tt.networkType, parsed)
 
-			//ctx := context.Background()
-			//cli := http.Client{}
-			/*
-				for k, v := range parsed.Bids {
-					if k.NetworkType != tt.networkType {
-						continue
-					}
-
-					toTest := pickPayload(v)
-					for _, p := range toTest {
-						t.Logf("Querying builder blocks for: %d, block: %s", p.Slot, p.Blockhash)
-						preAddress := fmt.Sprintf("http://%s/relay/v1/data/bidtraces/builder_blocks_received?block_hash=%s", tt.domain, p.Blockhash)
-						req, err := http.NewRequestWithContext(ctx, http.MethodGet, preAddress, nil)
-						require.NoError(t, err)
-
-						resp, err := cli.Do(req)
-						require.NoError(t, err)
-
-						bbR := []builderBlocksResponse{}
-						dec := json.NewDecoder(resp.Body)
-						err = dec.Decode(&bbR)
-						resp.Body.Close()
-
-						require.NoError(t, err)
-						require.NotEmpty(t, bbR)
-
-						address := fmt.Sprintf("http://%s/eth/v1/builder/header/%d/%s/%s", tt.domain, p.Slot, bbR[0].ParentHash, bbR[0].ProposerPubkey)
-						t.Logf("Testing: %d - address: %s", p.Slot, address)
-						req, err = http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
-						require.NoError(t, err)
-
-						resp, err = cli.Do(req)
-						require.NoError(t, err)
-
-						ghR := GetHeaderResponse{}
-						dec = json.NewDecoder(resp.Body)
-						err = dec.Decode(&ghR)
-						require.NoError(t, err)
-						resp.Body.Close()
-
-						require.Equal(t, p.Bid.String(), ghR.Data.Message.Value)
-						require.Equal(t, p.Blockhash, ghR.Data.Message.Header.BlockHash)
-					}
-				}*/
-
+			// Data API
+			usecaseBlockSubmissionsOnDataAPI(t, tt.networkType, parsed, tt.domain)
+			usecasePayloadDeliveredOnDataAPI(t, tt.networkType, parsed, tt.domain)
 		})
 	}
 }
@@ -108,6 +69,14 @@ type GetHeaderResponse struct {
 
 type builderBlocksResponse struct {
 	Slot           string `json:"slot"`
+	BlockHash      string `json:"block_hash"`
+	ParentHash     string `json:"parent_hash"`
+	ProposerPubkey string `json:"proposer_pubkey"`
+}
+
+type proposerPayloadResponse struct {
+	Slot           string `json:"slot"`
+	BlockHash      string `json:"block_hash"`
 	ParentHash     string `json:"parent_hash"`
 	ProposerPubkey string `json:"proposer_pubkey"`
 }
@@ -125,11 +94,8 @@ func usecaseCorrectMaxProfit(t *testing.T, env int, pr *ParsedResult) {
 	// Get all bid sent logs
 	// For all logs, get all builder block stored logs for the same slot, which were previous or equal to the bid sent log
 	// Calculate a list of candidate max profit blocks for that slot by:
-	// - Calculate the what blocks have been max profit in the following time window [header requested, bid sent], including both timestamps
+	// Calculating what blocks have been max profit in the following time window [header requested, bid sent], including both timestamps
 	// Confirm the bid that is sent has been "flaged" as max profit at certain moment in the aforementioned timestamps
-
-	// Calculate the max profit for that slot using the block stored logs
-	// Confirm the bid that is sent is the expected max profit
 
 	if len(pr.Bids) == 0 {
 		t.Log("[WARN] 'bid sent' not found in the test file")
@@ -234,7 +200,7 @@ func usecaseCorrectPayloadDelivered(t *testing.T, env int, pr *ParsedResult) {
 		for _, p := range payload {
 			var found bool
 			for _, req := range pReq {
-				if p.Blockhash == req.Blockhash {
+				if p.Blockhash == req.Blockhash && req.Time.UnixMilli() <= p.Time.UnixMilli() {
 					found = true
 					break
 				}
@@ -251,7 +217,7 @@ func usecaseCorrectPayloadDelivered(t *testing.T, env int, pr *ParsedResult) {
 // Check payload not found error only occurs if previously no bid is sent
 func usecasePayloadNotFoundOnlyAfterNoBid(t *testing.T, env int, pr *ParsedResult) {
 	// Get all no payload found logs
-	// For all logs, confirm there isn't any bid sent log is found with the same blockHash
+	// For all logs, confirm there isn't any 'bid sent' log with the same blockHash, previous to the 'payload sent' log
 
 	if len(pr.NoPayloadFound) == 0 {
 		t.Log("[WARN] 'no payloads found' not found in the test file")
@@ -264,9 +230,9 @@ func usecasePayloadNotFoundOnlyAfterNoBid(t *testing.T, env int, pr *ParsedResul
 		}
 
 		for _, v := range noPayload {
-			blocks := pr.Bids[k]           // should we check all logs or just this slot
-			for _, block := range blocks { // should we test for "before" here? like timestamp relation?
-				if v.Blockhash != block.Blockhash {
+			blocks := pr.Bids[k] // should we check all logs or just this slot
+			for _, block := range blocks {
+				if block.Time.UnixMilli() < v.Time.UnixMilli() {
 					require.NotEqual(t, v.Blockhash, block.Blockhash)
 					return
 				}
@@ -277,20 +243,99 @@ func usecasePayloadNotFoundOnlyAfterNoBid(t *testing.T, env int, pr *ParsedResul
 
 // Check bids not found only occur if there was no submission
 func usecaseNoSubmissionNoBids(t *testing.T, env int, pr *ParsedResult) {
-	///Get all no builder bid logs
+	///Get all 'no builder bid' logs
 	///For all logs, confirm there is no previous builder block stored log for the same slot
 	if len(pr.NoBids) == 0 {
 		t.Log("[WARN] 'No bids' not found in the test file")
 		return
 	}
 
-	for k, _ := range pr.NoBids {
+	for k, noBids := range pr.NoBids {
 		if k.NetworkType != env {
 			continue
 		}
 		blocks := pr.BuilderBlockStored[k]
-		require.Len(t, blocks, 0)
-		// should we test for "before" here? like timestamp relation?
+		for _, noBid := range noBids {
+			for _, block := range blocks {
+				require.GreaterOrEqual(t, noBid.Time.UnixMilli(), block.Time.UnixMilli(), "block submission found before 'no builder bid' log")
+			}
+		}
+	}
+}
+
+func usecaseBlockSubmissionsOnDataAPI(t *testing.T, env int, pr *ParsedResult, domain string) {
+	// For every payload sent,
+	// confirm it is found on Data API /relay/v1/data/bidtraces/proposer_payload_delivered
+
+	if len(pr.Payloads) == 0 {
+		t.Log("[WARN] 'payload sent' not found in the test file")
+		return
+	}
+
+	for k, blocks := range pr.BuilderBlockStored {
+		if k.NetworkType != env {
+			continue
+		}
+
+		address := fmt.Sprintf("http://%s/relay/v1/data/bidtraces/builder_blocks_received?slot=%d", domain, k.Slot)
+		resp, err := http.Get(address)
+		require.NoError(t, err)
+
+		allBlockInSlot := []builderBlocksResponse{}
+		dec := json.NewDecoder(resp.Body)
+		err = dec.Decode(&allBlockInSlot)
+		resp.Body.Close()
+		require.NoError(t, err)
+
+		for _, block := range blocks {
+			found := false
+			for _, apiBlock := range allBlockInSlot {
+				if apiBlock.BlockHash == block.Blockhash {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, fmt.Sprintf("block with hash %s not found when querying by slot %d", block.Blockhash, k))
+		}
+
+	}
+}
+
+func usecasePayloadDeliveredOnDataAPI(t *testing.T, env int, pr *ParsedResult, domain string) {
+	//For every payload sent,
+	// confirm it is found on Data API /relay/v1/data/bidtraces/proposer_payload_delivered
+
+	if len(pr.Payloads) == 0 {
+		t.Log("[WARN] 'payload sent' not found in the test file")
+		return
+	}
+
+	for k, payloads := range pr.Payloads {
+		if k.NetworkType != env {
+			continue
+		}
+
+		address := fmt.Sprintf("http://%s/relay/v1/data/bidtraces/proposer_payload_delivered?slot=%d", domain, k.Slot)
+		resp, err := http.Get(address)
+		require.NoError(t, err)
+
+		allPayloadInSlot := []proposerPayloadResponse{}
+		dec := json.NewDecoder(resp.Body)
+		err = dec.Decode(&allPayloadInSlot)
+		resp.Body.Close()
+		require.NoError(t, err)
+
+		for _, payload := range payloads {
+			found := false
+			for _, apiPayload := range allPayloadInSlot {
+				if apiPayload.BlockHash == payload.Blockhash {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, fmt.Sprintf("payload with hash %s not found when querying by slot %d", payload.Blockhash, k))
+		}
+
 	}
 }
 
