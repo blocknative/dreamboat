@@ -109,7 +109,7 @@ SendPayloads:
 
 	err := <-fc.ExitCh
 
-	if err != nil {
+	if err == nil {
 		logger.
 			WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
 			WithField("numberValidators", len(payload)).
