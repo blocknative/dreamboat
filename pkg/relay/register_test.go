@@ -73,6 +73,7 @@ func TestRegisterValidator(t *testing.T) {
 	err = r.RegisterValidator(ctx, registrations)
 	require.NoError(t, err)
 
+	time.Sleep(1 * time.Second)
 	for _, registration := range registrations {
 		key := structs.PubKey{registration.Message.Pubkey}
 		gotRegistration, err := ds.GetRegistration(ctx, key)
@@ -137,6 +138,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	err = r.RegisterValidator(ctx, registrations)
 	require.Error(t, err)
 	//t.Logf("returned %s", err.Error())
+	time.Sleep(1 * time.Second)
 
 	var errored bool
 	for i, registration := range registrations {
