@@ -44,6 +44,7 @@ func (hc *HeaderController) CheckForRemoval() (toBeRemoved []uint64, ok bool) {
 	l := hc.ordered[len(hc.ordered)-1]
 	for _, v := range hc.ordered {
 		if !(l.Slot-v.Slot >= hc.slotLag && time.Since(v.Added) > hc.slotTimeLag) {
+			hc.m.RemovalChecks.Inc()
 			return toBeRemoved, ok
 		}
 		toBeRemoved = append(toBeRemoved, v.Slot)
@@ -83,7 +84,7 @@ func (hc *HeaderController) GetLatestSlot() (slot uint64) {
 	return atomic.LoadUint64(hc.latestSlot)
 }
 
-func (hc *HeaderController) AddMultiple(slot uint64, hnt []structs.HeaderAndTrace) (err error) {
+func (hc *HeaderController) PrependMultiple(slot uint64, hnt []structs.HeaderAndTrace) (err error) {
 	hc.cl.Lock()
 	defer hc.cl.Unlock()
 
@@ -103,12 +104,10 @@ func (hc *HeaderController) AddMultiple(slot uint64, hnt []structs.HeaderAndTrac
 		}
 	}
 
-	for _, s := range hnt {
-		hc.m.HeadersAdded.Inc()
-		if err := h.AddContent(s); err != nil {
-			return err
-		}
+	if err := h.PrependContent(hnt); err != nil {
+		return err
 	}
+	hc.m.HeadersAdded.Add(float64(len(hnt)))
 
 	return nil
 }
@@ -257,22 +256,15 @@ func (h *IndexedHeaders) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
 	return h.content[n], true
 }
 
-func (h *IndexedHeaders) AddContent(hnt structs.HeaderAndTrace) error {
-	newEl := IndexMeta{
-		Hash:          hnt.Trace.BlockHash,
-		Value:         hnt.Trace.Value.BigInt(),
-		BuilderPubkey: hnt.Trace.BuilderPubkey,
-	}
-
-	h.contentLock.Lock()
-	defer h.contentLock.Unlock()
-
+func (h *IndexedHeaders) linkHash(hnt structs.HeaderAndTrace) {
 	_, ok := h.blockHashToContentPosition[hnt.Trace.BlockHash]
 	if !ok {
 		h.content = append(h.content, hnt)
 		h.blockHashToContentPosition[hnt.Trace.BlockHash] = len(h.content) - 1
 	}
+}
 
+func (h *IndexedHeaders) addContent(newEl IndexMeta) error {
 	h.S.Index = append(h.S.Index, newEl)
 	h.S.SubmissionsByPubKeys[newEl.BuilderPubkey] = newEl
 
@@ -291,7 +283,48 @@ func (h *IndexedHeaders) AddContent(hnt structs.HeaderAndTrace) error {
 		}
 	}
 
-	h.rev++
+	return nil
+}
 
+func (h *IndexedHeaders) AddContent(hnt structs.HeaderAndTrace) error {
+	h.contentLock.Lock()
+	defer h.contentLock.Unlock()
+
+	newEl := IndexMeta{
+		Hash:          hnt.Trace.BlockHash,
+		Value:         hnt.Trace.Value.BigInt(),
+		BuilderPubkey: hnt.Trace.BuilderPubkey,
+	}
+
+	h.linkHash(hnt)
+	h.rev++
+	return h.addContent(newEl)
+}
+
+func (h *IndexedHeaders) PrependContent(hnts []structs.HeaderAndTrace) error {
+	h.contentLock.Lock()
+	defer h.contentLock.Unlock()
+
+	newIndex := h.S.Index[:]
+	for _, hnt := range hnts {
+		newEl := IndexMeta{
+			Hash:          hnt.Trace.BlockHash,
+			Value:         hnt.Trace.Value.BigInt(),
+			BuilderPubkey: hnt.Trace.BuilderPubkey,
+		}
+
+		h.linkHash(hnt)
+		if err := h.addContent(newEl); err != nil {
+			h.S.Index = newIndex
+			return err
+		}
+	}
+	for _, ni := range newIndex {
+		if err := h.addContent(ni); err != nil {
+			h.S.Index = newIndex
+			return err
+		}
+	}
+	h.rev++
 	return nil
 }

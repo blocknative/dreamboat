@@ -420,18 +420,18 @@ func TestGetPutComplex(t *testing.T) {
 	//check right profit
 	hnt, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
 	require.NoError(t, err)
-	require.EqualValues(t, *v3, hnt.Trace.Value)
-	require.EqualValues(t, *header3.Header, *hnt.Header)
+	require.EqualValues(t, *v2, hnt.Trace.Value)
+	require.EqualValues(t, *header2.Header, *hnt.Header)
 
 	// purged from memory
 	hnt2, ok := hc.GetMaxProfit(uint64(slot))
 	require.True(t, ok)
-	require.EqualValues(t, *v3, hnt2.Trace.Value)
+	require.EqualValues(t, *v2, hnt2.Trace.Value)
 
 	el, max, rev, err := hc.GetSingleSlot(uint64(slot))
 	require.NoError(t, err)
 	require.Len(t, el, 4)
-	require.EqualValues(t, gotHeader[2].Trace.BlockHash, max)
+	require.EqualValues(t, header2.Trace.BlockHash, max)
 	require.Equal(t, uint64(4), rev)
 
 	//datastore.InMemorySlotLag = 0
@@ -531,6 +531,7 @@ func TestGetPutComplex(t *testing.T) {
 	el, max, rev, err = hc.GetSingleSlot(uint64(slot))
 	require.NoError(t, err)
 	require.Len(t, el, 5)
+
 	require.EqualValues(t, header6.Trace.BlockHash, max)
-	require.Equal(t, rev, uint64(5))
+	require.Equal(t, uint64(2), rev)
 }

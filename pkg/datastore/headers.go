@@ -158,7 +158,7 @@ func (s *Datastore) loadKeysAndCleanup(ctx context.Context, slot uint64) error {
 		return err
 	}
 
-	return s.hc.AddMultiple(slot, h)
+	return s.hc.PrependMultiple(slot, h)
 }
 
 func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
@@ -169,7 +169,6 @@ func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
 	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Header.BlockHash.String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
 		return err
 	}
-
 	slot := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slot, uint64(h.Slot))
 
