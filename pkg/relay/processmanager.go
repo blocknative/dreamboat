@@ -121,13 +121,6 @@ func (rm *ProcessManager) Set(k string, value uint64) {
 }
 
 func (rm *ProcessManager) SendStore(sReq SReq) {
-	rm.lrtl.Lock()
-	for _, v := range sReq.ReqS {
-		rm.LastRegTime[v.Pubkey.String()] = v.Time // uint64(v.Time.UnixMicro())
-	}
-	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
-	rm.lrtl.Unlock()
-
 	// lock needed for Close()
 	rm.storeMutex.RLock()
 	defer rm.storeMutex.RUnlock()
@@ -170,6 +163,14 @@ func (rm *ProcessManager) ParallelStore(datas Datastore, ttl time.Duration) {
 
 	for payload := range rm.StoreCh {
 		rm.m.StoreSize.Observe(float64(len(payload.ReqS)))
+
+		rm.lrtl.Lock()
+		for _, v := range payload.ReqS {
+			rm.LastRegTime[v.Pubkey.String()] = v.Time // uint64(v.Time.UnixMicro())
+		}
+		rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
+		rm.lrtl.Unlock()
+
 		for _, i := range payload.ReqS {
 			t := prometheus.NewTimer(rm.m.StoreTiming)
 
