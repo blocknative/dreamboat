@@ -27,9 +27,7 @@ var (
 type Relay interface {
 	// Proposer API
 	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
-
 	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs

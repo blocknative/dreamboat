@@ -284,7 +284,6 @@ func (s *RespC) Send(r Resp) {
 		return
 	}
 
-	s.numAll++
 	s.nonErrors = append(s.nonErrors, int64(r.ID))
 	if s.numAll == len(s.nonErrors) {
 		s.close()
