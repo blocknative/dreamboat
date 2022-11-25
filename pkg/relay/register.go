@@ -104,20 +104,9 @@ SendPayloads:
 		return err
 	}
 
-	var sReq SReq
-	if err == nil {
-		sReq = SReq{
-			ReqS: make([]StoreReq, len(payload)),
-		}
-		for i, p := range payload {
-			sReq.ReqS[i] = StoreReq{
-				Time:       p.Message.Timestamp,
-				Pubkey:     p.Message.Pubkey,
-				RawPayload: p.Raw,
-			}
-		}
-	} else {
-		for _, i := range respChA.SuccessfullIndexes() {
+	if si := respChA.SuccessfullIndexes(); len(si) > 0 {
+		sReq := SReq{ReqS: make([]StoreReq, len(si))}
+		for _, i := range si {
 			p := payload[i]
 			sReq.ReqS = append(sReq.ReqS, StoreReq{
 				Time:       p.Message.Timestamp,
@@ -125,9 +114,8 @@ SendPayloads:
 				RawPayload: p.Raw,
 			})
 		}
+		rs.regMngr.SendStore(sReq)
 	}
-
-	rs.regMngr.SendStore(sReq)
 
 	if err == nil {
 		logger.
