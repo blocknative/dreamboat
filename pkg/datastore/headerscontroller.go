@@ -278,6 +278,7 @@ func (h *IndexedHeaders) AddContent(hnt structs.HeaderAndTrace) error {
 
 	// we should allow resubmission
 	if h.S.MaxProfit.BuilderPubkey == newEl.BuilderPubkey {
+		h.S.MaxProfit = IndexMeta{}
 		for _, submission := range h.S.SubmissionsByPubKeys {
 			if h.S.MaxProfit.Value == nil || h.S.MaxProfit.Value.Cmp(submission.Value) <= 0 {
 				h.S.MaxProfit = submission
