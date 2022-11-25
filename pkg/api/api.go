@@ -46,7 +46,6 @@ var (
 
 type Service interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	RegisterValidatorSingular(ctx context.Context, payload structs.SignedValidatorRegistration) error
 	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
 	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
@@ -136,23 +135,6 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 
 	if payload != nil {
 		a.m.ApiReqElCount.WithLabelValues("registerValidator", "payload").Observe(float64(len(payload)))
-	}
-
-	if len(payload) == 1 { // We don't need complex sync for just one payload
-		if err = a.s.RegisterValidatorSingular(r.Context(), payload[0]); err != nil {
-			a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register (single) validator").Inc()
-			a.l.With(log.F{
-				"code":     400,
-				"endpoint": "registerValidator",
-				"type":     "single",
-				"payload":  payload,
-			}).WithError(err).Debug("failed registerValidator")
-			return http.StatusBadRequest, err
-
-		}
-		a.m.ApiReqCounter.WithLabelValues("registerValidator", "200", "").Inc()
-		return http.StatusOK, err
-
 	}
 
 	if err = a.s.RegisterValidator(r.Context(), payload); err != nil {

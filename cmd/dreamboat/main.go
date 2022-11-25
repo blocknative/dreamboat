@@ -125,13 +125,13 @@ var flags = []cli.Flag{
 	&cli.Uint64Flag{
 		Name:    "relay-verify-queue-size",
 		Usage:   "size of verify queue",
-		Value:   20000,
+		Value:   20_000,
 		EnvVars: []string{"RELAY_VERIFY_QUEUE_SIZE"},
 	},
 	&cli.Uint64Flag{
 		Name:    "relay-store-queue-size",
 		Usage:   "size of store queue",
-		Value:   20000,
+		Value:   100_000,
 		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
 	},
 
@@ -334,6 +334,9 @@ func run() cli.ActionFunc {
 		case <-ctx.Done():
 			return g.Wait()
 		}
+
+		// perform close only when app already started
+		defer regMgr.Close(ctx)
 
 		config.Log.Debug("relay service ready")
 

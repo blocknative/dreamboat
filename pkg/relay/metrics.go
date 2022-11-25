@@ -7,8 +7,12 @@ import (
 
 type ProcessManagerMetrics struct {
 	VerifyTiming *prometheus.HistogramVec
+	StoreTiming  prometheus.Histogram
+	StoreSize    prometheus.Histogram
 
 	MapSize prometheus.Gauge
+
+	StoreErrorRate prometheus.Counter
 
 	RunningWorkers *prometheus.GaugeVec
 }
@@ -28,6 +32,27 @@ func (rm *ProcessManager) initMetrics() {
 		Help:      "Duration of requests per endpoint",
 	}, []string{"type"})
 
+	rm.m.StoreTiming = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "storeTiming",
+		Help:      "Duration of stores",
+	})
+
+	rm.m.StoreSize = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "storeSize",
+		Help:      "Duration of stores",
+	})
+
+	rm.m.StoreErrorRate = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "storeError",
+		Help:      "Duration of stores",
+	})
+
 	rm.m.MapSize = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relayprocess",
@@ -37,6 +62,9 @@ func (rm *ProcessManager) initMetrics() {
 }
 
 func (rm *ProcessManager) AttachMetrics(m *metrics.Metrics) {
+	m.Register(rm.m.StoreTiming)
+	m.Register(rm.m.StoreSize)
+	m.Register(rm.m.StoreErrorRate)
 	m.Register(rm.m.VerifyTiming)
 	m.Register(rm.m.RunningWorkers)
 	m.Register(rm.m.MapSize)
