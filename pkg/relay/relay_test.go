@@ -1225,8 +1225,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	// check that payload served from relay is 2nd block with lower value
 	header, err := types.PayloadToPayloadHeader(submitRequestTwo.ExecutionPayload)
 	require.NoError(t, err)
-	gotHeaders, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
 
+	gotHeaders, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
 	require.NoError(t, err)
 
 	require.EqualValues(t, header, gotHeaders.Header)
