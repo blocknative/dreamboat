@@ -1123,7 +1123,6 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	gotHeaders, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
 
 	require.NoError(t, err)
-	require.Len(t, gotHeaders, 2)
 	require.EqualValues(t, header, gotHeaders.Header)
 }
 
@@ -1229,6 +1228,6 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	gotHeaders, err := ds.GetMaxProfitHeader(ctx, uint64(slot))
 
 	require.NoError(t, err)
-	require.Len(t, gotHeaders, 1)
+
 	require.EqualValues(t, header, gotHeaders.Header)
 }

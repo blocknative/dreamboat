@@ -293,7 +293,7 @@ func (s *RespC) Send(r Resp) {
 }
 
 func (s *RespC) Error() (err error) {
-	return
+	return s.err
 }
 
 func (s *RespC) Close(id int, err error) {

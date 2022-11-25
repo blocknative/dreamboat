@@ -39,9 +39,8 @@ type VerifyReq struct {
 // StoreReq is similar to VerifyReq jsut for storing payloads
 type StoreReq struct {
 	RawPayload json.RawMessage
-
-	Time   uint64
-	Pubkey types.PublicKey
+	Time       uint64
+	Pubkey     types.PublicKey
 }
 
 // Resp respone structure
@@ -56,7 +55,7 @@ type Resp struct {
 
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
+func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) (err error) {
 	logger := rs.l.WithField("method", "RegisterValidator")
 	timeStart := time.Now()
 
@@ -66,25 +65,25 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	be := rs.beaconState.Beacon()
 	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
 
-	respChA := NewRespC(len(payload))
+	response := NewRespC(len(payload))
 SendPayloads:
 	for i, p := range payload {
 		select {
 		case <-ctx.Done():
 			err := ctx.Err()
-			respChA.Close(0, err)
+			response.Close(0, err)
 			return err
 		default:
 		}
 		o, ok := verifyOther(be, rs.regMngr, i, p)
 		if !ok {
-			respChA.Close(i, o.Err)
+			response.Close(i, o.Err)
 			break SendPayloads
 		}
 
 		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
 		if err != nil {
-			respChA.Close(i, errors.New("invalid signature"))
+			response.Close(i, errors.New("invalid signature"))
 			break SendPayloads
 		}
 
@@ -93,30 +92,31 @@ SendPayloads:
 			Pubkey:    p.Message.Pubkey,
 			Msg:       msg,
 			ID:        i,
-			Response:  respChA}
+			Response:  response}
 	}
-	var err error
+
 	select {
-	case err = <-respChA.Done():
+	case <-response.Done():
 	case <-ctx.Done():
 		err := ctx.Err()
-		respChA.Close(0, err)
+		response.Close(0, err)
 		return err
 	}
 
-	if si := respChA.SuccessfullIndexes(); len(si) > 0 {
+	if si := response.SuccessfullIndexes(); len(si) > 0 {
 		sReq := SReq{ReqS: make([]StoreReq, len(si))}
-		for _, i := range si {
+		for nextIter, i := range si {
 			p := payload[i]
-			sReq.ReqS = append(sReq.ReqS, StoreReq{
+			sReq.ReqS[nextIter] = StoreReq{
 				Time:       p.Message.Timestamp,
 				Pubkey:     p.Message.Pubkey,
 				RawPayload: p.Raw,
-			})
+			}
 		}
 		rs.regMngr.SendStore(sReq)
 	}
 
+	err = response.Error()
 	if err == nil {
 		logger.
 			WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
@@ -125,17 +125,6 @@ SendPayloads:
 	}
 
 	return err
-}
-
-func checkStoragePossibility(syncMap map[int]struct{}, id int) bool {
-	// it's possible only if it has two records from both checks
-	_, ok := syncMap[id]
-	if !ok {
-		syncMap[id] = struct{}{}
-		return false
-	}
-	delete(syncMap, id)
-	return true
 }
 
 func verifyOther(beacon *structs.BeaconState, tsReg TimestampRegistry, i int, sp structs.SignedValidatorRegistration) (svresp Resp, ok bool) {
@@ -152,15 +141,3 @@ func verifyOther(beacon *structs.BeaconState, tsReg TimestampRegistry, i int, sp
 	previousValidatorTimestamp, ok := tsReg.Get(pk.String()) // Do not error on this
 	return Resp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), ID: i, Type: ResponseTypeOthers}, true
 }
-
-/*
-func verifyOthers(state State, tsReg TimestampRegistry, fc *FlowControl, payload []structs.SignedValidatorRegistration) {
-	beacon := state.Beacon()
-	for i, sp := range payload {
-		p, ok := verifyOther(beacon, tsReg, i, sp)
-		fc.RespCh <- p
-		if !ok {
-			return
-		}
-	}
-}*/

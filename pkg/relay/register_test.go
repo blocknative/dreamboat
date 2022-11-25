@@ -30,7 +30,9 @@ func TestRegisterValidator(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	var datadir = "/tmp/" + t.Name() + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -92,7 +94,9 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	var datadir = "/tmp/" + t.Name() + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -137,8 +141,8 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	err = r.RegisterValidator(ctx, registrations)
 	require.Error(t, err)
-	//t.Logf("returned %s", err.Error())
-	time.Sleep(1 * time.Second)
+	t.Logf("returned %s", err.Error())
+	time.Sleep(3 * time.Second)
 
 	var errored bool
 	for i, registration := range registrations {
@@ -167,7 +171,9 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	var datadir = "/tmp/" + t.Name() + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
