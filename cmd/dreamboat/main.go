@@ -316,7 +316,7 @@ func run() cli.ActionFunc {
 
 		cContext, cancel := context.WithCancel(c.Context)
 		go func(s *pkg.Service) error {
-			err := service.RunBeacon(cContext)
+			err := s.RunBeacon(cContext)
 			if err != nil {
 				cancel()
 			}
