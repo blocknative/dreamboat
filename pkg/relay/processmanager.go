@@ -26,7 +26,7 @@ type ProcessManager struct {
 	VerifyRegisterValidatorCh chan VerifyReq
 	VerifyOtherCh             chan VerifyReq
 
-	StoreCh             chan SReq
+	StoreCh             chan StoreReq
 	storeMutex          sync.RWMutex
 	storeWorkersCounter sync.WaitGroup
 	isClosed            int32
@@ -42,7 +42,7 @@ func NewProcessManager(verifySize, storeSize uint) *ProcessManager {
 		VerifyRegisterValidatorCh: make(chan VerifyReq, verifySize),
 		VerifyOtherCh:             make(chan VerifyReq, verifySize),
 
-		StoreCh: make(chan SReq, storeSize),
+		StoreCh: make(chan StoreReq, storeSize),
 	}
 	rm.initMetrics()
 	return rm
@@ -108,8 +108,8 @@ func (rm *ProcessManager) LoadAll(m map[string]uint64) {
 	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 }
 
-type SReq struct {
-	ReqS []StoreReq
+type StoreReq struct {
+	Items []StoreReqItem
 }
 
 func (rm *ProcessManager) Set(k string, value uint64) {
@@ -120,12 +120,12 @@ func (rm *ProcessManager) Set(k string, value uint64) {
 	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 }
 
-func (rm *ProcessManager) SendStore(sReq SReq) {
+func (rm *ProcessManager) SendStore(request StoreReq) {
 	// lock needed for Close()
 	rm.storeMutex.RLock()
 	defer rm.storeMutex.RUnlock()
 	if atomic.LoadInt32(&(rm.isClosed)) == 0 {
-		rm.StoreCh <- sReq
+		rm.StoreCh <- request
 	}
 
 }
@@ -162,16 +162,16 @@ func (rm *ProcessManager) ParallelStore(datas Datastore, ttl time.Duration) {
 	ctx := context.Background()
 
 	for payload := range rm.StoreCh {
-		rm.m.StoreSize.Observe(float64(len(payload.ReqS)))
+		rm.m.StoreSize.Observe(float64(len(payload.Items)))
 
 		rm.lrtl.Lock()
-		for _, v := range payload.ReqS {
+		for _, v := range payload.Items {
 			rm.LastRegTime[v.Pubkey.String()] = v.Time // uint64(v.Time.UnixMicro())
 		}
 		rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 		rm.lrtl.Unlock()
 
-		for _, i := range payload.ReqS {
+		for _, i := range payload.Items {
 			t := prometheus.NewTimer(rm.m.StoreTiming)
 
 			err := datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.RawPayload, ttl)
@@ -241,7 +241,7 @@ func verifyUnit(id int, msg [32]byte, sigBytes [96]byte, pkBytes [48]byte) Resp 
 	return Resp{Err: err, ID: id, Type: ResponseTypeVerify}
 }
 
-type RespC struct {
+type StoreResp struct {
 	nonErrors []int64
 	numAll    int
 
@@ -252,26 +252,26 @@ type RespC struct {
 	done chan error
 }
 
-func NewRespC(numAll int) (s *RespC) {
-	return &RespC{
+func NewRespC(numAll int) (s *StoreResp) {
+	return &StoreResp{
 		numAll: numAll,
 		done:   make(chan error, 1),
 	}
 }
 
-func (s *RespC) SuccessfullIndexes() []int64 {
+func (s *StoreResp) SuccessfullIndexes() []int64 {
 	return s.nonErrors
 }
 
-func (s *RespC) Done() chan error {
+func (s *StoreResp) Done() chan error {
 	return s.done
 }
 
-func (s *RespC) IsClosed() bool {
+func (s *StoreResp) IsClosed() bool {
 	return atomic.LoadInt32(&(s.isClosed)) != 0
 }
 
-func (s *RespC) Send(r Resp) {
+func (s *StoreResp) Send(r Resp) {
 	s.rLock.Lock()
 	defer s.rLock.Unlock()
 
@@ -292,11 +292,11 @@ func (s *RespC) Send(r Resp) {
 	}
 }
 
-func (s *RespC) Error() (err error) {
+func (s *StoreResp) Error() (err error) {
 	return s.err
 }
 
-func (s *RespC) Close(id int, err error) {
+func (s *StoreResp) Close(id int, err error) {
 	s.rLock.Lock()
 	defer s.rLock.Unlock()
 
@@ -306,7 +306,7 @@ func (s *RespC) Close(id int, err error) {
 	s.close()
 }
 
-func (s *RespC) close() {
+func (s *StoreResp) close() {
 	if !s.IsClosed() {
 		atomic.StoreInt32(&(s.isClosed), int32(1))
 		close(s.done)

@@ -50,7 +50,7 @@ type RegistrationManager interface {
 	GetVerifyChan(buffer uint) chan VerifyReq
 	//Set(k string, value uint64)
 
-	SendStore(sReq SReq)
+	SendStore(sReq StoreReq)
 	Get(k string) (value uint64, ok bool)
 }
 

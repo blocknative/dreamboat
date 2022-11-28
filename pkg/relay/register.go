@@ -33,11 +33,11 @@ type VerifyReq struct {
 	// Unique identifier of payload
 	// if needed to be passed back in response
 	ID       int
-	Response *RespC
+	Response *StoreResp
 }
 
-// StoreReq is similar to VerifyReq jsut for storing payloads
-type StoreReq struct {
+// StoreReqItem is similar to VerifyReq jsut for storing payloads
+type StoreReqItem struct {
 	RawPayload json.RawMessage
 	Time       uint64
 	Pubkey     types.PublicKey
@@ -104,16 +104,16 @@ SendPayloads:
 	}
 
 	if si := response.SuccessfullIndexes(); len(si) > 0 {
-		sReq := SReq{ReqS: make([]StoreReq, len(si))}
+		request := StoreReq{Items: make([]StoreReqItem, len(si))}
 		for nextIter, i := range si {
 			p := payload[i]
-			sReq.ReqS[nextIter] = StoreReq{
+			request.Items[nextIter] = StoreReqItem{
 				Time:       p.Message.Timestamp,
 				Pubkey:     p.Message.Pubkey,
 				RawPayload: p.Raw,
 			}
 		}
-		rs.regMngr.SendStore(sReq)
+		rs.regMngr.SendStore(request)
 	}
 
 	err = response.Error()
