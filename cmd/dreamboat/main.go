@@ -345,9 +345,6 @@ func run() cli.ActionFunc {
 		case <-service.Ready():
 		}
 
-		// perform close only when app already started
-		defer regMgr.Close(cContext)
-
 		config.Log.Debug("relay service ready")
 
 		mux := http.NewServeMux()
@@ -374,14 +371,28 @@ func run() cli.ActionFunc {
 
 		<-cContext.Done()
 
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
+		ctx, _ := context.WithTimeout(context.Background(), shutdownTimeout)
 		log.Info("Shutdown initialized")
 		err = srv.Shutdown(ctx)
 		log.Info("Shutdown returned ", err)
+
+		ctx, _ = context.WithTimeout(context.Background(), shutdownTimeout/2)
+		finish := make(chan struct{})
+		go closemanager(ctx, finish, regMgr)
+
+		select {
+		case <-finish:
+		case <-ctx.Done():
+			log.Warn("Closing manager deadline exceeded ")
+		}
 		return fmt.Errorf("properly exiting... %w", err) // this surprisingly has to return error
 
 	}
+}
+
+func closemanager(ctx context.Context, finish chan struct{}, regMgr *relay.ProcessManager) {
+	regMgr.Close(ctx)
+	finish <- struct{}{}
 }
 
 func loadRegistrations(ds *datastore.Datastore, regMgr *relay.ProcessManager) {
