@@ -9,6 +9,7 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -31,11 +32,14 @@ type ProcessManager struct {
 	storeWorkersCounter sync.WaitGroup
 	isClosed            int32
 
+	l log.Logger
+
 	m ProcessManagerMetrics
 }
 
-func NewProcessManager(verifySize, storeSize uint) *ProcessManager {
+func NewProcessManager(l log.Logger, verifySize, storeSize uint) *ProcessManager {
 	rm := &ProcessManager{
+		l:           l,
 		LastRegTime: make(map[string]uint64),
 
 		VerifySubmitBlockCh:       make(chan VerifyReq, verifySize),
@@ -153,36 +157,51 @@ func (rm *ProcessManager) Get(k string) (value uint64, ok bool) {
 	return value, ok
 }
 
-func (rm *ProcessManager) ParallelStore(datas Datastore, ttl time.Duration) {
-	defer rm.storeWorkersCounter.Done()
+func (pm *ProcessManager) ParallelStore(datas Datastore, ttl time.Duration) {
+	defer pm.storeWorkersCounter.Done()
 
-	rm.m.RunningWorkers.WithLabelValues("ParallelStore").Inc()
-	defer rm.m.RunningWorkers.WithLabelValues("ParallelStore").Dec()
+	pm.m.RunningWorkers.WithLabelValues("ParallelStore").Inc()
+	defer pm.m.RunningWorkers.WithLabelValues("ParallelStore").Dec()
 
 	ctx := context.Background()
 
-	for payload := range rm.StoreCh {
-		rm.m.StoreSize.Observe(float64(len(payload.Items)))
-
-		rm.lrtl.Lock()
-		for _, v := range payload.Items {
-			rm.LastRegTime[v.Pubkey.String()] = v.Time // uint64(v.Time.UnixMicro())
-		}
-		rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
-		rm.lrtl.Unlock()
-
-		for _, i := range payload.Items {
-			t := prometheus.NewTimer(rm.m.StoreTiming)
-
-			err := datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.RawPayload, ttl)
-			if err != nil {
-				rm.m.StoreErrorRate.Inc()
-
-				// todo add error
-			}
-			t.ObserveDuration()
+	for payload := range pm.StoreCh {
+		pm.m.StoreSize.Observe(float64(len(payload.Items)))
+		if err := pm.storeRegistration(ctx, datas, ttl, payload); err != nil {
+			pm.l.Errorf("error storing registration - %w ", err)
 		}
 	}
+}
+
+func (pm *ProcessManager) storeRegistration(ctx context.Context, datas Datastore, ttl time.Duration, payload StoreReq) (err error) {
+	defer func() { // better safe than sorry
+		if r := recover(); r != nil {
+			var isErr bool
+			err, isErr = r.(error)
+			if !isErr {
+				err = fmt.Errorf("storeRegistration panic: %v", r)
+			}
+		}
+	}()
+
+	pm.lrtl.Lock()
+	for _, v := range payload.Items {
+		pm.LastRegTime[v.Pubkey.String()] = v.Time
+	}
+	pm.m.MapSize.Set(float64(len(pm.LastRegTime)))
+	pm.lrtl.Unlock()
+
+	for _, i := range payload.Items {
+		t := prometheus.NewTimer(pm.m.StoreTiming)
+
+		err := datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.RawPayload, ttl)
+		if err != nil {
+			pm.m.StoreErrorRate.Inc()
+			return err
+		}
+		t.ObserveDuration()
+	}
+	return nil
 }
 
 func (rm *ProcessManager) VerifyParallel() {

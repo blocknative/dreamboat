@@ -145,10 +145,11 @@ func TestGetPayload(t *testing.T) {
 		BuilderSigningDomain:    types.DomainBuilder,
 	}
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(t, proposerSigningDomain, genesisTime)
@@ -250,10 +251,11 @@ func TestGetValidators(t *testing.T) {
 		RegisterValidatorMaxNum: 50_000,
 	}
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		DutiesState: structs.DutiesState{
 			ProposerDutiesResponse: structs.BuilderGetValidatorsResponseEntrySlice{{
@@ -285,7 +287,8 @@ func TestSubmitBlock(t *testing.T) {
 	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
 	bs := mock_relay.NewMockState(ctrl)
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -299,7 +302,7 @@ func TestSubmitBlock(t *testing.T) {
 		BuilderSigningDomain:    relaySigningDomain,
 		RegisterValidatorMaxNum: 50_000,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -528,10 +531,11 @@ func BenchmarkGetPayload(b *testing.B) {
 		RegisterValidatorMaxNum: 50_000,
 	}
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -637,7 +641,8 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		pkg.BellatrixForkVersionRopsten,
 		pkg.GenesisValidatorsRootRopsten)
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
 	config := relay.RelayConfig{
@@ -647,7 +652,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		ProposerSigningDomain:   proposerSigningDomain,
 		RegisterValidatorMaxNum: 50_000,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -754,7 +759,8 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
@@ -769,7 +775,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		BuilderSigningDomain:    relaySigningDomain,
 		RegisterValidatorMaxNum: 50_000,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -796,7 +802,8 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
@@ -811,7 +818,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		BuilderSigningDomain:    relaySigningDomain,
 		RegisterValidatorMaxNum: 50_000,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -848,7 +855,8 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	bs := mock_relay.NewMockState(ctrl)
 	sk, _, _ := bls.GenerateNewKeypair()
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -863,7 +871,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 		BuilderSigningDomain:    relaySigningDomain,
 		RegisterValidatorMaxNum: 50_000,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -1022,7 +1030,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
@@ -1037,7 +1046,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		BuilderSigningDomain:    relaySigningDomain,
 		RegisterValidatorMaxNum: 50_000,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	// generate and send 1st block
 	skB1, pkB1, err := bls.GenerateNewKeypair()
@@ -1146,7 +1155,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 
-	regMgr := relay.NewProcessManager(20, 20)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
@@ -1161,7 +1171,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		BuilderSigningDomain:    relaySigningDomain,
 		RegisterValidatorMaxNum: 50_000,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	// generate and send 1st block
 	skB1, pkB1, err := bls.GenerateNewKeypair()

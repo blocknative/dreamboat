@@ -46,12 +46,12 @@ func TestRegisterValidator(t *testing.T) {
 		BuilderSigningDomain:    relaySigningDomain,
 		RegisterValidatorMaxNum: 50_000,
 	}
-
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -111,11 +111,12 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 		RegisterValidatorMaxNum: 150_000,
 	}
 
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -139,7 +140,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	err = r.RegisterValidator(ctx, registrations)
 	require.Error(t, err)
-	t.Logf("returned %s", err.Error())
+	//t.Logf("returned %s", err.Error())
 	time.Sleep(3 * time.Second)
 
 	var errored bool
@@ -187,11 +188,12 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 		RegisterValidatorMaxNum: 50_000,
 	}
 
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -240,11 +242,12 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		RegisterValidatorMaxNum: 50_000,
 	}
 
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -294,7 +297,8 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		RegisterValidatorMaxNum: 50_000,
 	}
 
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
@@ -303,7 +307,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	const N = 10_000
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
