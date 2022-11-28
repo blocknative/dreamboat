@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -57,7 +58,6 @@ type Resp struct {
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
 func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) (err error) {
 	logger := rs.l.WithField("method", "RegisterValidator")
-	timeStart := time.Now()
 
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidator", "all"))
 	defer timer.ObserveDuration()
@@ -66,6 +66,10 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
 
 	response := NewRespC(len(payload))
+
+	timeStart := time.Now()
+
+	var totalCheckTime time.Duration
 SendPayloads:
 	for i, p := range payload {
 		select {
@@ -75,11 +79,14 @@ SendPayloads:
 			return err
 		default:
 		}
+
+		checkTime := time.Now()
 		o, ok := verifyOther(be, rs.regMngr, i, p)
 		if !ok {
 			response.Close(i, o.Err)
 			break SendPayloads
 		}
+		totalCheckTime += time.Since(checkTime)
 
 		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.config.BuilderSigningDomain)
 		if err != nil {
@@ -102,8 +109,12 @@ SendPayloads:
 		response.Close(0, err)
 		return err
 	}
+	processTime := time.Since(timeStart)
+	rs.m.Timing.WithLabelValues("registerValidator", "verify").Observe(math.Abs(processTime.Seconds() - totalCheckTime.Seconds()))
+	rs.m.Timing.WithLabelValues("registerValidator", "check").Observe(totalCheckTime.Seconds())
 
 	if si := response.SuccessfullIndexes(); len(si) > 0 {
+		timerStore := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidator", "asyncStore"))
 		request := StoreReq{Items: make([]StoreReqItem, len(si))}
 		for nextIter, i := range si {
 			p := payload[i]
@@ -114,6 +125,7 @@ SendPayloads:
 			}
 		}
 		rs.regMngr.SendStore(request)
+		timerStore.ObserveDuration()
 	}
 
 	err = response.Error()
