@@ -114,7 +114,7 @@ var flags = []cli.Flag{
 	&cli.Uint64Flag{
 		Name:    "relay-workers-verify",
 		Usage:   "number of workers running verify in parallel",
-		Value:   400,
+		Value:   2000,
 		EnvVars: []string{"RELAY_WORKERS_VERIFY"},
 	},
 	&cli.Uint64Flag{
@@ -126,7 +126,7 @@ var flags = []cli.Flag{
 	&cli.Uint64Flag{
 		Name:    "relay-verify-queue-size",
 		Usage:   "size of verify queue",
-		Value:   20_000,
+		Value:   100_000,
 		EnvVars: []string{"RELAY_VERIFY_QUEUE_SIZE"},
 	},
 	&cli.Uint64Flag{
@@ -135,14 +135,12 @@ var flags = []cli.Flag{
 		Value:   100_000,
 		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
 	},
-
 	&cli.Uint64Flag{
 		Name:    "relay-header-memory-slot-lag",
 		Usage:   "how many slots from the head relay should keep in memory",
 		Value:   200,
 		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_LAG"},
 	},
-
 	&cli.DurationFlag{
 		Name:    "relay-header-memory-slot-time-lag",
 		Usage:   "how log should it take for lagged slot to be eligible fot purge",
@@ -291,12 +289,11 @@ func run() cli.ActionFunc {
 		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
 
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
-			BuilderSigningDomain:    domainBuilder,
-			ProposerSigningDomain:   domainBeaconProposer,
-			PubKey:                  config.PubKey,
-			SecretKey:               config.SecretKey,
-			TTL:                     config.TTL,
-			RegisterValidatorMaxNum: config.RelayQueueProcessingSize,
+			BuilderSigningDomain:  domainBuilder,
+			ProposerSigningDomain: domainBeaconProposer,
+			PubKey:                config.PubKey,
+			SecretKey:             config.SecretKey,
+			TTL:                   config.TTL,
 		}, as, ds, regMgr)
 		r.AttachMetrics(m)
 

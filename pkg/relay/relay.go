@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -60,10 +59,7 @@ type RelayConfig struct {
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
 
-	// RegisterValidatorMaxNum is needed to set size of the buffer queue
-	// describing the queue of results before it would be processed by registerSync
-	RegisterValidatorMaxNum uint64
-	TTL                     time.Duration
+	TTL time.Duration
 }
 
 type Relay struct {
@@ -74,9 +70,6 @@ type Relay struct {
 	config  RelayConfig
 
 	beaconState State
-
-	retChannPool       sync.Pool
-	singleRetChannPool sync.Pool
 
 	m RelayMetrics
 }
@@ -89,16 +82,6 @@ func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, 
 		config:      config,
 		beaconState: beaconState,
 		regMngr:     regMngr,
-		retChannPool: sync.Pool{
-			New: func() any {
-				return make(chan Resp, config.RegisterValidatorMaxNum*3)
-			},
-		},
-		singleRetChannPool: sync.Pool{
-			New: func() any {
-				return make(chan Resp, 1)
-			},
-		},
 	}
 	rs.initMetrics()
 	return rs
