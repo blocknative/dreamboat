@@ -52,14 +52,17 @@ func NewProcessManager(l log.Logger, verifySize, storeSize uint) *ProcessManager
 	return rm
 }
 
-func (rm *ProcessManager) Close(ctx context.Context) {
-	rm.storeMutex.Lock()
-	atomic.StoreInt32(&(rm.isClosed), int32(1))
+func (pm *ProcessManager) Close(ctx context.Context) {
+	pm.l.Info("Closing process manager")
+	pm.storeMutex.Lock()
+	atomic.StoreInt32(&(pm.isClosed), int32(1))
 	// close of store channel would initiate range automatic exits
-	close(rm.StoreCh)
-	rm.storeMutex.Unlock()
+	close(pm.StoreCh)
+	pm.storeMutex.Unlock()
 
-	rm.storeWorkersCounter.Wait()
+	pm.l.Info("Awaiting registration stores to finish")
+	pm.storeWorkersCounter.Wait()
+	pm.l.Info("All registrations stored")
 }
 
 func (rm *ProcessManager) RunVerify(num uint) {

@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
-	"net"
+	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"time"
 
@@ -21,7 +23,6 @@ import (
 	"github.com/sirupsen/logrus"
 	blst "github.com/supranational/blst/bindings/go"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -160,6 +161,13 @@ var (
 	config pkg.Config
 )
 
+func waitForSignal(cancel context.CancelFunc, osSig chan os.Signal) {
+	for range osSig {
+		cancel()
+		return
+	}
+}
+
 // Main starts the relay
 func main() {
 	app := &cli.App{
@@ -171,9 +179,18 @@ func main() {
 		Action:  run(),
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	osSig := make(chan os.Signal, 2)
+
+	signal.Notify(osSig, syscall.SIGTERM)
+	signal.Notify(osSig, syscall.SIGINT)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go waitForSignal(cancel, osSig)
+	if err := app.RunContext(ctx, os.Args); err != nil {
 		log.Fatal(err)
 	}
+
 }
 
 func setup() cli.BeforeFunc {
@@ -298,18 +315,16 @@ func run() cli.ActionFunc {
 		}).Info("initialized")
 
 		cContext, cancel := context.WithCancel(c.Context)
-
-		g, ctx := errgroup.WithContext(cContext)
-		g.Go(func() error {
-			err := service.RunBeacon(ctx)
+		go func(s *pkg.Service) error {
+			err := service.RunBeacon(cContext)
 			if err != nil {
 				cancel()
 			}
 			return err
-		})
+		}(service)
 
 		// run internal http server
-		g.Go(func() (err error) {
+		go func(m *metrics.Metrics) (err error) {
 			internalMux := http.NewServeMux()
 			metrics.AttachProfiler(internalMux)
 
@@ -324,36 +339,31 @@ func run() cli.ActionFunc {
 				err = nil
 			}
 			return err
-		})
+		}(m)
 
 		// wait for the relay service to be ready
 		select {
 		case <-cContext.Done():
 			return err
 		case <-service.Ready():
-		case <-ctx.Done():
-			return g.Wait()
 		}
 
 		// perform close only when app already started
-		defer regMgr.Close(ctx)
+		defer regMgr.Close(cContext)
 
 		config.Log.Debug("relay service ready")
 
 		mux := http.NewServeMux()
 		api.AttachToHandler(mux)
 
-		var svr http.Server
+		var srv http.Server
 		// run the http server
-		g.Go(func() (err error) {
-			svr = http.Server{
-				Addr:         c.String("addr"),
-				ReadTimeout:  c.Duration("timeout"),
-				WriteTimeout: c.Duration("timeout"),
-				IdleTimeout:  time.Second * 2,
-				BaseContext: func(l net.Listener) context.Context { // 99% not needed
-					return ctx
-				},
+		go func(srv http.Server) (err error) {
+			svr := http.Server{
+				Addr:           c.String("addr"),
+				ReadTimeout:    c.Duration("timeout"),
+				WriteTimeout:   c.Duration("timeout"),
+				IdleTimeout:    time.Second * 2,
 				Handler:        mux,
 				MaxHeaderBytes: 4096,
 			}
@@ -361,21 +371,19 @@ func run() cli.ActionFunc {
 			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
 			}
-
+			config.Log.Info("http server finished")
 			return err
-		})
+		}(srv)
 
-		g.Go(func() error {
-			defer svr.Close()
-			<-ctx.Done()
+		<-cContext.Done()
 
-			ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-			defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		log.Info("Shutdown initialized")
+		err = srv.Shutdown(ctx)
+		log.Info("Shutdown returned ", err)
+		return fmt.Errorf("properly exiting... %w", err) // this surprisingly has to return error
 
-			return svr.Shutdown(ctx)
-		})
-
-		return g.Wait()
 	}
 }
 
