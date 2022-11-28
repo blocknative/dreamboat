@@ -133,6 +133,7 @@ func (hc *HeaderController) Add(slot uint64, hnt structs.HeaderAndTrace) (newCre
 		}
 	}
 	hc.m.HeadersAdded.Inc()
+	hc.m.HeadersSize.Set(float64(len(hc.headers)))
 	return newCreated, h.AddContent(hnt)
 }
 
