@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -46,9 +45,11 @@ type Datastore interface {
 }
 
 type RegistrationManager interface {
-	GetStoreChan() chan StoreReq
+	//GetStoreChan() chan StoreReq
 	GetVerifyChan(buffer uint) chan VerifyReq
-	Set(k string, value uint64)
+	//Set(k string, value uint64)
+
+	SendStore(sReq StoreReq)
 	Get(k string) (value uint64, ok bool)
 }
 
@@ -58,10 +59,7 @@ type RelayConfig struct {
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
 
-	// RegisterValidatorMaxNum is needed to set size of the buffer queue
-	// describing the queue of results before it would be processed by registerSync
-	RegisterValidatorMaxNum uint64
-	TTL                     time.Duration
+	TTL time.Duration
 }
 
 type Relay struct {
@@ -72,9 +70,6 @@ type Relay struct {
 	config  RelayConfig
 
 	beaconState State
-
-	retChannPool       sync.Pool
-	singleRetChannPool sync.Pool
 
 	m RelayMetrics
 }
@@ -87,16 +82,6 @@ func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, 
 		config:      config,
 		beaconState: beaconState,
 		regMngr:     regMngr,
-		retChannPool: sync.Pool{
-			New: func() any {
-				return make(chan Resp, config.RegisterValidatorMaxNum*3)
-			},
-		},
-		singleRetChannPool: sync.Pool{
-			New: func() any {
-				return make(chan Resp, 1)
-			},
-		},
 	}
 	rs.initMetrics()
 	return rs
@@ -221,16 +206,23 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		return nil, fmt.Errorf("signature invalid") // err
 	}
 
-	respCh := rs.singleRetChannPool.Get().(chan Resp)
+	respChA := NewRespC(1)
 	rs.regMngr.GetVerifyChan(ResponseQueueOther) <- VerifyReq{
 		Signature: payloadRequest.Signature,
 		Pubkey:    pk,
 		Msg:       msg,
-		Response:  respCh}
-	resp := <-respCh
-	rs.singleRetChannPool.Put(respCh)
+		Response:  respChA}
+
+	select {
+	case err = <-respChA.Done():
+	case <-ctx.Done():
+		err = ctx.Err()
+		respChA.Close(0, err)
+		return nil, err
+	}
+
 	timer2.ObserveDuration()
-	if resp.Err != nil {
+	if err != nil {
 		logger.WithField(
 			"pubkey", proposerPubkey,
 		).Error("signature invalid")
@@ -381,7 +373,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	}
 
 	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "verify"))
-	_, err = rs.verifySubmitSignature(submitBlockRequest)
+	_, err = rs.verifySubmitSignature(ctx, submitBlockRequest)
 	timer3.ObserveDuration()
 	if err != nil {
 		logger.WithError(err).
@@ -489,22 +481,28 @@ func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest
 	return true, nil
 }
 
-func (rs *Relay) verifySubmitSignature(submitBlockRequest *types.BuilderSubmitBlockRequest) (bool, error) { // TODO(l): remove FB type
+func (rs *Relay) verifySubmitSignature(ctx context.Context, submitBlockRequest *types.BuilderSubmitBlockRequest) (ok bool, err error) { // TODO(l): remove FB type
 	msg, err := types.ComputeSigningRoot(submitBlockRequest.Message, rs.config.BuilderSigningDomain)
 	if err != nil {
 		return false, fmt.Errorf("signature invalid")
 	}
 
-	respCh := rs.singleRetChannPool.Get().(chan Resp)
+	respChA := NewRespC(1)
 	rs.regMngr.GetVerifyChan(ResponseQueueSubmit) <- VerifyReq{
 		Signature: submitBlockRequest.Signature,
 		Pubkey:    submitBlockRequest.Message.BuilderPubkey,
 		Msg:       msg,
-		Response:  respCh}
-	resp := <-respCh
-	rs.singleRetChannPool.Put(respCh)
+		Response:  respChA}
 
-	return (resp.Err != nil), resp.Err
+	select {
+	case err = <-respChA.Done():
+	case <-ctx.Done():
+		err = ctx.Err()
+		respChA.Close(0, err)
+		return false, err
+	}
+
+	return (err != nil), err
 	//return VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
 }
 

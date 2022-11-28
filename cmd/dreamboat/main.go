@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
-	"net"
+	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"time"
 
@@ -21,7 +23,6 @@ import (
 	"github.com/sirupsen/logrus"
 	blst "github.com/supranational/blst/bindings/go"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -113,7 +114,7 @@ var flags = []cli.Flag{
 	&cli.Uint64Flag{
 		Name:    "relay-workers-verify",
 		Usage:   "number of workers running verify in parallel",
-		Value:   400,
+		Value:   2000,
 		EnvVars: []string{"RELAY_WORKERS_VERIFY"},
 	},
 	&cli.Uint64Flag{
@@ -125,23 +126,21 @@ var flags = []cli.Flag{
 	&cli.Uint64Flag{
 		Name:    "relay-verify-queue-size",
 		Usage:   "size of verify queue",
-		Value:   20000,
+		Value:   100_000,
 		EnvVars: []string{"RELAY_VERIFY_QUEUE_SIZE"},
 	},
 	&cli.Uint64Flag{
 		Name:    "relay-store-queue-size",
 		Usage:   "size of store queue",
-		Value:   20000,
+		Value:   100_000,
 		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
 	},
-
 	&cli.Uint64Flag{
 		Name:    "relay-header-memory-slot-lag",
 		Usage:   "how many slots from the head relay should keep in memory",
 		Value:   200,
 		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_LAG"},
 	},
-
 	&cli.DurationFlag{
 		Name:    "relay-header-memory-slot-time-lag",
 		Usage:   "how log should it take for lagged slot to be eligible fot purge",
@@ -160,6 +159,13 @@ var (
 	config pkg.Config
 )
 
+func waitForSignal(cancel context.CancelFunc, osSig chan os.Signal) {
+	for range osSig {
+		cancel()
+		return
+	}
+}
+
 // Main starts the relay
 func main() {
 	app := &cli.App{
@@ -171,9 +177,18 @@ func main() {
 		Action:  run(),
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	osSig := make(chan os.Signal, 2)
+
+	signal.Notify(osSig, syscall.SIGTERM)
+	signal.Notify(osSig, syscall.SIGINT)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go waitForSignal(cancel, osSig)
+	if err := app.RunContext(ctx, os.Args); err != nil {
 		log.Fatal(err)
 	}
+
 }
 
 func setup() cli.BeforeFunc {
@@ -267,19 +282,18 @@ func run() cli.ActionFunc {
 
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 
-		regMgr := relay.NewProcessManager(c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
+		regMgr := relay.NewProcessManager(config.Log, c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
 		regMgr.AttachMetrics(m)
 		loadRegistrations(ds, regMgr)
 
 		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
 
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
-			BuilderSigningDomain:    domainBuilder,
-			ProposerSigningDomain:   domainBeaconProposer,
-			PubKey:                  config.PubKey,
-			SecretKey:               config.SecretKey,
-			TTL:                     config.TTL,
-			RegisterValidatorMaxNum: config.RelayQueueProcessingSize,
+			BuilderSigningDomain:  domainBuilder,
+			ProposerSigningDomain: domainBeaconProposer,
+			PubKey:                config.PubKey,
+			SecretKey:             config.SecretKey,
+			TTL:                   config.TTL,
 		}, as, ds, regMgr)
 		r.AttachMetrics(m)
 
@@ -298,18 +312,16 @@ func run() cli.ActionFunc {
 		}).Info("initialized")
 
 		cContext, cancel := context.WithCancel(c.Context)
-
-		g, ctx := errgroup.WithContext(cContext)
-		g.Go(func() error {
-			err := service.RunBeacon(ctx)
+		go func(s *pkg.Service) error {
+			err := s.RunBeacon(cContext)
 			if err != nil {
 				cancel()
 			}
 			return err
-		})
+		}(service)
 
 		// run internal http server
-		g.Go(func() (err error) {
+		go func(m *metrics.Metrics) (err error) {
 			internalMux := http.NewServeMux()
 			metrics.AttachProfiler(internalMux)
 
@@ -324,15 +336,13 @@ func run() cli.ActionFunc {
 				err = nil
 			}
 			return err
-		})
+		}(m)
 
 		// wait for the relay service to be ready
 		select {
 		case <-cContext.Done():
 			return err
 		case <-service.Ready():
-		case <-ctx.Done():
-			return g.Wait()
 		}
 
 		config.Log.Debug("relay service ready")
@@ -340,17 +350,14 @@ func run() cli.ActionFunc {
 		mux := http.NewServeMux()
 		api.AttachToHandler(mux)
 
-		var svr http.Server
+		var srv http.Server
 		// run the http server
-		g.Go(func() (err error) {
-			svr = http.Server{
-				Addr:         c.String("addr"),
-				ReadTimeout:  c.Duration("timeout"),
-				WriteTimeout: c.Duration("timeout"),
-				IdleTimeout:  time.Second * 2,
-				BaseContext: func(l net.Listener) context.Context { // 99% not needed
-					return ctx
-				},
+		go func(srv http.Server) (err error) {
+			svr := http.Server{
+				Addr:           c.String("addr"),
+				ReadTimeout:    c.Duration("timeout"),
+				WriteTimeout:   c.Duration("timeout"),
+				IdleTimeout:    time.Second * 2,
 				Handler:        mux,
 				MaxHeaderBytes: 4096,
 			}
@@ -358,22 +365,34 @@ func run() cli.ActionFunc {
 			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
 			}
-
+			config.Log.Info("http server finished")
 			return err
-		})
+		}(srv)
 
-		g.Go(func() error {
-			defer svr.Close()
-			<-ctx.Done()
+		<-cContext.Done()
 
-			ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-			defer cancel()
+		ctx, _ := context.WithTimeout(context.Background(), shutdownTimeout)
+		log.Info("Shutdown initialized")
+		err = srv.Shutdown(ctx)
+		log.Info("Shutdown returned ", err)
 
-			return svr.Shutdown(ctx)
-		})
+		ctx, _ = context.WithTimeout(context.Background(), shutdownTimeout/2)
+		finish := make(chan struct{})
+		go closemanager(ctx, finish, regMgr)
 
-		return g.Wait()
+		select {
+		case <-finish:
+		case <-ctx.Done():
+			log.Warn("Closing manager deadline exceeded ")
+		}
+		return fmt.Errorf("properly exiting... %w", err) // this surprisingly has to return error
+
 	}
+}
+
+func closemanager(ctx context.Context, finish chan struct{}, regMgr *relay.ProcessManager) {
+	regMgr.Close(ctx)
+	finish <- struct{}{}
 }
 
 func loadRegistrations(ds *datastore.Datastore, regMgr *relay.ProcessManager) {

@@ -212,7 +212,6 @@ func (s *Datastore) GetAllRegistration() (map[string]types.SignedValidatorRegist
 				if err := nDec.Decode(&sgr); err != nil {
 					return err
 				}
-
 				m[string(k)[lenP:]] = sgr
 				return nil
 			})

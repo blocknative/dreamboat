@@ -25,12 +25,9 @@ var (
 )
 
 type Relay interface {
-	// Proposer APIs
-	RegisterValidatorSingular(context.Context, structs.SignedValidatorRegistration) error
+	// Proposer API
 	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
-
 	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-
 	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs
@@ -317,10 +314,6 @@ func (s *Service) updateKnownValidators(ctx context.Context, client BeaconClient
 
 func (s *Service) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
 	return s.Relay.RegisterValidator(ctx, payload)
-}
-
-func (s *Service) RegisterValidatorSingular(ctx context.Context, payload structs.SignedValidatorRegistration) error {
-	return s.Relay.RegisterValidatorSingular(ctx, payload)
 }
 
 func (s *Service) GetHeader(ctx context.Context, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {

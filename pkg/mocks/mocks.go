@@ -108,20 +108,6 @@ func (mr *MockRelayMockRecorder) RegisterValidator(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockRelay)(nil).RegisterValidator), arg0, arg1)
 }
 
-// RegisterValidatorSingular mocks base method
-func (m *MockRelay) RegisterValidatorSingular(arg0 context.Context, arg1 structs.SignedValidatorRegistration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterValidatorSingular", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// RegisterValidatorSingular indicates an expected call of RegisterValidatorSingular
-func (mr *MockRelayMockRecorder) RegisterValidatorSingular(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidatorSingular", reflect.TypeOf((*MockRelay)(nil).RegisterValidatorSingular), arg0, arg1)
-}
-
 // SubmitBlock mocks base method
 func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest) error {
 	m.ctrl.T.Helper()
@@ -235,18 +221,18 @@ func (mr *MockDatastoreMockRecorder) GetHeadersBySlot(arg0, arg1 interface{}) *g
 }
 
 // GetLatestHeaders mocks base method
-func (m *MockDatastore) GetLatestHeaders(arg0 context.Context, arg1 uint64) ([]structs.HeaderAndTrace, error) {
+func (m *MockDatastore) GetLatestHeaders(arg0 context.Context, arg1, arg2 uint64) ([]structs.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLatestHeaders", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetLatestHeaders", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]structs.HeaderAndTrace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetLatestHeaders indicates an expected call of GetLatestHeaders
-func (mr *MockDatastoreMockRecorder) GetLatestHeaders(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockDatastoreMockRecorder) GetLatestHeaders(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestHeaders", reflect.TypeOf((*MockDatastore)(nil).GetLatestHeaders), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestHeaders", reflect.TypeOf((*MockDatastore)(nil).GetLatestHeaders), arg0, arg1, arg2)
 }
 
 // GetPayload mocks base method

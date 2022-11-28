@@ -30,7 +30,9 @@ func TestRegisterValidator(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	var datadir = "/tmp/" + t.Name() + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -40,16 +42,15 @@ func TestRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
-		TTL:                     time.Minute,
-		BuilderSigningDomain:    relaySigningDomain,
-		RegisterValidatorMaxNum: 50_000,
+		TTL:                  time.Minute,
+		BuilderSigningDomain: relaySigningDomain,
 	}
-
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -73,6 +74,7 @@ func TestRegisterValidator(t *testing.T) {
 	err = r.RegisterValidator(ctx, registrations)
 	require.NoError(t, err)
 
+	time.Sleep(1 * time.Second)
 	for _, registration := range registrations {
 		key := structs.PubKey{registration.Message.Pubkey}
 		gotRegistration, err := ds.GetRegistration(ctx, key)
@@ -91,7 +93,9 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	var datadir = "/tmp/" + t.Name() + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -101,16 +105,16 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
-		TTL:                     time.Minute,
-		BuilderSigningDomain:    relaySigningDomain,
-		RegisterValidatorMaxNum: 150_000,
+		TTL:                  time.Minute,
+		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -130,23 +134,23 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	}
 
 	registrations[N/2].Signature = types.Signature{}
-	registrations[N/4].Signature = types.Signature{}
-	registrations[N/4*3].Message.Timestamp = 0
 	bs.EXPECT().Beacon().Return(fbn)
 
 	err = r.RegisterValidator(ctx, registrations)
 	require.Error(t, err)
 	//t.Logf("returned %s", err.Error())
+	time.Sleep(3 * time.Second)
 
 	var errored bool
 	for i, registration := range registrations {
 		key := structs.PubKey{registration.Message.Pubkey}
-
 		gotRegistration, err := ds.GetRegistration(ctx, key)
 		if !errored {
-			if i != N/2 && i != N/4 && i != N/4*3 {
-				require.NoError(t, err)
-				require.EqualValues(t, registration.SignedValidatorRegistration, gotRegistration)
+			if i != N/2 {
+				if err == nil || err.Error() != "datastore: key not found" {
+					require.NoError(t, err)
+					require.EqualValues(t, registration.SignedValidatorRegistration, gotRegistration)
+				}
 			} else {
 				errored = true
 				require.Error(t, err)
@@ -165,7 +169,9 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	var datadir = "/tmp/" + t.Name() + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -175,16 +181,16 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
-		TTL:                     time.Minute,
-		BuilderSigningDomain:    relaySigningDomain,
-		RegisterValidatorMaxNum: 50_000,
+		TTL:                  time.Minute,
+		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -228,16 +234,16 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                     5 * time.Minute,
-		BuilderSigningDomain:    relaySigningDomain,
-		RegisterValidatorMaxNum: 50_000,
+		TTL:                  5 * time.Minute,
+		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -282,12 +288,12 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                     5 * time.Minute,
-		BuilderSigningDomain:    relaySigningDomain,
-		RegisterValidatorMaxNum: 50_000,
+		TTL:                  5 * time.Minute,
+		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	regMgr := relay.NewProcessManager(20000, 20000)
+	l := log.New()
+	regMgr := relay.NewProcessManager(l, 20000, 20000)
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
@@ -296,7 +302,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	const N = 10_000
 
-	r := relay.NewRelay(log.New(), config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),

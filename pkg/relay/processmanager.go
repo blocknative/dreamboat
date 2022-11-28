@@ -2,11 +2,14 @@ package relay
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -24,13 +27,19 @@ type ProcessManager struct {
 	VerifyRegisterValidatorCh chan VerifyReq
 	VerifyOtherCh             chan VerifyReq
 
-	StoreCh chan StoreReq
+	StoreCh             chan StoreReq
+	storeMutex          sync.RWMutex
+	storeWorkersCounter sync.WaitGroup
+	isClosed            int32
+
+	l log.Logger
 
 	m ProcessManagerMetrics
 }
 
-func NewProcessManager(verifySize, storeSize uint) *ProcessManager {
+func NewProcessManager(l log.Logger, verifySize, storeSize uint) *ProcessManager {
 	rm := &ProcessManager{
+		l:           l,
 		LastRegTime: make(map[string]uint64),
 
 		VerifySubmitBlockCh:       make(chan VerifyReq, verifySize),
@@ -43,6 +52,19 @@ func NewProcessManager(verifySize, storeSize uint) *ProcessManager {
 	return rm
 }
 
+func (pm *ProcessManager) Close(ctx context.Context) {
+	pm.l.Info("Closing process manager")
+	pm.storeMutex.Lock()
+	atomic.StoreInt32(&(pm.isClosed), int32(1))
+	// close of store channel would initiate range automatic exits
+	close(pm.StoreCh)
+	pm.storeMutex.Unlock()
+
+	pm.l.Info("Awaiting registration stores to finish")
+	pm.storeWorkersCounter.Wait()
+	pm.l.Info("All registrations stored")
+}
+
 func (rm *ProcessManager) RunVerify(num uint) {
 	for i := uint(0); i < num; i++ {
 		go rm.VerifyParallel()
@@ -51,6 +73,7 @@ func (rm *ProcessManager) RunVerify(num uint) {
 
 func (rm *ProcessManager) RunStore(store Datastore, ttl time.Duration, num uint) {
 	for i := uint(0); i < num; i++ {
+		rm.storeWorkersCounter.Add(1)
 		go rm.ParallelStore(store, ttl)
 	}
 }
@@ -92,8 +115,26 @@ func (rm *ProcessManager) LoadAll(m map[string]uint64) {
 	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 }
 
-func (rm *ProcessManager) GetStoreChan() chan StoreReq {
-	return rm.StoreCh
+type StoreReq struct {
+	Items []StoreReqItem
+}
+
+func (rm *ProcessManager) Set(k string, value uint64) {
+	rm.lrtl.Lock()
+	defer rm.lrtl.Unlock()
+
+	rm.LastRegTime[k] = value
+	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
+}
+
+func (rm *ProcessManager) SendStore(request StoreReq) {
+	// lock needed for Close()
+	rm.storeMutex.RLock()
+	defer rm.storeMutex.RUnlock()
+	if atomic.LoadInt32(&(rm.isClosed)) == 0 {
+		rm.StoreCh <- request
+	}
+
 }
 
 func (rm *ProcessManager) VerifyChan() chan VerifyReq {
@@ -111,34 +152,59 @@ func (rm *ProcessManager) GetVerifyChan(stack uint) chan VerifyReq {
 	}
 }
 
-func (rm *ProcessManager) Set(k string, value uint64) {
-	rm.lrtl.Lock()
-	defer rm.lrtl.Unlock()
-
-	rm.LastRegTime[k] = value
-	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
-}
-
 func (rm *ProcessManager) Get(k string) (value uint64, ok bool) {
 	rm.lrtl.RLock()
 	defer rm.lrtl.RUnlock()
 
 	value, ok = rm.LastRegTime[k]
-	return
+	return value, ok
 }
 
-func (rm *ProcessManager) ParallelStore(datas Datastore, ttl time.Duration) {
-	rm.m.RunningWorkers.WithLabelValues("ParallelStore").Inc()
-	defer rm.m.RunningWorkers.WithLabelValues("ParallelStore").Dec()
+func (pm *ProcessManager) ParallelStore(datas Datastore, ttl time.Duration) {
+	defer pm.storeWorkersCounter.Done()
+
+	pm.m.RunningWorkers.WithLabelValues("ParallelStore").Inc()
+	defer pm.m.RunningWorkers.WithLabelValues("ParallelStore").Dec()
+
 	ctx := context.Background()
 
-	for i := range rm.StoreCh {
-		i.Response <- Resp{
-			Type: ResponseTypeStored,
-			ID:   i.ID,
-			Err:  datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.RawPayload, ttl),
+	for payload := range pm.StoreCh {
+		pm.m.StoreSize.Observe(float64(len(payload.Items)))
+		if err := pm.storeRegistration(ctx, datas, ttl, payload); err != nil {
+			pm.l.Errorf("error storing registration - %w ", err)
 		}
 	}
+}
+
+func (pm *ProcessManager) storeRegistration(ctx context.Context, datas Datastore, ttl time.Duration, payload StoreReq) (err error) {
+	defer func() { // better safe than sorry
+		if r := recover(); r != nil {
+			var isErr bool
+			err, isErr = r.(error)
+			if !isErr {
+				err = fmt.Errorf("storeRegistration panic: %v", r)
+			}
+		}
+	}()
+
+	pm.lrtl.Lock()
+	for _, v := range payload.Items {
+		pm.LastRegTime[v.Pubkey.String()] = v.Time
+	}
+	pm.m.MapSize.Set(float64(len(pm.LastRegTime)))
+	pm.lrtl.Unlock()
+
+	for _, i := range payload.Items {
+		t := prometheus.NewTimer(pm.m.StoreTiming)
+
+		err := datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.RawPayload, ttl)
+		if err != nil {
+			pm.m.StoreErrorRate.Inc()
+			return err
+		}
+		t.ObserveDuration()
+	}
+	return nil
 }
 
 func (rm *ProcessManager) VerifyParallel() {
@@ -159,25 +225,112 @@ func (rm *ProcessManager) VerifyParallel() {
 	for {
 		select {
 		case v := <-rm.VerifySubmitBlockCh:
-			t := prometheus.NewTimer(timerA)
-			v.Response <- verifyUnit(v.ID, v.Msg, v.Signature, v.Pubkey)
-			t.ObserveDuration()
+			_ = verifyCheck(timerA, v)
 		case v := <-rm.VerifyRegisterValidatorCh:
-			t := prometheus.NewTimer(timerB)
-			v.Response <- verifyUnit(v.ID, v.Msg, v.Signature, v.Pubkey)
-			t.ObserveDuration()
+			_ = verifyCheck(timerB, v)
 		case v := <-rm.VerifyOtherCh:
-			t := prometheus.NewTimer(timerC)
-			v.Response <- verifyUnit(v.ID, v.Msg, v.Signature, v.Pubkey)
-			t.ObserveDuration()
+			_ = verifyCheck(timerC, v)
 		}
 	}
 }
 
+func verifyCheck(o prometheus.Observer, v VerifyReq) (err error) {
+	defer func() { // better safe than sorry
+		if r := recover(); r != nil {
+			var isErr bool
+			err, isErr = r.(error)
+			if !isErr {
+				err = fmt.Errorf("verify signature bytes panic: %v", r)
+			}
+		}
+	}()
+
+	if v.Response.IsClosed() {
+		return nil
+	}
+	t := prometheus.NewTimer(o)
+	defer t.ObserveDuration()
+
+	v.Response.Send(verifyUnit(v.ID, v.Msg, v.Signature, v.Pubkey))
+	return err
+
+}
 func verifyUnit(id int, msg [32]byte, sigBytes [96]byte, pkBytes [48]byte) Resp {
 	ok, err := VerifySignatureBytes(msg, sigBytes[:], pkBytes[:])
 	if err == nil && !ok {
 		err = bls.ErrInvalidSignature
 	}
 	return Resp{Err: err, ID: id, Type: ResponseTypeVerify}
+}
+
+type StoreResp struct {
+	nonErrors []int64
+	numAll    int
+
+	rLock    sync.Mutex
+	isClosed int32
+	err      error
+
+	done chan error
+}
+
+func NewRespC(numAll int) (s *StoreResp) {
+	return &StoreResp{
+		numAll: numAll,
+		done:   make(chan error, 1),
+	}
+}
+
+func (s *StoreResp) SuccessfullIndexes() []int64 {
+	return s.nonErrors
+}
+
+func (s *StoreResp) Done() chan error {
+	return s.done
+}
+
+func (s *StoreResp) IsClosed() bool {
+	return atomic.LoadInt32(&(s.isClosed)) != 0
+}
+
+func (s *StoreResp) Send(r Resp) {
+	s.rLock.Lock()
+	defer s.rLock.Unlock()
+
+	if s.IsClosed() {
+		return
+	}
+
+	if r.Err != nil {
+		s.err = r.Err
+		s.close()
+		return
+	}
+
+	s.nonErrors = append(s.nonErrors, int64(r.ID))
+	if s.numAll == len(s.nonErrors) {
+		s.close()
+		return
+	}
+}
+
+func (s *StoreResp) Error() (err error) {
+	return s.err
+}
+
+func (s *StoreResp) Close(id int, err error) {
+	s.rLock.Lock()
+	defer s.rLock.Unlock()
+
+	if err != nil {
+		s.err = err
+	}
+	s.close()
+}
+
+func (s *StoreResp) close() {
+	if !s.IsClosed() {
+		atomic.StoreInt32(&(s.isClosed), int32(1))
+		close(s.done)
+	}
 }
