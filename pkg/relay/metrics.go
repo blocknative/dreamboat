@@ -43,14 +43,14 @@ func (rm *ProcessManager) initMetrics() {
 		Namespace: "dreamboat",
 		Subsystem: "relayprocess",
 		Name:      "storeSize",
-		Help:      "Duration of stores",
+		Help:      "Size of stored",
 	})
 
 	rm.m.StoreErrorRate = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relayprocess",
 		Name:      "storeError",
-		Help:      "Duration of stores",
+		Help:      "Number of errors",
 	})
 
 	rm.m.MapSize = prometheus.NewGauge(prometheus.GaugeOpts{
