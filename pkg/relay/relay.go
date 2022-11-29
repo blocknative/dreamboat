@@ -124,16 +124,6 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	if err != nil {
 		return nil, err
 	}
-	/*
-		vd, err := rs.d.GetRegistration(ctx, pk)
-		if err != nil {
-			logger.Warn("unregistered validator")
-			return nil, fmt.Errorf(noBuilderBidMsg)
-		}
-		if vd.Message.Pubkey != pk.PublicKey {
-			logger.Warn("registration and request pubkey mismatch")
-			return nil, fmt.Errorf("unknown validator")
-		}*/
 
 	logger = logger.With(log.F{
 		"slot":       slot,
@@ -175,7 +165,9 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		Pubkey: rs.config.PubKey,
 	}
 
+	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "signature"))
 	signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
+	timer3.ObserveDuration()
 	if err != nil {
 		return nil, fmt.Errorf("internal server error")
 	}
