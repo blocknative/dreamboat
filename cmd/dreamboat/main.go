@@ -313,7 +313,7 @@ func run() cli.ActionFunc {
 		service := pkg.NewService(config.Log, config, ds, as)
 		service.AttachMetrics(m)
 
-		api := api.NewApi(config.Log, service)
+		api := api.NewApi(config.Log, r)
 		api.AttachMetrics(m)
 
 		regMgr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))

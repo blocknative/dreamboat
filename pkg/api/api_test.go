@@ -29,7 +29,7 @@ func TestServerRouting(t *testing.T) {
 
 	t.Run("Status", func(t *testing.T) {
 		t.Parallel()
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -44,7 +44,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("RegisterValidator", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -62,7 +62,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("GetHeader", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -80,7 +80,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("GetPayload", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -98,7 +98,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("SubmitBlock", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -116,7 +116,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("GetValidators", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -134,7 +134,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("builderBlocksReceived", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -155,7 +155,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("builderBlocksReceived block_hash", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -178,7 +178,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("builderBlocksReceived block_number", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -200,7 +200,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("builderBlocksReceived limit", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -222,7 +222,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("builderBlocksReceived no limit", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -244,7 +244,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("payloadDelivered", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -265,7 +265,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("payloadDelivered block_hash", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -289,7 +289,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("payloadDelivered block_number", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -311,7 +311,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("payloadDelivered cursor", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -333,7 +333,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("payloadDelivered limit", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -355,7 +355,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("payloadDelivered no limit", func(t *testing.T) {
 		t.Parallel()
 
-		service := mock_relay.NewMockService(ctrl)
+		service := mock_relay.NewMockRelay(ctrl)
 		server := api.NewApi(logger, service)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
@@ -388,7 +388,7 @@ func BenchmarkAPISequential(b *testing.B) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
 
-	service := mock_relay.NewMockService(ctrl)
+	service := mock_relay.NewMockRelay(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
 	server := api.NewApi(logger, service)
 	m := http.NewServeMux()
@@ -417,7 +417,7 @@ func BenchmarkAPIParallel(b *testing.B) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	service := mock_relay.NewMockService(ctrl)
+	service := mock_relay.NewMockRelay(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
 	server := api.NewApi(logger, service)
 	m := http.NewServeMux()
