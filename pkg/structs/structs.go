@@ -218,3 +218,9 @@ func (hd *HeaderData) UnmarshalJSON(b []byte) error {
 	hd.Marshaled = b
 	return nil
 }
+
+// / That's to be improved in future
+type CompleteBlockstruct struct {
+	Header  HeaderAndTrace
+	Payload BlockBidAndTrace
+}

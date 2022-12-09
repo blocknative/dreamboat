@@ -383,12 +383,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("verify block: %w", err)
 	}
 
-	signedBuilderBid, err := SubmitBlockRequestToSignedBuilderBid(
-		submitBlockRequest,
-		rs.config.SecretKey,
-		&rs.config.PubKey,
-		rs.config.BuilderSigningDomain,
-	)
+	complete, err := rs.prepareContents(submitBlockRequest)
 	if err != nil {
 		logger.WithError(err).
 			With(log.F{
@@ -399,50 +394,23 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("block submission failed: %w", err)
 	}
 
-	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
-	payload := SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
-	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &payload, rs.config.TTL); err != nil {
-		return err
-	}
-	timer4.ObserveDuration()
-
-	timer5 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putHeader"))
-	header, err := types.PayloadToPayloadHeader(submitBlockRequest.ExecutionPayload)
-	if err != nil {
-		return err
-	}
-
-	h := structs.HeaderAndTrace{
-		Header: header,
-		Trace: &structs.BidTraceWithTimestamp{
-			BidTraceExtended: structs.BidTraceExtended{
-				BidTrace: types.BidTrace{
-					Slot:                 submitBlockRequest.Message.Slot,
-					ParentHash:           payload.Payload.Data.ParentHash,
-					BlockHash:            payload.Payload.Data.BlockHash,
-					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: payload.Trace.Message.ProposerFeeRecipient,
-					Value:                submitBlockRequest.Message.Value,
-					GasLimit:             payload.Trace.Message.GasLimit,
-					GasUsed:              payload.Trace.Message.GasUsed,
-				},
-				BlockNumber: payload.Payload.Data.BlockNumber,
-				NumTx:       uint64(len(payload.Payload.Data.Transactions)),
-			},
-			Timestamp: payload.Payload.Data.Timestamp,
-		},
-	}
-
-	b, err := json.Marshal(h)
+	b, err := json.Marshal(complete.Header)
 	if err != nil {
 		logger.WithError(err).Error("PutHeader marshal failed")
+		return err
+	}
+
+	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
+	timer4.ObserveDuration()
+	timer5 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putHeader"))
+
+	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
 		return err
 	}
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		Marshaled:      b,
-		HeaderAndTrace: h,
+		HeaderAndTrace: complete.Header,
 	}, rs.config.TTL)
 	if err != nil {
 		logger.WithError(err).Error("PutHeader failed")
@@ -455,6 +423,51 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	}).Trace("builder block stored")
 
 	return nil
+}
+
+func (rs *Relay) prepareContents(submitBlockRequest *types.BuilderSubmitBlockRequest) (structs.CompleteBlockstruct, error) {
+	s := structs.CompleteBlockstruct{}
+
+	signedBuilderBid, err := SubmitBlockRequestToSignedBuilderBid(
+		submitBlockRequest,
+		rs.config.SecretKey,
+		&rs.config.PubKey,
+		rs.config.BuilderSigningDomain,
+	)
+	if err != nil {
+		return s, err
+	}
+
+	s.Payload = SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
+
+	header, err := types.PayloadToPayloadHeader(submitBlockRequest.ExecutionPayload)
+	if err != nil {
+		return s, err
+	}
+
+	s.Header = structs.HeaderAndTrace{
+		Header: header,
+		Trace: &structs.BidTraceWithTimestamp{
+			BidTraceExtended: structs.BidTraceExtended{
+				BidTrace: types.BidTrace{
+					Slot:                 submitBlockRequest.Message.Slot,
+					ParentHash:           s.Payload.Payload.Data.ParentHash,
+					BlockHash:            s.Payload.Payload.Data.BlockHash,
+					BuilderPubkey:        s.Payload.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       s.Payload.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: s.Payload.Trace.Message.ProposerFeeRecipient,
+					Value:                submitBlockRequest.Message.Value,
+					GasLimit:             s.Payload.Trace.Message.GasLimit,
+					GasUsed:              s.Payload.Trace.Message.GasUsed,
+				},
+				BlockNumber: s.Payload.Payload.Data.BlockNumber,
+				NumTx:       uint64(len(s.Payload.Payload.Data.Transactions)),
+			},
+			Timestamp: s.Payload.Payload.Data.Timestamp,
+		},
+	}
+
+	return s, nil
 }
 
 // GetValidators returns a list of registered block proposers in current and next epoch
