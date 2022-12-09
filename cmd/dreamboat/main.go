@@ -310,7 +310,7 @@ func run() cli.ActionFunc {
 		}, as, ds, regMgr, auctioneer)
 		r.AttachMetrics(m)
 
-		service := pkg.NewService(config.Log, config, ds, r, as)
+		service := pkg.NewService(config.Log, config, ds, as)
 		service.AttachMetrics(m)
 
 		api := api.NewApi(config.Log, service)

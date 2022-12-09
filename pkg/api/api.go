@@ -44,7 +44,7 @@ var (
 	ErrParamNotFound = errors.New("not found")
 )
 
-type Service interface {
+type Relay interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
 	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
 	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
@@ -62,13 +62,13 @@ type Service interface {
 
 type API struct {
 	l log.Logger
-	s Service
+	r Relay
 
 	m APIMetrics
 }
 
-func NewApi(l log.Logger, s Service) (a *API) {
-	a = &API{l: l, s: s}
+func NewApi(l log.Logger, r Relay) (a *API) {
+	a = &API{l: l, r: r}
 	a.initMetrics()
 	return a
 }
@@ -137,7 +137,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 		a.m.ApiReqElCount.WithLabelValues("registerValidator", "payload").Observe(float64(len(payload)))
 	}
 
-	if err = a.s.RegisterValidator(r.Context(), payload); err != nil {
+	if err = a.r.RegisterValidator(r.Context(), payload); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
 			"code":     400,
@@ -157,7 +157,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 	defer timer.ObserveDuration()
 
 	req := ParseHeaderRequest(r)
-	response, err := a.s.GetHeader(r.Context(), req)
+	response, err := a.r.GetHeader(r.Context(), req)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
 		a.l.With(log.F{
@@ -188,7 +188,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
 
-	payload, err := a.s.GetPayload(r.Context(), &req)
+	payload, err := a.r.GetPayload(r.Context(), &req)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
 		a.l.With(log.F{
@@ -246,7 +246,7 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getValidators"))
 	defer timer.ObserveDuration()
 
-	vs := a.s.GetValidators()
+	vs := a.r.GetValidators()
 	if vs == nil {
 		a.l.Trace("no registered validators for epoch")
 		vs = structs.BuilderGetValidatorsResponseEntrySlice{}
@@ -278,7 +278,7 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) (int,
 		return http.StatusBadRequest, err
 	}
 
-	registration, err := a.s.Registration(r.Context(), pk)
+	registration, err := a.r.Registration(r.Context(), pk)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "registration").Inc()
 		return http.StatusInternalServerError, err
@@ -341,7 +341,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		Limit:     limit,
 	}
 
-	payloads, err := a.s.GetPayloadDelivered(r.Context(), query)
+	payloads, err := a.r.GetPayloadDelivered(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
 		return http.StatusInternalServerError, err
@@ -395,7 +395,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 		Limit:     limit,
 	}
 
-	blocks, err := a.s.GetBlockReceived(r.Context(), query)
+	blocks, err := a.r.GetBlockReceived(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
 		return http.StatusInternalServerError, err
