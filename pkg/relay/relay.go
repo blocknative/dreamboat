@@ -369,7 +369,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	})
 
 	logger.Trace("block submission requested")
-	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon().GenesisTime)
+	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
 	if err != nil {
 		logger.WithError(err).
 			WithField("slot", submitBlockRequest.Message.Slot).
@@ -501,14 +501,18 @@ func (rs *Relay) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice 
 	return validators
 }
 
-func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, genesisTime uint64) (bool, error) { // TODO(l): remove FB type
+func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconState *structs.BeaconState) (bool, error) { // TODO(l): remove FB type
 	if submitBlockRequest == nil || submitBlockRequest.Message == nil {
 		return false, fmt.Errorf("block empty")
 	}
 
-	expectedTimestamp := genesisTime + (submitBlockRequest.Message.Slot * 12)
+	expectedTimestamp := beaconState.GenesisTime + (submitBlockRequest.Message.Slot * 12)
 	if submitBlockRequest.ExecutionPayload.Timestamp != expectedTimestamp {
 		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
+	}
+
+	if beaconState.CurrentSlot != structs.Slot(submitBlockRequest.Message.Slot) {
+		return false, fmt.Errorf("builder submission with wrong slot. got %d, expected %d", submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
 	}
 
 	return true, nil

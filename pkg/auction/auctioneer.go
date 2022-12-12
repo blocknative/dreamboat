@@ -27,9 +27,10 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 
 	if a.maxProfit == nil || a.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
 		a.maxProfit = block
-	} else if a.maxProfit != nil && a.maxProfit.Header.Trace.BuilderPubkey == block.Header.Trace.BuilderPubkey {
+	} else if a.maxProfit.Header.Trace.BuilderPubkey == block.Header.Trace.BuilderPubkey {
 		for _, block := range a.latestBlockByBuilder {
-			if a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
+			if (a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 && a.maxProfit.Header.Trace.Slot == block.Header.Trace.Slot) ||
+				a.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
 				a.maxProfit = block
 			}
 		}
