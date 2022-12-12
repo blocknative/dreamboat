@@ -51,7 +51,7 @@ func TestRegisterValidator(t *testing.T) {
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -115,7 +115,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -191,7 +191,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -244,7 +244,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -303,7 +303,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	const N = 10_000
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),

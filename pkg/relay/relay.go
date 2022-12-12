@@ -46,7 +46,7 @@ type Datastore interface {
 }
 
 type Auctioneer interface {
-	AddBlock(block *structs.CompleteBlockstruct)
+	AddBlock(block *structs.CompleteBlockstruct) bool
 	MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool)
 }
 
@@ -264,12 +264,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	}
 	timer3.ObserveDuration()
 
-	if fromCache {
-		logger.Debug("cache hit")
-	} else {
-		logger.Debug("cache miss")
-	}
-
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"slot":             payloadRequest.Message.Slot,
@@ -278,6 +272,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"stateRoot":        payload.Payload.Data.StateRoot,
 		"feeRecipient":     payload.Payload.Data.FeeRecipient,
 		"bid":              payload.Bid.Data.Message.Value,
+		"from_cache":       fromCache,
 		"numTx":            len(payload.Payload.Data.Transactions),
 	}).Info("payload fetched")
 
@@ -431,8 +426,8 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return err
 	}
 
-	rs.a.AddBlock(&complete)
-	logger.Trace("block added to auctioneer")
+	isNewMax := rs.a.AddBlock(&complete)
+	logger.WithField("is_new_max", isNewMax).Trace("block added to auctioneer")
 
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
@@ -447,6 +442,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"is_new_max":       isNewMax,
 	}).Trace("builder block stored")
 
 	return nil

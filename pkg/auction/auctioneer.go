@@ -3,15 +3,11 @@ package auction
 import (
 	"sync"
 
-	"github.com/lthibault/log"
-
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
 )
 
 type Auctioneer struct {
-	l log.Logger
-
 	auctions [2]*Auction
 }
 
@@ -21,9 +17,8 @@ type Auction struct {
 	latestBlockByBuilder map[types.PublicKey]*structs.CompleteBlockstruct
 }
 
-func NewAuctioneer(l log.Logger) *Auctioneer {
+func NewAuctioneer() *Auctioneer {
 	return &Auctioneer{
-		l: l.WithField("relay-service", "auctioneer"),
 		auctions: [2]*Auction{
 			{latestBlockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct)}, // slot
 			{latestBlockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct)}, // slot + 1
@@ -31,7 +26,7 @@ func NewAuctioneer(l log.Logger) *Auctioneer {
 	}
 }
 
-func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
+func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) bool {
 	auction := a.auctions[block.Header.Trace.Slot%2]
 
 	auction.mu.Lock()
@@ -42,20 +37,18 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 	// always set new value and bigger slot
 	if auction.maxProfit == nil || auction.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
 		auction.maxProfit = block
-		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Trace("new max bid")
-		return
+		return true
 	}
 
 	// always discard submissions lower than latest slot
 	if auction.maxProfit.Header.Trace.Slot > block.Header.Trace.Slot {
-		return
+		return false
 	}
 
 	// accept bigger bid
 	if auction.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
 		auction.maxProfit = block
-		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Trace("new max bid")
-		return
+		return true
 	}
 
 	// reassign biggest for resubmission from the same builder with lower bid
@@ -70,8 +63,7 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 		}
 	}
 
-	block = auction.maxProfit
-	a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Trace("new max bid")
+	return block == auction.maxProfit
 }
 
 func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool) {
