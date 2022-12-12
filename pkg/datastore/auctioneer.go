@@ -8,14 +8,14 @@ import (
 )
 
 type Auctioneer struct {
-	mu             sync.RWMutex
-	maxProfit      *structs.CompleteBlockstruct
-	blockByBuilder map[types.PublicKey]*structs.CompleteBlockstruct
+	mu                   sync.RWMutex
+	maxProfit            *structs.CompleteBlockstruct
+	latestBlockByBuilder map[types.PublicKey]*structs.CompleteBlockstruct
 }
 
 func NewAuctioneer() *Auctioneer {
 	return &Auctioneer{
-		blockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct),
+		latestBlockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct),
 	}
 }
 
@@ -23,21 +23,18 @@ func (a *Auctioneer) UpdateMaxProfit(block *structs.CompleteBlockstruct) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	a.blockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
+	a.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
 
-	if a.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
+	if a.maxProfit == nil {
 		a.maxProfit = block
 	} else if a.maxProfit != nil && a.maxProfit.Header.Trace.BuilderPubkey == block.Header.Trace.BuilderPubkey {
-		for _, block := range a.blockByBuilder {
+		for _, block := range a.latestBlockByBuilder {
 			if a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
 				a.maxProfit = block
 			}
 		}
-	} else {
-		if a.maxProfit == nil ||
-			a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) < 0 {
-			a.maxProfit = block
-		}
+	} else if a.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot || a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
+		a.maxProfit = block
 	}
 }
 
