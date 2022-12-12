@@ -513,7 +513,7 @@ func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest
 		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
-	if beaconState.CurrentSlot != structs.Slot(submitBlockRequest.Message.Slot) {
+	if structs.Slot(submitBlockRequest.Message.Slot) <= beaconState.CurrentSlot   {
 		return false, fmt.Errorf("builder submission with wrong slot. got %d, expected %d", submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
 	}
 
