@@ -35,7 +35,7 @@ type Datastore interface {
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
@@ -152,6 +152,8 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache blocks: %s", err.Error())
 	}
+	logger.Debug("payload cached")
+
 	header := maxProfitBlock.Header
 
 	timer2.ObserveDuration()
@@ -251,7 +253,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		Slot:      structs.Slot(payloadRequest.Message.Slot),
 	}
 
-	payload, err := rs.d.GetPayload(ctx, key)
+	payload, fromCache, err := rs.d.GetPayload(ctx, key)
 	if err != nil || payload == nil {
 		logger.WithError(err).With(log.F{
 			"pubkey":    pk,
@@ -261,6 +263,12 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		return nil, ErrNoPayloadFound
 	}
 	timer3.ObserveDuration()
+
+	if fromCache {
+		logger.Debug("cache hit")
+	} else {
+		logger.Debug("cache miss")
+	}
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
