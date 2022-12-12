@@ -38,10 +38,10 @@ type Datastore struct {
 	Logger log.Logger
 	TTLStorage
 	Badger
+	PayloadCache *lru.Cache[structs.PayloadKey, *structs.BlockBidAndTrace]
 
 	hc           *HeaderController
 	l            sync.Mutex
-	payloadCache *lru.Cache[structs.PayloadKey, *structs.BlockBidAndTrace]
 }
 
 func NewDatastore(l log.Logger, t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize int) (*Datastore, error) {
@@ -55,13 +55,13 @@ func NewDatastore(l log.Logger, t TTLStorage, v Badger, hc *HeaderController, pa
 		TTLStorage:   t,
 		Badger:       v,
 		hc:           hc,
-		payloadCache: cache,
+		PayloadCache: cache,
 	}, nil
 }
 
 func (s *Datastore) CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error {
 	key := structs.PayloadKey{BlockHash: block.Payload.Payload.Data.BlockHash, Slot: structs.Slot(block.Payload.Trace.Message.Slot), Proposer: block.Payload.Trace.Message.ProposerPubkey}
-	s.payloadCache.Add(key, &block.Payload)
+	s.PayloadCache.Add(key, &block.Payload)
 	s.Logger.With(key).Debug("payload cached")
 	return nil
 }
@@ -156,7 +156,7 @@ func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payl
 }
 
 func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockBidAndTrace, error) {
-	memPayload, ok := s.payloadCache.Get(key)
+	memPayload, ok := s.PayloadCache.Get(key)
 	if ok {
 		s.Logger.With(key).Debug("payload cache hit")
 		return memPayload, nil
