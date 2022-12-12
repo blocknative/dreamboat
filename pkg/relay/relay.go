@@ -143,21 +143,17 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	logger.Info("header requested")
 	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "getters"))
 
-	var header structs.HeaderAndTrace
-
-	if maxProfitBlock, ok := rs.a.MaxProfitBlock(slot); ok {
-		if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
-			logger.Warnf("fail to cache blocks: %s", err.Error())
-		}
-		header = maxProfitBlock.Header
-	} else {
-		logger.Warn("no block in auctioneer")
-		header, err = rs.d.GetMaxProfitHeader(ctx, uint64(slot))
-		if err != nil {
-			logger.Warn(noBuilderBidMsg)
-			return nil, fmt.Errorf(noBuilderBidMsg)
-		}
+	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
+	if !ok {
+		logger.Warn(noBuilderBidMsg)
+		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
+
+	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+		logger.Warnf("fail to cache blocks: %s", err.Error())
+	}
+	header := maxProfitBlock.Header
+
 	timer2.ObserveDuration()
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
@@ -413,9 +409,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("block submission failed: %w", err)
 	}
 
-	rs.a.AddBlock(&complete)
-	logger.Trace("block added to auctioneer")
-
 	b, err := json.Marshal(complete.Header)
 	if err != nil {
 		logger.WithError(err).Error("PutHeader marshal failed")
@@ -429,6 +422,10 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
 		return err
 	}
+
+	rs.a.AddBlock(&complete)
+	logger.Trace("block added to auctioneer")
+
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		Marshaled:      b,
@@ -513,7 +510,7 @@ func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest
 		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
-	if structs.Slot(submitBlockRequest.Message.Slot) <= beaconState.CurrentSlot   {
+	if structs.Slot(submitBlockRequest.Message.Slot) <= beaconState.CurrentSlot {
 		return false, fmt.Errorf("builder submission with wrong slot. got %d, expected %d", submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
 	}
 
