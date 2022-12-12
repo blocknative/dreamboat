@@ -45,7 +45,7 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct)  {
 
 	// reassign biggest for resubmission from the same builder
 	for _, b := range a.latestBlockByBuilder {
-		if b.Header.Trace.Slot == block.Header.Trace.Slot && // Only check the current slot
+		if a.maxProfit.Header.Trace.Slot == b.Header.Trace.Slot && // Only check the current slot
 			a.maxProfit.Header.Trace.Value.Cmp(&b.Header.Trace.Value) <= 0 {
 			a.maxProfit = b
 		}
