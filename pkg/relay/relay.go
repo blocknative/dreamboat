@@ -147,10 +147,11 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 
 	if maxProfitBlock, ok := rs.a.MaxProfitBlock(slot); ok {
 		if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
-			rs.l.Warnf("fail to cache blocks: %s", err.Error())
+			logger.Warnf("fail to cache blocks: %s", err.Error())
 		}
 		header = maxProfitBlock.Header
 	} else {
+		logger.Warn("no block in auctioneer")
 		header, err = rs.d.GetMaxProfitHeader(ctx, uint64(slot))
 		if err != nil {
 			logger.Warn(noBuilderBidMsg)
