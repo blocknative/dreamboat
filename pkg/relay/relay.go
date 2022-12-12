@@ -419,16 +419,16 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	}
 
 	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
-	timer4.ObserveDuration()
-	timer5 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putHeader"))
-
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
 		return err
 	}
+	timer4.ObserveDuration()
 
+	timer5 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("addBlockToAuctioneer", "addBlockToAuctioneer"))
 	isNewMax := rs.a.AddBlock(&complete)
-	logger.WithField("is_new_max", isNewMax).Trace("block added to auctioneer")
+	timer5.ObserveDuration()
 
+	timer6 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putHeader"))
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		Marshaled:      b,
@@ -438,7 +438,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		logger.WithError(err).Error("PutHeader failed")
 		return err
 	}
-	timer5.ObserveDuration()
+	timer6.ObserveDuration()
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
