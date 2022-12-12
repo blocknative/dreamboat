@@ -47,7 +47,7 @@ type Datastore interface {
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 	GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
 }
@@ -70,7 +70,7 @@ type Service struct {
 
 func NewService(l log.Logger, c Config, d Datastore, r Relay, as *AtomicState) *Service {
 	return &Service{
-		Log:       l.WithField("service", "RelayService"),
+		Log:       l.WithField("relay-service", "Service"),
 		Config:    c,
 		Datastore: d,
 		Relay:     r,

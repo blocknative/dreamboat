@@ -35,13 +35,19 @@ type Datastore interface {
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
+	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
 	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+}
+
+type Auctioneer interface {
+	AddBlock(block *structs.CompleteBlockstruct) bool
+	MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool)
 }
 
 type RegistrationManager interface {
@@ -64,6 +70,7 @@ type RelayConfig struct {
 
 type Relay struct {
 	d Datastore
+	a Auctioneer
 	l log.Logger
 
 	regMngr RegistrationManager
@@ -75,9 +82,10 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, regMngr RegistrationManager) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, regMngr RegistrationManager, a Auctioneer) *Relay {
 	rs := &Relay{
 		d:           d,
+		a:           a,
 		l:           l,
 		config:      config,
 		beaconState: beaconState,
@@ -134,11 +142,20 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 
 	logger.Info("header requested")
 	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "getters"))
-	header, err := rs.d.GetMaxProfitHeader(ctx, uint64(slot))
-	if err != nil {
+
+	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
+	if !ok {
 		logger.Warn(noBuilderBidMsg)
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
+
+	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+		logger.Warnf("fail to cache blocks: %s", err.Error())
+	}
+	logger.Debug("payload cached")
+
+	header := maxProfitBlock.Header
+
 	timer2.ObserveDuration()
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
@@ -236,7 +253,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		Slot:      structs.Slot(payloadRequest.Message.Slot),
 	}
 
-	payload, err := rs.d.GetPayload(ctx, key)
+	payload, fromCache, err := rs.d.GetPayload(ctx, key)
 	if err != nil || payload == nil {
 		logger.WithError(err).With(log.F{
 			"pubkey":    pk,
@@ -255,6 +272,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"stateRoot":        payload.Payload.Data.StateRoot,
 		"feeRecipient":     payload.Payload.Data.FeeRecipient,
 		"bid":              payload.Bid.Data.Message.Value,
+		"from_cache":       fromCache,
 		"numTx":            len(payload.Payload.Data.Transactions),
 	}).Info("payload fetched")
 
@@ -351,7 +369,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	})
 
 	logger.Trace("block submission requested")
-	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon().GenesisTime)
+	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
 	if err != nil {
 		logger.WithError(err).
 			WithField("slot", submitBlockRequest.Message.Slot).
@@ -383,12 +401,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("verify block: %w", err)
 	}
 
-	signedBuilderBid, err := SubmitBlockRequestToSignedBuilderBid(
-		submitBlockRequest,
-		rs.config.SecretKey,
-		&rs.config.PubKey,
-		rs.config.BuilderSigningDomain,
-	)
+	complete, err := rs.prepareContents(submitBlockRequest)
 	if err != nil {
 		logger.WithError(err).
 			With(log.F{
@@ -399,62 +412,85 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("block submission failed: %w", err)
 	}
 
-	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
-	payload := SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
-	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &payload, rs.config.TTL); err != nil {
-		return err
-	}
-	timer4.ObserveDuration()
-
-	timer5 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putHeader"))
-	header, err := types.PayloadToPayloadHeader(submitBlockRequest.ExecutionPayload)
-	if err != nil {
-		return err
-	}
-
-	h := structs.HeaderAndTrace{
-		Header: header,
-		Trace: &structs.BidTraceWithTimestamp{
-			BidTraceExtended: structs.BidTraceExtended{
-				BidTrace: types.BidTrace{
-					Slot:                 submitBlockRequest.Message.Slot,
-					ParentHash:           payload.Payload.Data.ParentHash,
-					BlockHash:            payload.Payload.Data.BlockHash,
-					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: payload.Trace.Message.ProposerFeeRecipient,
-					Value:                submitBlockRequest.Message.Value,
-					GasLimit:             payload.Trace.Message.GasLimit,
-					GasUsed:              payload.Trace.Message.GasUsed,
-				},
-				BlockNumber: payload.Payload.Data.BlockNumber,
-				NumTx:       uint64(len(payload.Payload.Data.Transactions)),
-			},
-			Timestamp: payload.Payload.Data.Timestamp,
-		},
-	}
-
-	b, err := json.Marshal(h)
+	b, err := json.Marshal(complete.Header)
 	if err != nil {
 		logger.WithError(err).Error("PutHeader marshal failed")
 		return err
 	}
+
+	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
+	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
+		return err
+	}
+	timer4.ObserveDuration()
+
+	timer5 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("addBlockToAuctioneer", "addBlockToAuctioneer"))
+	isNewMax := rs.a.AddBlock(&complete)
+	timer5.ObserveDuration()
+
+	timer6 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putHeader"))
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		Marshaled:      b,
-		HeaderAndTrace: h,
+		HeaderAndTrace: complete.Header,
 	}, rs.config.TTL)
 	if err != nil {
 		logger.WithError(err).Error("PutHeader failed")
 		return err
 	}
-	timer5.ObserveDuration()
+	timer6.ObserveDuration()
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"is_new_max":       isNewMax,
 	}).Trace("builder block stored")
 
 	return nil
+}
+
+func (rs *Relay) prepareContents(submitBlockRequest *types.BuilderSubmitBlockRequest) (structs.CompleteBlockstruct, error) {
+	s := structs.CompleteBlockstruct{}
+
+	signedBuilderBid, err := SubmitBlockRequestToSignedBuilderBid(
+		submitBlockRequest,
+		rs.config.SecretKey,
+		&rs.config.PubKey,
+		rs.config.BuilderSigningDomain,
+	)
+	if err != nil {
+		return s, err
+	}
+
+	s.Payload = SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
+
+	header, err := types.PayloadToPayloadHeader(submitBlockRequest.ExecutionPayload)
+	if err != nil {
+		return s, err
+	}
+
+	s.Header = structs.HeaderAndTrace{
+		Header: header,
+		Trace: &structs.BidTraceWithTimestamp{
+			BidTraceExtended: structs.BidTraceExtended{
+				BidTrace: types.BidTrace{
+					Slot:                 submitBlockRequest.Message.Slot,
+					ParentHash:           s.Payload.Payload.Data.ParentHash,
+					BlockHash:            s.Payload.Payload.Data.BlockHash,
+					BuilderPubkey:        s.Payload.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       s.Payload.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: s.Payload.Trace.Message.ProposerFeeRecipient,
+					Value:                submitBlockRequest.Message.Value,
+					GasLimit:             s.Payload.Trace.Message.GasLimit,
+					GasUsed:              s.Payload.Trace.Message.GasUsed,
+				},
+				BlockNumber: s.Payload.Payload.Data.BlockNumber,
+				NumTx:       uint64(len(s.Payload.Payload.Data.Transactions)),
+			},
+			Timestamp: s.Payload.Payload.Data.Timestamp,
+		},
+	}
+
+	return s, nil
 }
 
 // GetValidators returns a list of registered block proposers in current and next epoch
@@ -468,14 +504,18 @@ func (rs *Relay) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice 
 	return validators
 }
 
-func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, genesisTime uint64) (bool, error) { // TODO(l): remove FB type
+func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconState *structs.BeaconState) (bool, error) { // TODO(l): remove FB type
 	if submitBlockRequest == nil || submitBlockRequest.Message == nil {
 		return false, fmt.Errorf("block empty")
 	}
 
-	expectedTimestamp := genesisTime + (submitBlockRequest.Message.Slot * 12)
+	expectedTimestamp := beaconState.GenesisTime + (submitBlockRequest.Message.Slot * 12)
 	if submitBlockRequest.ExecutionPayload.Timestamp != expectedTimestamp {
 		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
+	}
+
+	if structs.Slot(submitBlockRequest.Message.Slot) <= beaconState.CurrentSlot {
+		return false, fmt.Errorf("builder submission with wrong slot. got %d, expected %d", submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
 	}
 
 	return true, nil

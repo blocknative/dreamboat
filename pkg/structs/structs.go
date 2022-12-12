@@ -139,6 +139,14 @@ type PayloadKey struct {
 	Slot      Slot
 }
 
+func (k PayloadKey) Loggable() map[string]any {
+	return map[string]any{
+		"slot":       k.Slot,
+		"block_hash": k.BlockHash,
+		"proposer":   k.Proposer,
+	}
+}
+
 type DeliveredTrace struct {
 	Trace       BidTraceWithTimestamp
 	BlockNumber uint64
@@ -217,4 +225,10 @@ func (hd *HeaderData) UnmarshalJSON(b []byte) error {
 	hd.HeaderAndTrace = hnt
 	hd.Marshaled = b
 	return nil
+}
+
+// / That's to be improved in future
+type CompleteBlockstruct struct {
+	Header  HeaderAndTrace
+	Payload BlockBidAndTrace
 }

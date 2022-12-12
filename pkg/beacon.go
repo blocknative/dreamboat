@@ -328,7 +328,7 @@ func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
 	logger.
 		WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
 		WithField("bytesAmount", len(bodyBytes)).
-		Debug("beacon queried")
+		Trace("beacon queried")
 
 	return nil
 }
