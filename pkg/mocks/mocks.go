@@ -6,51 +6,52 @@ package mocks
 
 import (
 	context "context"
+	reflect "reflect"
+	time "time"
+
 	metrics "github.com/blocknative/dreamboat/metrics"
 	relay "github.com/blocknative/dreamboat/pkg"
 	structs "github.com/blocknative/dreamboat/pkg/structs"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
-	time "time"
 )
 
-// MockRelay is a mock of Relay interface
+// MockRelay is a mock of Relay interface.
 type MockRelay struct {
 	ctrl     *gomock.Controller
 	recorder *MockRelayMockRecorder
 }
 
-// MockRelayMockRecorder is the mock recorder for MockRelay
+// MockRelayMockRecorder is the mock recorder for MockRelay.
 type MockRelayMockRecorder struct {
 	mock *MockRelay
 }
 
-// NewMockRelay creates a new mock instance
+// NewMockRelay creates a new mock instance.
 func NewMockRelay(ctrl *gomock.Controller) *MockRelay {
 	mock := &MockRelay{ctrl: ctrl}
 	mock.recorder = &MockRelayMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockRelay) EXPECT() *MockRelayMockRecorder {
 	return m.recorder
 }
 
-// AttachMetrics mocks base method
+// AttachMetrics mocks base method.
 func (m *MockRelay) AttachMetrics(arg0 *metrics.Metrics) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AttachMetrics", arg0)
 }
 
-// AttachMetrics indicates an expected call of AttachMetrics
+// AttachMetrics indicates an expected call of AttachMetrics.
 func (mr *MockRelayMockRecorder) AttachMetrics(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachMetrics", reflect.TypeOf((*MockRelay)(nil).AttachMetrics), arg0)
 }
 
-// GetHeader mocks base method
+// GetHeader mocks base method.
 func (m *MockRelay) GetHeader(arg0 context.Context, arg1 structs.HeaderRequest) (*types.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1)
@@ -59,13 +60,13 @@ func (m *MockRelay) GetHeader(arg0 context.Context, arg1 structs.HeaderRequest) 
 	return ret0, ret1
 }
 
-// GetHeader indicates an expected call of GetHeader
+// GetHeader indicates an expected call of GetHeader.
 func (mr *MockRelayMockRecorder) GetHeader(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockRelay)(nil).GetHeader), arg0, arg1)
 }
 
-// GetPayload mocks base method
+// GetPayload mocks base method.
 func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1)
@@ -74,13 +75,13 @@ func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *types.SignedBlindedBe
 	return ret0, ret1
 }
 
-// GetPayload indicates an expected call of GetPayload
+// GetPayload indicates an expected call of GetPayload.
 func (mr *MockRelayMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockRelay)(nil).GetPayload), arg0, arg1)
 }
 
-// GetValidators mocks base method
+// GetValidators mocks base method.
 func (m *MockRelay) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValidators")
@@ -88,13 +89,13 @@ func (m *MockRelay) GetValidators() structs.BuilderGetValidatorsResponseEntrySli
 	return ret0
 }
 
-// GetValidators indicates an expected call of GetValidators
+// GetValidators indicates an expected call of GetValidators.
 func (mr *MockRelayMockRecorder) GetValidators() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidators", reflect.TypeOf((*MockRelay)(nil).GetValidators))
 }
 
-// RegisterValidator mocks base method
+// RegisterValidator mocks base method.
 func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []structs.SignedValidatorRegistration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1)
@@ -102,13 +103,13 @@ func (m *MockRelay) RegisterValidator(arg0 context.Context, arg1 []structs.Signe
 	return ret0
 }
 
-// RegisterValidator indicates an expected call of RegisterValidator
+// RegisterValidator indicates an expected call of RegisterValidator.
 func (mr *MockRelayMockRecorder) RegisterValidator(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterValidator", reflect.TypeOf((*MockRelay)(nil).RegisterValidator), arg0, arg1)
 }
 
-// SubmitBlock mocks base method
+// SubmitBlock mocks base method.
 func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitBlockRequest) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1)
@@ -116,36 +117,36 @@ func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *types.BuilderSubmitB
 	return ret0
 }
 
-// SubmitBlock indicates an expected call of SubmitBlock
+// SubmitBlock indicates an expected call of SubmitBlock.
 func (mr *MockRelayMockRecorder) SubmitBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBlock", reflect.TypeOf((*MockRelay)(nil).SubmitBlock), arg0, arg1)
 }
 
-// MockDatastore is a mock of Datastore interface
+// MockDatastore is a mock of Datastore interface.
 type MockDatastore struct {
 	ctrl     *gomock.Controller
 	recorder *MockDatastoreMockRecorder
 }
 
-// MockDatastoreMockRecorder is the mock recorder for MockDatastore
+// MockDatastoreMockRecorder is the mock recorder for MockDatastore.
 type MockDatastoreMockRecorder struct {
 	mock *MockDatastore
 }
 
-// NewMockDatastore creates a new mock instance
+// NewMockDatastore creates a new mock instance.
 func NewMockDatastore(ctrl *gomock.Controller) *MockDatastore {
 	mock := &MockDatastore{ctrl: ctrl}
 	mock.recorder = &MockDatastoreMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 	return m.recorder
 }
 
-// GetDelivered mocks base method
+// GetDelivered mocks base method.
 func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 structs.PayloadQuery) (structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDelivered", arg0, arg1)
@@ -154,13 +155,13 @@ func (m *MockDatastore) GetDelivered(arg0 context.Context, arg1 structs.PayloadQ
 	return ret0, ret1
 }
 
-// GetDelivered indicates an expected call of GetDelivered
+// GetDelivered indicates an expected call of GetDelivered.
 func (mr *MockDatastoreMockRecorder) GetDelivered(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDelivered", reflect.TypeOf((*MockDatastore)(nil).GetDelivered), arg0, arg1)
 }
 
-// GetDeliveredBatch mocks base method
+// GetDeliveredBatch mocks base method.
 func (m *MockDatastore) GetDeliveredBatch(arg0 context.Context, arg1 []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDeliveredBatch", arg0, arg1)
@@ -169,13 +170,13 @@ func (m *MockDatastore) GetDeliveredBatch(arg0 context.Context, arg1 []structs.P
 	return ret0, ret1
 }
 
-// GetDeliveredBatch indicates an expected call of GetDeliveredBatch
+// GetDeliveredBatch indicates an expected call of GetDeliveredBatch.
 func (mr *MockDatastoreMockRecorder) GetDeliveredBatch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredBatch", reflect.TypeOf((*MockDatastore)(nil).GetDeliveredBatch), arg0, arg1)
 }
 
-// GetHeadersByBlockHash mocks base method
+// GetHeadersByBlockHash mocks base method.
 func (m *MockDatastore) GetHeadersByBlockHash(arg0 context.Context, arg1 types.Hash) ([]structs.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeadersByBlockHash", arg0, arg1)
@@ -184,13 +185,13 @@ func (m *MockDatastore) GetHeadersByBlockHash(arg0 context.Context, arg1 types.H
 	return ret0, ret1
 }
 
-// GetHeadersByBlockHash indicates an expected call of GetHeadersByBlockHash
+// GetHeadersByBlockHash indicates an expected call of GetHeadersByBlockHash.
 func (mr *MockDatastoreMockRecorder) GetHeadersByBlockHash(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeadersByBlockHash", reflect.TypeOf((*MockDatastore)(nil).GetHeadersByBlockHash), arg0, arg1)
 }
 
-// GetHeadersByBlockNum mocks base method
+// GetHeadersByBlockNum mocks base method.
 func (m *MockDatastore) GetHeadersByBlockNum(arg0 context.Context, arg1 uint64) ([]structs.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeadersByBlockNum", arg0, arg1)
@@ -199,13 +200,13 @@ func (m *MockDatastore) GetHeadersByBlockNum(arg0 context.Context, arg1 uint64) 
 	return ret0, ret1
 }
 
-// GetHeadersByBlockNum indicates an expected call of GetHeadersByBlockNum
+// GetHeadersByBlockNum indicates an expected call of GetHeadersByBlockNum.
 func (mr *MockDatastoreMockRecorder) GetHeadersByBlockNum(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeadersByBlockNum", reflect.TypeOf((*MockDatastore)(nil).GetHeadersByBlockNum), arg0, arg1)
 }
 
-// GetHeadersBySlot mocks base method
+// GetHeadersBySlot mocks base method.
 func (m *MockDatastore) GetHeadersBySlot(arg0 context.Context, arg1 uint64) ([]structs.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeadersBySlot", arg0, arg1)
@@ -214,13 +215,13 @@ func (m *MockDatastore) GetHeadersBySlot(arg0 context.Context, arg1 uint64) ([]s
 	return ret0, ret1
 }
 
-// GetHeadersBySlot indicates an expected call of GetHeadersBySlot
+// GetHeadersBySlot indicates an expected call of GetHeadersBySlot.
 func (mr *MockDatastoreMockRecorder) GetHeadersBySlot(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeadersBySlot", reflect.TypeOf((*MockDatastore)(nil).GetHeadersBySlot), arg0, arg1)
 }
 
-// GetLatestHeaders mocks base method
+// GetLatestHeaders mocks base method.
 func (m *MockDatastore) GetLatestHeaders(arg0 context.Context, arg1, arg2 uint64) ([]structs.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLatestHeaders", arg0, arg1, arg2)
@@ -229,13 +230,13 @@ func (m *MockDatastore) GetLatestHeaders(arg0 context.Context, arg1, arg2 uint64
 	return ret0, ret1
 }
 
-// GetLatestHeaders indicates an expected call of GetLatestHeaders
+// GetLatestHeaders indicates an expected call of GetLatestHeaders.
 func (mr *MockDatastoreMockRecorder) GetLatestHeaders(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestHeaders", reflect.TypeOf((*MockDatastore)(nil).GetLatestHeaders), arg0, arg1, arg2)
 }
 
-// GetPayload mocks base method
+// GetPayload mocks base method.
 func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.PayloadKey) (*structs.BlockBidAndTrace, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1)
@@ -244,13 +245,13 @@ func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.PayloadKey
 	return ret0, ret1
 }
 
-// GetPayload indicates an expected call of GetPayload
+// GetPayload indicates an expected call of GetPayload.
 func (mr *MockDatastoreMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockDatastore)(nil).GetPayload), arg0, arg1)
 }
 
-// GetRegistration mocks base method
+// GetRegistration mocks base method.
 func (m *MockDatastore) GetRegistration(arg0 context.Context, arg1 structs.PubKey) (types.SignedValidatorRegistration, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRegistration", arg0, arg1)
@@ -259,13 +260,13 @@ func (m *MockDatastore) GetRegistration(arg0 context.Context, arg1 structs.PubKe
 	return ret0, ret1
 }
 
-// GetRegistration indicates an expected call of GetRegistration
+// GetRegistration indicates an expected call of GetRegistration.
 func (mr *MockDatastoreMockRecorder) GetRegistration(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRegistration", reflect.TypeOf((*MockDatastore)(nil).GetRegistration), arg0, arg1)
 }
 
-// PutDelivered mocks base method
+// PutDelivered mocks base method.
 func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 structs.Slot, arg2 structs.DeliveredTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2, arg3)
@@ -273,13 +274,13 @@ func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 structs.Slot, ar
 	return ret0
 }
 
-// PutDelivered indicates an expected call of PutDelivered
+// PutDelivered indicates an expected call of PutDelivered.
 func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutDelivered", reflect.TypeOf((*MockDatastore)(nil).PutDelivered), arg0, arg1, arg2, arg3)
 }
 
-// PutPayload mocks base method
+// PutPayload mocks base method.
 func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey, arg2 *structs.BlockBidAndTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutPayload", arg0, arg1, arg2, arg3)
@@ -287,13 +288,13 @@ func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey
 	return ret0
 }
 
-// PutPayload indicates an expected call of PutPayload
+// PutPayload indicates an expected call of PutPayload.
 func (mr *MockDatastoreMockRecorder) PutPayload(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutPayload", reflect.TypeOf((*MockDatastore)(nil).PutPayload), arg0, arg1, arg2, arg3)
 }
 
-// PutRegistrationRaw mocks base method
+// PutRegistrationRaw mocks base method.
 func (m *MockDatastore) PutRegistrationRaw(arg0 context.Context, arg1 structs.PubKey, arg2 []byte, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutRegistrationRaw", arg0, arg1, arg2, arg3)
@@ -301,36 +302,36 @@ func (m *MockDatastore) PutRegistrationRaw(arg0 context.Context, arg1 structs.Pu
 	return ret0
 }
 
-// PutRegistrationRaw indicates an expected call of PutRegistrationRaw
+// PutRegistrationRaw indicates an expected call of PutRegistrationRaw.
 func (mr *MockDatastoreMockRecorder) PutRegistrationRaw(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutRegistrationRaw", reflect.TypeOf((*MockDatastore)(nil).PutRegistrationRaw), arg0, arg1, arg2, arg3)
 }
 
-// MockBeaconClient is a mock of BeaconClient interface
+// MockBeaconClient is a mock of BeaconClient interface.
 type MockBeaconClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockBeaconClientMockRecorder
 }
 
-// MockBeaconClientMockRecorder is the mock recorder for MockBeaconClient
+// MockBeaconClientMockRecorder is the mock recorder for MockBeaconClient.
 type MockBeaconClientMockRecorder struct {
 	mock *MockBeaconClient
 }
 
-// NewMockBeaconClient creates a new mock instance
+// NewMockBeaconClient creates a new mock instance.
 func NewMockBeaconClient(ctrl *gomock.Controller) *MockBeaconClient {
 	mock := &MockBeaconClient{ctrl: ctrl}
 	mock.recorder = &MockBeaconClientMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockBeaconClient) EXPECT() *MockBeaconClientMockRecorder {
 	return m.recorder
 }
 
-// Endpoint mocks base method
+// Endpoint mocks base method.
 func (m *MockBeaconClient) Endpoint() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Endpoint")
@@ -338,13 +339,13 @@ func (m *MockBeaconClient) Endpoint() string {
 	return ret0
 }
 
-// Endpoint indicates an expected call of Endpoint
+// Endpoint indicates an expected call of Endpoint.
 func (mr *MockBeaconClientMockRecorder) Endpoint() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Endpoint", reflect.TypeOf((*MockBeaconClient)(nil).Endpoint))
 }
 
-// Genesis mocks base method
+// Genesis mocks base method.
 func (m *MockBeaconClient) Genesis() (structs.GenesisInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Genesis")
@@ -353,13 +354,13 @@ func (m *MockBeaconClient) Genesis() (structs.GenesisInfo, error) {
 	return ret0, ret1
 }
 
-// Genesis indicates an expected call of Genesis
+// Genesis indicates an expected call of Genesis.
 func (mr *MockBeaconClientMockRecorder) Genesis() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockBeaconClient)(nil).Genesis))
 }
 
-// GetProposerDuties mocks base method
+// GetProposerDuties mocks base method.
 func (m *MockBeaconClient) GetProposerDuties(arg0 structs.Epoch) (*relay.RegisteredProposersResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProposerDuties", arg0)
@@ -368,13 +369,13 @@ func (m *MockBeaconClient) GetProposerDuties(arg0 structs.Epoch) (*relay.Registe
 	return ret0, ret1
 }
 
-// GetProposerDuties indicates an expected call of GetProposerDuties
+// GetProposerDuties indicates an expected call of GetProposerDuties.
 func (mr *MockBeaconClientMockRecorder) GetProposerDuties(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDuties", reflect.TypeOf((*MockBeaconClient)(nil).GetProposerDuties), arg0)
 }
 
-// KnownValidators mocks base method
+// KnownValidators mocks base method.
 func (m *MockBeaconClient) KnownValidators(arg0 structs.Slot) (relay.AllValidatorsResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "KnownValidators", arg0)
@@ -383,25 +384,25 @@ func (m *MockBeaconClient) KnownValidators(arg0 structs.Slot) (relay.AllValidato
 	return ret0, ret1
 }
 
-// KnownValidators indicates an expected call of KnownValidators
+// KnownValidators indicates an expected call of KnownValidators.
 func (mr *MockBeaconClientMockRecorder) KnownValidators(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockBeaconClient)(nil).KnownValidators), arg0)
 }
 
-// SubscribeToHeadEvents mocks base method
+// SubscribeToHeadEvents mocks base method.
 func (m *MockBeaconClient) SubscribeToHeadEvents(arg0 context.Context, arg1 chan relay.HeadEvent) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubscribeToHeadEvents", arg0, arg1)
 }
 
-// SubscribeToHeadEvents indicates an expected call of SubscribeToHeadEvents
+// SubscribeToHeadEvents indicates an expected call of SubscribeToHeadEvents.
 func (mr *MockBeaconClientMockRecorder) SubscribeToHeadEvents(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToHeadEvents", reflect.TypeOf((*MockBeaconClient)(nil).SubscribeToHeadEvents), arg0, arg1)
 }
 
-// SyncStatus mocks base method
+// SyncStatus mocks base method.
 func (m *MockBeaconClient) SyncStatus() (*relay.SyncStatusPayloadData, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SyncStatus")
@@ -410,7 +411,7 @@ func (m *MockBeaconClient) SyncStatus() (*relay.SyncStatusPayloadData, error) {
 	return ret0, ret1
 }
 
-// SyncStatus indicates an expected call of SyncStatus
+// SyncStatus indicates an expected call of SyncStatus.
 func (mr *MockBeaconClientMockRecorder) SyncStatus() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncStatus", reflect.TypeOf((*MockBeaconClient)(nil).SyncStatus))

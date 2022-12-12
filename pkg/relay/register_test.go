@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pkg "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	mock_relay "github.com/blocknative/dreamboat/pkg/relay/mocks"
@@ -50,7 +51,7 @@ func TestRegisterValidator(t *testing.T) {
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -114,7 +115,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -190,7 +191,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -243,7 +244,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 	regMgr.RunStore(ds, config.TTL, 300)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -302,7 +303,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	const N = 10_000
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr)
+	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer(l))
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
