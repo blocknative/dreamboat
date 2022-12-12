@@ -271,7 +271,11 @@ func run() cli.ActionFunc {
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
-		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB, hc)
+		auctioneer := datastore.NewAuctioneer()
+		ds, err := datastore.NewDatastore(config.Log, &datastore.TTLDatastoreBatcher{storage}, storage.DB, hc, auctioneer, 1_000) // TODO: make cache size parameter
+		if err != nil {
+			return fmt.Errorf("fail to create datastore: %w", err)
+		}
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
 			return err
 		}

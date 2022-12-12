@@ -5,22 +5,18 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/lthibault/log"
 )
 
 type Auctioneer struct {
-	Logger log.Logger
-
 	mu             sync.RWMutex
 	maxProfit      *structs.CompleteBlockstruct
 	blockByBuilder map[types.PublicKey]*structs.CompleteBlockstruct
 }
 
-func NewAuctioneer(l log.Logger, cacheSize int) (*Auctioneer, error) {
+func NewAuctioneer() *Auctioneer {
 	return &Auctioneer{
-		Logger:         l,
 		blockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct),
-	}, nil
+	}
 }
 
 func (a *Auctioneer) UpdateMaxProfit(block *structs.CompleteBlockstruct) {
