@@ -8,9 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lthibault/log"
+
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
+	lru "github.com/hashicorp/golang-lru/v2"
 	ds "github.com/ipfs/go-datastore"
 )
 
@@ -32,19 +35,35 @@ type Badger interface {
 }
 
 type Datastore struct {
+	Logger log.Logger
 	TTLStorage
 	Badger
+	PayloadCache *lru.Cache[structs.PayloadKey, *structs.BlockBidAndTrace]
 
-	hc *HeaderController
-	l  sync.Mutex
+	hc           *HeaderController
+	l            sync.Mutex
 }
 
-func NewDatastore(t TTLStorage, v Badger, hc *HeaderController) *Datastore {
-	return &Datastore{
-		TTLStorage: t,
-		Badger:     v,
-		hc:         hc,
+func NewDatastore(l log.Logger, t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize int) (*Datastore, error) {
+	cache, err := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](payloadCacheSize)
+	if err != nil {
+		return nil, err
 	}
+
+	return &Datastore{
+		Logger:       l,
+		TTLStorage:   t,
+		Badger:       v,
+		hc:           hc,
+		PayloadCache: cache,
+	}, nil
+}
+
+func (s *Datastore) CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error {
+	key := structs.PayloadKey{BlockHash: block.Payload.Payload.Data.BlockHash, Slot: structs.Slot(block.Payload.Trace.Message.Slot), Proposer: block.Payload.Trace.Message.ProposerPubkey}
+	s.PayloadCache.Add(key, &block.Payload)
+	s.Logger.With(key).Debug("payload cached")
+	return nil
 }
 
 func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace structs.DeliveredTrace, ttl time.Duration) error {
@@ -137,6 +156,13 @@ func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payl
 }
 
 func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockBidAndTrace, error) {
+	memPayload, ok := s.PayloadCache.Get(key)
+	if ok {
+		s.Logger.With(key).Debug("payload cache hit")
+		return memPayload, nil
+	}
+	s.Logger.With(key).Debug("payload cache miss")
+
 	data, err := s.TTLStorage.Get(ctx, PayloadKeyKey(key))
 	if err != nil {
 		return nil, err

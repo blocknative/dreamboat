@@ -3,6 +3,7 @@ package datastore_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -10,12 +11,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lthibault/log"
+
 	datastore "github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/flashbots/go-boost-utils/types"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	l = log.New(log.WithWriter(io.Discard))
 )
 
 func TestPutGetHeader(t *testing.T) {
@@ -28,7 +35,8 @@ func TestPutGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	hc := datastore.NewHeaderController(200, time.Hour)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	ds, err := datastore.NewDatastore(l, &datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	require.NoError(t, err)
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -78,7 +86,8 @@ func TestPutGetHeaderDuplicate(t *testing.T) {
 	require.NoError(t, err)
 
 	hc := datastore.NewHeaderController(200, time.Hour)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	ds, err := datastore.NewDatastore(l, &datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	require.NoError(t, err)
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
@@ -117,7 +126,8 @@ func TestPutGetHeaders(t *testing.T) {
 	require.NoError(t, err)
 
 	hc := datastore.NewHeaderController(200, time.Hour)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	ds, err := datastore.NewDatastore(l, &datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	require.NoError(t, err)
 
 	headers := make([]structs.HeaderAndTrace, N)
 	slots := make([]structs.Slot, N)
@@ -204,7 +214,8 @@ func TestPutGetHeaderBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		hc := datastore.NewHeaderController(200, time.Hour)
-		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+		ds, err := datastore.NewDatastore(l, &datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+		require.NoError(t, err)
 		for i, payload := range batch {
 			jsHeader, _ := json.Marshal(payload)
 			err := ds.PutHeader(ctx, structs.HeaderData{
@@ -229,7 +240,8 @@ func TestPutGetHeaderBatch(t *testing.T) {
 		store, err := badger.NewDatastore("/tmp/BadgerBatcher6", &badger.DefaultOptions)
 		require.NoError(t, err)
 		hc := datastore.NewHeaderController(200, time.Hour)
-		ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+		ds, err := datastore.NewDatastore(l, &datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+		require.NoError(t, err)
 
 		for i, payload := range batch {
 			jsHeader, _ := json.Marshal(payload)
@@ -280,7 +292,8 @@ func TestPutGetHeaderBatchDelivered(t *testing.T) {
 	store, err := badger.NewDatastore("/tmp/BadgerBatcher7", &badger.DefaultOptions)
 	require.NoError(t, err)
 	hc := datastore.NewHeaderController(200, time.Hour)
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	ds, err := datastore.NewDatastore(l, &datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	require.NoError(t, err)
 
 	for i, header := range headers {
 		jsHeader, _ := json.Marshal(header)
@@ -321,7 +334,8 @@ func TestGetPutComplex(t *testing.T) {
 	require.NoError(t, err)
 
 	hc := datastore.NewHeaderController(0, 0) // remove immediately
-	ds := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	ds, err := datastore.NewDatastore(l, &datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	require.NoError(t, err)
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()

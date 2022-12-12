@@ -70,12 +70,6 @@ type SlotInfo struct {
 }
 
 func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error) {
-	// Check memory
-	p, ok := s.hc.GetMaxProfit(uint64(slot))
-	if ok {
-		return p, nil
-	}
-
 	// Check new
 	p, err := s.getMaxHeader(ctx, slot)
 	if err == nil {
