@@ -222,29 +222,14 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	if err != nil {
 		return nil, fmt.Errorf("signature invalid") // err
 	}
-
-	respChA := NewRespC(1)
-	rs.regMngr.GetVerifyChan(ResponseQueueOther) <- VerifyReq{
-		Signature: payloadRequest.Signature,
-		Pubkey:    pk,
-		Msg:       msg,
-		Response:  respChA}
-
-	select {
-	case err = <-respChA.Done():
-	case <-ctx.Done():
-		err = ctx.Err()
-		respChA.Close(0, err)
-		return nil, err
-	}
-
-	timer2.ObserveDuration()
-	if err != nil {
+	ok, err := VerifySignatureBytes(msg, payloadRequest.Signature[:], pk[:])
+	if err != nil || !ok {
 		logger.WithField(
 			"pubkey", proposerPubkey,
 		).Error("signature invalid")
 		return nil, fmt.Errorf("signature invalid")
 	}
+	timer2.ObserveDuration()
 
 	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "getPayload"))
 	key := structs.PayloadKey{
@@ -276,12 +261,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"numTx":            len(payload.Payload.Data.Transactions),
 	}).Info("payload fetched")
 
-	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "putDelivered"))
-	response := types.GetPayloadResponse{
-		Version: "bellatrix",
-		Data:    payload.Payload.Data,
-	}
-
 	trace := structs.DeliveredTrace{
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
@@ -304,10 +283,12 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		BlockNumber: payload.Payload.Data.BlockNumber,
 	}
 
-	if err := rs.d.PutDelivered(ctx, structs.Slot(payloadRequest.Message.Slot), trace, rs.config.TTL); err != nil {
-		rs.l.WithError(err).Warn("failed to set payload after delivery")
-	}
-	timer4.ObserveDuration()
+	// defer put delivered datastore write
+	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
+		if err := rs.d.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
+			rs.l.WithError(err).Warn("failed to set payload after delivery")
+		}
+	}(rs, structs.Slot(payloadRequest.Message.Slot), trace)
 
 	logger.With(log.F{
 		"slot":             payloadRequest.Message.Slot,
@@ -316,7 +297,10 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 	}).Info("payload sent")
 
-	return &response, nil
+	return &types.GetPayloadResponse{
+		Version: "bellatrix",
+		Data:    payload.Payload.Data,
+	}, nil
 }
 
 // ***** Relay Domain *****
@@ -543,7 +527,6 @@ func (rs *Relay) verifySubmitSignature(ctx context.Context, submitBlockRequest *
 	}
 
 	return (err != nil), err
-	//return VerifySignature(SubmitBlockRequest.Message, rs.config.BuilderSigningDomain, SubmitBlockRequest.Message.BuilderPubkey[:], SubmitBlockRequest.Signature[:])
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
