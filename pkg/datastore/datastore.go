@@ -38,14 +38,13 @@ type Datastore struct {
 	Logger log.Logger
 	TTLStorage
 	Badger
-	*Auctioneer
 
 	hc           *HeaderController
 	l            sync.Mutex
 	payloadCache *lru.Cache[structs.PayloadKey, *structs.BlockBidAndTrace]
 }
 
-func NewDatastore(l log.Logger, t TTLStorage, v Badger, hc *HeaderController, a *Auctioneer, payloadCacheSize int) (*Datastore, error) {
+func NewDatastore(l log.Logger, t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize int) (*Datastore, error) {
 	cache, err := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](payloadCacheSize)
 	if err != nil {
 		return nil, err
@@ -55,10 +54,16 @@ func NewDatastore(l log.Logger, t TTLStorage, v Badger, hc *HeaderController, a 
 		Logger:       l,
 		TTLStorage:   t,
 		Badger:       v,
-		Auctioneer:   a,
 		hc:           hc,
 		payloadCache: cache,
 	}, nil
+}
+
+func (s *Datastore) CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error {
+	key := structs.PayloadKey{BlockHash: block.Payload.Payload.Data.BlockHash, Slot: structs.Slot(block.Payload.Trace.Message.Slot), Proposer: block.Payload.Trace.Message.ProposerPubkey}
+	s.payloadCache.Add(key, &block.Payload)
+	s.Logger.With(key).Debug("payload cached")
+	return nil
 }
 
 func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace structs.DeliveredTrace, ttl time.Duration) error {

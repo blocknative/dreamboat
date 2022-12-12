@@ -13,6 +13,7 @@ import (
 	"github.com/blocknative/dreamboat/metrics"
 	pkg "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
+	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -153,6 +154,12 @@ var flags = []cli.Flag{
 		Value:   time.Minute * 10,
 		EnvVars: []string{"RELAY_HEADER_MEMORY_PURGE_INTERVAL"},
 	},
+	&cli.IntFlag{
+		Name:    "relay-payload-cache-size",
+		Usage:   "number of payloads to cache for fast in-memory reads",
+		Value:   1_000,
+		EnvVars: []string{"RELAY_PAYLOAD_CACHE_SIZE"},
+	},
 }
 
 var (
@@ -271,8 +278,8 @@ func run() cli.ActionFunc {
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
-		auctioneer := datastore.NewAuctioneer()
-		ds, err := datastore.NewDatastore(config.Log, &datastore.TTLDatastoreBatcher{storage}, storage.DB, hc, auctioneer, 1_000) // TODO: make cache size parameter
+		auctioneer := auction.NewAuctioneer()
+		ds, err := datastore.NewDatastore(config.Log, &datastore.TTLDatastoreBatcher{storage}, storage.DB, hc, c.Int("relay-payload-cache-size")) // TODO: make cache size parameter
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
@@ -298,7 +305,7 @@ func run() cli.ActionFunc {
 			PubKey:                config.PubKey,
 			SecretKey:             config.SecretKey,
 			TTL:                   config.TTL,
-		}, as, ds, regMgr)
+		}, as, ds, regMgr, auctioneer)
 		r.AttachMetrics(m)
 
 		service := pkg.NewService(config.Log, config, ds, r, as)

@@ -1,4 +1,4 @@
-package datastore
+package auction
 
 import (
 	"sync"
@@ -19,7 +19,7 @@ func NewAuctioneer() *Auctioneer {
 	}
 }
 
-func (a *Auctioneer) UpdateMaxProfit(block *structs.CompleteBlockstruct) {
+func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -38,7 +38,7 @@ func (a *Auctioneer) UpdateMaxProfit(block *structs.CompleteBlockstruct) {
 	}
 }
 
-func (a *Auctioneer) GetMaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool) {
+func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 

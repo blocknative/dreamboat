@@ -38,11 +38,16 @@ type Datastore interface {
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
-	UpdateMaxProfit(block *structs.CompleteBlockstruct)
+	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
 	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+}
+
+type Auctioneer interface {
+	AddBlock(block *structs.CompleteBlockstruct)
+	MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool)
 }
 
 type RegistrationManager interface {
@@ -65,6 +70,7 @@ type RelayConfig struct {
 
 type Relay struct {
 	d Datastore
+	a Auctioneer
 	l log.Logger
 
 	regMngr RegistrationManager
@@ -76,9 +82,10 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, regMngr RegistrationManager) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, regMngr RegistrationManager, a Auctioneer) *Relay {
 	rs := &Relay{
 		d:           d,
+		a:           a,
 		l:           l,
 		config:      config,
 		beaconState: beaconState,
@@ -135,10 +142,20 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 
 	logger.Info("header requested")
 	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "getters"))
-	header, err := rs.d.GetMaxProfitHeader(ctx, uint64(slot))
-	if err != nil {
-		logger.Warn(noBuilderBidMsg)
-		return nil, fmt.Errorf(noBuilderBidMsg)
+
+	var header structs.HeaderAndTrace
+
+	if maxProfitBlock, ok := rs.a.MaxProfitBlock(slot); ok {
+		if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+			rs.l.Warnf("fail to cache blocks: %s", err.Error())
+		}
+		header = maxProfitBlock.Header
+	} else {
+		header, err = rs.d.GetMaxProfitHeader(ctx, uint64(slot))
+		if err != nil {
+			logger.Warn(noBuilderBidMsg)
+			return nil, fmt.Errorf(noBuilderBidMsg)
+		}
 	}
 	timer2.ObserveDuration()
 
@@ -395,7 +412,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("block submission failed: %w", err)
 	}
 
-	rs.d.UpdateMaxProfit(&complete)
+	rs.a.AddBlock(&complete)
 
 	b, err := json.Marshal(complete.Header)
 	if err != nil {

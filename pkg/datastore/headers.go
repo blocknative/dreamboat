@@ -70,17 +70,6 @@ type SlotInfo struct {
 }
 
 func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error) {
-	// Check memory
-	block, ok := s.Auctioneer.GetMaxProfitBlock(structs.Slot(slot))
-	if ok {
-		// cache payload
-		key := structs.PayloadKey{BlockHash: block.Payload.Payload.Data.BlockHash, Slot: structs.Slot(block.Payload.Trace.Message.Slot), Proposer: block.Payload.Trace.Message.ProposerPubkey}
-		s.payloadCache.Add(key, &block.Payload)
-		s.Logger.With(key).Debug("payload cached")
-
-		return block.Header, nil
-	}
-
 	// Check new
 	p, err := s.getMaxHeader(ctx, slot)
 	if err == nil {
