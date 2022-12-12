@@ -414,7 +414,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	}
 
 	rs.a.AddBlock(&complete)
-	logger.Debug("block added to auctioneer")
+	logger.Trace("block added to auctioneer")
 
 	b, err := json.Marshal(complete.Header)
 	if err != nil {
