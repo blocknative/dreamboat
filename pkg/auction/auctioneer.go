@@ -51,16 +51,18 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 		return
 	}
 
-	// accept bigger bid from different builder
-	if auction.maxProfit.Header.Trace.BuilderPubkey != block.Header.Trace.BuilderPubkey &&
-		auction.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
+	// accept bigger bid
+	if auction.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
 		auction.maxProfit = block
 		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Trace("new max bid")
 		return
 	}
 
-	// reassign biggest for resubmission from the same builder
-	for _, b := range auction.latestBlockByBuilder {
+	// reassign biggest for resubmission from the same builder with lower bid
+	if auction.maxProfit.Header.Trace.BuilderPubkey == block.Header.Trace.BuilderPubkey &&
+	auction.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) > 0{
+		auction.maxProfit = block
+		for _, b := range auction.latestBlockByBuilder {
 		if auction.maxProfit.Header.Trace.Slot == b.Header.Trace.Slot && // Only check the current slot
 			auction.maxProfit.Header.Trace.Value.Cmp(&b.Header.Trace.Value) <= 0 {
 			auction.maxProfit = b
