@@ -25,17 +25,30 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 
 	a.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
 
+	// always set new value and bigger slot
 	if a.maxProfit == nil || a.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
 		a.maxProfit = block
-	} else if a.maxProfit.Header.Trace.BuilderPubkey == block.Header.Trace.BuilderPubkey {
-		for _, block := range a.latestBlockByBuilder {
-			if (a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 && a.maxProfit.Header.Trace.Slot == block.Header.Trace.Slot) ||
-				a.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
-				a.maxProfit = block
-			}
-		}
-	} else if a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
+		return
+	}
+
+	// always discard submissions lower than latest slot
+	if a.maxProfit.Header.Trace.Slot > block.Header.Trace.Slot {
+		return
+	}
+
+	// accept bigger bid from different builder
+	if a.maxProfit.Header.Trace.BuilderPubkey != block.Header.Trace.BuilderPubkey &&
+		a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
 		a.maxProfit = block
+		return
+	}
+
+	// reassign biggest for resubmission from the same builder
+	for _, b := range a.latestBlockByBuilder {
+		if b.Header.Trace.Slot == block.Header.Trace.Slot && // Only check the current slot
+			a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
+			a.maxProfit = block
+		}
 	}
 }
 
