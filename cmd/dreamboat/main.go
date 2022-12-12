@@ -298,7 +298,7 @@ func run() cli.ActionFunc {
 
 		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
 
-		auctioneer := auction.NewAuctioneer()
+		auctioneer := auction.NewAuctioneer(config.Log)
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
 			ProposerSigningDomain: domainBeaconProposer,
