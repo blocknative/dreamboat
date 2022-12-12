@@ -38,6 +38,7 @@ type Datastore interface {
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
+	UpdateMaxProfit(block *structs.CompleteBlockstruct)
 	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
@@ -393,6 +394,8 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 
 		return fmt.Errorf("block submission failed: %w", err)
 	}
+
+	rs.d.UpdateMaxProfit(&complete)
 
 	b, err := json.Marshal(complete.Header)
 	if err != nil {
