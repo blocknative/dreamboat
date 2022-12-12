@@ -19,7 +19,7 @@ func NewAuctioneer() *Auctioneer {
 	}
 }
 
-func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
+func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct)  {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -46,8 +46,8 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 	// reassign biggest for resubmission from the same builder
 	for _, b := range a.latestBlockByBuilder {
 		if b.Header.Trace.Slot == block.Header.Trace.Slot && // Only check the current slot
-			a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
-			a.maxProfit = block
+			a.maxProfit.Header.Trace.Value.Cmp(&b.Header.Trace.Value) <= 0 {
+			a.maxProfit = b
 		}
 	}
 }
