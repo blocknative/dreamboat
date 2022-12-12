@@ -25,8 +25,9 @@ func (a *Auctioneer) UpdateMaxProfit(block *structs.CompleteBlockstruct) {
 
 	a.blockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
 
-	// we should allow resubmission
-	if a.maxProfit != nil && a.maxProfit.Header.Trace.BuilderPubkey == block.Header.Trace.BuilderPubkey {
+	if a.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
+		a.maxProfit = block
+	} else if a.maxProfit != nil && a.maxProfit.Header.Trace.BuilderPubkey == block.Header.Trace.BuilderPubkey {
 		for _, block := range a.blockByBuilder {
 			if a.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
 				a.maxProfit = block
