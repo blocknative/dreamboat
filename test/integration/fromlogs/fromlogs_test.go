@@ -29,7 +29,7 @@ func Test_payoads(t *testing.T) {
 		{
 			name:        "one",
 			path:        "./test.csv",
-			networkType: NetworkDevnet,
+			networkType: NetworkMainnet,
 			domain:      localOrEnv("0.0.0.0:18550"),
 		},
 	}
@@ -50,8 +50,8 @@ func Test_payoads(t *testing.T) {
 			usecasePayloadNotFoundOnlyAfterNoBid(t, tt.networkType, parsed)
 
 			// Data API
-			// usecaseBlockSubmissionsOnDataAPI(t, tt.networkType, parsed, tt.domain)
-			// usecasePayloadDeliveredOnDataAPI(t, tt.networkType, parsed, tt.domain)
+			usecaseBlockSubmissionsOnDataAPI(t, tt.networkType, parsed, tt.domain)
+			usecasePayloadDeliveredOnDataAPI(t, tt.networkType, parsed, tt.domain)
 		})
 	}
 }
