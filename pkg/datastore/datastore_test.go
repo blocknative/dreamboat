@@ -34,7 +34,8 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.NoError(t, err)
 
 	hc := datastore.NewHeaderController(200, time.Hour)
-	d := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc)
+	d, err := datastore.NewDatastore(l, &datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	require.NoError(t, err)
 
 	header := randomHeaderAndTrace()
 	slotInt := rand.Int()
