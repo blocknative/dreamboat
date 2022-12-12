@@ -42,7 +42,7 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 	// always set new value and bigger slot
 	if auction.maxProfit == nil || auction.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
 		auction.maxProfit = block
-		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Debug("new max bid")
+		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Trace("new max bid")
 		return
 	}
 
@@ -55,7 +55,7 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 	if auction.maxProfit.Header.Trace.BuilderPubkey != block.Header.Trace.BuilderPubkey &&
 		auction.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
 		auction.maxProfit = block
-		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Debug("new max bid")
+		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Trace("new max bid")
 		return
 	}
 
@@ -68,7 +68,7 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
 	}
 
 	block = auction.maxProfit
-	a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Debug("new max bid")
+	a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Trace("new max bid")
 }
 
 func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool) {
