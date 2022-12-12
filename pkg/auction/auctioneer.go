@@ -12,70 +12,74 @@ import (
 type Auctioneer struct {
 	l log.Logger
 
-	mu                   [2]sync.RWMutex
-	maxProfit            [2]*structs.CompleteBlockstruct
-	latestBlockByBuilder [2]map[types.PublicKey]*structs.CompleteBlockstruct
+	auctions [2]*Auction
+}
+
+type Auction struct {
+	mu                   sync.RWMutex
+	maxProfit            *structs.CompleteBlockstruct
+	latestBlockByBuilder map[types.PublicKey]*structs.CompleteBlockstruct
 }
 
 func NewAuctioneer(l log.Logger) *Auctioneer {
 	return &Auctioneer{
-		l:                    l.WithField("relay-service", "auctioneer"),
-		mu:                   [2]sync.RWMutex{},
-		maxProfit:            [2]*structs.CompleteBlockstruct{},
-		latestBlockByBuilder: [2]map[types.PublicKey]*structs.CompleteBlockstruct{make(map[types.PublicKey]*structs.CompleteBlockstruct), make(map[types.PublicKey]*structs.CompleteBlockstruct)},
+		l: l.WithField("relay-service", "auctioneer"),
+		auctions: [2]*Auction{
+			{latestBlockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct)}, // slot
+			{latestBlockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct)}, // slot + 1
+		},
 	}
 }
 
 func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) {
-	idx := block.Header.Trace.Slot % 2
+	auction := a.auctions[block.Header.Trace.Slot%2]
 
-	a.mu[idx].Lock()
-	defer a.mu[idx].Unlock()
+	auction.mu.Lock()
+	defer auction.mu.Unlock()
 
-	a.latestBlockByBuilder[idx][block.Payload.Trace.Message.BuilderPubkey] = block
+	auction.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
 
 	// always set new value and bigger slot
-	if a.maxProfit[idx] == nil || a.maxProfit[idx].Header.Trace.Slot < block.Header.Trace.Slot {
-		a.maxProfit[idx] = block
+	if auction.maxProfit == nil || auction.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
+		auction.maxProfit = block
 		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Debug("new max bid")
 		return
 	}
 
 	// always discard submissions lower than latest slot
-	if a.maxProfit[idx].Header.Trace.Slot > block.Header.Trace.Slot {
+	if auction.maxProfit.Header.Trace.Slot > block.Header.Trace.Slot {
 		return
 	}
 
 	// accept bigger bid from different builder
-	if a.maxProfit[idx].Header.Trace.BuilderPubkey != block.Header.Trace.BuilderPubkey &&
-		a.maxProfit[idx].Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
-		a.maxProfit[idx] = block
+	if auction.maxProfit.Header.Trace.BuilderPubkey != block.Header.Trace.BuilderPubkey &&
+		auction.maxProfit.Header.Trace.Value.Cmp(&block.Header.Trace.Value) <= 0 {
+		auction.maxProfit = block
 		a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Debug("new max bid")
 		return
 	}
 
 	// reassign biggest for resubmission from the same builder
-	for _, b := range a.latestBlockByBuilder[idx] {
-		if a.maxProfit[idx].Header.Trace.Slot == b.Header.Trace.Slot && // Only check the current slot
-			a.maxProfit[idx].Header.Trace.Value.Cmp(&b.Header.Trace.Value) <= 0 {
-			a.maxProfit[idx] = b
+	for _, b := range auction.latestBlockByBuilder {
+		if auction.maxProfit.Header.Trace.Slot == b.Header.Trace.Slot && // Only check the current slot
+			auction.maxProfit.Header.Trace.Value.Cmp(&b.Header.Trace.Value) <= 0 {
+			auction.maxProfit = b
 		}
 	}
 
-	block = a.maxProfit[idx]
+	block = auction.maxProfit
 	a.l.WithField("slot", block.Header.Trace.Slot).WithField("value", block.Header.Trace.Value.String()).Debug("new max bid")
 }
 
 func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool) {
-	idx := slot % 2
+	auction := a.auctions[slot%2]
 
-	a.mu[idx].RLock()
-	defer a.mu[idx].RUnlock()
+	auction.mu.RLock()
+	defer auction.mu.RUnlock()
 
-	if a.maxProfit[idx] != nil && structs.Slot(a.maxProfit[idx].Header.Trace.Slot) == slot {
-		return a.maxProfit[idx], true
+	if auction.maxProfit != nil && structs.Slot(auction.maxProfit.Header.Trace.Slot) == slot {
+		return auction.maxProfit, true
 	}
 
-	a.l.WithField("slot", slot).Debug("max profit not found")
 	return nil, false
 }
