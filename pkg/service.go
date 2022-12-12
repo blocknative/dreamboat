@@ -70,7 +70,7 @@ type Service struct {
 
 func NewService(l log.Logger, c Config, d Datastore, r Relay, as *AtomicState) *Service {
 	return &Service{
-		Log:       l.WithField("service", "RelayService"),
+		Log:       l.WithField("relay-service", "Service"),
 		Config:    c,
 		Datastore: d,
 		Relay:     r,

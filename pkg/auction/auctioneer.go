@@ -8,7 +8,7 @@ import (
 )
 
 type Auctioneer struct {
-	auctions [2]*Auction
+	auctions [3]*Auction
 }
 
 type Auction struct {
@@ -19,7 +19,8 @@ type Auction struct {
 
 func NewAuctioneer() *Auctioneer {
 	return &Auctioneer{
-		auctions: [2]*Auction{
+		auctions: [3]*Auction{
+			{latestBlockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct)}, // slot - 1
 			{latestBlockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct)}, // slot
 			{latestBlockByBuilder: make(map[types.PublicKey]*structs.CompleteBlockstruct)}, // slot + 1
 		},
@@ -27,7 +28,7 @@ func NewAuctioneer() *Auctioneer {
 }
 
 func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) bool {
-	auction := a.auctions[block.Header.Trace.Slot%2]
+	auction := a.auctions[block.Header.Trace.Slot%3]
 
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
@@ -67,7 +68,7 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) bool {
 }
 
 func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool) {
-	auction := a.auctions[slot%2]
+	auction := a.auctions[slot%3]
 
 	auction.mu.RLock()
 	defer auction.mu.RUnlock()
