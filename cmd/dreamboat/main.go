@@ -170,7 +170,7 @@ var flags = []cli.Flag{
 	&cli.DurationFlag{
 		Name:    "relay-distribution-ttl",
 		Usage:   "TTL of the data that is distributed",
-		Value:   time.Hour,
+		Value:   time.Minute,
 		EnvVars: []string{"RELAY_DISTRIBUTION_TTL"},
 	},
 	&cli.StringFlag{

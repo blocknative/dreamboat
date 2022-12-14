@@ -186,6 +186,20 @@ func (s *StreamDatastore) PutPayload(ctx context.Context, key structs.PayloadKey
 	return nil
 }
 
+func (s *StreamDatastore) CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error {
+	if err := s.Datastore.CacheBlock(ctx, block); err != nil {
+		return err
+	}
+
+	sBlock := toStreamBlock(&block.Payload, true, s.ID)
+	b, err := proto.Marshal(sBlock)
+	if err != nil {
+		return fmt.Errorf("fail to encode stream block: %w", err)
+	}
+
+	return s.Pubsub.Publish(ctx, s.Config.PubsubTopic, b)
+}
+
 func toStreamBlock(block *structs.BlockAndTrace, isCache bool, source string) *StreamBlock {
 	var transactions [][]byte
 	for _, tx := range block.Payload.Data.Transactions {
@@ -277,8 +291,6 @@ func toBlockAndTrace(streamBlock *StreamBlock) *structs.BlockAndTrace {
 
 	return &block
 }
-
-
 
 func payloadToKey(payload *structs.BlockAndTrace) structs.PayloadKey {
 	return structs.PayloadKey{
