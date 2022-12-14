@@ -157,10 +157,20 @@ type HeaderAndTrace struct {
 	Trace  *BidTraceWithTimestamp
 }
 
-type BlockBidAndTrace struct {
-	Trace   *types.SignedBidTrace
-	Bid     *types.GetHeaderResponse
+type BlockAndTrace struct {
+	Trace *types.SignedBidTrace
+	//Bid     *types.GetHeaderResponse
 	Payload *types.GetPayloadResponse
+}
+
+func (b BlockAndTrace) Loggable() map[string]any {
+	return map[string]any{
+		"slot":                 b.Trace.Message.Slot,
+		"blockHash":            b.Trace.Message.BlockHash,
+		"bid":                  b.Trace.Message.Value,
+		"builder":              b.Trace.Message.BuilderPubkey,
+		"proposerFeeRecipient": b.Trace.Message.ProposerFeeRecipient,
+	}
 }
 
 type BeaconState struct {
@@ -230,5 +240,5 @@ func (hd *HeaderData) UnmarshalJSON(b []byte) error {
 // / That's to be improved in future
 type CompleteBlockstruct struct {
 	Header  HeaderAndTrace
-	Payload BlockBidAndTrace
+	Payload BlockAndTrace
 }

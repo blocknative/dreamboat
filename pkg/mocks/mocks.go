@@ -237,10 +237,10 @@ func (mr *MockDatastoreMockRecorder) GetLatestHeaders(arg0, arg1, arg2 interface
 }
 
 // GetPayload mocks base method.
-func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error) {
+func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.PayloadKey) (*structs.BlockAndTrace, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1)
-	ret0, _ := ret[0].(*structs.BlockBidAndTrace)
+	ret0, _ := ret[0].(*structs.BlockAndTrace)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -282,7 +282,7 @@ func (mr *MockDatastoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interfa
 }
 
 // PutPayload mocks base method.
-func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey, arg2 *structs.BlockBidAndTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey, arg2 *structs.BlockAndTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutPayload", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)

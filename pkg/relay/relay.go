@@ -34,8 +34,8 @@ type Datastore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
-	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
+	PutPayload(context.Context, structs.PayloadKey, *structs.BlockAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockAndTrace, bool, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
@@ -256,7 +256,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"blockNumber":      payload.Payload.Data.BlockNumber,
 		"stateRoot":        payload.Payload.Data.StateRoot,
 		"feeRecipient":     payload.Payload.Data.FeeRecipient,
-		"bid":              payload.Bid.Data.Message.Value,
+		"bid":              payload.Trace.Message.Value,
 		"from_cache":       fromCache,
 		"numTx":            len(payload.Payload.Data.Transactions),
 	}).Info("payload fetched")
@@ -293,7 +293,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	logger.With(log.F{
 		"slot":             payloadRequest.Message.Slot,
 		"blockHash":        payload.Payload.Data.BlockHash,
-		"bid":              payload.Bid.Data.Message.Value,
+		"bid":              payload.Trace.Message.Value,
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 	}).Info("payload sent")
 
@@ -537,12 +537,7 @@ func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.Payloa
 	}
 }
 
-func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
-	getHeaderResponse := types.GetHeaderResponse{
-		Version: "bellatrix",
-		Data:    signedBuilderBid,
-	}
-
+func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockAndTrace { // TODO(l): remove FB type
 	getPayloadResponse := types.GetPayloadResponse{
 		Version: "bellatrix",
 		Data:    submitBlockRequest.ExecutionPayload,
@@ -553,9 +548,8 @@ func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderB
 		Signature: submitBlockRequest.Signature,
 	}
 
-	return structs.BlockBidAndTrace{
+	return structs.BlockAndTrace{
 		Trace:   &signedBidTrace,
-		Bid:     &getHeaderResponse,
 		Payload: &getPayloadResponse,
 	}
 }
