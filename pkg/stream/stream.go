@@ -11,6 +11,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/lthibault/log"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -27,22 +28,38 @@ type RemoteDatastore interface {
 }
 
 type StreamConfig struct {
+	ID          string
 	PubsubTopic string // pubsub topic name for block submissions
 	TTL         time.Duration
+	Logger      log.Logger
 }
 
 type StreamDatastore struct {
 	*datastore.Datastore
 	Pubsub          Pubsub
 	RemoteDatastore RemoteDatastore
-	ID              string // TODO: must be unique for every relay
+	Config          StreamConfig
 
-	Config StreamConfig
+	Logger log.Logger
+
+	m StreamMetrics
+}
+
+func NewStreamDatastore(ds *datastore.Datastore, ps Pubsub, rds RemoteDatastore, cfg StreamConfig) *StreamDatastore {
+	s := StreamDatastore{
+		Datastore:       ds,
+		Pubsub:          ps,
+		RemoteDatastore: rds,
+		Config:          cfg,
+		Logger:          cfg.Logger.WithField("relay-service", "stream"),
+	}
+
+	s.initMetrics()
+
+	return &s
 }
 
 func (s *StreamDatastore) Run(ctx context.Context, logger log.Logger) error {
-	logger = logger.WithField("relay-service", "stream")
-
 	blocks, err := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic)
 	if err != nil {
 		return err
@@ -54,16 +71,18 @@ func (s *StreamDatastore) Run(ctx context.Context, logger log.Logger) error {
 			logger.Warnf("fail to decode stream block: %s", err.Error())
 		}
 
-		if sBlock.Source == s.ID {
+		if sBlock.Source == s.Config.ID {
 			continue
 		}
 
 		block := toBlockAndTrace(&sBlock)
 		if sBlock.IsCache {
+			s.m.StreamRecvCounter.WithLabelValues("cache").Inc()
 			if err := s.cachePayload(ctx, block); err != nil {
 				logger.With(block).Warnf("fail to cache payload: %s", err.Error())
 			}
 		} else {
+			s.m.StreamRecvCounter.WithLabelValues("store").Inc()
 			if err := s.storePayload(ctx, block); err != nil {
 				logger.With(block).Warnf("fail to store payload: %s", err.Error())
 			}
@@ -155,47 +174,82 @@ func (s *StreamDatastore) storePayload(ctx context.Context, payload *structs.Blo
 }
 
 func (s *StreamDatastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockAndTrace, bool, error) {
+	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "all"))
+	defer timer0.ObserveDuration()
+
+	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "local"))
 	block, from_cache, err := s.Datastore.GetPayload(ctx, key)
 	if err != nil || block == nil {
+		if err != nil {
+			s.Logger.With(key).Debugf("payload not found locally: %s", err.Error())
+		} else {
+			s.Logger.With(key).Debugf("payload not found locally", err.Error())
+		}
+
+		timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "remote"))
+		defer timer2.ObserveDuration()
+
+		s.m.StreamMissCounter.WithLabelValues("local").Inc()
 		block, err = s.RemoteDatastore.GetPayload(ctx, key)
-		return block, false, err
+		if err != nil {
+			s.m.StreamMissCounter.WithLabelValues("remote").Inc()
+		}
+		return block, false, nil
+	} else {
+		timer1.ObserveDuration()
 	}
 
 	return block, from_cache, err
 }
 
 func (s *StreamDatastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload *structs.BlockAndTrace, ttl time.Duration) error {
+	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "all"))
+	defer timer0.ObserveDuration()
+
+	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "remoteStore"))
 	if err := s.RemoteDatastore.PutPayload(ctx, key, payload, ttl); err != nil {
 		return err
 	}
+	timer1.ObserveDuration()
 
+	timer1 = prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "localStore"))
 	if err := s.Datastore.PutPayload(ctx, key, payload, ttl); err != nil {
 		return err
 	}
+	timer1.ObserveDuration()
 
-	block := toStreamBlock(payload, false, s.ID)
+	timer1 = prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "pub"))
+	defer timer1.ObserveDuration()
+
+	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "encode"))
+	block := toStreamBlock(payload, false, s.Config.ID)
 	rawBlock, err := proto.Marshal(block)
 	if err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
+	timer2.ObserveDuration()
 
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic, rawBlock); err != nil {
-		return fmt.Errorf("fail to stream payload: %w", err)
-	}
-
-	return nil
+	return s.Pubsub.Publish(ctx, s.Config.PubsubTopic, rawBlock)
 }
 
 func (s *StreamDatastore) CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error {
+	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("cacheBlock", "all"))
+	defer timer0.ObserveDuration()
+
 	if err := s.Datastore.CacheBlock(ctx, block); err != nil {
 		return err
 	}
 
-	sBlock := toStreamBlock(&block.Payload, true, s.ID)
+	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("cacheBlock", "pub"))
+	defer timer1.ObserveDuration()
+
+	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("cacheBlock", "encode"))
+	sBlock := toStreamBlock(&block.Payload, true, s.Config.ID)
 	b, err := proto.Marshal(sBlock)
 	if err != nil {
 		return fmt.Errorf("fail to encode stream block: %w", err)
 	}
+	timer2.ObserveDuration()
 
 	return s.Pubsub.Publish(ctx, s.Config.PubsubTopic, b)
 }

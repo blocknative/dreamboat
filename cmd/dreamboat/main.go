@@ -326,16 +326,14 @@ func run() cli.ActionFunc {
 			remoteDatastore := &stream.RedisDatastore{redisClient}
 			pubsub := &stream.RedisPubsub{redisClient}
 			streamConfig := stream.StreamConfig{
+				ID:          "", // TODO: generate random ID (string)
 				PubsubTopic: c.String("relay-distribution-pubsub-topic"),
 				TTL:         c.Duration("relay-distribution-ttl"),
+				Logger:      config.Log,
 			}
 
-			streamDs := &stream.StreamDatastore{
-				Datastore:       badgerDs,
-				RemoteDatastore: remoteDatastore,
-				Pubsub:          pubsub,
-				Config:          streamConfig,
-			}
+			streamDs := stream.NewStreamDatastore(badgerDs, pubsub, remoteDatastore, streamConfig)
+			streamDs.AttachMetrics(m)
 
 			go func(s *stream.StreamDatastore) error {
 				err := s.Run(cContext, config.Log)
