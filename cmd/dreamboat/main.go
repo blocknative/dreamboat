@@ -20,7 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"

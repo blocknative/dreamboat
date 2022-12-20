@@ -5,7 +5,6 @@ go 1.18
 require (
 	github.com/dgraph-io/badger/v2 v2.2007.3
 	github.com/ethereum/go-ethereum v1.10.21
-	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
