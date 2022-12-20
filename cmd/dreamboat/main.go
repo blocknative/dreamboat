@@ -176,6 +176,7 @@ var flags = []cli.Flag{
 	&cli.StringFlag{
 		Name:    "relay-distribution-pubsub-topic",
 		Usage:   "Pubsub topic for streaming payloads",
+		Value:   "relay/payload",
 		EnvVars: []string{"RELAY_DISTRIBUTION_PUBSUB_TOPIC"},
 	},
 	&cli.StringFlag{
