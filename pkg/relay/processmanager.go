@@ -41,10 +41,10 @@ type ProcessManager struct {
 	m ProcessManagerMetrics
 }
 
-func NewProcessManager(l log.Logger, verifySize, storeSize uint, registrationCacheSize int) *ProcessManager {
+func NewProcessManager(l log.Logger, verifySize, storeSize uint, registrationCacheSize int) (*ProcessManager, error) {
 	cache, err := lru.New[types.PublicKey, types.RegisterValidatorRequestMessage](registrationCacheSize)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	rm := &ProcessManager{
@@ -58,7 +58,7 @@ func NewProcessManager(l log.Logger, verifySize, storeSize uint, registrationCac
 		StoreCh: make(chan StoreReq, storeSize),
 	}
 	rm.initMetrics()
-	return rm
+	return rm, nil
 }
 
 func (pm *ProcessManager) Close(ctx context.Context) {
