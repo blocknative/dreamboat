@@ -149,10 +149,12 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		return nil, fmt.Errorf(noBuilderBidMsg)
 	}
 
-	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
-		logger.Warnf("fail to cache blocks: %s", err.Error())
-	}
-	logger.Debug("payload cached")
+	go func(ctx context.Context, maxProfitBlock *structs.CompleteBlockstruct) {
+		if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+			logger.Warnf("failed to cache block: %s", err.Error())
+		}
+		logger.Debug("payload cached")
+	}(ctx, maxProfitBlock)
 
 	header := maxProfitBlock.Header
 

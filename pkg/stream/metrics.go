@@ -7,7 +7,7 @@ import (
 
 type StreamMetrics struct {
 	StreamRecvCounter *prometheus.CounterVec
-	StreamMissCounter *prometheus.CounterVec
+	StreamPayloadHitCounter *prometheus.CounterVec
 	Timing            *prometheus.HistogramVec
 }
 
@@ -19,11 +19,11 @@ func (s *StreamDatastore) initMetrics() {
 		Help:      "Number of blocks received from stream.",
 	}, []string{"type"})
 
-	s.m.StreamMissCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	s.m.StreamPayloadHitCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
 		Subsystem: "stream",
-		Name:      "misscount",
-		Help:      "Number of payloads not found locally",
+		Name:      "payloadHit",
+		Help:      "Number of payloads hit",
 	}, []string{"type"})
 
 	s.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -36,5 +36,5 @@ func (s *StreamDatastore) initMetrics() {
 
 func (s *StreamDatastore) AttachMetrics(m *metrics.Metrics) {
 	m.Register(s.m.StreamRecvCounter)
-	m.Register(s.m.StreamMissCounter)
+	m.Register(s.m.StreamPayloadHitCounter)
 }

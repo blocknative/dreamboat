@@ -173,33 +173,54 @@ func (s *StreamDatastore) storePayload(ctx context.Context, payload *structs.Blo
 	}, s.Config.TTL)
 }
 
+type getPayloadResponse struct {
+	block     *structs.BlockAndTrace
+	isLocal   bool
+	fromCache bool
+	err       error
+}
+
 func (s *StreamDatastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockAndTrace, bool, error) {
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "all"))
 	defer timer0.ObserveDuration()
 
-	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "local"))
-	block, from_cache, err := s.Datastore.GetPayload(ctx, key)
-	if err != nil || block == nil {
-		if err != nil {
-			s.Logger.With(key).Debugf("payload not found locally: %s", err.Error())
-		} else {
-			s.Logger.With(key).Debugf("payload not found locally", err.Error())
-		}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-		timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "remote"))
-		defer timer2.ObserveDuration()
+	responses := make(chan getPayloadResponse, 2)
 
-		s.m.StreamMissCounter.WithLabelValues("local").Inc()
-		block, err = s.RemoteDatastore.GetPayload(ctx, key)
-		if err != nil {
-			s.m.StreamMissCounter.WithLabelValues("remote").Inc()
-		}
-		return block, false, nil
-	} else {
+	go func(ctx context.Context, resp chan getPayloadResponse) {
+		timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "local"))
+		block, fromCache, err := s.Datastore.GetPayload(ctx, key)
 		timer1.ObserveDuration()
+		responses <- getPayloadResponse{block: block, isLocal: true, fromCache: fromCache, err: err}
+	}(ctx, responses)
+
+	go func(ctx context.Context, resp chan getPayloadResponse) {
+		timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "remote"))
+		block, err := s.RemoteDatastore.GetPayload(ctx, key)
+		timer1.ObserveDuration()
+		responses <- getPayloadResponse{block: block, isLocal: false, fromCache: false, err: err}
+	}(ctx, responses)
+
+	for i := 0; i < cap(responses); i++ {
+		resp := <-responses
+		if resp.block != nil && resp.err == nil {
+			if resp.isLocal {
+				s.m.StreamPayloadHitCounter.WithLabelValues("local").Inc()
+			} else {
+				s.m.StreamPayloadHitCounter.WithLabelValues("remote").Inc()
+			}
+			return resp.block, resp.fromCache, resp.err
+		}
+		if resp.err != nil {
+			s.Logger.With(key).WithField("isLocal", resp.isLocal).Debugf("payload not found: %s", resp.err.Error())
+		} else {
+			s.Logger.With(key).WithField("isLocal", resp.isLocal).Debugf("payload not found")
+		}
 	}
 
-	return block, from_cache, err
+	return nil, false, fmt.Errorf("payload not found")
 }
 
 func (s *StreamDatastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload *structs.BlockAndTrace, ttl time.Duration) error {
