@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -320,6 +321,7 @@ func run() cli.ActionFunc {
 		ds = badgerDs
 
 		if c.Bool("relay-distribution") {
+			timeStreamStart := time.Now()
 			redisClient := redis.NewClient(&redis.Options{
 				Addr: c.String("relay-distribution-redis-uri"),
 			})
@@ -337,8 +339,14 @@ func run() cli.ActionFunc {
 			streamDs.AttachMetrics(m)
 
 			go func(s *stream.StreamDatastore) error {
+				config.Log.With(log.F{
+					"service":     "relay-stream",
+					"startTimeMs": time.Since(timeStreamStart).Milliseconds(),
+				}).Info("initialized")
+
 				err := s.Run(cContext, config.Log)
-				if err != nil {
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+					config.Log.Errorf("stream failed: %s", err.Error())
 					cancel()
 				}
 				return err
