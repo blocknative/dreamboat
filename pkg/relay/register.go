@@ -42,6 +42,10 @@ type StoreReqItem struct {
 	RawPayload json.RawMessage
 	Time       uint64
 	Pubkey     types.PublicKey
+
+	// additional params
+	FeeRecipient types.Address
+	GasLimit     uint64
 }
 
 // Resp respone structure
@@ -78,6 +82,11 @@ SendPayloads:
 			response.Close(0, err)
 			return err
 		default:
+		}
+
+		if rs.regMngr.Check(p.Message) {
+			response.SkipOne()
+			continue SendPayloads
 		}
 
 		checkTime := time.Now()
@@ -122,6 +131,9 @@ SendPayloads:
 				Time:       p.Message.Timestamp,
 				Pubkey:     p.Message.Pubkey,
 				RawPayload: p.Raw,
+
+				FeeRecipient: p.Message.FeeRecipient,
+				GasLimit:     p.Message.GasLimit,
 			}
 		}
 		rs.regMngr.SendStore(request)
