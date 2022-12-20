@@ -86,8 +86,10 @@ SendPayloads:
 
 		if rs.regMngr.Check(p.Message) {
 			response.SkipOne()
+			rs.m.RegistrationsCacheHits.WithLabelValues("hit").Inc()
 			continue SendPayloads
 		}
+		rs.m.RegistrationsCacheHits.WithLabelValues("miss").Inc()
 
 		checkTime := time.Now()
 		o, ok := verifyOther(be, rs.regMngr, i, p)

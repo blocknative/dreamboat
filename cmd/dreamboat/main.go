@@ -160,6 +160,12 @@ var flags = []cli.Flag{
 		Value:   1_000,
 		EnvVars: []string{"RELAY_PAYLOAD_CACHE_SIZE"},
 	},
+	&cli.IntFlag{
+		Name:    "relay-registrations-cache-size",
+		Usage:   "relay registrations cache size",
+		Value:   600_000,
+		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
+	},
 }
 
 var (
@@ -292,7 +298,7 @@ func run() cli.ActionFunc {
 
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 
-		regMgr := relay.NewProcessManager(config.Log, c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
+		regMgr := relay.NewProcessManager(config.Log, c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))
 		regMgr.AttachMetrics(m)
 		loadRegistrations(ds, regMgr)
 

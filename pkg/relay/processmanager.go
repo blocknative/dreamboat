@@ -220,8 +220,10 @@ func (pm *ProcessManager) storeRegistration(ctx context.Context, datas Datastore
 			pm.m.StoreErrorRate.Inc()
 			return err
 		}
-
-		pm.RegistrationCache.Add(i.Pubkey, types.RegisterValidatorRequestMessage{FeeRecipient: i.FeeRecipient, GasLimit: i.GasLimit})
+		pm.RegistrationCache.Add(i.Pubkey, types.RegisterValidatorRequestMessage{
+			FeeRecipient: i.FeeRecipient,
+			Timestamp:    i.Time,
+			GasLimit:     i.GasLimit})
 		t.ObserveDuration()
 	}
 	return nil
