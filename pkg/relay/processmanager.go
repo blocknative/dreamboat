@@ -169,7 +169,7 @@ func (rm *ProcessManager) Check(rvg *types.RegisterValidatorRequestMessage) bool
 		return false
 	}
 
-	if uint64(time.Now().Second())-v.Timestamp > uint64(rm.storeTTLHalftimeSeconds+rand.Intn(rm.storeTTLHalftimeSeconds)) {
+	if uint64(time.Now().Unix())-v.Timestamp > uint64(rm.storeTTLHalftimeSeconds+rand.Intn(rm.storeTTLHalftimeSeconds)) {
 		return false
 	}
 
