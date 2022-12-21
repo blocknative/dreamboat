@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,7 +23,8 @@ const (
 )
 
 type ProcessManager struct {
-	RegistrationCache *lru.Cache[types.PublicKey, types.RegisterValidatorRequestMessage]
+	RegistrationCache       *lru.Cache[types.PublicKey, types.RegisterValidatorRequestMessage]
+	storeTTLHalftimeSeconds int
 
 	LastRegTime map[string]uint64 // [pubkey]timestamp
 	lrtl        sync.RWMutex      // LastRegTime RWLock
@@ -41,7 +43,7 @@ type ProcessManager struct {
 	m ProcessManagerMetrics
 }
 
-func NewProcessManager(l log.Logger, verifySize, storeSize uint, registrationCacheSize int) (*ProcessManager, error) {
+func NewProcessManager(l log.Logger, storeTTLHalftimeSeconds int, verifySize, storeSize uint, registrationCacheSize int) (*ProcessManager, error) {
 	cache, err := lru.New[types.PublicKey, types.RegisterValidatorRequestMessage](registrationCacheSize)
 	if err != nil {
 		return nil, err
@@ -49,6 +51,7 @@ func NewProcessManager(l log.Logger, verifySize, storeSize uint, registrationCac
 
 	rm := &ProcessManager{
 		l:                         l,
+		storeTTLHalftimeSeconds:   storeTTLHalftimeSeconds,
 		LastRegTime:               make(map[string]uint64),
 		RegistrationCache:         cache,
 		VerifySubmitBlockCh:       make(chan VerifyReq, verifySize),
@@ -143,7 +146,6 @@ func (rm *ProcessManager) SendStore(request StoreReq) {
 	if atomic.LoadInt32(&(rm.isClosed)) == 0 {
 		rm.StoreCh <- request
 	}
-
 }
 
 func (rm *ProcessManager) VerifyChan() chan VerifyReq {
@@ -166,6 +168,11 @@ func (rm *ProcessManager) Check(rvg *types.RegisterValidatorRequestMessage) bool
 	if !ok {
 		return false
 	}
+
+	if uint64(time.Now().Second())-v.Timestamp > uint64(rm.storeTTLHalftimeSeconds+rand.Intn(rm.storeTTLHalftimeSeconds)) {
+		return false
+	}
+
 	return v.FeeRecipient == rvg.FeeRecipient && v.GasLimit == rvg.GasLimit
 }
 

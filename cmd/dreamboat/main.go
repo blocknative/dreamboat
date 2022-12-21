@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -298,7 +299,7 @@ func run() cli.ActionFunc {
 
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 
-		regMgr, err := relay.NewProcessManager(config.Log, c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))
+		regMgr, err := relay.NewProcessManager(config.Log, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create relay process manager: %w", err)
 		}
