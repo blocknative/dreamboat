@@ -94,7 +94,7 @@ func (s *Service) setReady() {
 }
 
 func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
-	logger := s.Log.WithField("method", "BeaconEventLoop")
+	logger := s.Log.WithField("method", "RunBeacon")
 
 	syncStatus, err := client.SyncStatus()
 	if err != nil {
