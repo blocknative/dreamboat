@@ -25,8 +25,9 @@ var (
 	ErrMissingRequest        = errors.New("req is nil")
 	ErrMissingSecretKey      = errors.New("secret key is nil")
 	UnregisteredValidatorMsg = "unregistered validator"
-	noBuilderBidMsg          = "no builder bid"
-	badHeaderMsg             = "invalid block header from datastore"
+	ErrNoBuilderBid          = errors.New("no builder bid")
+	ErrOldSlot               = errors.New("requested slot is old")
+	ErrBadHeader             = "invalid block header from datastore"
 )
 
 type Datastore interface {
@@ -145,12 +146,16 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 
 	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
 	if !ok {
-		logger.Warn(noBuilderBidMsg)
-		return nil, fmt.Errorf(noBuilderBidMsg)
+		if slot < rs.beaconState.Beacon().HeadSlot()-1 {
+			rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
+			return nil, ErrOldSlot
+		}
+		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
+		return nil, ErrNoBuilderBid
 	}
 
 	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
-		logger.Warnf("fail to cache blocks: %s", err.Error())
+		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
 
@@ -159,8 +164,9 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	timer2.ObserveDuration()
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
-		logger.Debug(badHeaderMsg)
-		return nil, fmt.Errorf(noBuilderBidMsg)
+		logger.Debug(ErrBadHeader)
+		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
+		return nil, ErrNoBuilderBid
 	}
 
 	bid := types.BuilderBid{
@@ -224,9 +230,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	}
 	ok, err := VerifySignatureBytes(msg, payloadRequest.Signature[:], pk[:])
 	if err != nil || !ok {
-		logger.WithField(
-			"pubkey", proposerPubkey,
-		).Error("signature invalid")
 		return nil, fmt.Errorf("signature invalid")
 	}
 	timer2.ObserveDuration()
@@ -240,11 +243,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, key)
 	if err != nil || payload == nil {
-		logger.WithError(err).With(log.F{
-			"pubkey":    pk,
-			"slot":      payloadRequest.Message.Slot,
-			"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
-		}).Error("no payload found")
 		return nil, ErrNoPayloadFound
 	}
 	timer3.ObserveDuration()
@@ -355,10 +353,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	logger.Trace("block submission requested")
 	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
 	if err != nil {
-		logger.WithError(err).
-			WithField("slot", submitBlockRequest.Message.Slot).
-			WithField("builder", submitBlockRequest.Message.BuilderPubkey).
-			Debug("block verification failed")
 		return fmt.Errorf("verify block: %w", err)
 	}
 
@@ -367,7 +361,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
 	timer2.ObserveDuration()
 	if ok {
-		logger.Debug("block submission after payload delivered")
 		return structs.ErrPayloadAlreadyDelivered
 	}
 	if err != nil {
@@ -378,33 +371,22 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	_, err = rs.verifySubmitSignature(ctx, submitBlockRequest)
 	timer3.ObserveDuration()
 	if err != nil {
-		logger.WithError(err).
-			WithField("slot", submitBlockRequest.Message.Slot).
-			WithField("builder", submitBlockRequest.Message.BuilderPubkey).
-			Debug("block verification failed")
 		return fmt.Errorf("verify block: %w", err)
 	}
 
 	complete, err := rs.prepareContents(submitBlockRequest)
 	if err != nil {
-		logger.WithError(err).
-			With(log.F{
-				"slot":    submitBlockRequest.Message.Slot,
-				"builder": submitBlockRequest.Message.BuilderPubkey,
-			}).Debug("signature failed")
-
-		return fmt.Errorf("block submission failed: %w", err)
+		return fmt.Errorf("fail to generate contents from block submission: %w", err)
 	}
 
 	b, err := json.Marshal(complete.Header)
 	if err != nil {
-		logger.WithError(err).Error("PutHeader marshal failed")
-		return err
+		return fmt.Errorf("fail to marshal block as header: %w", err)
 	}
 
 	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
-		return err
+		return fmt.Errorf("fail to store block as payload: %w", err)
 	}
 	timer4.ObserveDuration()
 
@@ -419,8 +401,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		HeaderAndTrace: complete.Header,
 	}, rs.config.TTL)
 	if err != nil {
-		logger.WithError(err).Error("PutHeader failed")
-		return err
+		return fmt.Errorf("fail to store block as header: %w", err)
 	}
 	timer6.ObserveDuration()
 

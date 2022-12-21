@@ -121,6 +121,8 @@ func (s *Service) setReady() {
 }
 
 func (s *Service) beaconEventLoop(ctx context.Context, client BeaconClient) error {
+	logger := s.Log.WithField("method", "BeaconEventLoop")
+
 	syncStatus, err := client.SyncStatus()
 	if err != nil {
 		return err
@@ -134,7 +136,7 @@ func (s *Service) beaconEventLoop(ctx context.Context, client BeaconClient) erro
 		return fmt.Errorf("fail to get genesis from beacon: %w", err)
 	}
 	s.state.genesis.Store(genesis)
-	s.Log.
+	logger.
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
@@ -143,7 +145,7 @@ func (s *Service) beaconEventLoop(ctx context.Context, client BeaconClient) erro
 		return err
 	}
 
-	defer s.Log.Debug("beacon loop stopped")
+	defer logger.Debug("beacon loop stopped")
 
 	events := make(chan HeadEvent)
 
@@ -154,20 +156,29 @@ func (s *Service) beaconEventLoop(ctx context.Context, client BeaconClient) erro
 		case <-ctx.Done():
 			return ctx.Err()
 		case ev := <-events:
-			if err := s.processNewSlot(ctx, client, ev); err != nil {
-				s.Log.
+			err := s.processNewSlot(ctx, client, ev)
+			if err != nil {
+				logger.
 					With(ev).
 					WithError(err).
 					Warn("error processing slot")
 				continue
 			}
+
+			logger.With(log.F{
+				"epoch":                     s.headslotSlot.Epoch(),
+				"slotHead":                  s.headslotSlot,
+				"slotStartNextEpoch":        structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
+				"numDuties":                 len(s.state.duties.Load().(structs.DutiesState).ProposerDutiesResponse),
+				"numKnownValidators":        len(s.state.duties.Load().(structs.ValidatorsState).KnownValidators),
+				"knownValidatorsUpdateTime": s.knownValidatorsUpdateTime(),
+			}).Debug("processed new slot")
 		}
 	}
 }
 
 func (s *Service) processNewSlot(ctx context.Context, client BeaconClient, event HeadEvent) error {
 	logger := s.Log.WithField("method", "ProcessNewSlot")
-	timeStart := time.Now()
 
 	received := structs.Slot(event.Slot)
 	if received <= s.headslotSlot {
@@ -182,18 +193,11 @@ func (s *Service) processNewSlot(ctx context.Context, client BeaconClient, event
 
 	s.headslotSlot = received
 
-	logger.With(log.F{
-		"epoch":              s.headslotSlot.Epoch(),
-		"slotHead":           s.headslotSlot,
-		"slotStartNextEpoch": structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
-	},
-	).Debugf("updated headSlot to %d", received)
-
 	// update proposer duties and known validators in the background
 	if (DurationPerEpoch / 2) < time.Since(s.knownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
 		go func() {
 			if err := s.updateKnownValidators(ctx, client, s.headslotSlot); err != nil {
-				s.Log.WithError(err).Warn("failed to update known validators")
+				logger.WithError(err).Warn("failed to update known validators")
 			} else {
 				s.updateTime.Store(time.Now())
 				s.setReady()
@@ -204,14 +208,6 @@ func (s *Service) processNewSlot(ctx context.Context, client BeaconClient, event
 	if err := s.updateProposerDuties(ctx, client, s.headslotSlot); err != nil {
 		return err
 	}
-
-	logger.With(log.F{
-		"epoch":              s.headslotSlot.Epoch(),
-		"slotHead":           s.headslotSlot,
-		"slotStartNextEpoch": structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
-		"slot":               uint64(s.headslotSlot),
-		"processingTimeMs":   time.Since(timeStart).Milliseconds(),
-	}).Info("updated head slot")
 
 	return nil
 }
@@ -233,8 +229,6 @@ func (s *Service) updateProposerDuties(ctx context.Context, client BeaconClient,
 		"epochFrom": epoch,
 		"epochTo":   epoch + 1,
 	})
-
-	timeStart := time.Now()
 
 	state := structs.DutiesState{}
 
@@ -259,9 +253,6 @@ func (s *Service) updateProposerDuties(ctx context.Context, client BeaconClient,
 	for _, e := range entries {
 		reg, err := s.Datastore.GetRegistration(ctx, e.PubKey)
 		if err == nil {
-			logger.With(e.PubKey).
-				Debug("new proposer duty")
-
 			state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
 				Slot:  e.Slot,
 				Entry: &reg,
@@ -273,18 +264,10 @@ func (s *Service) updateProposerDuties(ctx context.Context, client BeaconClient,
 
 	s.state.duties.Store(state)
 
-	logger.With(log.F{
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
-		"receivedDuties":   len(entries),
-	}).With(state.ProposerDutiesResponse).Debug("proposer duties updated")
-
 	return nil
 }
 
 func (s *Service) updateKnownValidators(ctx context.Context, client BeaconClient, current structs.Slot) error {
-	logger := s.Log.WithField("method", "UpdateKnownValidators")
-	timeStart := time.Now()
-
 	state := structs.ValidatorsState{}
 	validators, err := client.KnownValidators(current)
 	if err != nil {
@@ -302,12 +285,6 @@ func (s *Service) updateKnownValidators(ctx context.Context, client BeaconClient
 	state.KnownValidatorsByIndex = knownValidatorsByIndex
 
 	s.state.validators.Store(state)
-
-	logger.With(log.F{
-		"slotHead":         uint64(current),
-		"numValidators":    len(knownValidators),
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
-	}).Debug("updated known validators")
 
 	return nil
 }
@@ -373,11 +350,6 @@ func (s *Service) getTailDelivered(ctx context.Context, limit, cursor uint64) ([
 
 	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
 	queries := make([]structs.PayloadQuery, 0, limit)
-
-	s.Log.WithField("limit", limit).
-		WithField("start", start).
-		WithField("stop", stop).
-		Debug("querying delivered payload traces")
 
 	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= structs.Slot(limit) {
 		queries = queries[:0]

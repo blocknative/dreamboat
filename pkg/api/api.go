@@ -182,15 +182,20 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
 	defer timer.ObserveDuration()
 
-	var block types.SignedBlindedBeaconBlock
-	if err := json.NewDecoder(r.Body).Decode(&block); err != nil {
+	var req types.SignedBlindedBeaconBlock
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
 
-	payload, err := a.s.GetPayload(r.Context(), &block)
+	payload, err := a.s.GetPayload(r.Context(), &req)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
+		a.l.With(log.F{
+			"code":     400,
+			"endpoint": "getPayload",
+			"payload":  req,
+		}).WithError(err).Debug("failed getPayload")
 		return http.StatusBadRequest, err
 	}
 
@@ -209,17 +214,17 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 
-	var br types.BuilderSubmitBlockRequest
-	if err := json.NewDecoder(r.Body).Decode(&br); err != nil {
+	var req types.BuilderSubmitBlockRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 		return http.StatusBadRequest, err
 	}
 
-	if br.ExecutionPayload != nil && br.ExecutionPayload.Transactions != nil {
-		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(br.ExecutionPayload.Transactions)))
+	if req.ExecutionPayload != nil && req.ExecutionPayload.Transactions != nil {
+		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload.Transactions)))
 	}
 
-	if err := a.s.SubmitBlock(r.Context(), &br); err != nil {
+	if err := a.s.SubmitBlock(r.Context(), &req); err != nil {
 		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
@@ -227,7 +232,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 			a.l.With(log.F{
 				"code":     400,
 				"endpoint": "submitBlock",
-				"payload":  br,
+				"payload":  req,
 			}).WithError(err).Debug("failed block submission")
 		}
 		return http.StatusBadRequest, err

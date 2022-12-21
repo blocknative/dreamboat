@@ -249,6 +249,8 @@ func run() cli.ActionFunc {
 			return err
 		}
 
+		logger := config.Log
+
 		domainBuilder, err := pkg.ComputeDomain(types.DomainTypeAppBuilder, config.GenesisForkVersion, types.Root{}.String())
 		if err != nil {
 			return err
@@ -264,10 +266,10 @@ func run() cli.ActionFunc {
 
 		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
 		if err != nil {
-			config.Log.WithError(err).Error("failed to initialize datastore")
+			logger.WithError(err).Error("failed to initialize datastore")
 			return err
 		}
-		config.Log.With(log.F{
+		logger.With(log.F{
 			"service":     "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
 		}).Info("data store initialized")
@@ -294,7 +296,7 @@ func run() cli.ActionFunc {
 
 		regMgr := relay.NewProcessManager(config.Log, c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
 		regMgr.AttachMetrics(m)
-		loadRegistrations(ds, regMgr)
+		loadRegistrations(ds, regMgr, logger)
 
 		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
 
@@ -317,7 +319,7 @@ func run() cli.ActionFunc {
 		regMgr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
 		regMgr.RunVerify(c.Uint("relay-workers-verify"))
 
-		config.Log.With(log.F{
+		logger.With(log.F{
 			"service":     "relay",
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
@@ -337,7 +339,7 @@ func run() cli.ActionFunc {
 			metrics.AttachProfiler(internalMux)
 
 			internalMux.Handle("/metrics", m.Handler())
-			config.Log.Info("internal server listening")
+			logger.Info("internal server listening")
 			internalSrv := http.Server{
 				Addr:    c.String("internalAddr"),
 				Handler: internalMux,
@@ -356,7 +358,7 @@ func run() cli.ActionFunc {
 		case <-service.Ready():
 		}
 
-		config.Log.Debug("relay service ready")
+		logger.Info("relay service ready")
 
 		mux := http.NewServeMux()
 		api.AttachToHandler(mux)
@@ -372,20 +374,20 @@ func run() cli.ActionFunc {
 				Handler:        mux,
 				MaxHeaderBytes: 4096,
 			}
-			config.Log.Info("http server listening")
+			logger.Info("http server listening")
 			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
 			}
-			config.Log.Info("http server finished")
+			logger.Info("http server finished")
 			return err
 		}(srv)
 
 		<-cContext.Done()
 
 		ctx, _ := context.WithTimeout(context.Background(), shutdownTimeout)
-		log.Info("Shutdown initialized")
+		logger.Info("Shutdown initialized")
 		err = srv.Shutdown(ctx)
-		log.Info("Shutdown returned ", err)
+		logger.Info("Shutdown returned ", err)
 
 		ctx, _ = context.WithTimeout(context.Background(), shutdownTimeout/2)
 		finish := make(chan struct{})
@@ -394,10 +396,10 @@ func run() cli.ActionFunc {
 		select {
 		case <-finish:
 		case <-ctx.Done():
-			log.Warn("Closing manager deadline exceeded ")
+			logger.Warn("Closing manager deadline exceeded ")
 		}
-		return fmt.Errorf("properly exiting... %w", err) // this surprisingly has to return error
 
+		return nil
 	}
 }
 
@@ -406,14 +408,14 @@ func closemanager(ctx context.Context, finish chan struct{}, regMgr *relay.Proce
 	finish <- struct{}{}
 }
 
-func loadRegistrations(ds *datastore.Datastore, regMgr *relay.ProcessManager) {
+func loadRegistrations(ds *datastore.Datastore, regMgr *relay.ProcessManager, logger log.Logger) {
 	reg, err := ds.GetAllRegistration()
 	if err == nil {
 		for k, v := range reg {
 			regMgr.Set(k, v.Message.Timestamp)
 		}
 
-		config.Log.With(log.F{
+		logger.With(log.F{
 			"service":        "registration",
 			"count-elements": len(reg),
 		}).Info("registrations loaded")

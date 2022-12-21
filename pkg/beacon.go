@@ -222,9 +222,6 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 				case <-ctx.Done():
 					return
 				case slotC <- head:
-					logger.
-						With(head).
-						Debug("read head subscription")
 				}
 			})
 
@@ -287,11 +284,6 @@ func (b *beaconClient) Endpoint() string {
 }
 
 func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
-	logger := b.log.
-		WithField("method", "QueryBeacon").
-		WithField("URL", u.RequestURI())
-	timeStart := time.Now()
-
 	req, err := http.NewRequest(method, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("invalid request for %s: %w", u, err)
@@ -324,11 +316,6 @@ func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
 	if err != nil {
 		return fmt.Errorf("could not unmarshal response for %s from %s: %w", u, string(bodyBytes), err)
 	}
-
-	logger.
-		WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
-		WithField("bytesAmount", len(bodyBytes)).
-		Trace("beacon queried")
 
 	return nil
 }
