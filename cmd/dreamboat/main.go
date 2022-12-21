@@ -324,9 +324,16 @@ func run() cli.ActionFunc {
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
+		beacon, err := initBeacon(c.Context, config)
+		if err != nil {
+			return fmt.Errorf("fail to initialize beacon: %w", err)
+		}
+
+		beacon.AttachMetrics(m)
+
 		cContext, cancel := context.WithCancel(c.Context)
 		go func(s *pkg.Service) error {
-			err := s.RunBeacon(cContext)
+			err := s.RunBeacon(cContext, beacon)
 			if err != nil {
 				cancel()
 			}
@@ -401,6 +408,19 @@ func run() cli.ActionFunc {
 
 		return nil
 	}
+}
+
+func initBeacon(ctx context.Context, config pkg.Config) (pkg.BeaconClient, error) {
+	clients := make([]pkg.BeaconClient, 0, len(config.BeaconEndpoints))
+
+	for _, endpoint := range config.BeaconEndpoints {
+		client, err := pkg.NewBeaconClient(endpoint, config)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, client)
+	}
+	return pkg.NewMultiBeaconClient(config.Log, clients), nil
 }
 
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *relay.ProcessManager) {

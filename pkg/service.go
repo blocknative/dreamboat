@@ -78,33 +78,6 @@ func NewService(l log.Logger, c Config, d Datastore, r Relay, as *AtomicState) *
 	}
 }
 
-// Run creates a relay, datastore and starts the beacon client event loop
-func (s *Service) RunBeacon(ctx context.Context) (err error) {
-	if s.NewBeaconClient == nil {
-		s.NewBeaconClient = func() (BeaconClient, error) {
-			clients := make([]BeaconClient, 0, len(s.Config.BeaconEndpoints))
-			for _, endpoint := range s.Config.BeaconEndpoints {
-				client, err := NewBeaconClient(endpoint, s.Config)
-				if err != nil {
-					return nil, err
-				}
-				clients = append(clients, client)
-			}
-			return NewMultiBeaconClient(s.Config.Log.WithField("service", "multi-beacon client"), clients), nil
-		}
-	}
-
-	client, err := s.NewBeaconClient()
-	if err != nil {
-		s.Log.WithError(err).Warn("failed beacon client registration")
-		return err
-	}
-
-	s.Log.Info("beacon client initialized")
-
-	return s.beaconEventLoop(ctx, client)
-}
-
 func (s *Service) Ready() <-chan struct{} {
 	s.once.Do(func() {
 		s.ready = make(chan struct{})
@@ -120,7 +93,7 @@ func (s *Service) setReady() {
 	}
 }
 
-func (s *Service) beaconEventLoop(ctx context.Context, client BeaconClient) error {
+func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 	logger := s.Log.WithField("method", "BeaconEventLoop")
 
 	syncStatus, err := client.SyncStatus()
