@@ -22,8 +22,13 @@ const (
 	ResponseQueueOther
 )
 
+type CacheEntry struct {
+	Time  time.Time
+	Entry types.RegisterValidatorRequestMessage
+}
+
 type ProcessManager struct {
-	RegistrationCache       *lru.Cache[types.PublicKey, types.RegisterValidatorRequestMessage]
+	RegistrationCache       *lru.Cache[types.PublicKey, CacheEntry]
 	storeTTLHalftimeSeconds int
 
 	LastRegTime map[string]uint64 // [pubkey]timestamp
@@ -44,7 +49,7 @@ type ProcessManager struct {
 }
 
 func NewProcessManager(l log.Logger, storeTTLHalftimeSeconds int, verifySize, storeSize uint, registrationCacheSize int) (*ProcessManager, error) {
-	cache, err := lru.New[types.PublicKey, types.RegisterValidatorRequestMessage](registrationCacheSize)
+	cache, err := lru.New[types.PublicKey, CacheEntry](registrationCacheSize)
 	if err != nil {
 		return nil, err
 	}
@@ -169,11 +174,11 @@ func (rm *ProcessManager) Check(rvg *types.RegisterValidatorRequestMessage) bool
 		return false
 	}
 
-	if uint64(time.Now().Unix())-v.Timestamp > uint64(rm.storeTTLHalftimeSeconds+rand.Intn(rm.storeTTLHalftimeSeconds)) {
+	if time.Since(v.Time).Seconds() > float64(rm.storeTTLHalftimeSeconds+rand.Intn(rm.storeTTLHalftimeSeconds)-(rm.storeTTLHalftimeSeconds*5/100)) {
 		return false
 	}
 
-	return v.FeeRecipient == rvg.FeeRecipient && v.GasLimit == rvg.GasLimit
+	return v.Entry.FeeRecipient == rvg.FeeRecipient && v.Entry.GasLimit == rvg.GasLimit
 }
 
 func (rm *ProcessManager) Get(k string) (value uint64, ok bool) {
@@ -221,16 +226,19 @@ func (pm *ProcessManager) storeRegistration(ctx context.Context, datas Datastore
 
 	for _, i := range payload.Items {
 		t := prometheus.NewTimer(pm.m.StoreTiming)
-
+		now := time.Now()
 		err := datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.RawPayload, ttl)
 		if err != nil {
 			pm.m.StoreErrorRate.Inc()
 			return err
 		}
-		pm.RegistrationCache.Add(i.Pubkey, types.RegisterValidatorRequestMessage{
-			FeeRecipient: i.FeeRecipient,
-			Timestamp:    i.Time,
-			GasLimit:     i.GasLimit})
+		pm.RegistrationCache.Add(i.Pubkey, CacheEntry{
+			Time: now,
+			Entry: types.RegisterValidatorRequestMessage{
+				FeeRecipient: i.FeeRecipient,
+				Timestamp:    i.Time,
+				GasLimit:     i.GasLimit},
+		})
 		t.ObserveDuration()
 	}
 	return nil
