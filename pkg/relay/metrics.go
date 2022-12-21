@@ -59,6 +59,14 @@ func (rm *ProcessManager) initMetrics() {
 		Name:      "mapSize",
 		Help:      "Size of internal map",
 	})
+
+	rm.m.StoreSize = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "storeSize",
+		Help:      "Size of stored",
+	})
+
 }
 
 func (rm *ProcessManager) AttachMetrics(m *metrics.Metrics) {
@@ -72,6 +80,8 @@ func (rm *ProcessManager) AttachMetrics(m *metrics.Metrics) {
 
 type RelayMetrics struct {
 	Timing *prometheus.HistogramVec
+
+	RegistrationsCacheHits *prometheus.CounterVec
 }
 
 func (r *Relay) initMetrics() {
@@ -81,8 +91,16 @@ func (r *Relay) initMetrics() {
 		Name:      "timing",
 		Help:      "Duration of requests per function",
 	}, []string{"function", "type"})
+
+	r.m.RegistrationsCacheHits = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "registrationCache",
+		Help:      "cache hit/miss",
+	}, []string{"result"})
 }
 
 func (r *Relay) AttachMetrics(m *metrics.Metrics) {
 	m.Register(r.m.Timing)
+	m.Register(r.m.RegistrationsCacheHits)
 }

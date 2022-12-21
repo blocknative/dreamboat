@@ -3,12 +3,15 @@ package relay
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
+	"github.com/flashbots/go-boost-utils/types"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -20,6 +23,9 @@ const (
 )
 
 type ProcessManager struct {
+	RegistrationCache       *lru.Cache[types.PublicKey, types.RegisterValidatorRequestMessage]
+	storeTTLHalftimeSeconds int
+
 	LastRegTime map[string]uint64 // [pubkey]timestamp
 	lrtl        sync.RWMutex      // LastRegTime RWLock
 
@@ -37,11 +43,17 @@ type ProcessManager struct {
 	m ProcessManagerMetrics
 }
 
-func NewProcessManager(l log.Logger, verifySize, storeSize uint) *ProcessManager {
-	rm := &ProcessManager{
-		l:           l,
-		LastRegTime: make(map[string]uint64),
+func NewProcessManager(l log.Logger, storeTTLHalftimeSeconds int, verifySize, storeSize uint, registrationCacheSize int) (*ProcessManager, error) {
+	cache, err := lru.New[types.PublicKey, types.RegisterValidatorRequestMessage](registrationCacheSize)
+	if err != nil {
+		return nil, err
+	}
 
+	rm := &ProcessManager{
+		l:                         l,
+		storeTTLHalftimeSeconds:   storeTTLHalftimeSeconds,
+		LastRegTime:               make(map[string]uint64),
+		RegistrationCache:         cache,
 		VerifySubmitBlockCh:       make(chan VerifyReq, verifySize),
 		VerifyRegisterValidatorCh: make(chan VerifyReq, verifySize),
 		VerifyOtherCh:             make(chan VerifyReq, verifySize),
@@ -49,7 +61,7 @@ func NewProcessManager(l log.Logger, verifySize, storeSize uint) *ProcessManager
 		StoreCh: make(chan StoreReq, storeSize),
 	}
 	rm.initMetrics()
-	return rm
+	return rm, nil
 }
 
 func (pm *ProcessManager) Close(ctx context.Context) {
@@ -134,7 +146,6 @@ func (rm *ProcessManager) SendStore(request StoreReq) {
 	if atomic.LoadInt32(&(rm.isClosed)) == 0 {
 		rm.StoreCh <- request
 	}
-
 }
 
 func (rm *ProcessManager) VerifyChan() chan VerifyReq {
@@ -150,6 +161,19 @@ func (rm *ProcessManager) GetVerifyChan(stack uint) chan VerifyReq {
 	default: // ResponseQueueOther
 		return rm.VerifyOtherCh
 	}
+}
+
+func (rm *ProcessManager) Check(rvg *types.RegisterValidatorRequestMessage) bool {
+	v, ok := rm.RegistrationCache.Get(rvg.Pubkey)
+	if !ok {
+		return false
+	}
+
+	if uint64(time.Now().Unix())-v.Timestamp > uint64(rm.storeTTLHalftimeSeconds+rand.Intn(rm.storeTTLHalftimeSeconds)) {
+		return false
+	}
+
+	return v.FeeRecipient == rvg.FeeRecipient && v.GasLimit == rvg.GasLimit
 }
 
 func (rm *ProcessManager) Get(k string) (value uint64, ok bool) {
@@ -172,6 +196,7 @@ func (pm *ProcessManager) ParallelStore(datas Datastore, ttl time.Duration) {
 		pm.m.StoreSize.Observe(float64(len(payload.Items)))
 		if err := pm.storeRegistration(ctx, datas, ttl, payload); err != nil {
 			pm.l.Errorf("error storing registration - %w ", err)
+			continue
 		}
 	}
 }
@@ -202,6 +227,10 @@ func (pm *ProcessManager) storeRegistration(ctx context.Context, datas Datastore
 			pm.m.StoreErrorRate.Inc()
 			return err
 		}
+		pm.RegistrationCache.Add(i.Pubkey, types.RegisterValidatorRequestMessage{
+			FeeRecipient: i.FeeRecipient,
+			Timestamp:    i.Time,
+			GasLimit:     i.GasLimit})
 		t.ObserveDuration()
 	}
 	return nil
@@ -287,6 +316,21 @@ func (s *StoreResp) SuccessfullIndexes() []int64 {
 
 func (s *StoreResp) Done() chan error {
 	return s.done
+}
+
+func (s *StoreResp) SkipOne() {
+	s.rLock.Lock()
+	defer s.rLock.Unlock()
+
+	if s.IsClosed() {
+		return
+	}
+
+	s.numAll -= 1
+	if s.numAll == len(s.nonErrors) {
+		s.close()
+		return
+	}
 }
 
 func (s *StoreResp) IsClosed() bool {
