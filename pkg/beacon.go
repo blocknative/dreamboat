@@ -311,7 +311,9 @@ func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
 		return fmt.Errorf("fail to publish block: %w", err)
 	}
 
-	if resp.StatusCode >= 300 {
+	if resp.StatusCode == 202 {  // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
+		return fmt.Errorf("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
+	} else if resp.StatusCode >= 300 {
 		ec := &struct {
 			Code    int    `json:"code"`
 			Message string `json:"message"`

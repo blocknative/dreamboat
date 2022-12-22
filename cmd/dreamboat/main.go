@@ -170,7 +170,7 @@ var flags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
 		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
-		Value:   true,
+		Value:   false,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
 }
