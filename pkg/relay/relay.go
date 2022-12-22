@@ -300,8 +300,9 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 			beaconBlock := structs.SignedBlindedBeaconBlockToBeaconBlock(payloadRequest, payload.Payload.Data)
 			if err := rs.beacon.PublishBlock(beaconBlock); err != nil {
 				logger.WithError(err).Warn("fail to publish block to beacon node")
+			} else {
+				logger.Info("published block to beacon node")
 			}
-			logger.Info("published block to beacon node")
 		}
 
 		if err := rs.d.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
