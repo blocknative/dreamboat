@@ -167,6 +167,12 @@ var flags = []cli.Flag{
 		Value:   600_000,
 		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
 	},
+	&cli.BoolFlag{
+		Name:    "relay-publish-block",
+		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
+		Value:   true,
+		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
+	},
 }
 
 var (
@@ -308,6 +314,11 @@ func run() cli.ActionFunc {
 
 		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
 
+		beacon, err := initBeacon(c.Context, config)
+		if err != nil {
+			return fmt.Errorf("fail to initialize beacon: %w", err)
+		}
+
 		auctioneer := auction.NewAuctioneer()
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
@@ -315,7 +326,8 @@ func run() cli.ActionFunc {
 			PubKey:                config.PubKey,
 			SecretKey:             config.SecretKey,
 			TTL:                   config.TTL,
-		}, as, ds, regMgr, auctioneer)
+			PublishBlock:          c.Bool("relay-publish-block"),
+		}, beacon, as, ds, regMgr, auctioneer)
 		r.AttachMetrics(m)
 
 		service := pkg.NewService(config.Log, config, ds, r, as)
@@ -334,7 +346,8 @@ func run() cli.ActionFunc {
 
 		cContext, cancel := context.WithCancel(c.Context)
 		go func(s *pkg.Service) error {
-			err := s.RunBeacon(cContext)
+			config.Log.Info("initialized beacon")
+			err := s.RunBeacon(cContext, beacon)
 			if err != nil {
 				cancel()
 			}
@@ -429,6 +442,19 @@ func loadRegistrations(ds *datastore.Datastore, regMgr *relay.ProcessManager) {
 		}).Info("registrations loaded")
 	}
 
+}
+
+func initBeacon(ctx context.Context, config pkg.Config) (pkg.BeaconClient, error) {
+	clients := make([]pkg.BeaconClient, 0, len(config.BeaconEndpoints))
+
+	for _, endpoint := range config.BeaconEndpoints {
+		client, err := pkg.NewBeaconClient(endpoint, config)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, client)
+	}
+	return pkg.NewMultiBeaconClient(config.Log, clients), nil
 }
 
 func logger(c *cli.Context) log.Logger {

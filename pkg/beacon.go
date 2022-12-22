@@ -186,8 +186,6 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconClient {
 	return instances
 }
 
-<<<<<<< Updated upstream
-=======
 func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err error) {
 	log := b.Log.WithField("slot", block.Message.Slot).WithField("blockHash", block.Message.Body.ExecutionPayload.BlockHash)
 
@@ -206,13 +204,6 @@ func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err er
 	return err
 }
 
-func (b *MultiBeaconClient) AttachMetrics(m *metrics.Metrics) {
-	for _, c := range b.Clients {
-		c.AttachMetrics(m)
-	}
-}
-
->>>>>>> Stashed changes
 type beaconClient struct {
 	beaconEndpoint *url.URL
 	log            log.Logger
