@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -191,7 +192,7 @@ func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err er
 		if err = client.PublishBlock(block); err != nil {
 			b.Log.WithError(err).
 				WithField("endpoint", client.Endpoint()).
-				Warn("failed to get genesis info")
+				Warn("failed to publish block to beacon")
 			continue
 		}
 
@@ -300,11 +301,33 @@ func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 }
 
 func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
-	resp := struct{}{}
-	u := *b.beaconEndpoint
-	u.Path = "/eth/v1/beacon/blocks"
+	bb, err := json.Marshal(block)
+	if err != nil {
+		return fmt.Errorf("fail to marshal block: %w", err)
+	}
 
-	return b.queryBeacon(&u, "POST", &resp)
+	resp, err := http.Post(b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", "application/json", bytes.NewBuffer(bb))
+	if err != nil {
+		return fmt.Errorf("fail to publish block: %w", err)
+	}
+
+	if resp.StatusCode >= 300 {
+		ec := &struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}{}
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("fail to read read error response body: %w", err)
+		}
+
+		if err = json.Unmarshal(bodyBytes, ec); err != nil {
+			return fmt.Errorf("fail to unmarshal error response: %w", err)
+		}
+		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
+	}
+
+	return nil
 }
 
 func (b *beaconClient) Endpoint() string {
