@@ -187,8 +187,6 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconClient {
 }
 
 func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err error) {
-	log := b.Log.WithField("slot", block.Message.Slot).WithField("blockHash", block.Message.Body.ExecutionPayload.BlockHash)
-
 	for _, client := range b.clientsByLastResponse() {
 		if err = client.PublishBlock(block); err != nil {
 			b.Log.WithError(err).
