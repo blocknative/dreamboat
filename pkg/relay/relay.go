@@ -204,8 +204,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "all"))
 	defer timer.ObserveDuration()
 
-	logger := rs.l.WithField("method", "GetPayload")
-
 	if len(payloadRequest.Signature) != 96 {
 		return nil, fmt.Errorf("invalid signature")
 	}
@@ -222,11 +220,14 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	if err != nil {
 		return nil, err
 	}
-	logger.With(log.F{
+
+	logger := rs.l.With(log.F{
+		"method":    "GetPayload",
 		"slot":      payloadRequest.Message.Slot,
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		"pubkey":    pk,
-	}).Info("payload requested")
+	})
+	logger.Info("payload requested")
 
 	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain)
 	if err != nil {
