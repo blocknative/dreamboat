@@ -60,7 +60,6 @@ func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.Signed
 	logger := rs.l.WithField("method", "RegisterValidator")
 
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidator", "all"))
-	defer timer.ObserveDuration()
 
 	be := rs.beaconState.Beacon()
 	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
@@ -134,6 +133,8 @@ SendPayloads:
 			WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
 			WithField("numberValidators", len(payload)).
 			Trace("validator registrations succeeded")
+
+		timer.ObserveDuration()
 	}
 
 	return err

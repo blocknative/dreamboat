@@ -106,7 +106,6 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	timeStart := time.Now()
 
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "all"))
-	defer timer.ObserveDuration()
 
 	logger := rs.l.WithField("method", "GetHeader")
 
@@ -188,6 +187,8 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		"slot":             slot,
 	}).Info("bid sent")
 
+	timer.ObserveDuration()
+
 	return &types.GetHeaderResponse{
 		Version: "bellatrix",
 		Data:    &types.SignedBuilderBid{Message: &bid, Signature: signature},
@@ -198,7 +199,6 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
 	timeStart := time.Now()
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "all"))
-	defer timer.ObserveDuration()
 
 	logger := rs.l.WithField("method", "GetPayload")
 
@@ -295,6 +295,8 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 	}).Info("payload sent")
 
+	timer.ObserveDuration()
+
 	return &types.GetPayloadResponse{
 		Version: "bellatrix",
 		Data:    payload.Payload.Data,
@@ -339,7 +341,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	timeStart := time.Now()
 
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "all"))
-	defer timer.ObserveDuration()
 
 	logger := rs.l.With(log.F{
 		"method":    "SubmitBlock",
@@ -409,6 +410,8 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		"processingTimeMs": time.Since(timeStart).Milliseconds(),
 		"is_new_max":       isNewMax,
 	}).Trace("builder block stored")
+
+	timer.ObserveDuration()
 
 	return nil
 }
