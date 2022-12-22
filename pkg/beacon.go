@@ -197,7 +197,6 @@ func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err er
 			continue
 		}
 
-		log.Info("published block")
 		return nil
 	}
 
