@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 	"github.com/r3labs/sse/v2"
 	uberatomic "go.uber.org/atomic"
@@ -31,6 +32,7 @@ type BeaconClient interface {
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
+	PublishBlock(block *types.SignedBeaconBlock) error
 	Endpoint() string
 }
 
@@ -184,6 +186,33 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconClient {
 	return instances
 }
 
+<<<<<<< Updated upstream
+=======
+func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err error) {
+	log := b.Log.WithField("slot", block.Message.Slot).WithField("blockHash", block.Message.Body.ExecutionPayload.BlockHash)
+
+	for _, client := range b.clientsByLastResponse() {
+		if err = client.PublishBlock(block); err != nil {
+			b.Log.WithError(err).
+				WithField("endpoint", client.Endpoint()).
+				Warn("failed to get genesis info")
+			continue
+		}
+
+		log.Info("published block")
+		return nil
+	}
+
+	return err
+}
+
+func (b *MultiBeaconClient) AttachMetrics(m *metrics.Metrics) {
+	for _, c := range b.Clients {
+		c.AttachMetrics(m)
+	}
+}
+
+>>>>>>> Stashed changes
 type beaconClient struct {
 	beaconEndpoint *url.URL
 	log            log.Logger
@@ -280,6 +309,14 @@ func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 	u.Path = "/eth/v1/beacon/genesis"
 	err := b.queryBeacon(&u, "GET", &resp)
 	return resp.Data, err
+}
+
+func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
+	resp := struct{}{}
+	u := *b.beaconEndpoint
+	u.Path = "/eth/v1/beacon/blocks"
+
+	return b.queryBeacon(&u, "POST", &resp)
 }
 
 func (b *beaconClient) Endpoint() string {
