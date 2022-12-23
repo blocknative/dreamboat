@@ -143,7 +143,7 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 				"slotHead":                  s.headslotSlot,
 				"slotStartNextEpoch":        structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
 				"numDuties":                 len(s.state.duties.Load().(structs.DutiesState).ProposerDutiesResponse),
-				"numKnownValidators":        len(s.state.duties.Load().(structs.ValidatorsState).KnownValidators),
+				"numKnownValidators":        len(s.state.validators.Load().(structs.ValidatorsState).KnownValidators),
 				"knownValidatorsUpdateTime": s.knownValidatorsUpdateTime(),
 			}).Debug("processed new slot")
 		}
