@@ -265,11 +265,11 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	if vs == nil {
 		a.l.Trace("no registered validators for epoch")
 		vs = structs.BuilderGetValidatorsResponseEntrySlice{}
-		m.CommitWithError(a.m.RelayTiming, "getValidators", fmt.Errorf("no validators"))
+		m.CommitWithError(a.m.RelayTiming ,"getValidators", fmt.Errorf("no validators"))
 	}
 
 	if vs != nil {
-		m.Commit(a.m.RelayTiming, "getValidators")
+		m.Commit(a.m.RelayTiming ,"getValidators")
 		a.m.ApiReqElCount.WithLabelValues("getValidators", "validator").Observe(float64(len(vs)))
 	}
 
