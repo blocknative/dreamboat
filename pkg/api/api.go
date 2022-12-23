@@ -46,12 +46,12 @@ var (
 
 type Service interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
-	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
+	RegisterValidator(context.Context, structs.MetricGroup, []structs.SignedValidatorRegistration) error
+	GetHeader(context.Context, structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
+	GetPayload(context.Context, structs.MetricGroup, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
+	SubmitBlock(context.Context, structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
 	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
@@ -137,7 +137,9 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 		a.m.ApiReqElCount.WithLabelValues("registerValidator", "payload").Observe(float64(len(payload)))
 	}
 
-	if err = a.s.RegisterValidator(r.Context(), payload); err != nil {
+	m := make(structs.MetricGroup)
+	if err = a.s.RegisterValidator(r.Context(), m, payload); err != nil {
+		m.CommitWithError(a.m.RelayTiming, "registerValidator", err)
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
 			"code":     400,
@@ -148,6 +150,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 		return http.StatusBadRequest, err
 	}
 
+	m.Commit(a.m.RelayTiming, "registerValidator")
 	a.m.ApiReqCounter.WithLabelValues("registerValidator", "200", "").Inc()
 	return http.StatusOK, err
 }
@@ -157,8 +160,10 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 	defer timer.ObserveDuration()
 
 	req := ParseHeaderRequest(r)
-	response, err := a.s.GetHeader(r.Context(), req)
+	m := make(structs.MetricGroup)
+	response, err := a.s.GetHeader(r.Context(), m, req)
 	if err != nil {
+		m.CommitWithError(a.m.RelayTiming, "getHeader", err)
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
 		a.l.With(log.F{
 			"code":     400,
@@ -167,6 +172,8 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 		}).WithError(err).Debug("failed getHeader")
 		return http.StatusBadRequest, err
 	}
+
+	m.Commit(a.m.RelayTiming, "getHeader")
 
 	if err = json.NewEncoder(w).Encode(response); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
@@ -188,8 +195,10 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
 
-	payload, err := a.s.GetPayload(r.Context(), &req)
+	m := make(structs.MetricGroup)
+	payload, err := a.s.GetPayload(r.Context(), m, &req)
 	if err != nil {
+		m.CommitWithError(a.m.RelayTiming, "getPayload", err)
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
 		a.l.With(log.F{
 			"code":     400,
@@ -198,6 +207,8 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 		}).WithError(err).Debug("failed getPayload")
 		return http.StatusBadRequest, err
 	}
+
+	m.Commit(a.m.RelayTiming, "getPayload")
 
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
@@ -224,7 +235,9 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload.Transactions)))
 	}
 
-	if err := a.s.SubmitBlock(r.Context(), &req); err != nil {
+	m := make(structs.MetricGroup)
+	if err := a.s.SubmitBlock(r.Context(), m, &req); err != nil {
+		m.CommitWithError(a.m.RelayTiming, "submitBlock", err)
 		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
@@ -238,6 +251,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusBadRequest, err
 	}
 
+	m.Commit(a.m.RelayTiming, "submitBlock")
 	a.m.ApiReqCounter.WithLabelValues("submitBlock", "200", "").Inc()
 	return http.StatusOK, nil
 }

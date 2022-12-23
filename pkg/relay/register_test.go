@@ -72,7 +72,7 @@ func TestRegisterValidator(t *testing.T) {
 	}
 	bs.EXPECT().Beacon().Return(fbn)
 
-	err = r.RegisterValidator(ctx, registrations)
+	err = r.RegisterValidator(ctx, make(structs.MetricGroup), registrations)
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
@@ -137,7 +137,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	registrations[N/2].Signature = types.Signature{}
 	bs.EXPECT().Beacon().Return(fbn)
 
-	err = r.RegisterValidator(ctx, registrations)
+	err = r.RegisterValidator(ctx, make(structs.MetricGroup), registrations)
 	require.Error(t, err)
 	//t.Logf("returned %s", err.Error())
 	time.Sleep(3 * time.Second)
@@ -213,7 +213,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	}
 
 	bs.EXPECT().Beacon().Return(fbn)
-	err = r.RegisterValidator(ctx, registrations)
+	err = r.RegisterValidator(ctx, make(structs.MetricGroup), registrations)
 	require.Error(t, err)
 	//t.Logf("returned %s", err.Error())
 }
@@ -268,7 +268,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := r.RegisterValidator(ctx, registrations)
+		err := r.RegisterValidator(ctx, make(structs.MetricGroup), registrations)
 		if err != nil {
 			panic(err)
 		}
@@ -340,7 +340,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			t := time.Now()
-			err := r.RegisterValidator(ctx, registrations)
+			err := r.RegisterValidator(ctx, make(structs.MetricGroup), registrations)
 			b.Logf(" RegisterValidator %s", time.Since(t).String())
 			if err != nil {
 				panic(err)
@@ -353,7 +353,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			t := time.Now()
-			err := r.RegisterValidator(ctx, registrations)
+			err := r.RegisterValidator(ctx, make(structs.MetricGroup), registrations)
 			b.Logf(" RegisterValidator %s", time.Since(t).String())
 			if err != nil {
 				panic(err)
@@ -366,7 +366,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			t := time.Now()
-			err := r.RegisterValidator(ctx, registrations)
+			err := r.RegisterValidator(ctx,make(structs.MetricGroup), registrations)
 			b.Logf(" RegisterValidator %s", time.Since(t).String())
 			if err != nil {
 				panic(err)

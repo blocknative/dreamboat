@@ -102,10 +102,9 @@ func verifyTimestamp(timestamp uint64) bool {
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
-func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
-	timeStart := time.Now()
-
-	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "all"))
+func (rs *Relay) GetHeader(ctx context.Context, m structs.MetricGroup, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
+	tStart := time.Now()
+	defer m.ObserveSince("all", tStart)
 
 	logger := rs.l.WithField("method", "GetHeader")
 
@@ -123,16 +122,6 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	if err != nil {
 		return nil, err
 	}
-	/*
-		vd, err := rs.d.GetRegistration(ctx, pk)
-		if err != nil {
-			logger.Warn("unregistered validator")
-			return nil, fmt.Errorf(noBuilderBidMsg)
-		}
-		if vd.Message.Pubkey != pk.PublicKey {
-			logger.Warn("registration and request pubkey mismatch")
-			return nil, fmt.Errorf("unknown validator")
-		}*/
 
 	logger = logger.With(log.F{
 		"slot":       slot,
@@ -141,7 +130,7 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	})
 
 	logger.Info("header requested")
-	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "getters"))
+	tGet := time.Now()
 
 	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
 	if !ok {
@@ -153,14 +142,14 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 		return nil, ErrNoBuilderBid
 	}
 
+	m.ObserveSince("get", tGet)
+
 	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
 
 	header := maxProfitBlock.Header
-
-	timer2.ObserveDuration()
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
 		logger.Debug(ErrBadHeader)
@@ -180,14 +169,12 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 	}
 
 	logger.With(log.F{
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"processingTimeMs": time.Since(tStart).Milliseconds(),
 		"bidValue":         bid.Value.String(),
 		"blockHash":        bid.Header.BlockHash.String(),
 		"feeRecipient":     bid.Header.FeeRecipient.String(),
 		"slot":             slot,
 	}).Info("bid sent")
-
-	timer.ObserveDuration()
 
 	return &types.GetHeaderResponse{
 		Version: "bellatrix",
@@ -196,9 +183,9 @@ func (rs *Relay) GetHeader(ctx context.Context, request structs.HeaderRequest) (
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
-	timeStart := time.Now()
-	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "all"))
+func (rs *Relay) GetPayload(ctx context.Context, m structs.MetricGroup, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
+	tStart := time.Now()
+	defer m.ObserveSince("all", tStart)
 
 	logger := rs.l.WithField("method", "GetPayload")
 
@@ -213,7 +200,7 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		return nil, err
 	}
 
-	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "verify"))
+	tVerify := time.Now()
 	pk, err := types.HexToPubkey(proposerPubkey.String())
 	if err != nil {
 		return nil, err
@@ -232,9 +219,9 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	if err != nil || !ok {
 		return nil, fmt.Errorf("signature invalid")
 	}
-	timer2.ObserveDuration()
+	m.ObserveSince("verify", tVerify)
 
-	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "getPayload"))
+	tGet := time.Now()
 	key := structs.PayloadKey{
 		BlockHash: payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  pk,
@@ -245,10 +232,10 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	if err != nil || payload == nil {
 		return nil, ErrNoPayloadFound
 	}
-	timer3.ObserveDuration()
+	m.ObserveSince("get", tGet)
 
 	logger.With(log.F{
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"processingTimeMs": time.Since(tStart).Milliseconds(),
 		"slot":             payloadRequest.Message.Slot,
 		"blockHash":        payload.Payload.Data.BlockHash,
 		"blockNumber":      payload.Payload.Data.BlockNumber,
@@ -292,11 +279,10 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 		"slot":             payloadRequest.Message.Slot,
 		"blockHash":        payload.Payload.Data.BlockHash,
 		"bid":              payload.Bid.Data.Message.Value,
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	}).Info("payload sent")
 
-	timer.ObserveDuration()
-
+	rs.m.Timing.WithLabelValues()
 	return &types.GetPayloadResponse{
 		Version: "bellatrix",
 		Data:    payload.Payload.Data,
@@ -337,10 +323,9 @@ func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, 
 }
 
 // SubmitBlock Accepts block from trusted builder and stores
-func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
-	timeStart := time.Now()
-
-	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "all"))
+func (rs *Relay) SubmitBlock(ctx context.Context, m structs.MetricGroup, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
+	tStart := time.Now()
+	defer m.ObserveSince("all", tStart)
 
 	logger := rs.l.With(log.F{
 		"method":    "SubmitBlock",
@@ -357,10 +342,10 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("verify block: %w", err)
 	}
 
-	timer2 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "checkDelivered"))
+	tCheckDelivered := time.Now()
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
 	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
-	timer2.ObserveDuration()
+	m.ObserveSince("checkDelivered", tCheckDelivered)
 	if ok {
 		return structs.ErrPayloadAlreadyDelivered
 	}
@@ -368,9 +353,9 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return err
 	}
 
-	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "verify"))
+	tVerify := time.Now()
 	_, err = rs.verifySubmitSignature(ctx, submitBlockRequest)
-	timer3.ObserveDuration()
+	m.ObserveSince("verify", tVerify)
 	if err != nil {
 		return fmt.Errorf("verify block: %w", err)
 	}
@@ -385,17 +370,17 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 		return fmt.Errorf("fail to marshal block as header: %w", err)
 	}
 
-	timer4 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putPayload"))
+	tPutPayload := time.Now()
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
 		return fmt.Errorf("fail to store block as payload: %w", err)
 	}
-	timer4.ObserveDuration()
+	m.ObserveSince("putPayload", tPutPayload)
 
-	timer5 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("addBlockToAuctioneer", "addBlockToAuctioneer"))
+	tAddAuction := time.Now()
 	isNewMax := rs.a.AddBlock(&complete)
-	timer5.ObserveDuration()
+	m.ObserveSince("addAuction", tAddAuction)
 
-	timer6 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("submitBlock", "putHeader"))
+	tPutHeader := time.Now()
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		Marshaled:      b,
@@ -404,14 +389,12 @@ func (rs *Relay) SubmitBlock(ctx context.Context, submitBlockRequest *types.Buil
 	if err != nil {
 		return fmt.Errorf("fail to store block as header: %w", err)
 	}
-	timer6.ObserveDuration()
+	m.ObserveSince("putHeader", tPutHeader)
 
 	logger.With(log.F{
-		"processingTimeMs": time.Since(timeStart).Milliseconds(),
+		"processingTimeMs": time.Since(tStart).Milliseconds(),
 		"is_new_max":       isNewMax,
 	}).Trace("builder block stored")
-
-	timer.ObserveDuration()
 
 	return nil
 }
