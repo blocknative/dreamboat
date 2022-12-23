@@ -276,7 +276,7 @@ func TestGetValidators(t *testing.T) {
 	}
 	bs.EXPECT().Beacon().Return(fbn).Times(1)
 
-	validators := r.GetValidators()
+	validators := r.GetValidators(make(structs.MetricGroup))
 	require.NotNil(t, validators)
 }
 

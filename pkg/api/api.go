@@ -52,7 +52,7 @@ type Service interface {
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 	SubmitBlock(context.Context, structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
-	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
+	GetValidators(structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
@@ -260,13 +260,16 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getValidators"))
 	defer timer.ObserveDuration()
 
-	vs := a.s.GetValidators()
+	m := make(structs.MetricGroup)
+	vs := a.s.GetValidators(m)
 	if vs == nil {
 		a.l.Trace("no registered validators for epoch")
 		vs = structs.BuilderGetValidatorsResponseEntrySlice{}
+		m.CommitWithError(a.m.RelayTiming, "getValidators", fmt.Errorf("no validators"))
 	}
 
 	if vs != nil {
+		m.Commit(a.m.RelayTiming, "getValidators")
 		a.m.ApiReqElCount.WithLabelValues("getValidators", "validator").Observe(float64(len(vs)))
 	}
 

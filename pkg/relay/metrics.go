@@ -71,19 +71,10 @@ func (rm *ProcessManager) AttachMetrics(m *metrics.Metrics) {
 }
 
 type RelayMetrics struct {
-	Timing *prometheus.HistogramVec
-
 	MissHeaderCount *prometheus.CounterVec
 }
 
 func (r *Relay) initMetrics() {
-	r.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "dreamboat",
-		Subsystem: "relay",
-		Name:      "timing",
-		Help:      "Duration of requests per function",
-	}, []string{"function", "type"})
-
 	r.m.MissHeaderCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relayprocess",
@@ -93,6 +84,5 @@ func (r *Relay) initMetrics() {
 }
 
 func (r *Relay) AttachMetrics(m *metrics.Metrics) {
-	m.Register(r.m.Timing)
 	m.Register(r.m.MissHeaderCount)
 }

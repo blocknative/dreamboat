@@ -40,7 +40,7 @@ func (api *API) initMetrics() {
 		Subsystem: "relay",
 		Name:      "timing",
 		Help:      "Duration of requests per function",
-	}, []string{"function", "type"})
+	}, []string{"function", "type", "error"})
 }
 
 func (api *API) AttachMetrics(m *metrics.Metrics) {

@@ -11,7 +11,6 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
@@ -282,7 +281,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m structs.MetricGroup, payloadR
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	}).Info("payload sent")
 
-	rs.m.Timing.WithLabelValues()
 	return &types.GetPayloadResponse{
 		Version: "bellatrix",
 		Data:    payload.Payload.Data,
@@ -445,9 +443,9 @@ func (rs *Relay) prepareContents(submitBlockRequest *types.BuilderSubmitBlockReq
 }
 
 // GetValidators returns a list of registered block proposers in current and next epoch
-func (rs *Relay) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
-	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getValidators", "all"))
-	defer timer.ObserveDuration()
+func (rs *Relay) GetValidators(m structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice {
+	tStart := time.Now()
+	defer m.ObserveSince("all", tStart)
 
 	//log := rs.l.WithField("method", "GetValidators")
 	validators := rs.beaconState.Beacon().ValidatorsMap()
