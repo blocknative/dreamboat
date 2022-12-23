@@ -57,6 +57,8 @@ type RegistrationManager interface {
 
 	SendStore(sReq StoreReq)
 	Get(k string) (value uint64, ok bool)
+
+	Check(*types.RegisterValidatorRequestMessage) bool
 }
 
 type RelayConfig struct {
