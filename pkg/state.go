@@ -13,9 +13,17 @@ type AtomicState struct {
 }
 
 func (as *AtomicState) Beacon() *structs.BeaconState {
-	return &structs.BeaconState{
-		DutiesState:     as.duties.Load().(structs.DutiesState),
-		ValidatorsState: as.validators.Load().(structs.ValidatorsState),
-		GenesisInfo:     as.genesis.Load().(structs.GenesisInfo),
+	state := &structs.BeaconState{}
+
+	if val := as.duties.Load(); val != nil {
+		state.DutiesState = val.(structs.DutiesState)
 	}
+	if val := as.validators.Load(); val != nil {
+		state.ValidatorsState = val.(structs.ValidatorsState)
+	}
+	if val := as.genesis.Load(); val != nil {
+		state.GenesisInfo = val.(structs.GenesisInfo)
+	}
+
+	return state
 }
