@@ -224,7 +224,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload.Transactions)))
 	}
 
-	if err := a.s.SubmitBlock(r.Context(), &req); err != nil {
+	if err := a.r.SubmitBlock(r.Context(), &req); err != nil {
 		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
