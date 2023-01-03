@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blocknative/dreamboat/blstools"
 	pkg "github.com/blocknative/dreamboat/pkg"
-	"github.com/blocknative/dreamboat/pkg/blstools"
 	"github.com/blocknative/dreamboat/pkg/datastore/dsbadger"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	mock_relay "github.com/blocknative/dreamboat/pkg/relay/mocks"

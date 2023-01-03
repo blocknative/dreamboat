@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/pkg/auction"
-	"github.com/blocknative/dreamboat/pkg/blstools"
 
 	"github.com/blocknative/dreamboat/pkg/datastore/dsbadger"
 	"github.com/blocknative/dreamboat/pkg/datastore/headerscontroller"

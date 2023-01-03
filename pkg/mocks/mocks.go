@@ -6,8 +6,6 @@ package mocks
 
 import (
 	context "context"
-	reflect "reflect"
-
 	metrics "github.com/blocknative/dreamboat/metrics"
 	relay "github.com/blocknative/dreamboat/pkg"
 	structs "github.com/blocknative/dreamboat/pkg/structs"
@@ -76,19 +74,19 @@ func (m *MockBeaconClient) EXPECT() *MockBeaconClientMockRecorder {
 	return m.recorder
 }
 
-// AttachMetrics mocks base method.
+// AttachMetrics mocks base method
 func (m *MockBeaconClient) AttachMetrics(arg0 *metrics.Metrics) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AttachMetrics", arg0)
 }
 
-// AttachMetrics indicates an expected call of AttachMetrics.
+// AttachMetrics indicates an expected call of AttachMetrics
 func (mr *MockBeaconClientMockRecorder) AttachMetrics(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachMetrics", reflect.TypeOf((*MockBeaconClient)(nil).AttachMetrics), arg0)
 }
 
-// Endpoint mocks base method.
+// Endpoint mocks base method
 func (m *MockBeaconClient) Endpoint() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Endpoint")

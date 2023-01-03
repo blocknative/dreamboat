@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blocknative/dreamboat/blstools"
 	pkg "github.com/blocknative/dreamboat/pkg"
-	"github.com/blocknative/dreamboat/pkg/blstools"
 	datastore "github.com/blocknative/dreamboat/pkg/datastore"
 	realRelay "github.com/blocknative/dreamboat/pkg/relay"
 	lru "github.com/hashicorp/golang-lru/v2"

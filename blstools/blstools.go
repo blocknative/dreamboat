@@ -15,3 +15,16 @@ func GenerateNewKeypair() (sk *bls.SecretKey, pubKey types.PublicKey, err error)
 
 	return sk, pubKey, err
 }
+
+func SecretKeyFromBytes(skBytes []byte) (sk *bls.SecretKey, pubKey types.PublicKey, err error) {
+
+	sk, err = bls.SecretKeyFromBytes(skBytes[:])
+	if err != nil {
+		return nil, types.PublicKey{}, err
+	}
+
+	var pk types.PublicKey
+	err = pk.FromSlice(bls.PublicKeyFromSecretKey(sk).Compress()) //nolint
+
+	return sk, pubKey, err
+}

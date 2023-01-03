@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/api Relay
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/api Relay,Registrations
 
 package api
 
@@ -46,29 +46,36 @@ var (
 
 type Relay interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	RegisterValidator(context.Context, *structs.MetricGroup, []structs.SignedValidatorRegistration) error
 	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
 	GetPayload(context.Context, *structs.MetricGroup, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 	SubmitBlock(context.Context, *structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
-	GetValidators(*structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
 	GetBlockReceived(context.Context, structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+}
+
+type Registrations interface {
+	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
+	RegisterValidator(context.Context, *structs.MetricGroup, []structs.SignedValidatorRegistration) error
+	// Data APIs
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
+	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
+	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
 }
 
 type API struct {
-	l log.Logger
-	r Relay
+	l   log.Logger
+	r   Relay
+	reg Registrations
 
 	m APIMetrics
 }
 
-func NewApi(l log.Logger, r Relay) (a *API) {
-	a = &API{l: l, r: r}
+func NewApi(l log.Logger, r Relay, reg Registrations) (a *API) {
+	a = &API{l: l, r: r, reg: reg}
 	a.initMetrics()
 	return a
 }
@@ -138,7 +145,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 	}
 
 	m := structs.NewMetricGroup(4)
-	if err = a.r.RegisterValidator(r.Context(), m, payload); err != nil {
+	if err = a.reg.RegisterValidator(r.Context(), m, payload); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
@@ -261,7 +268,7 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	defer timer.ObserveDuration()
 
 	m := structs.NewMetricGroup(4)
-	vs := a.r.GetValidators(m)
+	vs := a.reg.GetValidators(m)
 	if vs == nil {
 		a.l.Trace("no registered validators for epoch")
 		vs = structs.BuilderGetValidatorsResponseEntrySlice{}
@@ -295,7 +302,7 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) (int,
 		return http.StatusBadRequest, err
 	}
 
-	registration, err := a.r.Registration(r.Context(), pk)
+	registration, err := a.reg.Registration(r.Context(), pk)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "registration").Inc()
 		return http.StatusInternalServerError, err

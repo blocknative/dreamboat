@@ -3,7 +3,7 @@ package verify_test
 import (
 	"testing"
 
-	"github.com/blocknative/dreamboat/pkg/blstools"
+	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/pkg/verify"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
