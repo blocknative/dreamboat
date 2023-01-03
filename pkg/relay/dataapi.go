@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"github.com/flashbots/go-boost-utils/types"
 	"golang.org/x/exp/constraints"
 
 	ds "github.com/ipfs/go-datastore"
@@ -15,10 +14,6 @@ import (
 var (
 	DurationPerSlot = time.Second * 12
 )
-
-func (r *Relay) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
-	return r.d.GetRegistration(ctx, structs.PubKey{PublicKey: pk})
-}
 
 func (r *Relay) GetPayloadDelivered(ctx context.Context, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
 	var (

@@ -11,7 +11,10 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/auction"
-	"github.com/blocknative/dreamboat/pkg/datastore"
+	"github.com/blocknative/dreamboat/pkg/blstools"
+
+	"github.com/blocknative/dreamboat/pkg/datastore/dsbadger"
+	"github.com/blocknative/dreamboat/pkg/datastore/headerscontroller"
 	mock_relay "github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/google/uuid"
@@ -46,8 +49,8 @@ func TestGetHeader(t *testing.T) {
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
-	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mock_relay.NewMockState(ctrl)
@@ -65,7 +68,7 @@ func TestGetHeader(t *testing.T) {
 	}
 
 	a := auction.NewAuctioneer()
-	r := relay.NewRelay(log.New(), config, nil, bs, ds, nil, a)
+	r := relay.NewRelay(log.New(), config, bs, ds, ds, a)
 
 	require.NoError(t, err)
 
@@ -113,7 +116,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	a.AddBlock(&structs.CompleteBlockstruct{Header: pHeader, Payload: payload})
-	err = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	err = ds.PutRegistration(ctx, *registration, time.Minute)
 	require.NoError(t, err)
 
 	response, err := r.GetHeader(ctx, structs.NewMetricGroup(4), request)
@@ -136,9 +139,9 @@ func TestGetPayload(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := datastore.NewHeaderController(100, time.Hour)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
 
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mock_relay.NewMockState(ctrl)
@@ -160,7 +163,7 @@ func TestGetPayload(t *testing.T) {
 	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(t, proposerSigningDomain, genesisTime)
@@ -229,7 +232,7 @@ func TestGetPayload(t *testing.T) {
 	}, time.Minute)
 
 	require.NoError(t, err)
-	err = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	err = ds.PutRegistration(ctx, *registration, time.Minute)
 	require.NoError(t, err)
 
 	fbn := &structs.BeaconState{
@@ -254,7 +257,7 @@ func TestGetValidators(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	ds := &dsbadger.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
 	config := relay.RelayConfig{
@@ -265,7 +268,7 @@ func TestGetValidators(t *testing.T) {
 	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
 	fbn := &structs.BeaconState{
 		DutiesState: structs.DutiesState{
 			ProposerDutiesResponse: structs.BuilderGetValidatorsResponseEntrySlice{{
@@ -293,8 +296,8 @@ func TestSubmitBlock(t *testing.T) {
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
-	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -312,7 +315,7 @@ func TestSubmitBlock(t *testing.T) {
 		SecretKey:            sk,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -352,8 +355,8 @@ func BenchmarkGetHeader(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(b, err)
 
 	bs := mock_relay.NewMockState(ctrl)
@@ -370,7 +373,7 @@ func BenchmarkGetHeader(b *testing.B) {
 		ProposerSigningDomain: proposerSigningDomain,
 	}
 
-	r := relay.NewRelay(log.New(), config, bs, ds, nil, auction.NewAuctioneer())
+	r := relay.NewRelay(log.New(), config, bs, ds, nil, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -411,7 +414,7 @@ func BenchmarkGetHeader(b *testing.B) {
 		Marshaled:      jsHeader,
 	}, time.Minute)
 
-	_ = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, *registration, time.Minute)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -435,8 +438,8 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
-	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -451,7 +454,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		PubKey:                types.PublicKey(random48Bytes()),
 		ProposerSigningDomain: proposerSigningDomain,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, nil, auction.NewAuctioneer())
+	r := relay.NewRelay(log.New(), config, bs, ds, nil, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -493,7 +496,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		Marshaled:      jsHeader,
 	}, time.Minute)
 
-	_ = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, *registration, time.Minute)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -524,8 +527,8 @@ func BenchmarkGetPayload(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -545,7 +548,7 @@ func BenchmarkGetPayload(b *testing.B) {
 	regMgr := relay.NewProcessManager(l, 20, 20)
 	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -609,7 +612,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		Marshaled:      jsHeader,
 	}, time.Minute)
 
-	_ = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, *registration, time.Minute)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -642,8 +645,8 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -662,7 +665,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		PubKey:                types.PublicKey(random48Bytes()),
 		ProposerSigningDomain: proposerSigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -728,7 +731,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		Marshaled:      jsHeader,
 	}, time.Minute)
 
-	_ = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, *registration, time.Minute)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -766,7 +769,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 
 	pk, _, _ := bls.GenerateNewKeypair()
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	ds := &dsbadger.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
 	l := log.New()
@@ -784,7 +787,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -808,7 +811,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	ctrl := gomock.NewController(b)
 
 	pk, _, _ := bls.GenerateNewKeypair()
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	ds := &dsbadger.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
 	l := log.New()
@@ -826,7 +829,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -859,7 +862,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	ds := &dsbadger.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 	sk, _, _ := bls.GenerateNewKeypair()
 
@@ -878,7 +881,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -889,11 +892,8 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 }
 
 func validValidatorRegistration(t require.TestingT, domain types.Domain) (*types.SignedValidatorRegistration, *bls.SecretKey) {
-	sk, pk, err := bls.GenerateNewKeypair()
+	sk, pubKey, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
-
-	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
 
 	msg := &types.RegisterValidatorRequestMessage{
 		FeeRecipient: types.Address{0x42},
@@ -911,11 +911,8 @@ func validValidatorRegistration(t require.TestingT, domain types.Domain) (*types
 }
 
 func validSubmitBlockRequest(t require.TestingT, domain types.Domain, genesisTime uint64) *types.BuilderSubmitBlockRequest {
-	sk, pk, err := bls.GenerateNewKeypair()
+	sk, pubKey, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
-
-	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
 
 	slot := rand.Uint64()
 
@@ -1030,8 +1027,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -1056,11 +1053,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
 
 	// generate and send 1st block
-	skB1, pkB1, err := bls.GenerateNewKeypair()
+	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
-
-	var pubKeyB1 types.PublicKey
-	pubKeyB1.FromSlice(pkB1.Compress())
 
 	slot := structs.Slot(rand.Uint64())
 	payloadB1 := randomPayload()
@@ -1088,12 +1082,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequestOne)
 	require.NoError(t, err)
 
-	// generate and send 2nd block
-	skB2, pkB2, err := bls.GenerateNewKeypair()
+	skB2, pubKeyB2, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
-
-	var pubKeyB2 types.PublicKey
-	pubKeyB2.FromSlice(pkB2.Compress())
 
 	payloadB2 := randomPayload()
 	payloadB2.Timestamp = genesisTime + (uint64(slot) * 12)
@@ -1154,8 +1144,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mock_relay.NewMockState(ctrl)
@@ -1180,12 +1170,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	}
 	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
 
-	// generate and send 1st block
-	skB1, pkB1, err := bls.GenerateNewKeypair()
+	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
-
-	var pubKeyB1 types.PublicKey
-	pubKeyB1.FromSlice(pkB1.Compress())
 
 	slot := structs.Slot(rand.Uint64())
 	payloadB1 := randomPayload()

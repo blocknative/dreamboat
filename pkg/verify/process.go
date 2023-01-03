@@ -1,4 +1,4 @@
-package relay
+package verify
 
 import (
 	"fmt"

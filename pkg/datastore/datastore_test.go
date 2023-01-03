@@ -9,6 +9,7 @@ import (
 	"time"
 
 	pkg "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/blstools"
 	datastore "github.com/blocknative/dreamboat/pkg/datastore"
 	realRelay "github.com/blocknative/dreamboat/pkg/relay"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -391,11 +392,8 @@ func randomRegistration() types.SignedValidatorRegistration {
 	}
 }
 func validSignedBlindedBeaconBlock(t require.TestingT, domain types.Domain) *types.BuilderSubmitBlockRequest {
-	sk, pk, err := bls.GenerateNewKeypair()
+	sk, _, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
-
-	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
 
 	payload := randomPayload()
 

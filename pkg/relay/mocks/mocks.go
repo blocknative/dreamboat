@@ -187,6 +187,7 @@ func (mr *MockDatastoreMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockDatastore)(nil).GetPayload), arg0, arg1)
 }
 
+<<<<<<< HEAD
 // GetRegistration mocks base method.
 func (m *MockDatastore) GetRegistration(arg0 context.Context, arg1 structs.PubKey) (types.SignedValidatorRegistration, error) {
 	m.ctrl.T.Helper()
@@ -203,6 +204,9 @@ func (mr *MockDatastoreMockRecorder) GetRegistration(arg0, arg1 interface{}) *go
 }
 
 // PutDelivered mocks base method.
+=======
+// PutDelivered mocks base method
+>>>>>>> 286294a (Separate registrations)
 func (m *MockDatastore) PutDelivered(arg0 context.Context, arg1 structs.Slot, arg2 structs.DeliveredTrace, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2, arg3)
@@ -244,21 +248,7 @@ func (mr *MockDatastoreMockRecorder) PutPayload(arg0, arg1, arg2, arg3 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutPayload", reflect.TypeOf((*MockDatastore)(nil).PutPayload), arg0, arg1, arg2, arg3)
 }
 
-// PutRegistrationRaw mocks base method.
-func (m *MockDatastore) PutRegistrationRaw(arg0 context.Context, arg1 structs.PubKey, arg2 []byte, arg3 time.Duration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutRegistrationRaw", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// PutRegistrationRaw indicates an expected call of PutRegistrationRaw.
-func (mr *MockDatastoreMockRecorder) PutRegistrationRaw(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutRegistrationRaw", reflect.TypeOf((*MockDatastore)(nil).PutRegistrationRaw), arg0, arg1, arg2, arg3)
-}
-
-// MockState is a mock of State interface.
+// MockState is a mock of State interface
 type MockState struct {
 	ctrl     *gomock.Controller
 	recorder *MockStateMockRecorder
