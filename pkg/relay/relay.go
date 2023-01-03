@@ -172,9 +172,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m structs.MetricGroup, request s
 		Pubkey: rs.config.PubKey,
 	}
 
-	timer3 := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getHeader", "signature"))
+	tSignature := time.Now()
 	signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
-	timer3.ObserveDuration()
+	m.ObserveSince("signature", tSignature)
 	if err != nil {
 		return nil, fmt.Errorf("internal server error")
 	}
