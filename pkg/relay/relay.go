@@ -296,6 +296,10 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 
 	// defer put delivered datastore write
 	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
+		if err := rs.d.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
+			rs.l.WithError(err).Warn("failed to set payload after delivery")
+		}
+
 		if rs.config.PublishBlock {
 			beaconBlock := structs.SignedBlindedBeaconBlockToBeaconBlock(payloadRequest, payload.Payload.Data)
 			if err := rs.beacon.PublishBlock(beaconBlock); err != nil {
@@ -303,10 +307,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 			} else {
 				logger.Info("published block to beacon node")
 			}
-		}
-
-		if err := rs.d.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
-			rs.l.WithError(err).Warn("failed to set payload after delivery")
 		}
 	}(rs, structs.Slot(payloadRequest.Message.Slot), trace)
 
