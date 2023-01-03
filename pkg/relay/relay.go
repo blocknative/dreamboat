@@ -58,7 +58,6 @@ type Auctioneer interface {
 	AddBlock(block *structs.CompleteBlockstruct) bool
 	MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool)
 }
-
 type Beacon interface {
 	PublishBlock(block *types.SignedBeaconBlock) error
 }
