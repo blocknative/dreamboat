@@ -45,7 +45,7 @@ Special thanks to Flashbots for their commiment to open source. This project was
 3. **Performance.** We have put significant engineering effort into tuning Dreamboat's performance, and have much, much more in store.  The HTTP server's hot paths are 100% lock-free, concurrency is carefully tuned, and there are ongoing efforts to optimize the garbage collector and speed up signature validation.  The result is a ship that doesn't just sail... it *glides*.
 4. **Transparency.**  Dreamboat implements the [Relay Data API](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#38a21c8a40e64970904500eb7b373ea5), so you can audit past proposals.  But we take a much broader view of transparency, which includes **code transparency**.  A major cleanup effort is underway to make -- and *keep* -- Dreamboat's code *legible*.  We believe this is an essential part of ensuring transparency and reliability.
 
-We are continuously improving Dreaboat's runtime performance, standards compliance, reliability and transparency.
+We are continuously improving Dreamoat's runtime performance, standards compliance, reliability and transparency.
 
 ## Planned Features & Enhancements
 
