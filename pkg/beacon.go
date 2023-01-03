@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/r3labs/sse/v2"
@@ -33,6 +35,7 @@ type BeaconClient interface {
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
+	PublishBlock(block *types.SignedBeaconBlock) error
 	Endpoint() string
 
 	AttachMetrics(m *metrics.Metrics)
@@ -188,6 +191,21 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconClient {
 	return instances
 }
 
+func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err error) {
+	for _, client := range b.clientsByLastResponse() {
+		if err = client.PublishBlock(block); err != nil {
+			b.Log.WithError(err).
+				WithField("endpoint", client.Endpoint()).
+				Warn("failed to publish block to beacon")
+			continue
+		}
+
+		return nil
+	}
+
+	return err
+}
+
 func (b *MultiBeaconClient) AttachMetrics(m *metrics.Metrics) {
 	for _, c := range b.Clients {
 		c.AttachMetrics(m)
@@ -294,6 +312,38 @@ func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 	u.Path = "/eth/v1/beacon/genesis"
 	err := b.queryBeacon(&u, "GET", &resp)
 	return resp.Data, err
+}
+
+func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
+	bb, err := json.Marshal(block)
+	if err != nil {
+		return fmt.Errorf("fail to marshal block: %w", err)
+	}
+
+	resp, err := http.Post(b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", "application/json", bytes.NewBuffer(bb))
+	if err != nil {
+		return fmt.Errorf("fail to publish block: %w", err)
+	}
+
+	if resp.StatusCode == 202 { // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
+		return fmt.Errorf("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
+	} else if resp.StatusCode >= 300 {
+		ec := &struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}{}
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("fail to read read error response body: %w", err)
+		}
+
+		if err = json.Unmarshal(bodyBytes, ec); err != nil {
+			return fmt.Errorf("fail to unmarshal error response: %w", err)
+		}
+		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
+	}
+
+	return nil
 }
 
 func (b *beaconClient) Endpoint() string {
