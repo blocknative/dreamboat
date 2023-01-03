@@ -22,12 +22,12 @@ func (mg MetricGroup) ObserveSince(name string, t time.Time) {
 
 func (mg MetricGroup) Commit(t PrometheusObserver, name string) {
 	for metric, dur := range mg {
-		t.WithLabelValues(name, metric, "").Observe(float64(dur.Milliseconds() / 1_000))
+		t.WithLabelValues(name, metric, "").Observe(dur.Seconds())
 	}
 }
 
 func (mg MetricGroup) CommitWithError(t PrometheusObserver, name string, err error) {
 	for metric, dur := range mg {
-		t.WithLabelValues(name, metric, err.Error()).Observe(float64(dur.Milliseconds() / 1_000))
+		t.WithLabelValues(name, metric, err.Error()).Observe(dur.Seconds())
 	}
 }
