@@ -61,11 +61,17 @@ type RegistrationManager interface {
 	Check(*types.RegisterValidatorRequestMessage) bool
 }
 
+type Beacon interface {
+	PublishBlock(block *types.SignedBeaconBlock) error
+}
+
 type RelayConfig struct {
 	BuilderSigningDomain  types.Domain
 	ProposerSigningDomain types.Domain
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
+
+	PublishBlock bool
 
 	TTL time.Duration
 }
@@ -78,18 +84,20 @@ type Relay struct {
 	regMngr RegistrationManager
 	config  RelayConfig
 
+	beacon      Beacon
 	beaconState State
 
 	m RelayMetrics
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beaconState State, d Datastore, regMngr RegistrationManager, a Auctioneer) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, beaconState State, d Datastore, regMngr RegistrationManager, a Auctioneer) *Relay {
 	rs := &Relay{
 		d:           d,
 		a:           a,
 		l:           l,
 		config:      config,
+		beacon:      beacon,
 		beaconState: beaconState,
 		regMngr:     regMngr,
 	}
@@ -196,8 +204,6 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getPayload", "all"))
 	defer timer.ObserveDuration()
 
-	logger := rs.l.WithField("method", "GetPayload")
-
 	if len(payloadRequest.Signature) != 96 {
 		return nil, fmt.Errorf("invalid signature")
 	}
@@ -214,11 +220,14 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	if err != nil {
 		return nil, err
 	}
-	logger.With(log.F{
+
+	logger := rs.l.With(log.F{
+		"method":    "GetPayload",
 		"slot":      payloadRequest.Message.Slot,
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		"pubkey":    pk,
-	}).Info("payload requested")
+	})
+	logger.Info("payload requested")
 
 	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain)
 	if err != nil {
@@ -289,6 +298,15 @@ func (rs *Relay) GetPayload(ctx context.Context, payloadRequest *types.SignedBli
 	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
 		if err := rs.d.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
 			rs.l.WithError(err).Warn("failed to set payload after delivery")
+		}
+
+		if rs.config.PublishBlock {
+			beaconBlock := structs.SignedBlindedBeaconBlockToBeaconBlock(payloadRequest, payload.Payload.Data)
+			if err := rs.beacon.PublishBlock(beaconBlock); err != nil {
+				logger.WithError(err).Warn("fail to publish block to beacon node")
+			} else {
+				logger.Info("published block to beacon node")
+			}
 		}
 	}(rs, structs.Slot(payloadRequest.Message.Slot), trace)
 

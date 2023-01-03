@@ -391,6 +391,20 @@ func (mr *MockBeaconClientMockRecorder) KnownValidators(arg0 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockBeaconClient)(nil).KnownValidators), arg0)
 }
 
+// PublishBlock mocks base method.
+func (m *MockBeaconClient) PublishBlock(arg0 *types.SignedBeaconBlock) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishBlock", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PublishBlock indicates an expected call of PublishBlock.
+func (mr *MockBeaconClientMockRecorder) PublishBlock(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishBlock", reflect.TypeOf((*MockBeaconClient)(nil).PublishBlock), arg0)
+}
+
 // SubscribeToHeadEvents mocks base method.
 func (m *MockBeaconClient) SubscribeToHeadEvents(arg0 context.Context, arg1 chan relay.HeadEvent) {
 	m.ctrl.T.Helper()
