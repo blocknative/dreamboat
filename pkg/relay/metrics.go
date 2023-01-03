@@ -59,6 +59,14 @@ func (rm *ProcessManager) initMetrics() {
 		Name:      "mapSize",
 		Help:      "Size of internal map",
 	})
+
+	rm.m.StoreSize = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "storeSize",
+		Help:      "Size of stored",
+	})
+
 }
 
 func (rm *ProcessManager) AttachMetrics(m *metrics.Metrics) {
@@ -71,28 +79,27 @@ func (rm *ProcessManager) AttachMetrics(m *metrics.Metrics) {
 }
 
 type RelayMetrics struct {
-	Timing *prometheus.HistogramVec
-
 	MissHeaderCount *prometheus.CounterVec
+
+	RegistrationsCacheHits *prometheus.CounterVec
 }
 
 func (r *Relay) initMetrics() {
-	r.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "dreamboat",
-		Subsystem: "relay",
-		Name:      "timing",
-		Help:      "Duration of requests per function",
-	}, []string{"function", "type"})
-
 	r.m.MissHeaderCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
 		Subsystem: "relayprocess",
 		Name:      "missHeader",
 		Help:      "Number of missed headers by reason (oldSlot, noSubmission)",
 	}, []string{"reason"})
+	r.m.RegistrationsCacheHits = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "registrationCache",
+		Help:      "cache hit/miss",
+	}, []string{"result"})
 }
 
 func (r *Relay) AttachMetrics(m *metrics.Metrics) {
-	m.Register(r.m.Timing)
 	m.Register(r.m.MissHeaderCount)
+	m.Register(r.m.RegistrationsCacheHits)
 }

@@ -26,13 +26,13 @@ var (
 
 type Relay interface {
 	// Proposer API
-	RegisterValidator(context.Context, []structs.SignedValidatorRegistration) error
-	GetHeader(context.Context, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-	GetPayload(context.Context, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
+	RegisterValidator(context.Context, structs.MetricGroup, []structs.SignedValidatorRegistration) error
+	GetHeader(context.Context, structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
+	GetPayload(context.Context, structs.MetricGroup, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs
-	SubmitBlock(context.Context, *types.BuilderSubmitBlockRequest) error
-	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
+	SubmitBlock(context.Context, structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
+	GetValidators(structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
 
 	AttachMetrics(m *metrics.Metrics)
 }
@@ -138,12 +138,15 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 				continue
 			}
 
+			validators := s.state.Beacon().KnownValidators()
+			duties := s.state.Beacon().ProposerDutiesResponse
+
 			logger.With(log.F{
 				"epoch":                     s.headslotSlot.Epoch(),
 				"slotHead":                  s.headslotSlot,
 				"slotStartNextEpoch":        structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
-				"numDuties":                 len(s.state.duties.Load().(structs.DutiesState).ProposerDutiesResponse),
-				"numKnownValidators":        len(s.state.duties.Load().(structs.ValidatorsState).KnownValidators),
+				"numDuties":                 len(duties),
+				"numKnownValidators":        len(validators),
 				"knownValidatorsUpdateTime": s.knownValidatorsUpdateTime(),
 			}).Debug("processed new slot")
 		}
@@ -262,24 +265,24 @@ func (s *Service) updateKnownValidators(ctx context.Context, client BeaconClient
 	return nil
 }
 
-func (s *Service) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) error {
-	return s.Relay.RegisterValidator(ctx, payload)
+func (s *Service) RegisterValidator(ctx context.Context, m structs.MetricGroup, payload []structs.SignedValidatorRegistration) error {
+	return s.Relay.RegisterValidator(ctx, m, payload)
 }
 
-func (s *Service) GetHeader(ctx context.Context, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
-	return s.Relay.GetHeader(ctx, request)
+func (s *Service) GetHeader(ctx context.Context, m structs.MetricGroup, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
+	return s.Relay.GetHeader(ctx, m, request)
 }
 
-func (s *Service) GetPayload(ctx context.Context, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) {
-	return s.Relay.GetPayload(ctx, payloadRequest)
+func (s *Service) GetPayload(ctx context.Context, m structs.MetricGroup, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) {
+	return s.Relay.GetPayload(ctx, m, payloadRequest)
 }
 
-func (s *Service) SubmitBlock(ctx context.Context, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
-	return s.Relay.SubmitBlock(ctx, submitBlockRequest)
+func (s *Service) SubmitBlock(ctx context.Context, m structs.MetricGroup, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
+	return s.Relay.SubmitBlock(ctx, m, submitBlockRequest)
 }
 
-func (s *Service) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
-	return s.Relay.GetValidators()
+func (s *Service) GetValidators(m structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice {
+	return s.Relay.GetValidators(m)
 }
 
 func (s *Service) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {

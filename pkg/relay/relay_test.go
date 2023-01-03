@@ -65,7 +65,7 @@ func TestGetHeader(t *testing.T) {
 	}
 
 	a := auction.NewAuctioneer()
-	r := relay.NewRelay(log.New(), config, bs, ds, nil, a)
+	r := relay.NewRelay(log.New(), config, nil, bs, ds, nil, a)
 
 	require.NoError(t, err)
 
@@ -116,7 +116,7 @@ func TestGetHeader(t *testing.T) {
 	err = ds.PutRegistration(ctx, structs.PubKey{registration.Message.Pubkey}, *registration, time.Minute)
 	require.NoError(t, err)
 
-	response, err := r.GetHeader(ctx, request)
+	response, err := r.GetHeader(ctx, make(structs.MetricGroup), request)
 	require.NoError(t, err)
 
 	require.EqualValues(t, header, response.Data.Message.Header)
@@ -243,7 +243,7 @@ func TestGetPayload(t *testing.T) {
 
 	bs.EXPECT().Beacon().Return(fbn).Times(1)
 
-	response, err := r.GetPayload(ctx, request)
+	response, err := r.GetPayload(ctx, make(structs.MetricGroup), request)
 	require.NoError(t, err)
 
 	require.EqualValues(t, submitRequest.ExecutionPayload, response.Data)
@@ -276,7 +276,7 @@ func TestGetValidators(t *testing.T) {
 	}
 	bs.EXPECT().Beacon().Return(fbn).Times(1)
 
-	validators := r.GetValidators()
+	validators := r.GetValidators(make(structs.MetricGroup))
 	require.NotNil(t, validators)
 }
 
@@ -318,7 +318,7 @@ func TestSubmitBlock(t *testing.T) {
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime)
 
-	err = r.SubmitBlock(ctx, submitRequest)
+	err = r.SubmitBlock(ctx, make(structs.MetricGroup), submitRequest)
 	require.NoError(t, err)
 
 	signedBuilderBid, err := relay.SubmitBlockRequestToSignedBuilderBid(
@@ -417,7 +417,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := r.GetHeader(ctx, request)
+		_, err := r.GetHeader(ctx, make(structs.MetricGroup), request)
 		if err != nil {
 			panic(err)
 		}
@@ -505,7 +505,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		go func() {
-			_, err := r.GetHeader(ctx, request)
+			_, err := r.GetHeader(ctx, make(structs.MetricGroup), request)
 			if err != nil {
 				panic(err)
 			}
@@ -625,7 +625,7 @@ func BenchmarkGetPayload(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := r.GetPayload(ctx, request)
+		_, err := r.GetPayload(ctx, make(structs.MetricGroup), request)
 		if err != nil {
 			panic(err)
 		}
@@ -749,7 +749,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		go func() {
-			_, err := r.GetPayload(ctx, request)
+			_, err := r.GetPayload(ctx, make(structs.MetricGroup), request)
 			if err != nil {
 				panic(err)
 			}
@@ -794,7 +794,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := r.SubmitBlock(ctx, submitRequest)
+		err := r.SubmitBlock(ctx, make(structs.MetricGroup), submitRequest)
 		if err != nil {
 			panic(err)
 		}
@@ -842,7 +842,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		go func() {
-			err := r.SubmitBlock(ctx, submitRequest)
+			err := r.SubmitBlock(ctx, make(structs.MetricGroup), submitRequest)
 			if err != nil {
 				panic(err)
 			}
@@ -884,7 +884,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime+1) // +1 in order to make timestamp invalid
 
-	err = r.SubmitBlock(ctx, submitRequest)
+	err = r.SubmitBlock(ctx, make(structs.MetricGroup), submitRequest)
 	require.Error(t, err)
 }
 
@@ -1085,7 +1085,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		ExecutionPayload: payloadB1,
 	}
 
-	err = r.SubmitBlock(ctx, submitRequestOne)
+	err = r.SubmitBlock(ctx, make(structs.MetricGroup), submitRequestOne)
 	require.NoError(t, err)
 
 	// generate and send 2nd block
@@ -1117,7 +1117,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		ExecutionPayload: payloadB2,
 	}
 
-	err = r.SubmitBlock(ctx, submitRequestTwo)
+	err = r.SubmitBlock(ctx, make(structs.MetricGroup), submitRequestTwo)
 	require.NoError(t, err)
 
 	// check that payload served from relay is 2nd builders
@@ -1210,7 +1210,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		ExecutionPayload: payloadB1,
 	}
 
-	err = r.SubmitBlock(ctx, submitRequestOne)
+	err = r.SubmitBlock(ctx, make(structs.MetricGroup), submitRequestOne)
 	require.NoError(t, err)
 
 	// generate and send 2nd block from same builder
@@ -1236,7 +1236,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		ExecutionPayload: payloadB2,
 	}
 
-	err = r.SubmitBlock(ctx, submitRequestTwo)
+	err = r.SubmitBlock(ctx, make(structs.MetricGroup), submitRequestTwo)
 	require.NoError(t, err)
 
 	// check that payload served from relay is 2nd block with lower value

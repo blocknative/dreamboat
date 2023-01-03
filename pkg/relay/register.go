@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -42,6 +40,10 @@ type StoreReqItem struct {
 	RawPayload json.RawMessage
 	Time       uint64
 	Pubkey     types.PublicKey
+
+	// additional params
+	FeeRecipient types.Address
+	GasLimit     uint64
 }
 
 // Resp respone structure
@@ -56,11 +58,11 @@ type Resp struct {
 
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *Relay) RegisterValidator(ctx context.Context, payload []structs.SignedValidatorRegistration) (err error) {
+func (rs *Relay) RegisterValidator(ctx context.Context, m structs.MetricGroup, payload []structs.SignedValidatorRegistration) (err error) {
 	logger := rs.l.WithField("method", "RegisterValidator")
 
-	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidator", "all"))
-	defer timer.ObserveDuration()
+	tStart := time.Now()
+	m.ObserveSince("all", tStart)
 
 	be := rs.beaconState.Beacon()
 	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
@@ -79,6 +81,13 @@ SendPayloads:
 			return err
 		default:
 		}
+
+		if rs.regMngr.Check(p.Message) {
+			response.SkipOne()
+			rs.m.RegistrationsCacheHits.WithLabelValues("hit").Inc()
+			continue SendPayloads
+		}
+		rs.m.RegistrationsCacheHits.WithLabelValues("miss").Inc()
 
 		checkTime := time.Now()
 		o, ok := verifyOther(be, rs.regMngr, i, p)
@@ -110,11 +119,11 @@ SendPayloads:
 		return err
 	}
 	processTime := time.Since(timeStart)
-	rs.m.Timing.WithLabelValues("registerValidator", "verify").Observe(math.Abs(processTime.Seconds() - totalCheckTime.Seconds()))
-	rs.m.Timing.WithLabelValues("registerValidator", "check").Observe(totalCheckTime.Seconds())
+	m.Observe("verify", processTime-totalCheckTime)
+	m.Observe("check", totalCheckTime)
 
 	if si := response.SuccessfullIndexes(); len(si) > 0 {
-		timerStore := prometheus.NewTimer(rs.m.Timing.WithLabelValues("registerValidator", "asyncStore"))
+		tStore := time.Now()
 		request := StoreReq{Items: make([]StoreReqItem, len(si))}
 		for nextIter, i := range si {
 			p := payload[i]
@@ -122,10 +131,13 @@ SendPayloads:
 				Time:       p.Message.Timestamp,
 				Pubkey:     p.Message.Pubkey,
 				RawPayload: p.Raw,
+
+				FeeRecipient: p.Message.FeeRecipient,
+				GasLimit:     p.Message.GasLimit,
 			}
 		}
 		rs.regMngr.SendStore(request)
-		timerStore.ObserveDuration()
+		m.ObserveSince("asyncStore", tStore)
 	}
 
 	err = response.Error()
