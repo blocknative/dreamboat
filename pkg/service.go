@@ -68,12 +68,9 @@ func (s *Service) setReady() {
 func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 	logger := s.Log.WithField("method", "RunBeacon")
 
-	syncStatus, err := client.SyncStatus()
+	syncStatus, err := s.waitSynced(ctx, client)
 	if err != nil {
 		return err
-	}
-	if syncStatus.IsSyncing {
-		return ErrBeaconNodeSyncing
 	}
 
 	genesis, err := client.Genesis()
@@ -110,14 +107,35 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 				continue
 			}
 
+			validators := s.state.Beacon().KnownValidators()
+			duties := s.state.Beacon().ProposerDutiesResponse
+
 			logger.With(log.F{
 				"epoch":                     s.headslotSlot.Epoch(),
 				"slotHead":                  s.headslotSlot,
 				"slotStartNextEpoch":        structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
-				"numDuties":                 len(s.state.duties.Load().(structs.DutiesState).ProposerDutiesResponse),
-				"numKnownValidators":        len(s.state.duties.Load().(structs.ValidatorsState).KnownValidators),
+				"numDuties":                 len(duties),
+				"numKnownValidators":        len(validators),
 				"knownValidatorsUpdateTime": s.knownValidatorsUpdateTime(),
 			}).Debug("processed new slot")
+		}
+	}
+}
+
+func (s *Service) waitSynced(ctx context.Context, client BeaconClient) (*SyncStatusPayloadData, error) {
+	logger := s.Log.WithField("method", "WaitSynced")
+
+	for {
+		status, err := client.SyncStatus()
+		if err != nil || !status.IsSyncing {
+			return status, err
+		}
+
+		logger.Debug("beacon clients are syncing...")
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(3 * time.Second):
 		}
 	}
 }
