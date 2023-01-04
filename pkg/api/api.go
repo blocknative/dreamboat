@@ -138,7 +138,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 	}
 
 	m := structs.NewMetricGroup(4)
-	if err = a.s.RegisterValidator(r.Context(), m, payload); err != nil {
+	if err = a.r.RegisterValidator(r.Context(), m, payload); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
@@ -161,7 +161,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	req := ParseHeaderRequest(r)
 	m := structs.NewMetricGroup(4)
-	response, err := a.s.GetHeader(r.Context(), m, req)
+	response, err := a.r.GetHeader(r.Context(), m, req)
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
@@ -196,7 +196,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	m := structs.NewMetricGroup(4)
-	payload, err := a.s.GetPayload(r.Context(), m, &req)
+	payload, err := a.r.GetPayload(r.Context(), m, &req)
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
@@ -236,7 +236,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	m := structs.NewMetricGroup(4)
-	if err := a.s.SubmitBlock(r.Context(), m, &req); err != nil {
+	if err := a.r.SubmitBlock(r.Context(), m, &req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
@@ -261,7 +261,7 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	defer timer.ObserveDuration()
 
 	m := structs.NewMetricGroup(4)
-	vs := a.s.GetValidators(m)
+	vs := a.r.GetValidators(m)
 	if vs == nil {
 		a.l.Trace("no registered validators for epoch")
 		vs = structs.BuilderGetValidatorsResponseEntrySlice{}
