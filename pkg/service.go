@@ -32,7 +32,7 @@ type Relay interface {
 
 	// Builder APIs
 	SubmitBlock(context.Context, *structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
-	GetValidators(Metrics) structs.BuilderGetValidatorsResponseEntrySlice
+	GetValidators(*structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
 
 	AttachMetrics(m *metrics.Metrics)
 }
