@@ -166,7 +166,14 @@ var flags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:    "relay-distribution",
 		Usage:   "run relay as a distributed system with multiple replicas",
+		Value:   false,
 		EnvVars: []string{"RELAY_DISTRIBUTION"},
+	},
+	&cli.BoolFlag{
+		Name:    "relay-distribution-publish-all",
+		Usage:   "publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published",
+		Value:   false,
+		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_ALL"},
 	},
 	&cli.DurationFlag{
 		Name:    "relay-distribution-ttl",
@@ -329,10 +336,11 @@ func run() cli.ActionFunc {
 			remoteDatastore := &stream.RedisDatastore{redisClient}
 			pubsub := &stream.RedisPubsub{redisClient}
 			streamConfig := stream.StreamConfig{
-				ID:          "", // TODO: generate random ID (string)
-				PubsubTopic: c.String("relay-distribution-pubsub-topic"),
-				TTL:         c.Duration("relay-distribution-ttl"),
 				Logger:      config.Log,
+				ID:          "", // TODO: generate random ID (string)
+				TTL:         c.Duration("relay-distribution-ttl"),
+				PubsubTopic: c.String("relay-distribution-pubsub-topic"),
+				PublishAll:  c.Bool("relay-distribution-publish-all"),
 			}
 
 			streamDs := stream.NewStreamDatastore(badgerDs, pubsub, remoteDatastore, streamConfig)

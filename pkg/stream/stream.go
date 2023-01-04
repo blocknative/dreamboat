@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/lthibault/log"
@@ -28,10 +27,11 @@ type RemoteDatastore interface {
 }
 
 type StreamConfig struct {
-	ID          string
-	PubsubTopic string // pubsub topic name for block submissions
-	TTL         time.Duration
 	Logger      log.Logger
+	ID          string
+	TTL         time.Duration
+	PubsubTopic string // pubsub topic name for block submissions
+	PublishAll  bool
 }
 
 type StreamDatastore struct {
@@ -75,7 +75,7 @@ func (s *StreamDatastore) Run(ctx context.Context, logger log.Logger) error {
 			continue
 		}
 
-		block := toBlockAndTrace(&sBlock)
+		block := ToBlockAndTrace(&sBlock)
 		if sBlock.IsCache {
 			s.m.StreamRecvCounter.WithLabelValues("cache").Inc()
 			if err := s.cachePayload(ctx, block); err != nil {
@@ -239,11 +239,16 @@ func (s *StreamDatastore) PutPayload(ctx context.Context, key structs.PayloadKey
 	}
 	timer1.ObserveDuration()
 
+	// if PublishAll is deactivated, do not publish to Pubsub
+	if !s.Config.PublishAll {
+		return nil
+	}
+
 	timer1 = prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "pub"))
 	defer timer1.ObserveDuration()
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "encode"))
-	block := toStreamBlock(payload, false, s.Config.ID)
+	block := ToStreamBlock(payload, false, s.Config.ID)
 	rawBlock, err := proto.Marshal(block)
 	if err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
@@ -265,7 +270,7 @@ func (s *StreamDatastore) CacheBlock(ctx context.Context, block *structs.Complet
 	defer timer1.ObserveDuration()
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("cacheBlock", "encode"))
-	sBlock := toStreamBlock(&block.Payload, true, s.Config.ID)
+	sBlock := ToStreamBlock(&block.Payload, true, s.Config.ID)
 	b, err := proto.Marshal(sBlock)
 	if err != nil {
 		return fmt.Errorf("fail to encode stream block: %w", err)
@@ -273,98 +278,6 @@ func (s *StreamDatastore) CacheBlock(ctx context.Context, block *structs.Complet
 	timer2.ObserveDuration()
 
 	return s.Pubsub.Publish(ctx, s.Config.PubsubTopic, b)
-}
-
-func toStreamBlock(block *structs.BlockAndTrace, isCache bool, source string) *StreamBlock {
-	var transactions [][]byte
-	for _, tx := range block.Payload.Data.Transactions {
-		transactions = append(transactions, tx)
-	}
-
-	return &StreamBlock{
-		Source:  source,
-		IsCache: isCache,
-		Block: &PayloadAndTrace{
-			Trace: &SignedBidTrace{
-				Signature: block.Trace.Signature[:],
-				Message: &BidTrace{
-					Slot:                 block.Trace.Message.Slot,
-					ParentHash:           block.Trace.Message.ParentHash[:],
-					BlockHash:            block.Trace.Message.BlockHash[:],
-					BuilderPubkey:        block.Trace.Message.BuilderPubkey[:],
-					ProposerPubkey:       block.Trace.Message.ProposerPubkey[:],
-					ProposerFeeRecipient: block.Trace.Message.ProposerFeeRecipient[:],
-					GasLimit:             block.Trace.Message.GasLimit,
-					GasUsed:              block.Trace.Message.GasUsed,
-					Value:                block.Trace.Message.Value[:],
-				},
-			},
-			Payload: &PayloadWithVersion{
-				Version: string(block.Payload.Version),
-				Payload: &ExecutionPayload{
-					ParentHash:    block.Payload.Data.ParentHash[:],
-					FeeRecipient:  block.Payload.Data.FeeRecipient[:],
-					StateRoot:     block.Payload.Data.StateRoot[:],
-					ReceiptsRoot:  block.Payload.Data.ReceiptsRoot[:],
-					LogsBloom:     block.Payload.Data.LogsBloom[:],
-					Random:        block.Payload.Data.Random[:],
-					BlockNumber:   block.Payload.Data.BlockNumber,
-					GasLimit:      block.Payload.Data.GasLimit,
-					GasUsed:       block.Payload.Data.GasUsed,
-					Timestamp:     block.Payload.Data.Timestamp,
-					ExtraData:     block.Payload.Data.ExtraData,
-					BaseFeePerGas: block.Payload.Data.BaseFeePerGas[:],
-					BlockHash:     block.Payload.Data.BlockHash[:],
-					Transactions:  transactions,
-				},
-			},
-		},
-	}
-}
-
-func toBlockAndTrace(streamBlock *StreamBlock) *structs.BlockAndTrace {
-	block := structs.BlockAndTrace{
-		Trace: &types.SignedBidTrace{
-			Message: &types.BidTrace{},
-		},
-		Payload: &types.GetPayloadResponse{
-			Data: &types.ExecutionPayload{},
-		},
-	}
-
-	// copy trace
-	copy(block.Trace.Signature[:], streamBlock.Block.Trace.Signature)
-	block.Trace.Message.Slot = streamBlock.Block.Trace.Message.Slot
-	copy(block.Trace.Message.ParentHash[:], streamBlock.Block.Trace.Message.ParentHash)
-	copy(block.Trace.Message.BlockHash[:], streamBlock.Block.Trace.Message.BlockHash)
-	copy(block.Trace.Message.BuilderPubkey[:], streamBlock.Block.Trace.Message.BuilderPubkey)
-	copy(block.Trace.Message.ProposerPubkey[:], streamBlock.Block.Trace.Message.ProposerPubkey)
-	copy(block.Trace.Message.ProposerFeeRecipient[:], streamBlock.Block.Trace.Message.ProposerFeeRecipient)
-	block.Trace.Message.GasLimit = streamBlock.Block.Trace.Message.GasLimit
-	block.Trace.Message.GasUsed = streamBlock.Block.Trace.Message.GasUsed
-	copy(block.Trace.Message.Value[:], streamBlock.Block.Trace.Message.Value)
-
-	// copy payload
-	block.Payload.Version = types.VersionString(streamBlock.Block.Payload.Version)
-	copy(block.Payload.Data.ParentHash[:], streamBlock.Block.Payload.Payload.ParentHash)
-	copy(block.Payload.Data.FeeRecipient[:], streamBlock.Block.Payload.Payload.FeeRecipient)
-	copy(block.Payload.Data.StateRoot[:], streamBlock.Block.Payload.Payload.StateRoot)
-	copy(block.Payload.Data.ReceiptsRoot[:], streamBlock.Block.Payload.Payload.ReceiptsRoot)
-	copy(block.Payload.Data.LogsBloom[:], streamBlock.Block.Payload.Payload.LogsBloom)
-	copy(block.Payload.Data.Random[:], streamBlock.Block.Payload.Payload.Random)
-	block.Payload.Data.BlockNumber = streamBlock.Block.Payload.Payload.BlockNumber
-	block.Payload.Data.GasLimit = streamBlock.Block.Payload.Payload.GasLimit
-	block.Payload.Data.GasUsed = streamBlock.Block.Payload.Payload.GasUsed
-	block.Payload.Data.Timestamp = streamBlock.Block.Payload.Payload.Timestamp
-	copy(block.Payload.Data.ExtraData[:], streamBlock.Block.Payload.Payload.ExtraData)
-	copy(block.Payload.Data.BaseFeePerGas[:], streamBlock.Block.Payload.Payload.BaseFeePerGas)
-	copy(block.Payload.Data.BlockHash[:], streamBlock.Block.Payload.Payload.BlockHash)
-	block.Payload.Data.Transactions = make([]hexutil.Bytes, 0)
-	for _, tx := range streamBlock.Block.Payload.Payload.Transactions {
-		block.Payload.Data.Transactions = append(block.Payload.Data.Transactions, tx)
-	}
-
-	return &block
 }
 
 func payloadToKey(payload *structs.BlockAndTrace) structs.PayloadKey {
