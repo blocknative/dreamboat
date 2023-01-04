@@ -1,3 +1,4 @@
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/validators RegistrationStore
 package validators
 
 import (
@@ -44,17 +45,20 @@ type Register struct {
 	regMngr              RegistrationManager
 	ver                  Verifier
 	builderSigningDomain types.Domain
-	m                    *RegisterMetrics
+	m                    RegisterMetrics
 }
 
-func NewRegister(l log.Logger, builderSigningDomain types.Domain, beaconState State, ver Verifier, d RegistrationStore) *Register {
-	return &Register{
+func NewRegister(l log.Logger, builderSigningDomain types.Domain, beaconState State, ver Verifier, regMngr RegistrationManager, d RegistrationStore) *Register {
+	reg := &Register{
 		d:                    d,
 		l:                    l,
 		ver:                  ver,
+		regMngr:              regMngr,
 		builderSigningDomain: builderSigningDomain,
 		beaconState:          beaconState,
 	}
+	reg.initMetrics()
+	return reg
 }
 
 func (r *Register) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {

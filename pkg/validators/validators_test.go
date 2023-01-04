@@ -9,7 +9,7 @@ import (
 
 	"github.com/blocknative/dreamboat/blstools"
 	pkg "github.com/blocknative/dreamboat/pkg"
-	"github.com/blocknative/dreamboat/pkg/datastore/dsbadger"
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	mock_relay "github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -36,7 +36,7 @@ func TestRegisterValidator(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &dsbadger.Datastore{TTLStorage: &dsbadger.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -57,7 +57,6 @@ func TestRegisterValidator(t *testing.T) {
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
 		},
 	}
-	r := validators.NewRegister(l, relaySigningDomain, fbn, ver, ds)
 
 	registrations := make([]structs.SignedValidatorRegistration, 0, N)
 	for i := 0; i < N; i++ {
@@ -72,12 +71,13 @@ func TestRegisterValidator(t *testing.T) {
 	}
 	bs.EXPECT().Beacon().Return(fbn)
 
+	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr, ds)
 	err = r.RegisterValidator(ctx, structs.NewMetricGroup(4), registrations)
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
 	for _, registration := range registrations {
-		key := structs.PubKey{registration.Message.Pubkey}
+		key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 		gotRegistration, err := ds.GetRegistration(ctx, key)
 		require.NoError(t, err)
 		require.EqualValues(t, registration.SignedValidatorRegistration, gotRegistration)
@@ -96,7 +96,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &dsbadger.Datastore{TTLStorage: &dsbadger.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -106,8 +106,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
-		TTL:                  time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL: time.Minute,
 	}
 
 	l := log.New()
@@ -117,7 +116,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := validators.NewRegister(l, config, bs, ds, ver, ds)
+	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr, ds)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -146,7 +145,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	var errored bool
 	for i, registration := range registrations {
-		key := structs.PubKey{registration.Message.Pubkey}
+		key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 		gotRegistration, err := ds.GetRegistration(ctx, key)
 		if !errored {
 			if i != N/2 {
@@ -174,7 +173,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &dsbadger.Datastore{TTLStorage: &dsbadger.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -184,8 +183,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
-		TTL:                  time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL: time.Minute,
 	}
 
 	l := log.New()
@@ -196,7 +194,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := validators.NewRegister(l, config, bs, ds, ver, ds)
+	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr, ds)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -231,7 +229,9 @@ func BenchmarkRegisterValidator(b *testing.B) {
 
 	ctrl := gomock.NewController(b)
 
-	ds := mock_relay.NewMockDatastore(ctrl)
+	var datadir = "/tmp/" + b.Name() + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
@@ -240,8 +240,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
-		TTL:                  5 * time.Minute,
-		BuilderSigningDomain: relaySigningDomain,
+		TTL: 5 * time.Minute,
 	}
 
 	l := log.New()
@@ -252,7 +251,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := validators.NewRegister(l, config, bs, ds, ver, ds)
+	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr, ds)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -271,7 +270,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		fbn.ValidatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
 	bs.EXPECT().Beacon().Return(fbn).AnyTimes()
-	ds.EXPECT().PutRegistrationRaw(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
@@ -289,7 +288,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &dsbadger.Datastore{TTLStorage: &dsbadger.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -308,7 +307,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	const N = 10_000
 
-	r := validators.NewRegister(l, relaySigningDomain, bs, ds, ver, ds)
+	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr, ds)
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
 			KnownValidators: make(map[types.PubkeyHex]struct{}),

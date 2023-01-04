@@ -326,7 +326,7 @@ func run() cli.ActionFunc {
 		loadRegistrations(ds, regStr, logger)
 		go regStr.RunCleanup(uint64(config.TTL), time.Hour)
 
-		regM := validators.NewRegister(config.Log, domainBuilder, as, v, ds)
+		regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr, ds)
 		a := api.NewApi(config.Log, r, regM)
 		a.AttachMetrics(m)
 
