@@ -228,7 +228,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	var req types.BuilderSubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-		return http.StatusBadRequest, err
+		return http.StatusBadRequest, errors.New("invalid payload")
 	}
 
 	if req.ExecutionPayload != nil && req.ExecutionPayload.Transactions != nil {

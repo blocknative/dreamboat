@@ -96,12 +96,9 @@ func (s *Service) setReady() {
 func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 	logger := s.Log.WithField("method", "RunBeacon")
 
-	syncStatus, err := client.SyncStatus()
+	syncStatus, err := s.waitSynced(ctx, client)
 	if err != nil {
 		return err
-	}
-	if syncStatus.IsSyncing {
-		return ErrBeaconNodeSyncing
 	}
 
 	genesis, err := client.Genesis()
@@ -149,6 +146,24 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 				"numKnownValidators":        len(validators),
 				"knownValidatorsUpdateTime": s.knownValidatorsUpdateTime(),
 			}).Debug("processed new slot")
+		}
+	}
+}
+
+func (s *Service) waitSynced(ctx context.Context, client BeaconClient) (*SyncStatusPayloadData, error) {
+	logger := s.Log.WithField("method", "WaitSynced")
+
+	for {
+		status, err := client.SyncStatus()
+		if err != nil || !status.IsSyncing {
+			return status, err
+		}
+
+		logger.Debug("beacon clients are syncing...")
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(3 * time.Second):
 		}
 	}
 }
@@ -322,12 +337,12 @@ func (s *Service) getTailDelivered(ctx context.Context, limit, cursor uint64) ([
 		start = min(headSlot, structs.Slot(cursor))
 	}
 
-	stop := start - structs.Slot(s.Config.TTL/DurationPerSlot)
+	stop := start - min(structs.Slot(s.Config.TTL/DurationPerSlot), start)
 
 	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
 	queries := make([]structs.PayloadQuery, 0, limit)
 
-	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= structs.Slot(limit) {
+	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= min(structs.Slot(limit), highSlot) {
 		queries = queries[:0]
 		for s := highSlot; highSlot-structs.Slot(limit) < s && stop <= s; s-- {
 			queries = append(queries, structs.PayloadQuery{Slot: s})

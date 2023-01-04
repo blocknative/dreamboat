@@ -172,7 +172,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		Pubkey: rs.config.PubKey,
 	}
 
+	tSignature := time.Now()
 	signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
+	m.ObserveSince("signature", tSignature)
 	if err != nil {
 		return nil, fmt.Errorf("internal server error")
 	}

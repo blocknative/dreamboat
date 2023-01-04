@@ -70,29 +70,13 @@ type SlotInfo struct {
 }
 
 func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error) {
-	// Check memory
 	p, ok := s.hc.GetMaxProfit(uint64(slot))
 	if ok {
 		return p, nil
 	}
 
-	// Check new
 	p, err := s.getMaxHeader(ctx, slot)
-	if err == nil {
-		return p, nil
-	}
-
-	// Check old (until ttl passes)
-	headers, err := s.deprecatedGetHeaders(ctx, HeaderMaxProfitKey(slot))
-	if err != nil {
-		return p, err
-	}
-
-	if len(headers) == 0 {
-		return p, fmt.Errorf("there is no header")
-	}
-
-	return headers[0], nil
+	return p, err
 }
 
 var ErrNotFound = errors.New("not found")
@@ -288,26 +272,6 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag 
 		initialSlot--
 		// introduce limit?
 	}
-}
-
-func (s *Datastore) deprecatedGetHeaders(ctx context.Context, key ds.Key) ([]structs.HeaderAndTrace, error) {
-	data, err := s.TTLStorage.Get(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	return s.deprecatedUnsmarshalHeaders(data)
-}
-
-func (s *Datastore) deprecatedUnsmarshalHeaders(data []byte) ([]structs.HeaderAndTrace, error) {
-	var headers []structs.HeaderAndTrace
-	if err := json.Unmarshal(data, &headers); err != nil {
-		var header structs.HeaderAndTrace
-		if err := json.Unmarshal(data, &header); err != nil {
-			return nil, err
-		}
-		return []structs.HeaderAndTrace{header}, nil
-	}
-	return headers, nil
 }
 
 // SaveHeaders is meant to persist the all the keys under one key
