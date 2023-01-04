@@ -283,7 +283,7 @@ func run() cli.ActionFunc {
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
-		ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
+		ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
@@ -316,7 +316,6 @@ func run() cli.ActionFunc {
 		r.AttachMetrics(m)
 
 		service := pkg.NewService(config.Log, config, ds, as)
-		service.AttachMetrics(m)
 
 		regStr, err := validators.NewStoreManager(config.Log, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))
 		if err != nil {
@@ -399,12 +398,14 @@ func run() cli.ActionFunc {
 
 		<-cContext.Done()
 
-		ctx, _ := context.WithTimeout(context.Background(), shutdownTimeout)
+		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer closeC()
 		logger.Info("Shutdown initialized")
 		err = srv.Shutdown(ctx)
 		logger.Info("Shutdown returned ", err)
 
-		ctx, _ = context.WithTimeout(context.Background(), shutdownTimeout/2)
+		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
+		defer closeC()
 		finish := make(chan struct{})
 		go closemanager(ctx, finish, regStr)
 

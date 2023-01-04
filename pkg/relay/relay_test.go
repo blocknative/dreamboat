@@ -152,6 +152,7 @@ func TestGetPayload(t *testing.T) {
 		types.DomainTypeBeaconProposer,
 		pkg.BellatrixForkVersionRopsten,
 		pkg.GenesisValidatorsRootRopsten)
+	require.NoError(t, err)
 
 	config := relay.RelayConfig{
 		SecretKey:             pk, //pragma: allowlist secret
@@ -190,7 +191,7 @@ func TestGetPayload(t *testing.T) {
 			Attestations:           []*types.Attestation{},
 			Deposits:               []*types.Deposit{},
 			VoluntaryExits:         []*types.SignedVoluntaryExit{},
-			SyncAggregate:          &types.SyncAggregate{types.CommitteeBits{0x07}, types.Signature{0x08}},
+			SyncAggregate:          &types.SyncAggregate{CommitteeBits: types.CommitteeBits{0x07}, CommitteeSignature: types.Signature{0x08}},
 			ExecutionPayloadHeader: header,
 		},
 	}
@@ -282,6 +283,7 @@ func TestSubmitBlock(t *testing.T) {
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
+	require.NoError(t, err)
 
 	config := relay.RelayConfig{
 		TTL:                  time.Minute,
@@ -552,7 +554,7 @@ func BenchmarkGetPayload(b *testing.B) {
 			Attestations:           []*types.Attestation{},
 			Deposits:               []*types.Deposit{},
 			VoluntaryExits:         []*types.SignedVoluntaryExit{},
-			SyncAggregate:          &types.SyncAggregate{types.CommitteeBits{0x07}, types.Signature{0x08}},
+			SyncAggregate:          &types.SyncAggregate{CommitteeBits: types.CommitteeBits{0x07}, CommitteeSignature: types.Signature{0x08}},
 			ExecutionPayloadHeader: header,
 		},
 	}
@@ -669,7 +671,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 			Attestations:           []*types.Attestation{},
 			Deposits:               []*types.Deposit{},
 			VoluntaryExits:         []*types.SignedVoluntaryExit{},
-			SyncAggregate:          &types.SyncAggregate{types.CommitteeBits{0x07}, types.Signature{0x08}},
+			SyncAggregate:          &types.SyncAggregate{CommitteeBits: types.CommitteeBits{0x07}, CommitteeSignature: types.Signature{0x08}},
 			ExecutionPayloadHeader: header,
 		},
 	}
@@ -858,6 +860,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
+	require.NoError(t, err)
 
 	config := relay.RelayConfig{
 		TTL:                  5 * time.Minute,
