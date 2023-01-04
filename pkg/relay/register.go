@@ -58,11 +58,11 @@ type Resp struct {
 
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *Relay) RegisterValidator(ctx context.Context, m structs.MetricGroup, payload []structs.SignedValidatorRegistration) (err error) {
+func (rs *Relay) RegisterValidator(ctx context.Context, m Metrics, payload []structs.SignedValidatorRegistration) (err error) {
 	logger := rs.l.WithField("method", "RegisterValidator")
 
 	tStart := time.Now()
-	m.ObserveSince("all", tStart)
+	m.AppendSince(tStart, "registerValidator", "all")
 
 	be := rs.beaconState.Beacon()
 	verifyChan := rs.regMngr.GetVerifyChan(ResponseQueueRegister)
@@ -119,8 +119,8 @@ SendPayloads:
 		return err
 	}
 	processTime := time.Since(timeStart)
-	m.Observe("verify", processTime-totalCheckTime)
-	m.Observe("check", totalCheckTime)
+	m.Append(processTime-totalCheckTime, "registerValidator", "verify")
+	m.Append(totalCheckTime, "registerValidator", "check")
 
 	if si := response.SuccessfullIndexes(); len(si) > 0 {
 		tStore := time.Now()
@@ -137,7 +137,7 @@ SendPayloads:
 			}
 		}
 		rs.regMngr.SendStore(request)
-		m.ObserveSince("asyncStore", tStore)
+		m.AppendSince(tStore, "registerValidator", "asyncStore")
 	}
 
 	err = response.Error()

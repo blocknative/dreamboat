@@ -65,6 +65,11 @@ type Beacon interface {
 	PublishBlock(block *types.SignedBeaconBlock) error
 }
 
+type Metrics interface {
+	Append(dur time.Duration, labels ...string)
+	AppendSince(t time.Time, labels ...string)
+}
+
 type RelayConfig struct {
 	BuilderSigningDomain  types.Domain
 	ProposerSigningDomain types.Domain
@@ -111,9 +116,9 @@ func verifyTimestamp(timestamp uint64) bool {
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
-func (rs *Relay) GetHeader(ctx context.Context, m structs.MetricGroup, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
+func (rs *Relay) GetHeader(ctx context.Context, m Metrics, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
 	tStart := time.Now()
-	defer m.ObserveSince("all", tStart)
+	defer m.AppendSince(tStart, "getHeader", "all")
 
 	logger := rs.l.WithField("method", "GetHeader")
 
@@ -151,7 +156,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m structs.MetricGroup, request s
 		return nil, ErrNoBuilderBid
 	}
 
-	m.ObserveSince("get", tGet)
+	m.AppendSince(tGet, "getHeader", "get")
 
 	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
@@ -192,9 +197,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m structs.MetricGroup, request s
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, m structs.MetricGroup, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
+func (rs *Relay) GetPayload(ctx context.Context, m Metrics, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
 	tStart := time.Now()
-	defer m.ObserveSince("all", tStart)
+	defer m.AppendSince(tStart, "getPayload", "all")
 
 	if len(payloadRequest.Signature) != 96 {
 		return nil, fmt.Errorf("invalid signature")
@@ -229,7 +234,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m structs.MetricGroup, payloadR
 	if err != nil || !ok {
 		return nil, fmt.Errorf("signature invalid")
 	}
-	m.ObserveSince("verify", tVerify)
+	m.AppendSince(tVerify, "getPayload", "verify")
 
 	tGet := time.Now()
 	key := structs.PayloadKey{
@@ -242,7 +247,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m structs.MetricGroup, payloadR
 	if err != nil || payload == nil {
 		return nil, ErrNoPayloadFound
 	}
-	m.ObserveSince("get", tGet)
+	m.AppendSince(tGet, "getPayload", "get")
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
@@ -341,9 +346,9 @@ func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, 
 }
 
 // SubmitBlock Accepts block from trusted builder and stores
-func (rs *Relay) SubmitBlock(ctx context.Context, m structs.MetricGroup, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
+func (rs *Relay) SubmitBlock(ctx context.Context, m Metrics, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
 	tStart := time.Now()
-	defer m.ObserveSince("all", tStart)
+	defer m.AppendSince(tStart, "submitBlock", "all")
 
 	logger := rs.l.With(log.F{
 		"method":    "SubmitBlock",
@@ -363,7 +368,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m structs.MetricGroup, submitB
 	tCheckDelivered := time.Now()
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
 	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
-	m.ObserveSince("checkDelivered", tCheckDelivered)
+	m.AppendSince(tCheckDelivered,"submitBlock", "checkDelivered")
 	if ok {
 		return structs.ErrPayloadAlreadyDelivered
 	}
@@ -373,7 +378,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m structs.MetricGroup, submitB
 
 	tVerify := time.Now()
 	_, err = rs.verifySubmitSignature(ctx, submitBlockRequest)
-	m.ObserveSince("verify", tVerify)
+	m.AppendSince(tVerify, "submitBlock","verify")
 	if err != nil {
 		return fmt.Errorf("verify block: %w", err)
 	}
@@ -392,11 +397,11 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m structs.MetricGroup, submitB
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
 		return fmt.Errorf("fail to store block as payload: %w", err)
 	}
-	m.ObserveSince("putPayload", tPutPayload)
+	m.AppendSince(tPutPayload, "submitBlock","putPayload")
 
 	tAddAuction := time.Now()
 	isNewMax := rs.a.AddBlock(&complete)
-	m.ObserveSince("addAuction", tAddAuction)
+	m.AppendSince(tAddAuction, "addAuction")
 
 	tPutHeader := time.Now()
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
@@ -407,7 +412,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m structs.MetricGroup, submitB
 	if err != nil {
 		return fmt.Errorf("fail to store block as header: %w", err)
 	}
-	m.ObserveSince("putHeader", tPutHeader)
+	m.AppendSince(tPutHeader, "submitBlock","putHeader")
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
@@ -463,9 +468,9 @@ func (rs *Relay) prepareContents(submitBlockRequest *types.BuilderSubmitBlockReq
 }
 
 // GetValidators returns a list of registered block proposers in current and next epoch
-func (rs *Relay) GetValidators(m structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice {
+func (rs *Relay) GetValidators(m Metrics) structs.BuilderGetValidatorsResponseEntrySlice {
 	tStart := time.Now()
-	defer m.ObserveSince("all", tStart)
+	defer m.AppendSince(tStart, "getValidators", "all")
 
 	//log := rs.l.WithField("method", "GetValidators")
 	validators := rs.beaconState.Beacon().ValidatorsMap()

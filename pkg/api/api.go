@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
@@ -44,15 +45,22 @@ var (
 	ErrParamNotFound = errors.New("not found")
 )
 
+type Metrics interface {
+	Append(dur time.Duration, labels ...string)
+	AppendSince(t time.Time, labels ...string)
+	Observe(t structs.PrometheusObserver)
+	ObserveWithError(t structs.PrometheusObserver, err error)
+}
+
 type Service interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	RegisterValidator(context.Context, structs.MetricGroup, []structs.SignedValidatorRegistration) error
-	GetHeader(context.Context, structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-	GetPayload(context.Context, structs.MetricGroup, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
+	RegisterValidator(context.Context, Metrics, []structs.SignedValidatorRegistration) error
+	GetHeader(context.Context, Metrics, structs.HeaderRequest) (*types.GetHeaderResponse, error)
+	GetPayload(context.Context, Metrics, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	SubmitBlock(context.Context, structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
-	GetValidators(structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
+	SubmitBlock(context.Context, Metrics, *types.BuilderSubmitBlockRequest) error
+	GetValidators(Metrics) structs.BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
@@ -137,9 +145,9 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 		a.m.ApiReqElCount.WithLabelValues("registerValidator", "payload").Observe(float64(len(payload)))
 	}
 
-	m := make(structs.MetricGroup)
+	m := structs.NewMetricGroup(4)
 	if err = a.s.RegisterValidator(r.Context(), m, payload); err != nil {
-		m.CommitWithError(a.m.RelayTiming, "registerValidator", err)
+		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
 			"code":     400,
@@ -150,7 +158,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 		return http.StatusBadRequest, err
 	}
 
-	m.Commit(a.m.RelayTiming, "registerValidator")
+	m.Observe(a.m.RelayTiming)
 	a.m.ApiReqCounter.WithLabelValues("registerValidator", "200", "").Inc()
 	return http.StatusOK, err
 }
@@ -160,10 +168,10 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 	defer timer.ObserveDuration()
 
 	req := ParseHeaderRequest(r)
-	m := make(structs.MetricGroup)
+	m := structs.NewMetricGroup(4)
 	response, err := a.s.GetHeader(r.Context(), m, req)
 	if err != nil {
-		m.CommitWithError(a.m.RelayTiming, "getHeader", err)
+		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
 		a.l.With(log.F{
 			"code":     400,
@@ -173,7 +181,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusBadRequest, err
 	}
 
-	m.Commit(a.m.RelayTiming, "getHeader")
+	m.Observe(a.m.RelayTiming)
 
 	if err = json.NewEncoder(w).Encode(response); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
@@ -195,10 +203,10 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusBadRequest, errors.New("invalid payload")
 	}
 
-	m := make(structs.MetricGroup)
+	m := structs.NewMetricGroup(4)
 	payload, err := a.s.GetPayload(r.Context(), m, &req)
 	if err != nil {
-		m.CommitWithError(a.m.RelayTiming, "getPayload", err)
+		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
 		a.l.With(log.F{
 			"code":     400,
@@ -208,7 +216,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusBadRequest, err
 	}
 
-	m.Commit(a.m.RelayTiming, "getPayload")
+	m.Observe(a.m.RelayTiming)
 
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
@@ -235,9 +243,9 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload.Transactions)))
 	}
 
-	m := make(structs.MetricGroup)
+	m := structs.NewMetricGroup(4)
 	if err := a.s.SubmitBlock(r.Context(), m, &req); err != nil {
-		m.CommitWithError(a.m.RelayTiming, "submitBlock", err)
+		m.ObserveWithError(a.m.RelayTiming, err)
 		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
@@ -251,7 +259,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusBadRequest, err
 	}
 
-	m.Commit(a.m.RelayTiming, "submitBlock")
+	m.Observe(a.m.RelayTiming)
 	a.m.ApiReqCounter.WithLabelValues("submitBlock", "200", "").Inc()
 	return http.StatusOK, nil
 }
@@ -260,16 +268,16 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getValidators"))
 	defer timer.ObserveDuration()
 
-	m := make(structs.MetricGroup)
+	m := structs.NewMetricGroup(4)
 	vs := a.s.GetValidators(m)
 	if vs == nil {
 		a.l.Trace("no registered validators for epoch")
 		vs = structs.BuilderGetValidatorsResponseEntrySlice{}
-		m.CommitWithError(a.m.RelayTiming ,"getValidators", fmt.Errorf("no validators"))
+		m.ObserveWithError(a.m.RelayTiming, fmt.Errorf("no validators"))
 	}
 
 	if vs != nil {
-		m.Commit(a.m.RelayTiming ,"getValidators")
+		m.Observe(a.m.RelayTiming)
 		a.m.ApiReqElCount.WithLabelValues("getValidators", "validator").Observe(float64(len(vs)))
 	}
 
