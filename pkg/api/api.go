@@ -59,7 +59,7 @@ type Relay interface {
 
 type Registrations interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	RegisterValidator(context.Context, *structs.MetricGroup, []structs.SignedValidatorRegistration) error
+	RegisterValidator(context.Context, *structs.MetricGroup, []types.SignedValidatorRegistration) error
 	// Data APIs
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
@@ -134,7 +134,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("registerValidator"))
 	defer timer.ObserveDuration()
 
-	payload := []structs.SignedValidatorRegistration{}
+	payload := []types.SignedValidatorRegistration{}
 	if err = json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "input decoding").Inc()
 		return http.StatusBadRequest, errors.New("invalid payload")

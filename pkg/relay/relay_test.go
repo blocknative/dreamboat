@@ -49,8 +49,8 @@ func TestGetHeader(t *testing.T) {
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mock_relay.NewMockState(ctrl)
@@ -68,7 +68,9 @@ func TestGetHeader(t *testing.T) {
 	}
 
 	a := auction.NewAuctioneer()
-	r := relay.NewRelay(log.New(), config, bs, ds, ds, a)
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
+	r := relay.NewRelay(log.New(), config, ver, bs, ds, a)
 
 	require.NoError(t, err)
 
@@ -116,7 +118,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	a.AddBlock(&structs.CompleteBlockstruct{Header: pHeader, Payload: payload})
-	err = ds.PutRegistration(ctx, *registration, time.Minute)
+	err = ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, *registration, time.Minute)
 	require.NoError(t, err)
 
 	response, err := r.GetHeader(ctx, structs.NewMetricGroup(4), request)
@@ -164,7 +166,7 @@ func TestGetPayload(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ver, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(t, proposerSigningDomain, genesisTime)
@@ -233,7 +235,7 @@ func TestGetPayload(t *testing.T) {
 	}, time.Minute)
 
 	require.NoError(t, err)
-	err = ds.PutRegistration(ctx, *registration, time.Minute)
+	err = ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, *registration, time.Minute)
 	require.NoError(t, err)
 
 	fbn := &structs.BeaconState{
@@ -251,39 +253,6 @@ func TestGetPayload(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, submitRequest.ExecutionPayload, response.Data)
-}
-
-func TestGetValidators(t *testing.T) {
-	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
-	bs := mock_relay.NewMockState(ctrl)
-
-	config := relay.RelayConfig{
-		TTL: time.Minute,
-	}
-
-	l := log.New()
-
-	ver := verify.NewVerificationManager(l, 20)
-	ver.RunVerify(300)
-
-	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
-
-	fbn := &structs.BeaconState{
-		DutiesState: structs.DutiesState{
-			ProposerDutiesResponse: structs.BuilderGetValidatorsResponseEntrySlice{{
-				Slot:  0,
-				Entry: &types.SignedValidatorRegistration{},
-			}},
-		},
-	}
-	bs.EXPECT().Beacon().Return(fbn).Times(1)
-
-	validators := r.GetValidators(structs.NewMetricGroup(4))
-	require.NotNil(t, validators)
 }
 
 func TestSubmitBlock(t *testing.T) {
@@ -305,8 +274,9 @@ func TestSubmitBlock(t *testing.T) {
 	bs := mock_relay.NewMockState(ctrl)
 
 	l := log.New()
-	regMgr := relay.NewProcessManager(l, 20, 20)
-	regMgr.RunVerify(300)
+
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -318,7 +288,7 @@ func TestSubmitBlock(t *testing.T) {
 		SecretKey:            sk,
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -376,7 +346,10 @@ func BenchmarkGetHeader(b *testing.B) {
 		ProposerSigningDomain: proposerSigningDomain,
 	}
 
-	r := relay.NewRelay(log.New(), config, bs, ds, nil, ds, auction.NewAuctioneer())
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
+
+	r := relay.NewRelay(log.New(), config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -417,7 +390,7 @@ func BenchmarkGetHeader(b *testing.B) {
 		Marshaled:      jsHeader,
 	}, time.Minute)
 
-	_ = ds.PutRegistration(ctx, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, *registration, time.Minute)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -457,7 +430,11 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		PubKey:                types.PublicKey(random48Bytes()),
 		ProposerSigningDomain: proposerSigningDomain,
 	}
-	r := relay.NewRelay(log.New(), config, bs, ds, nil, ds, auction.NewAuctioneer())
+
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
+
+	r := relay.NewRelay(log.New(), config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -499,7 +476,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		Marshaled:      jsHeader,
 	}, time.Minute)
 
-	_ = ds.PutRegistration(ctx, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, *registration, time.Minute)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -548,10 +525,11 @@ func BenchmarkGetPayload(b *testing.B) {
 	}
 
 	l := log.New()
-	regMgr := relay.NewProcessManager(l, 20, 20)
-	regMgr.RunVerify(300)
 
-	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
+
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -615,7 +593,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		Marshaled:      jsHeader,
 	}, time.Minute)
 
-	_ = ds.PutRegistration(ctx, *registration, time.Minute)
+	_ = ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, *registration, time.Minute)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -659,8 +637,8 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		pkg.GenesisValidatorsRootRopsten)
 
 	l := log.New()
-	regMgr := relay.NewProcessManager(l, 20, 20)
-	regMgr.RunVerify(300)
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
 
 	config := relay.RelayConfig{
 		TTL:                   5 * time.Minute,
@@ -668,7 +646,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		PubKey:                types.PublicKey(random48Bytes()),
 		ProposerSigningDomain: proposerSigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -734,7 +712,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		Marshaled:      jsHeader,
 	}, time.Minute)
 
-	_ = ds.PutRegistration(ctx, *registration, time.Minute)
+	// _ = ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, *registration, time.Minute)
 
 	fbn := &structs.BeaconState{
 		ValidatorsState: structs.ValidatorsState{
@@ -776,8 +754,9 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	bs := mock_relay.NewMockState(ctrl)
 
 	l := log.New()
-	regMgr := relay.NewProcessManager(l, 20, 20)
-	regMgr.RunVerify(300)
+
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -790,7 +769,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -818,8 +797,9 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	bs := mock_relay.NewMockState(ctrl)
 
 	l := log.New()
-	regMgr := relay.NewProcessManager(l, 20, 20)
-	regMgr.RunVerify(300)
+
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -832,7 +812,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -870,8 +850,9 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	sk, _, _ := bls.GenerateNewKeypair()
 
 	l := log.New()
-	regMgr := relay.NewProcessManager(l, 20, 20)
-	regMgr.RunVerify(300)
+
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -884,7 +865,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -1038,9 +1019,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 
-	l := log.New()
-	regMgr := relay.NewProcessManager(l, 20, 20)
-	regMgr.RunVerify(300)
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -1053,7 +1033,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	// generate and send 1st block
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
@@ -1157,8 +1137,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 
 	l := log.New()
-	regMgr := relay.NewProcessManager(l, 20, 20)
-	regMgr.RunVerify(300)
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -1171,7 +1151,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
-	r := relay.NewRelay(l, config, bs, ds, regMgr, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, ver, bs, ds, auction.NewAuctioneer())
 
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)

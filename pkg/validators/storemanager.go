@@ -2,7 +2,6 @@ package validators
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -18,9 +17,9 @@ import (
 
 // StoreReqItem is similar to VerifyReq jsut for storing payloads
 type StoreReqItem struct {
-	RawPayload json.RawMessage
-	Time       uint64
-	Pubkey     types.PublicKey
+	Payload types.SignedValidatorRegistration
+	Time    uint64
+	Pubkey  types.PublicKey
 
 	// additional params
 	FeeRecipient types.Address
@@ -177,7 +176,7 @@ func (pm *StoreManager) storeRegistration(ctx context.Context, datas Registratio
 	for _, i := range payload.Items {
 		t := prometheus.NewTimer(pm.m.StoreTiming)
 		now := time.Now()
-		err := datas.PutRegistrationRaw(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.RawPayload, ttl)
+		err := datas.PutRegistration(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.Payload, ttl)
 		if err != nil {
 			pm.m.StoreErrorRate.Inc()
 			return err

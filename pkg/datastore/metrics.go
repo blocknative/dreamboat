@@ -2,11 +2,10 @@ package datastore
 
 import (
 	"github.com/blocknative/dreamboat/metrics"
-	met "github.com/blocknative/dreamboat/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func InitDatastoreMetrics(m *met.Metrics) error {
+func InitDatastoreMetrics(m *metrics.Metrics) error {
 	return m.RegisterExpvar(map[string]*prometheus.Desc{
 		"badger_v2_blocked_puts_total":   prometheus.NewDesc("badger_blocked_puts_total", "Blocked Puts", nil, nil),
 		"badger_v2_disk_reads_total":     prometheus.NewDesc("badger_disk_reads_total", "Disk Reads", nil, nil),

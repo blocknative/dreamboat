@@ -12,7 +12,6 @@ import (
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type State interface {
@@ -24,7 +23,7 @@ type Verifier interface {
 }
 
 type RegistrationStore interface {
-	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
+	PutRegistration(context.Context, structs.PubKey, types.SignedValidatorRegistration, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
 }
 
@@ -67,7 +66,7 @@ func (r *Register) Registration(ctx context.Context, pk types.PublicKey) (types.
 
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *Register) RegisterValidator(ctx context.Context, m *structs.MetricGroup, payload []structs.SignedValidatorRegistration) (err error) {
+func (rs *Register) RegisterValidator(ctx context.Context, m *structs.MetricGroup, payload []types.SignedValidatorRegistration) (err error) {
 	logger := rs.l.WithField("method", "RegisterValidator")
 
 	tStart := time.Now()
@@ -137,9 +136,9 @@ SendPayloads:
 		for nextIter, i := range si {
 			p := payload[i]
 			request.Items[nextIter] = StoreReqItem{
-				Time:       p.Message.Timestamp,
-				Pubkey:     p.Message.Pubkey,
-				RawPayload: p.Raw,
+				Time:    p.Message.Timestamp,
+				Pubkey:  p.Message.Pubkey,
+				Payload: p,
 
 				FeeRecipient: p.Message.FeeRecipient,
 				GasLimit:     p.Message.GasLimit,
@@ -160,7 +159,7 @@ SendPayloads:
 	return err
 }
 
-func verifyOther(beacon *structs.BeaconState, tsReg RegistrationManager, i int, sp structs.SignedValidatorRegistration) (svresp verify.Resp, ok bool) {
+func verifyOther(beacon *structs.BeaconState, tsReg RegistrationManager, i int, sp types.SignedValidatorRegistration) (svresp verify.Resp, ok bool) {
 	if verifyTimestamp(sp.Message.Timestamp) {
 		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String())}, false
 	}
@@ -181,9 +180,9 @@ func verifyTimestamp(timestamp uint64) bool {
 }
 
 // GetValidators returns a list of registered block proposers in current and next epoch
-func (rs *Register) GetValidators() structs.BuilderGetValidatorsResponseEntrySlice {
-	timer := prometheus.NewTimer(rs.m.Timing.WithLabelValues("getValidators", "all"))
-	defer timer.ObserveDuration()
+func (rs *Register) GetValidators(m *structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice {
+	tStart := time.Now()
+	defer m.AppendSince(tStart, "getValidators", "all")
 
 	validators := rs.beaconState.Beacon().ValidatorsMap()
 	return validators
