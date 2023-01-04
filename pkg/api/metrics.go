@@ -47,4 +47,5 @@ func (api *API) AttachMetrics(m *metrics.Metrics) {
 	m.Register(api.m.ApiReqCounter)
 	m.Register(api.m.ApiReqTiming)
 	m.Register(api.m.ApiReqElCount)
+	m.Register(api.m.RelayTiming)
 }
