@@ -58,7 +58,7 @@ type Resp struct {
 
 // ***** Builder Domain *****
 // RegisterValidator is called is called by validators communicating through mev-boost who would like to receive a block from us when their slot is scheduled
-func (rs *Relay) RegisterValidator(ctx context.Context, m Metrics, payload []structs.SignedValidatorRegistration) (err error) {
+func (rs *Relay) RegisterValidator(ctx context.Context, m *structs.MetricGroup, payload []structs.SignedValidatorRegistration) (err error) {
 	logger := rs.l.WithField("method", "RegisterValidator")
 
 	tStart := time.Now()

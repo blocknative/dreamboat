@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
@@ -45,22 +44,15 @@ var (
 	ErrParamNotFound = errors.New("not found")
 )
 
-type Metrics interface {
-	Append(dur time.Duration, labels ...string)
-	AppendSince(t time.Time, labels ...string)
-	Observe(t structs.PrometheusObserver)
-	ObserveWithError(t structs.PrometheusObserver, err error)
-}
-
 type Service interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	RegisterValidator(context.Context, Metrics, []structs.SignedValidatorRegistration) error
-	GetHeader(context.Context, Metrics, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-	GetPayload(context.Context, Metrics, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
+	RegisterValidator(context.Context, *structs.MetricGroup, []structs.SignedValidatorRegistration) error
+	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
+	GetPayload(context.Context, *structs.MetricGroup, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	SubmitBlock(context.Context, Metrics, *types.BuilderSubmitBlockRequest) error
-	GetValidators(Metrics) structs.BuilderGetValidatorsResponseEntrySlice
+	SubmitBlock(context.Context, *structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
+	GetValidators(*structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)

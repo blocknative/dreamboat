@@ -65,11 +65,6 @@ type Beacon interface {
 	PublishBlock(block *types.SignedBeaconBlock) error
 }
 
-type Metrics interface {
-	Append(dur time.Duration, labels ...string)
-	AppendSince(t time.Time, labels ...string)
-}
-
 type RelayConfig struct {
 	BuilderSigningDomain  types.Domain
 	ProposerSigningDomain types.Domain
@@ -116,7 +111,7 @@ func verifyTimestamp(timestamp uint64) bool {
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
-func (rs *Relay) GetHeader(ctx context.Context, m Metrics, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
+func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getHeader", "all")
 
@@ -197,7 +192,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m Metrics, request structs.Heade
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, m Metrics, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
+func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
@@ -346,7 +341,7 @@ func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, 
 }
 
 // SubmitBlock Accepts block from trusted builder and stores
-func (rs *Relay) SubmitBlock(ctx context.Context, m Metrics, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
+func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "submitBlock", "all")
 
@@ -368,7 +363,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m Metrics, submitBlockRequest 
 	tCheckDelivered := time.Now()
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
 	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
-	m.AppendSince(tCheckDelivered,"submitBlock", "checkDelivered")
+	m.AppendSince(tCheckDelivered, "submitBlock", "checkDelivered")
 	if ok {
 		return structs.ErrPayloadAlreadyDelivered
 	}
@@ -378,7 +373,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m Metrics, submitBlockRequest 
 
 	tVerify := time.Now()
 	_, err = rs.verifySubmitSignature(ctx, submitBlockRequest)
-	m.AppendSince(tVerify, "submitBlock","verify")
+	m.AppendSince(tVerify, "submitBlock", "verify")
 	if err != nil {
 		return fmt.Errorf("verify block: %w", err)
 	}
@@ -397,7 +392,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m Metrics, submitBlockRequest 
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
 		return fmt.Errorf("fail to store block as payload: %w", err)
 	}
-	m.AppendSince(tPutPayload, "submitBlock","putPayload")
+	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
 
 	tAddAuction := time.Now()
 	isNewMax := rs.a.AddBlock(&complete)
@@ -412,7 +407,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m Metrics, submitBlockRequest 
 	if err != nil {
 		return fmt.Errorf("fail to store block as header: %w", err)
 	}
-	m.AppendSince(tPutHeader, "submitBlock","putHeader")
+	m.AppendSince(tPutHeader, "submitBlock", "putHeader")
 
 	logger.With(log.F{
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
@@ -468,7 +463,7 @@ func (rs *Relay) prepareContents(submitBlockRequest *types.BuilderSubmitBlockReq
 }
 
 // GetValidators returns a list of registered block proposers in current and next epoch
-func (rs *Relay) GetValidators(m Metrics) structs.BuilderGetValidatorsResponseEntrySlice {
+func (rs *Relay) GetValidators(m *structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice {
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getValidators", "all")
 
