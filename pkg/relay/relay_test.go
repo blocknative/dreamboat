@@ -12,10 +12,9 @@ import (
 
 	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/pkg/auction"
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/verify"
 
-	"github.com/blocknative/dreamboat/pkg/datastore/dsbadger"
-	"github.com/blocknative/dreamboat/pkg/datastore/headerscontroller"
 	mock_relay "github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/google/uuid"
@@ -142,9 +141,9 @@ func TestGetPayload(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
+	hc := datastore.NewHeaderController(100, time.Hour)
 
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mock_relay.NewMockState(ctrl)
@@ -270,8 +269,8 @@ func TestSubmitBlock(t *testing.T) {
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -331,8 +330,8 @@ func BenchmarkGetHeader(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(b, err)
 
 	bs := mock_relay.NewMockState(ctrl)
@@ -417,8 +416,8 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -510,8 +509,8 @@ func BenchmarkGetPayload(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -629,8 +628,8 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -753,7 +752,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 
 	pk, _, _ := bls.GenerateNewKeypair()
 
-	ds := &dsbadger.Datastore{TTLStorage: newMockDatastore()}
+	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
 	l := log.New()
@@ -796,7 +795,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	ctrl := gomock.NewController(b)
 
 	pk, _, _ := bls.GenerateNewKeypair()
-	ds := &dsbadger.Datastore{TTLStorage: newMockDatastore()}
+	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 
 	l := log.New()
@@ -848,7 +847,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &dsbadger.Datastore{TTLStorage: newMockDatastore()}
+	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mock_relay.NewMockState(ctrl)
 	sk, _, _ := bls.GenerateNewKeypair()
 
@@ -1015,8 +1014,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 	bs := mock_relay.NewMockState(ctrl)
 
@@ -1131,8 +1130,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	hc := headerscontroller.NewHeaderController(100, time.Hour)
-	ds, err := dsbadger.NewDatastore(&dsbadger.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mock_relay.NewMockState(ctrl)
