@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blocknative/dreamboat/blstools"
 	pkg "github.com/blocknative/dreamboat/pkg"
 	datastore "github.com/blocknative/dreamboat/pkg/datastore"
 	realRelay "github.com/blocknative/dreamboat/pkg/relay"

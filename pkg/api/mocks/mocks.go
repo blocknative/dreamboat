@@ -213,7 +213,7 @@ func (mr *MockRegistrationsMockRecorder) GetValidators() *gomock.Call {
 }
 
 // RegisterValidator mocks base method
-func (m *MockRegistrations) RegisterValidator(arg0 context.Context, arg1 []structs.SignedValidatorRegistration) error {
+func (m *MockRegistrations) RegisterValidator(arg0 context.Context, arg1 []types.SignedValidatorRegistration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterValidator", arg0, arg1)
 	ret0, _ := ret[0].(error)
