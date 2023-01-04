@@ -396,7 +396,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	tAddAuction := time.Now()
 	isNewMax := rs.a.AddBlock(&complete)
-	m.AppendSince(tAddAuction, "addAuction")
+	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
 	tPutHeader := time.Now()
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
