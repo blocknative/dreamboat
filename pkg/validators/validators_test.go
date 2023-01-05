@@ -77,7 +77,10 @@ func TestRegisterValidator(t *testing.T) {
 	require.NoError(t, err)
 
 	l := log.New()
-	storeMgr := validators.NewStoreManager(l, 20000)
+	storeMgr, err := validators.NewStoreManager(l, 20, 20000, 20)
+	if err != nil {
+		t.Error()
+	}
 	storeMgr.RunStore(ds, time.Minute, 300)
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -137,7 +140,10 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	}
 
 	l := log.New()
-	storeMgr := validators.NewStoreManager(l, 20000)
+	storeMgr, err := validators.NewStoreManager(l, 20, 20000, 20)
+	if err != nil {
+		t.Error()
+	}
 	storeMgr.RunStore(ds, config.TTL, 300)
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -211,7 +217,10 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 
 	l := log.New()
 
-	storeMgr := validators.NewStoreManager(l, 20000)
+	storeMgr, err := validators.NewStoreManager(l, 20, 20000, 20)
+	if err != nil {
+		t.Error()
+	}
 	storeMgr.RunStore(ds, config.TTL, 300)
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -264,7 +273,10 @@ func BenchmarkRegisterValidator(b *testing.B) {
 
 	l := log.New()
 
-	storeMgr := validators.NewStoreManager(l, 20000)
+	storeMgr, err := validators.NewStoreManager(l, 20, 20000, 20)
+	if err != nil {
+		b.Error()
+	}
 	storeMgr.RunStore(ds, config.TTL, 300)
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -311,7 +323,11 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		types.Root{}.String())
 
 	l := log.New()
-	storeMgr := validators.NewStoreManager(l, 20000)
+
+	storeMgr, err := validators.NewStoreManager(l, 20, 20000, 20)
+	if err != nil {
+		b.Error()
+	}
 	storeMgr.RunStore(ds, 5*time.Minute, 300)
 
 	ver := verify.NewVerificationManager(l, 20000)

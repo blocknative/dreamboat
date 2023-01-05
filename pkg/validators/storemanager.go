@@ -10,7 +10,7 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
