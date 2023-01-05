@@ -1,6 +1,7 @@
-package datastore
+package headerscontroller
 
 import (
+	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -8,6 +9,11 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
+
+type SlotInfo struct {
+	Slot  uint64
+	Added time.Time
+}
 
 type HeaderController struct {
 	headers map[uint64]*IndexedHeaders
@@ -212,6 +218,24 @@ func (hc *HeaderController) GetMaxProfit(slot uint64) (hnt structs.HeaderAndTrac
 	}
 	return s.GetMaxProfit()
 
+}
+
+type IndexMeta struct {
+	Hash          [32]byte
+	Value         *big.Int
+	BuilderPubkey [48]byte
+}
+
+type StoredIndex struct {
+	Index                []IndexMeta
+	MaxProfit            IndexMeta
+	SubmissionsByPubKeys map[[48]byte]IndexMeta
+}
+
+func NewStoreIndex() StoredIndex {
+	return StoredIndex{
+		SubmissionsByPubKeys: make(map[[48]byte]IndexMeta),
+	}
 }
 
 type IndexedHeaders struct {
