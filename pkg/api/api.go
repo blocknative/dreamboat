@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/api Service
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/api Relay
 
 package api
 
@@ -44,7 +44,7 @@ var (
 	ErrParamNotFound = errors.New("not found")
 )
 
-type Service interface {
+type Relay interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
 	RegisterValidator(context.Context, *structs.MetricGroup, []structs.SignedValidatorRegistration) error
 	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
@@ -62,13 +62,13 @@ type Service interface {
 
 type API struct {
 	l log.Logger
-	s Service
+	r Relay
 
 	m APIMetrics
 }
 
-func NewApi(l log.Logger, s Service) (a *API) {
-	a = &API{l: l, s: s}
+func NewApi(l log.Logger, r Relay) (a *API) {
+	a = &API{l: l, r: r}
 	a.initMetrics()
 	return a
 }
@@ -138,7 +138,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 	}
 
 	m := structs.NewMetricGroup(4)
-	if err = a.s.RegisterValidator(r.Context(), m, payload); err != nil {
+	if err = a.r.RegisterValidator(r.Context(), m, payload); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
@@ -161,7 +161,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	req := ParseHeaderRequest(r)
 	m := structs.NewMetricGroup(4)
-	response, err := a.s.GetHeader(r.Context(), m, req)
+	response, err := a.r.GetHeader(r.Context(), m, req)
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
@@ -196,7 +196,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	m := structs.NewMetricGroup(4)
-	payload, err := a.s.GetPayload(r.Context(), m, &req)
+	payload, err := a.r.GetPayload(r.Context(), m, &req)
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
@@ -236,7 +236,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	m := structs.NewMetricGroup(4)
-	if err := a.s.SubmitBlock(r.Context(), m, &req); err != nil {
+	if err := a.r.SubmitBlock(r.Context(), m, &req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
@@ -261,7 +261,7 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 	defer timer.ObserveDuration()
 
 	m := structs.NewMetricGroup(4)
-	vs := a.s.GetValidators(m)
+	vs := a.r.GetValidators(m)
 	if vs == nil {
 		a.l.Trace("no registered validators for epoch")
 		vs = structs.BuilderGetValidatorsResponseEntrySlice{}
@@ -295,7 +295,7 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) (int,
 		return http.StatusBadRequest, err
 	}
 
-	registration, err := a.s.Registration(r.Context(), pk)
+	registration, err := a.r.Registration(r.Context(), pk)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "registration").Inc()
 		return http.StatusInternalServerError, err
@@ -358,7 +358,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		Limit:     limit,
 	}
 
-	payloads, err := a.s.GetPayloadDelivered(r.Context(), query)
+	payloads, err := a.r.GetPayloadDelivered(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
 		return http.StatusInternalServerError, err
@@ -412,7 +412,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 		Limit:     limit,
 	}
 
-	blocks, err := a.s.GetBlockReceived(r.Context(), query)
+	blocks, err := a.r.GetBlockReceived(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
 		return http.StatusInternalServerError, err

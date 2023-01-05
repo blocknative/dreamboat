@@ -43,6 +43,13 @@ type Datastore interface {
 
 	PutRegistrationRaw(context.Context, structs.PubKey, []byte, time.Duration) error
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+
+	// to be changed
+	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
+	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
+	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
+	GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
+	GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
 }
 
 type Auctioneer interface {
@@ -51,9 +58,7 @@ type Auctioneer interface {
 }
 
 type RegistrationManager interface {
-	//GetStoreChan() chan StoreReq
 	GetVerifyChan(buffer uint) chan VerifyReq
-	//Set(k string, value uint64)
 
 	SendStore(sReq StoreReq)
 	Get(k string) (value uint64, ok bool)
@@ -174,7 +179,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	tSignature := time.Now()
 	signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
-	m.ObserveSince("signature", tSignature)
+	m.AppendSince(tSignature, "getHeader", "signature")
 	if err != nil {
 		return nil, fmt.Errorf("internal server error")
 	}

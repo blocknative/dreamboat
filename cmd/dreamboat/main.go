@@ -333,11 +333,11 @@ func run() cli.ActionFunc {
 		}, beacon, as, ds, regMgr, auctioneer)
 		r.AttachMetrics(m)
 
-		service := pkg.NewService(config.Log, config, ds, r, as)
+		service := pkg.NewService(config.Log, config, ds, as)
 		service.AttachMetrics(m)
 
-		api := api.NewApi(config.Log, service)
-		api.AttachMetrics(m)
+		a := api.NewApi(config.Log, r)
+		a.AttachMetrics(m)
 
 		regMgr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
 		regMgr.RunVerify(c.Uint("relay-workers-verify"))
@@ -385,7 +385,7 @@ func run() cli.ActionFunc {
 		logger.Info("relay service ready")
 
 		mux := http.NewServeMux()
-		api.AttachToHandler(mux)
+		a.AttachToHandler(mux)
 
 		var srv http.Server
 		// run the http server
