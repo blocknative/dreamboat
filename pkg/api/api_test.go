@@ -53,7 +53,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		register.EXPECT().
-			RegisterValidator(gomock.Any(), gomock.Any()).
+			RegisterValidator(gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -71,7 +71,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetHeader(gomock.Any(), gomock.Any()).
+			GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -89,7 +89,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayload(gomock.Any(), gomock.Any()).
+			GetPayload(gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -107,7 +107,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			SubmitBlock(gomock.Any(), gomock.Any()).
+			SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -125,7 +125,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		register.EXPECT().
-			GetValidators().
+			GetValidators(gomock.Any()).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -395,11 +395,11 @@ func BenchmarkAPISequential(b *testing.B) {
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 
-	service.EXPECT().GetHeader(gomock.Any(), gomock.Any()).AnyTimes()
-	service.EXPECT().GetPayload(gomock.Any(), gomock.Any()).AnyTimes()
-	register.EXPECT().GetValidators().AnyTimes()
-	register.EXPECT().RegisterValidator(gomock.Any(), gomock.Any()).AnyTimes()
-	service.EXPECT().SubmitBlock(gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().GetPayload(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	register.EXPECT().GetValidators(gomock.Any()).AnyTimes()
+	register.EXPECT().RegisterValidator(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	w := httptest.NewRecorder()
 
@@ -426,11 +426,11 @@ func BenchmarkAPIParallel(b *testing.B) {
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 
-	service.EXPECT().GetHeader(gomock.Any(), gomock.Any()).AnyTimes()
-	service.EXPECT().GetPayload(gomock.Any(), gomock.Any()).AnyTimes()
-	register.EXPECT().GetValidators().AnyTimes()
-	register.EXPECT().RegisterValidator(gomock.Any(), gomock.Any()).AnyTimes()
-	service.EXPECT().SubmitBlock(gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().GetPayload(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	register.EXPECT().GetValidators(gomock.Any()).AnyTimes()
+	register.EXPECT().RegisterValidator(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	randReqs := make([]*http.Request, 0)
 	ws := make([]*httptest.ResponseRecorder, 0)

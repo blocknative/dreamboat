@@ -63,7 +63,7 @@ type Registrations interface {
 	// Data APIs
 	Registration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	GetValidators() structs.BuilderGetValidatorsResponseEntrySlice
+	GetValidators(*structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
 }
 
 type API struct {
