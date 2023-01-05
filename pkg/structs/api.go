@@ -1,7 +1,6 @@
 package structs
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
+/*
 type SignedValidatorRegistration struct {
 	types.SignedValidatorRegistration
 	Raw json.RawMessage
@@ -24,6 +24,7 @@ func (s *SignedValidatorRegistration) UnmarshalJSON(b []byte) error {
 	s.Raw = b
 	return nil
 }
+*/
 
 type HeaderRequest map[string]string
 
