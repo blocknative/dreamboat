@@ -15,7 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// StoreReqItem is similar to VerifyReq jsut for storing payloads
+// StoreReqItem is a payload requested to be stored
 type StoreReqItem struct {
 	Payload types.SignedValidatorRegistration
 	Time    uint64
