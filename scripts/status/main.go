@@ -5,12 +5,12 @@ import (
 	"io"
 	"net/http"
 
-	relay "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/pkg/errors"
 )
 
 const (
-	url = "http://localhost:18550" + relay.PathStatus
+	url = "http://localhost:18550" + api.PathStatus
 )
 
 func main() {

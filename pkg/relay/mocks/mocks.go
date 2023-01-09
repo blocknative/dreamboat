@@ -81,6 +81,81 @@ func (mr *MockDatastoreMockRecorder) GetDelivered(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDelivered", reflect.TypeOf((*MockDatastore)(nil).GetDelivered), arg0, arg1)
 }
 
+// GetDeliveredBatch mocks base method.
+func (m *MockDatastore) GetDeliveredBatch(arg0 context.Context, arg1 []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDeliveredBatch", arg0, arg1)
+	ret0, _ := ret[0].([]structs.BidTraceWithTimestamp)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDeliveredBatch indicates an expected call of GetDeliveredBatch.
+func (mr *MockDatastoreMockRecorder) GetDeliveredBatch(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredBatch", reflect.TypeOf((*MockDatastore)(nil).GetDeliveredBatch), arg0, arg1)
+}
+
+// GetHeadersByBlockHash mocks base method.
+func (m *MockDatastore) GetHeadersByBlockHash(arg0 context.Context, arg1 types.Hash) ([]structs.HeaderAndTrace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHeadersByBlockHash", arg0, arg1)
+	ret0, _ := ret[0].([]structs.HeaderAndTrace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHeadersByBlockHash indicates an expected call of GetHeadersByBlockHash.
+func (mr *MockDatastoreMockRecorder) GetHeadersByBlockHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeadersByBlockHash", reflect.TypeOf((*MockDatastore)(nil).GetHeadersByBlockHash), arg0, arg1)
+}
+
+// GetHeadersByBlockNum mocks base method.
+func (m *MockDatastore) GetHeadersByBlockNum(arg0 context.Context, arg1 uint64) ([]structs.HeaderAndTrace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHeadersByBlockNum", arg0, arg1)
+	ret0, _ := ret[0].([]structs.HeaderAndTrace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHeadersByBlockNum indicates an expected call of GetHeadersByBlockNum.
+func (mr *MockDatastoreMockRecorder) GetHeadersByBlockNum(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeadersByBlockNum", reflect.TypeOf((*MockDatastore)(nil).GetHeadersByBlockNum), arg0, arg1)
+}
+
+// GetHeadersBySlot mocks base method.
+func (m *MockDatastore) GetHeadersBySlot(arg0 context.Context, arg1 uint64) ([]structs.HeaderAndTrace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHeadersBySlot", arg0, arg1)
+	ret0, _ := ret[0].([]structs.HeaderAndTrace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHeadersBySlot indicates an expected call of GetHeadersBySlot.
+func (mr *MockDatastoreMockRecorder) GetHeadersBySlot(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeadersBySlot", reflect.TypeOf((*MockDatastore)(nil).GetHeadersBySlot), arg0, arg1)
+}
+
+// GetLatestHeaders mocks base method.
+func (m *MockDatastore) GetLatestHeaders(arg0 context.Context, arg1, arg2 uint64) ([]structs.HeaderAndTrace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestHeaders", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]structs.HeaderAndTrace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLatestHeaders indicates an expected call of GetLatestHeaders.
+func (mr *MockDatastoreMockRecorder) GetLatestHeaders(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestHeaders", reflect.TypeOf((*MockDatastore)(nil).GetLatestHeaders), arg0, arg1, arg2)
+}
+
 // GetMaxProfitHeader mocks base method.
 func (m *MockDatastore) GetMaxProfitHeader(arg0 context.Context, arg1 uint64) (structs.HeaderAndTrace, error) {
 	m.ctrl.T.Helper()
@@ -110,21 +185,6 @@ func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.PayloadKey
 func (mr *MockDatastoreMockRecorder) GetPayload(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockDatastore)(nil).GetPayload), arg0, arg1)
-}
-
-// GetRegistration mocks base method.
-func (m *MockDatastore) GetRegistration(arg0 context.Context, arg1 structs.PubKey) (types.SignedValidatorRegistration, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRegistration", arg0, arg1)
-	ret0, _ := ret[0].(types.SignedValidatorRegistration)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRegistration indicates an expected call of GetRegistration.
-func (mr *MockDatastoreMockRecorder) GetRegistration(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRegistration", reflect.TypeOf((*MockDatastore)(nil).GetRegistration), arg0, arg1)
 }
 
 // PutDelivered mocks base method.
@@ -167,20 +227,6 @@ func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey
 func (mr *MockDatastoreMockRecorder) PutPayload(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutPayload", reflect.TypeOf((*MockDatastore)(nil).PutPayload), arg0, arg1, arg2, arg3)
-}
-
-// PutRegistrationRaw mocks base method.
-func (m *MockDatastore) PutRegistrationRaw(arg0 context.Context, arg1 structs.PubKey, arg2 []byte, arg3 time.Duration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutRegistrationRaw", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// PutRegistrationRaw indicates an expected call of PutRegistrationRaw.
-func (mr *MockDatastoreMockRecorder) PutRegistrationRaw(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutRegistrationRaw", reflect.TypeOf((*MockDatastore)(nil).PutRegistrationRaw), arg0, arg1, arg2, arg3)
 }
 
 // MockState is a mock of State interface.

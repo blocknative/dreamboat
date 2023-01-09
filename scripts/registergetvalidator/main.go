@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/blocknative/dreamboat/blstools"
 	relay "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -64,14 +65,10 @@ func registerValidator() error {
 }
 
 func validValidatorRegistration(domain types.Domain) (*types.SignedValidatorRegistration, *bls.SecretKey, error) {
-	sk, pk, err := bls.GenerateNewKeypair()
+	sk, pubKey, err := blstools.GenerateNewKeypair()
 	if err != nil {
 		return nil, nil, err
 	}
-
-	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
-
 	msg := &types.RegisterValidatorRequestMessage{
 		FeeRecipient: types.Address{0x42},
 		GasLimit:     15_000_000,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 
 	"time"
 
+	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/metrics"
 	pkg "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
@@ -18,14 +20,14 @@ import (
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/stream"
+	"github.com/blocknative/dreamboat/pkg/validators"
+	"github.com/blocknative/dreamboat/pkg/verify"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/go-redis/redis/v8"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
-	blst "github.com/supranational/blst/bindings/go"
 	"github.com/urfave/cli/v2"
 )
 
@@ -163,6 +165,18 @@ var flags = []cli.Flag{
 		Value:   1_000,
 		EnvVars: []string{"RELAY_PAYLOAD_CACHE_SIZE"},
 	},
+	&cli.IntFlag{
+		Name:    "relay-registrations-cache-size",
+		Usage:   "relay registrations cache size",
+		Value:   600_000,
+		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
+	},
+	&cli.BoolFlag{
+		Name:    "relay-publish-block",
+		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
+		Value:   false,
+		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
+	},
 	&cli.BoolFlag{
 		Name:    "relay-distribution",
 		Usage:   "run relay as a distributed system with multiple replicas",
@@ -232,7 +246,11 @@ func main() {
 
 func setup() cli.BeforeFunc {
 	return func(c *cli.Context) (err error) {
-		sk, pk, err := setupKeys(c)
+		skBytes, err := hexutil.Decode(c.String("secretKey"))
+		if err != nil {
+			return err
+		}
+		sk, pk, err := blstools.SecretKeyFromBytes(skBytes)
 		if err != nil {
 			return err
 		}
@@ -260,22 +278,8 @@ func setup() cli.BeforeFunc {
 	}
 }
 
-func setupKeys(c *cli.Context) (*blst.SecretKey, types.PublicKey, error) {
-	skBytes, err := hexutil.Decode(c.String("secretKey"))
-	if err != nil {
-		return nil, types.PublicKey{}, err
-	}
-	sk, err := bls.SecretKeyFromBytes(skBytes[:])
-	if err != nil {
-		return nil, types.PublicKey{}, err
-	}
-
-	var pk types.PublicKey
-	err = pk.FromSlice(bls.PublicKeyFromSecretKey(sk).Compress())
-	return sk, pk, err
-}
-
 type Datastore interface {
+	validators.RegistrationStore
 	pkg.Datastore
 	relay.Datastore
 	FixOrphanHeaders(context.Context, time.Duration) error
@@ -286,10 +290,13 @@ type Datastore interface {
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
 		cContext, cancel := context.WithCancel(c.Context)
+		defer cancel()
 
 		if err := config.Validate(); err != nil {
 			return err
 		}
+
+		logger := config.Log
 
 		domainBuilder, err := pkg.ComputeDomain(types.DomainTypeAppBuilder, config.GenesisForkVersion, types.Root{}.String())
 		if err != nil {
@@ -306,10 +313,10 @@ func run() cli.ActionFunc {
 
 		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
 		if err != nil {
-			config.Log.WithError(err).Error("failed to initialize datastore")
+			logger.WithError(err).Error("failed to initialize datastore")
 			return err
 		}
-		config.Log.With(log.F{
+		logger.With(log.F{
 			"service":     "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
 		}).Info("data store initialized")
@@ -321,7 +328,7 @@ func run() cli.ActionFunc {
 		hc.AttachMetrics(m)
 
 		var ds Datastore
-		badgerDs, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{storage}, storage.DB, hc, c.Int("relay-payload-cache-size")) // TODO: make cache size parameter
+		badgerDs, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
@@ -333,8 +340,8 @@ func run() cli.ActionFunc {
 				Addr: c.String("relay-distribution-redis-uri"),
 			})
 
-			remoteDatastore := &stream.RedisDatastore{redisClient}
-			pubsub := &stream.RedisPubsub{redisClient}
+			remoteDatastore := &stream.RedisDatastore{Redis: redisClient}
+			pubsub := &stream.RedisPubsub{Redis: redisClient}
 			streamConfig := stream.StreamConfig{
 				Logger:      config.Log,
 				ID:          "", // TODO: generate random ID (string)
@@ -371,12 +378,13 @@ func run() cli.ActionFunc {
 
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 
-		regMgr := relay.NewProcessManager(config.Log, c.Uint("relay-verify-queue-size"), c.Uint("relay-store-queue-size"))
-		regMgr.AttachMetrics(m)
-		loadRegistrations(ds, regMgr)
+		beacon, err := initBeacon(c.Context, config)
+		if err != nil {
+			return fmt.Errorf("fail to initialize beacon: %w", err)
+		}
+		beacon.AttachMetrics(m)
 
-		go regMgr.RunCleanup(uint64(config.TTL), time.Hour)
-
+		v := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
 		auctioneer := auction.NewAuctioneer()
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
@@ -384,25 +392,35 @@ func run() cli.ActionFunc {
 			PubKey:                config.PubKey,
 			SecretKey:             config.SecretKey,
 			TTL:                   config.TTL,
-		}, as, ds, regMgr, auctioneer)
+			PublishBlock:          c.Bool("relay-publish-block"),
+		}, beacon, v, as, ds, auctioneer)
 		r.AttachMetrics(m)
 
-		service := pkg.NewService(config.Log, config, ds, r, as)
-		service.AttachMetrics(m)
+		service := pkg.NewService(config.Log, config, ds, as)
 
-		api := api.NewApi(config.Log, service)
-		api.AttachMetrics(m)
+		regStr, err := validators.NewStoreManager(config.Log, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))
+		if err != nil {
+			return fmt.Errorf("fail to initialize store manager: %w", err)
+		}
+		regStr.AttachMetrics(m)
+		loadRegistrations(ds, regStr, logger)
+		go regStr.RunCleanup(uint64(config.TTL), time.Hour)
 
-		regMgr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
-		regMgr.RunVerify(c.Uint("relay-workers-verify"))
+		regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr, ds)
+		a := api.NewApi(config.Log, r, regM)
+		a.AttachMetrics(m)
 
-		config.Log.With(log.F{
+		regStr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
+		v.RunVerify(c.Uint("relay-workers-verify"))
+
+		logger.With(log.F{
 			"service":     "relay",
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
 		go func(s *pkg.Service) error {
-			err := s.RunBeacon(cContext)
+			config.Log.Info("initialized beacon")
+			err := s.RunBeacon(cContext, beacon)
 			if err != nil {
 				cancel()
 			}
@@ -415,7 +433,7 @@ func run() cli.ActionFunc {
 			metrics.AttachProfiler(internalMux)
 
 			internalMux.Handle("/metrics", m.Handler())
-			config.Log.Info("internal server listening")
+			logger.Info("internal server listening")
 			internalSrv := http.Server{
 				Addr:    c.String("internalAddr"),
 				Handler: internalMux,
@@ -434,10 +452,10 @@ func run() cli.ActionFunc {
 		case <-service.Ready():
 		}
 
-		config.Log.Debug("relay service ready")
+		logger.Info("relay service ready")
 
 		mux := http.NewServeMux()
-		api.AttachToHandler(mux)
+		a.AttachToHandler(mux)
 
 		var srv http.Server
 		// run the http server
@@ -450,53 +468,67 @@ func run() cli.ActionFunc {
 				Handler:        mux,
 				MaxHeaderBytes: 4096,
 			}
-			config.Log.Info("http server listening")
+			logger.Info("http server listening")
 			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
 			}
-			config.Log.Info("http server finished")
+			logger.Info("http server finished")
 			return err
 		}(srv)
 
 		<-cContext.Done()
 
-		ctx, _ := context.WithTimeout(context.Background(), shutdownTimeout)
-		log.Info("Shutdown initialized")
+		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer closeC()
+		logger.Info("Shutdown initialized")
 		err = srv.Shutdown(ctx)
-		log.Info("Shutdown returned ", err)
+		logger.Info("Shutdown returned ", err)
 
-		ctx, _ = context.WithTimeout(context.Background(), shutdownTimeout/2)
+		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
+		defer closeC()
 		finish := make(chan struct{})
-		go closemanager(ctx, finish, regMgr)
+		go closemanager(ctx, finish, regStr)
 
 		select {
 		case <-finish:
 		case <-ctx.Done():
-			log.Warn("Closing manager deadline exceeded ")
+			logger.Warn("Closing manager deadline exceeded ")
 		}
-		return fmt.Errorf("properly exiting... %w", err) // this surprisingly has to return error
 
+		return nil
 	}
 }
 
-func closemanager(ctx context.Context, finish chan struct{}, regMgr *relay.ProcessManager) {
+func initBeacon(ctx context.Context, config pkg.Config) (pkg.BeaconClient, error) {
+	clients := make([]pkg.BeaconClient, 0, len(config.BeaconEndpoints))
+
+	for _, endpoint := range config.BeaconEndpoints {
+		client, err := pkg.NewBeaconClient(endpoint, config)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, client)
+	}
+	return pkg.NewMultiBeaconClient(config.Log, clients), nil
+}
+
+func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager) {
 	regMgr.Close(ctx)
 	finish <- struct{}{}
 }
 
-func loadRegistrations(ds Datastore, regMgr *relay.ProcessManager) {
+func loadRegistrations(ds Datastore, regMgr *validators.StoreManager, logger log.Logger) {
 	reg, err := ds.GetAllRegistration()
 	if err == nil {
 		for k, v := range reg {
 			regMgr.Set(k, v.Message.Timestamp)
 		}
 
-		config.Log.With(log.F{
+		logger.With(log.F{
 			"service":        "registration",
 			"count-elements": len(reg),
 		}).Info("registrations loaded")
 	}
-
 }
 
 func logger(c *cli.Context) log.Logger {

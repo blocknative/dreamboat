@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,8 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/r3labs/sse/v2"
 	uberatomic "go.uber.org/atomic"
 )
@@ -31,7 +35,10 @@ type BeaconClient interface {
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
+	PublishBlock(block *types.SignedBeaconBlock) error
 	Endpoint() string
+
+	AttachMetrics(m *metrics.Metrics)
 }
 
 type MultiBeaconClient struct {
@@ -43,9 +50,9 @@ type MultiBeaconClient struct {
 
 func NewMultiBeaconClient(l log.Logger, clients []BeaconClient) BeaconClient {
 	if l == nil {
-		l = log.New().WithField("service", "multi-beacon client")
+		l = log.New()
 	}
-	return &MultiBeaconClient{Log: l, Clients: clients}
+	return &MultiBeaconClient{Log: l.WithField("service", "multi-beacon client"), Clients: clients}
 }
 
 func (b *MultiBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
@@ -184,10 +191,36 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconClient {
 	return instances
 }
 
+func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err error) {
+	for _, client := range b.clientsByLastResponse() {
+		if err = client.PublishBlock(block); err != nil {
+			b.Log.WithError(err).
+				WithField("endpoint", client.Endpoint()).
+				Warn("failed to publish block to beacon")
+			continue
+		}
+
+		return nil
+	}
+
+	return err
+}
+
+func (b *MultiBeaconClient) AttachMetrics(m *metrics.Metrics) {
+	for _, c := range b.Clients {
+		c.AttachMetrics(m)
+	}
+}
+
 type beaconClient struct {
 	beaconEndpoint *url.URL
 	log            log.Logger
 	Config
+	m BeaconMetrics
+}
+
+type BeaconMetrics struct {
+	Timing *prometheus.HistogramVec
 }
 
 func NewBeaconClient(endpoint string, config Config) (*beaconClient, error) {
@@ -198,6 +231,8 @@ func NewBeaconClient(endpoint string, config Config) (*beaconClient, error) {
 		log:            config.Log.WithField("beaconEndpoint", endpoint),
 		Config:         config,
 	}
+
+	bc.initMetrics()
 
 	return bc, err
 }
@@ -222,9 +257,6 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 				case <-ctx.Done():
 					return
 				case slotC <- head:
-					logger.
-						With(head).
-						Debug("read head subscription")
 				}
 			})
 
@@ -282,21 +314,64 @@ func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 	return resp.Data, err
 }
 
+func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
+	bb, err := json.Marshal(block)
+	if err != nil {
+		return fmt.Errorf("fail to marshal block: %w", err)
+	}
+
+	resp, err := http.Post(b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", "application/json", bytes.NewBuffer(bb))
+	if err != nil {
+		return fmt.Errorf("fail to publish block: %w", err)
+	}
+
+	if resp.StatusCode == 202 { // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
+		return fmt.Errorf("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
+	} else if resp.StatusCode >= 300 {
+		ec := &struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}{}
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("fail to read read error response body: %w", err)
+		}
+
+		if err = json.Unmarshal(bodyBytes, ec); err != nil {
+			return fmt.Errorf("fail to unmarshal error response: %w", err)
+		}
+		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
+	}
+
+	return nil
+}
+
 func (b *beaconClient) Endpoint() string {
 	return b.beaconEndpoint.String()
 }
 
-func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
-	logger := b.log.
-		WithField("method", "QueryBeacon").
-		WithField("URL", u.RequestURI())
-	timeStart := time.Now()
+func (b *beaconClient) initMetrics() {
+	b.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "dreamboat",
+		Subsystem: "beacon",
+		Name:      "timing",
+		Help:      "Duration of requests per endpoint",
+	}, []string{"endpoint"})
+}
 
+func (b *beaconClient) AttachMetrics(m *metrics.Metrics) {
+	m.Register(b.m.Timing)
+}
+
+func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
 	req, err := http.NewRequest(method, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("invalid request for %s: %w", u, err)
 	}
 	req.Header.Set("accept", "application/json")
+
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues(u.String()))
+	defer t.ObserveDuration()
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -324,11 +399,6 @@ func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
 	if err != nil {
 		return fmt.Errorf("could not unmarshal response for %s from %s: %w", u, string(bodyBytes), err)
 	}
-
-	logger.
-		WithField("processingTimeMs", time.Since(timeStart).Milliseconds()).
-		WithField("bytesAmount", len(bodyBytes)).
-		Trace("beacon queried")
 
 	return nil
 }
