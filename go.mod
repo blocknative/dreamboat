@@ -7,7 +7,6 @@ require (
 	github.com/ethereum/go-ethereum v1.10.21
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/mock v1.6.0
-	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/golang-lru/v2 v2.0.1
 	github.com/ipfs/go-datastore v0.6.0
@@ -43,6 +42,7 @@ require (
 	github.com/ferranbt/fastssz v0.1.2-0.20220723134332-b3d3034a4575 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect

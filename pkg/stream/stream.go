@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/structs"
