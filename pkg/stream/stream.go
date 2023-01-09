@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/stream.go -package=mocks github.com/blocknative/dreamboat/pkg/datastore Pubsub,RemoteDatastore
+//go:generate mockgen  -destination=./mocks/stream.go -package=mocks github.com/blocknative/dreamboat/pkg/stream Pubsub,RemoteDatastore
 package stream
 
 import (
