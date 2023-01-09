@@ -70,7 +70,7 @@ func (rs *Register) RegisterValidator(ctx context.Context, m *structs.MetricGrou
 	logger := rs.l.WithField("method", "RegisterValidator")
 
 	tStart := time.Now()
-	m.AppendSince(tStart, "registerValidator", "all")
+	defer m.AppendSince(tStart, "registerValidator", "all")
 
 	be := rs.beaconState.Beacon()
 
