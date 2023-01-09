@@ -350,7 +350,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 		"bid":       submitBlockRequest.Message.Value.String(),
 	})
 
-	logger.Trace("block submission requested")
 	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
 	if err != nil {
 		return fmt.Errorf("verify block: %w", err)
