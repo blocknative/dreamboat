@@ -39,8 +39,8 @@ type Datastore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
-	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
+	PutPayload(context.Context, structs.PayloadKey, *structs.BlockAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockAndTrace, bool, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
@@ -144,13 +144,14 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
 		return nil, ErrNoBuilderBid
 	}
-
 	m.AppendSince(tGet, "getHeader", "get")
 
-	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
-		logger.Warnf("fail to cache block: %s", err.Error())
-	}
-	logger.Debug("payload cached")
+	go func(ctx context.Context, maxProfitBlock *structs.CompleteBlockstruct) {
+		if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+			logger.Warnf("failed to cache block: %s", err.Error())
+		}
+		logger.Debug("payload cached")
+	}(ctx, maxProfitBlock)
 
 	header := maxProfitBlock.Header
 
@@ -284,7 +285,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"blockNumber":      payload.Payload.Data.BlockNumber,
 		"stateRoot":        payload.Payload.Data.StateRoot,
 		"feeRecipient":     payload.Payload.Data.FeeRecipient,
-		"bid":              payload.Bid.Data.Message.Value,
+		"bid":              payload.Trace.Message.Value,
 		"from_cache":       fromCache,
 		"numTx":            len(payload.Payload.Data.Transactions),
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
@@ -481,12 +482,7 @@ func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.Payloa
 	}
 }
 
-func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
-	getHeaderResponse := types.GetHeaderResponse{
-		Version: "bellatrix",
-		Data:    signedBuilderBid,
-	}
-
+func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockAndTrace { // TODO(l): remove FB type
 	getPayloadResponse := types.GetPayloadResponse{
 		Version: "bellatrix",
 		Data:    submitBlockRequest.ExecutionPayload,
@@ -497,9 +493,8 @@ func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderB
 		Signature: submitBlockRequest.Signature,
 	}
 
-	return structs.BlockBidAndTrace{
+	return structs.BlockAndTrace{
 		Trace:   &signedBidTrace,
-		Bid:     &getHeaderResponse,
 		Payload: &getPayloadResponse,
 	}
 }

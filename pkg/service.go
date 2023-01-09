@@ -26,6 +26,7 @@ var (
 type Datastore interface {
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
 }
+
 type Service struct {
 	Log             log.Logger
 	Config          Config

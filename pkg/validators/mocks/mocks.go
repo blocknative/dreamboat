@@ -6,37 +6,38 @@ package mocks
 
 import (
 	context "context"
+	reflect "reflect"
+	time "time"
+
 	structs "github.com/blocknative/dreamboat/pkg/structs"
 	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
-	time "time"
 )
 
-// MockRegistrationStore is a mock of RegistrationStore interface
+// MockRegistrationStore is a mock of RegistrationStore interface.
 type MockRegistrationStore struct {
 	ctrl     *gomock.Controller
 	recorder *MockRegistrationStoreMockRecorder
 }
 
-// MockRegistrationStoreMockRecorder is the mock recorder for MockRegistrationStore
+// MockRegistrationStoreMockRecorder is the mock recorder for MockRegistrationStore.
 type MockRegistrationStoreMockRecorder struct {
 	mock *MockRegistrationStore
 }
 
-// NewMockRegistrationStore creates a new mock instance
+// NewMockRegistrationStore creates a new mock instance.
 func NewMockRegistrationStore(ctrl *gomock.Controller) *MockRegistrationStore {
 	mock := &MockRegistrationStore{ctrl: ctrl}
 	mock.recorder = &MockRegistrationStoreMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockRegistrationStore) EXPECT() *MockRegistrationStoreMockRecorder {
 	return m.recorder
 }
 
-// GetRegistration mocks base method
+// GetRegistration mocks base method.
 func (m *MockRegistrationStore) GetRegistration(arg0 context.Context, arg1 structs.PubKey) (types.SignedValidatorRegistration, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRegistration", arg0, arg1)
@@ -45,22 +46,22 @@ func (m *MockRegistrationStore) GetRegistration(arg0 context.Context, arg1 struc
 	return ret0, ret1
 }
 
-// GetRegistration indicates an expected call of GetRegistration
+// GetRegistration indicates an expected call of GetRegistration.
 func (mr *MockRegistrationStoreMockRecorder) GetRegistration(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRegistration", reflect.TypeOf((*MockRegistrationStore)(nil).GetRegistration), arg0, arg1)
 }
 
-// PutRegistrationRaw mocks base method
-func (m *MockRegistrationStore) PutRegistrationRaw(arg0 context.Context, arg1 structs.PubKey, arg2 []byte, arg3 time.Duration) error {
+// PutRegistration mocks base method.
+func (m *MockRegistrationStore) PutRegistration(arg0 context.Context, arg1 structs.PubKey, arg2 types.SignedValidatorRegistration, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutRegistrationRaw", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "PutRegistration", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// PutRegistrationRaw indicates an expected call of PutRegistrationRaw
-func (mr *MockRegistrationStoreMockRecorder) PutRegistrationRaw(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// PutRegistration indicates an expected call of PutRegistration.
+func (mr *MockRegistrationStoreMockRecorder) PutRegistration(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutRegistrationRaw", reflect.TypeOf((*MockRegistrationStore)(nil).PutRegistrationRaw), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutRegistration", reflect.TypeOf((*MockRegistrationStore)(nil).PutRegistration), arg0, arg1, arg2, arg3)
 }

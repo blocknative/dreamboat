@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -18,10 +19,12 @@ import (
 	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
+	"github.com/blocknative/dreamboat/pkg/stream"
 	"github.com/blocknative/dreamboat/pkg/validators"
 	"github.com/blocknative/dreamboat/pkg/verify"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/go-redis/redis/v8"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
@@ -174,6 +177,35 @@ var flags = []cli.Flag{
 		Value:   false,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
+	&cli.BoolFlag{
+		Name:    "relay-distribution",
+		Usage:   "run relay as a distributed system with multiple replicas",
+		Value:   false,
+		EnvVars: []string{"RELAY_DISTRIBUTION"},
+	},
+	&cli.BoolFlag{
+		Name:    "relay-distribution-publish-all",
+		Usage:   "publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published",
+		Value:   false,
+		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_ALL"},
+	},
+	&cli.DurationFlag{
+		Name:    "relay-distribution-ttl",
+		Usage:   "TTL of the data that is distributed",
+		Value:   time.Minute,
+		EnvVars: []string{"RELAY_DISTRIBUTION_TTL"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-distribution-pubsub-topic",
+		Usage:   "Pubsub topic for streaming payloads",
+		Value:   "relay/payload",
+		EnvVars: []string{"RELAY_DISTRIBUTION_PUBSUB_TOPIC"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-distribution-redis-uri",
+		Usage:   "Redis URI",
+		EnvVars: []string{"RELAY_DISTRIBUTION_REDIS_URI"},
+	},
 }
 
 var (
@@ -246,8 +278,20 @@ func setup() cli.BeforeFunc {
 	}
 }
 
+type Datastore interface {
+	validators.RegistrationStore
+	pkg.Datastore
+	relay.Datastore
+	FixOrphanHeaders(context.Context, time.Duration) error
+	MemoryCleanup(context.Context, time.Duration, time.Duration) error
+	GetAllRegistration() (map[string]types.SignedValidatorRegistration, error)
+}
+
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
+		cContext, cancel := context.WithCancel(c.Context)
+		defer cancel()
+
 		if err := config.Validate(); err != nil {
 			return err
 		}
@@ -283,10 +327,47 @@ func run() cli.ActionFunc {
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
-		ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
+		var ds Datastore
+		badgerDs, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
+		ds = badgerDs
+
+		if c.Bool("relay-distribution") {
+			timeStreamStart := time.Now()
+			redisClient := redis.NewClient(&redis.Options{
+				Addr: c.String("relay-distribution-redis-uri"),
+			})
+
+			remoteDatastore := &stream.RedisDatastore{Redis: redisClient}
+			pubsub := &stream.RedisPubsub{Redis: redisClient}
+			streamConfig := stream.StreamConfig{
+				Logger:      config.Log,
+				ID:          "", // TODO: generate random ID (string)
+				TTL:         c.Duration("relay-distribution-ttl"),
+				PubsubTopic: c.String("relay-distribution-pubsub-topic"),
+				PublishAll:  c.Bool("relay-distribution-publish-all"),
+			}
+
+			streamDs := stream.NewStreamDatastore(badgerDs, pubsub, remoteDatastore, streamConfig)
+			streamDs.AttachMetrics(m)
+
+			go func(s *stream.StreamDatastore) error {
+				config.Log.With(log.F{
+					"service":     "relay-stream",
+					"startTimeMs": time.Since(timeStreamStart).Milliseconds(),
+				}).Info("initialized")
+
+				err := s.Run(cContext, config.Log)
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+					config.Log.Errorf("stream failed: %s", err.Error())
+					cancel()
+				}
+				return err
+			}(streamDs)
+		}
+
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
 			return err
 		}
@@ -337,7 +418,6 @@ func run() cli.ActionFunc {
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
-		cContext, cancel := context.WithCancel(c.Context)
 		go func(s *pkg.Service) error {
 			config.Log.Info("initialized beacon")
 			err := s.RunBeacon(cContext, beacon)
@@ -437,7 +517,7 @@ func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.
 	finish <- struct{}{}
 }
 
-func loadRegistrations(ds *datastore.Datastore, regMgr *validators.StoreManager, logger log.Logger) {
+func loadRegistrations(ds Datastore, regMgr *validators.StoreManager, logger log.Logger) {
 	reg, err := ds.GetAllRegistration()
 	if err == nil {
 		for k, v := range reg {
