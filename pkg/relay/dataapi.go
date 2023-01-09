@@ -53,11 +53,6 @@ func (r *Relay) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]s
 	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
 	queries := make([]structs.PayloadQuery, 0, limit)
 
-	r.l.WithField("limit", limit).
-		WithField("start", start).
-		WithField("stop", stop).
-		Debug("querying delivered payload traces")
-
 	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= min(structs.Slot(limit), highSlot) {
 		queries = queries[:0]
 		for s := highSlot; highSlot-structs.Slot(limit) < s && stop <= s; s-- {
