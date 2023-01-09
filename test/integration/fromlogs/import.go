@@ -39,6 +39,7 @@ type RecordPosition struct {
 	Slot      int
 	Message   int
 	Builder   int
+	Error     int
 }
 
 type RecordBid struct {
@@ -75,6 +76,8 @@ func parseHeader(headers []string) (rp RecordPosition, err error) {
 			rp.Builder = i
 		case "Message":
 			rp.Message = i
+		case "@error":
+			rp.Error = i
 		}
 	}
 
@@ -143,20 +146,7 @@ func parseCSV(readr io.ReadCloser) (*ParsedResult, error) {
 			continue
 		}
 
-		switch record[rp.Message] {
-
-		case "bid sent":
-			pb, err := parseBid(record, rp)
-			if err != nil {
-				return nil, err
-			}
-			v, ok := pR.Bids[Key{pb.Slot, pb.NetworkType}]
-			if !ok {
-				v = []RecordBid{}
-			}
-			v = append(v, pb)
-			pR.Bids[Key{pb.Slot, pb.NetworkType}] = v
-
+		switch record[rp.Error] {
 		case "no builder bid":
 			pb, err := parseBid(record, rp)
 			if err != nil {
@@ -168,6 +158,33 @@ func parseCSV(readr io.ReadCloser) (*ParsedResult, error) {
 			}
 			v = append(v, pb)
 			pR.NoBids[Key{pb.Slot, pb.NetworkType}] = v
+		case "no payload found":
+			pp, err := parsePayload(record, rp)
+			if err != nil {
+				return nil, err
+			}
+
+			v, ok := pR.NoPayloadFound[Key{pp.Slot, pp.NetworkType}]
+			if !ok {
+				v = []RecordPayload{}
+			}
+			v = append(v, pp)
+			pR.NoPayloadFound[Key{pp.Slot, pp.NetworkType}] = v
+
+		}
+
+		switch record[rp.Message] {
+		case "bid sent":
+			pb, err := parseBid(record, rp)
+			if err != nil {
+				return nil, err
+			}
+			v, ok := pR.Bids[Key{pb.Slot, pb.NetworkType}]
+			if !ok {
+				v = []RecordBid{}
+			}
+			v = append(v, pb)
+			pR.Bids[Key{pb.Slot, pb.NetworkType}] = v
 		case "header requested":
 			pb, err := parseBid(record, rp)
 			if err != nil {
@@ -202,20 +219,6 @@ func parseCSV(readr io.ReadCloser) (*ParsedResult, error) {
 			}
 			v = append(v, pp)
 			pR.Payloads[Key{pp.Slot, pp.NetworkType}] = v
-
-		case "no payload found":
-			pp, err := parsePayload(record, rp)
-			if err != nil {
-				return nil, err
-			}
-
-			v, ok := pR.NoPayloadFound[Key{pp.Slot, pp.NetworkType}]
-			if !ok {
-				v = []RecordPayload{}
-			}
-			v = append(v, pp)
-			pR.NoPayloadFound[Key{pp.Slot, pp.NetworkType}] = v
-
 		case "payload requested":
 			pp, err := parsePayload(record, rp)
 			if err != nil {

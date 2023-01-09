@@ -18,8 +18,9 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/google/uuid"
+
 	ds "github.com/ipfs/go-datastore"
-	goDatastore "github.com/ipfs/go-datastore"
+
 	ds_sync "github.com/ipfs/go-datastore/sync"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/stretchr/testify/require"
@@ -130,7 +131,7 @@ func TestPutGetRegistration(t *testing.T) {
 	ds := datastore.Datastore{TTLStorage: store, PayloadCache: cache}
 
 	registration := randomRegistration()
-	key := structs.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 
 	// put
 	err := ds.PutRegistration(ctx, key, registration, time.Minute)
@@ -153,13 +154,11 @@ func BenchmarkPutRegistration(b *testing.B) {
 	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
 
 	registration := randomRegistration()
-	key := structs.PubKey{registration.Message.Pubkey}
-
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := ds.PutRegistration(ctx, key, registration, time.Minute)
+		err := ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration, time.Minute)
 		if err != nil {
 			panic(err)
 		}
@@ -177,7 +176,6 @@ func BenchmarkPutRegistrationParallel(b *testing.B) {
 	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
 
 	registration := randomRegistration()
-	key := structs.PubKey{registration.Message.Pubkey}
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -189,7 +187,7 @@ func BenchmarkPutRegistrationParallel(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		go func() {
-			err := ds.PutRegistration(ctx, key, registration, time.Minute)
+			err := ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration, time.Minute)
 			if err != nil {
 				panic(err)
 			}
@@ -209,7 +207,7 @@ func BenchmarkGetRegistration(b *testing.B) {
 	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
 
 	registration := randomRegistration()
-	key := structs.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 
 	_ = ds.PutRegistration(ctx, key, registration, time.Minute)
 
@@ -237,7 +235,7 @@ func TestGetRegistrationReal(t *testing.T) {
 		Badger: store.DB}
 
 	registration := randomRegistration()
-	key := structs.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 
 	err := ds.PutRegistration(ctx, key, registration, time.Minute*2)
 	require.NoError(t, err)
@@ -261,7 +259,7 @@ func BenchmarkGetRegistrationParallel(b *testing.B) {
 	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
 
 	registration := randomRegistration()
-	key := structs.PubKey{registration.Message.Pubkey}
+	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 
 	_ = ds.PutRegistration(ctx, key, registration, time.Minute)
 
@@ -390,34 +388,6 @@ func randomRegistration() types.SignedValidatorRegistration {
 		Signature: types.Signature(random96Bytes()),
 	}
 }
-func validSignedBlindedBeaconBlock(t require.TestingT, domain types.Domain) *types.BuilderSubmitBlockRequest {
-	sk, pk, err := bls.GenerateNewKeypair()
-	require.NoError(t, err)
-
-	var pubKey types.PublicKey
-	pubKey.FromSlice(pk.Compress())
-
-	payload := randomPayload()
-
-	msg := &types.BidTrace{
-		Slot:                 rand.Uint64(),
-		ParentHash:           types.Hash(random32Bytes()),
-		BlockHash:            types.Hash(random32Bytes()),
-		BuilderPubkey:        types.PublicKey(random48Bytes()),
-		ProposerPubkey:       types.PublicKey(random48Bytes()),
-		ProposerFeeRecipient: types.Address(random20Bytes()),
-		Value:                types.IntToU256(rand.Uint64()),
-	}
-
-	signature, err := types.SignMessage(msg, domain, sk)
-	require.NoError(t, err)
-
-	return &types.BuilderSubmitBlockRequest{
-		Signature:        signature,
-		Message:          msg,
-		ExecutionPayload: payload,
-	}
-}
 
 func random32Bytes() (b [32]byte) {
 	rand.Read(b[:])
@@ -446,13 +416,13 @@ func random256Bytes() (b [256]byte) {
 
 var _ datastore.TTLStorage = (*mockDatastore)(nil)
 
-type mockDatastore struct{ goDatastore.Datastore }
+type mockDatastore struct{ ds.Datastore }
 
 func newMockDatastore() mockDatastore {
-	return mockDatastore{ds_sync.MutexWrap(goDatastore.NewMapDatastore())}
+	return mockDatastore{ds_sync.MutexWrap(ds.NewMapDatastore())}
 }
 
-func (d mockDatastore) PutWithTTL(ctx context.Context, key goDatastore.Key, value []byte, ttl time.Duration) error {
+func (d mockDatastore) PutWithTTL(ctx context.Context, key ds.Key, value []byte, ttl time.Duration) error {
 	go func() {
 		time.Sleep(ttl)
 		d.Delete(ctx, key)

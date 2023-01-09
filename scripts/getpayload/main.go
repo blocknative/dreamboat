@@ -8,10 +8,10 @@ import (
 	"math/rand"
 	"net/http"
 
+	"github.com/blocknative/dreamboat/blstools"
 	relay "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/pkg/errors"
 )
@@ -109,13 +109,8 @@ func validGetPayloadRequest(domain types.Domain) (*types.SignedBlindedBeaconBloc
 }
 
 func validSubmitBlockRequest(domain types.Domain) (*types.BuilderSubmitBlockRequest, error) {
-	sk, pk, err := bls.GenerateNewKeypair()
+	sk, pubKey, err := blstools.GenerateNewKeypair()
 	if err != nil {
-		return nil, err
-	}
-
-	var pubKey types.PublicKey
-	if err := pubKey.FromSlice(pk.Compress()); err != nil {
 		return nil, err
 	}
 

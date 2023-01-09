@@ -38,13 +38,6 @@ type GetValidatorRelayResponse []struct {
 	} `json:"entry"`
 }
 
-func min[T constraints.Ordered](a, b T) T {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 type ErrBadProposer struct {
 	Want, Got structs.PubKey
 }
