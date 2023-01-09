@@ -172,10 +172,14 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
+		slot, _ := req.Slot()
+		proposer, _ := req.Pubkey()
 		a.l.With(log.F{
 			"code":     400,
 			"endpoint": "getHeader",
 			"payload":  req,
+			"slot":     slot,
+			"proposer": proposer,
 		}).WithError(err).Debug("failed getHeader")
 		return http.StatusBadRequest, err
 	}
@@ -208,9 +212,11 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 		m.ObserveWithError(a.m.RelayTiming, err)
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
 		a.l.With(log.F{
-			"code":     400,
-			"endpoint": "getPayload",
-			"payload":  req,
+			"code":      400,
+			"endpoint":  "getPayload",
+			"payload":   req,
+			"slot":      req.Message.Slot,
+			"blockHash": req.Message.Body.Eth1Data.BlockHash,
 		}).WithError(err).Debug("failed getPayload")
 		return http.StatusBadRequest, err
 	}
@@ -250,9 +256,14 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
 			a.l.With(log.F{
-				"code":     400,
-				"endpoint": "submitBlock",
-				"payload":  req,
+				"code":      400,
+				"endpoint":  "submitBlock",
+				"payload":   req,
+				"slot":      req.Message.Slot,
+				"blockHash": req.ExecutionPayload.BlockHash,
+				"bidValue":  req.Message.Value,
+				"proposer":  req.Message.ProposerPubkey,
+				"builder":   req.Message.BuilderPubkey,
 			}).WithError(err).Debug("failed block submission")
 		}
 		return http.StatusBadRequest, err
