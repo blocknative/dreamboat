@@ -240,18 +240,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
-	logger.With(log.F{
-		"processingTimeMs": time.Since(tStart).Milliseconds(),
-		"slot":             payloadRequest.Message.Slot,
-		"blockHash":        payload.Payload.Data.BlockHash,
-		"blockNumber":      payload.Payload.Data.BlockNumber,
-		"stateRoot":        payload.Payload.Data.StateRoot,
-		"feeRecipient":     payload.Payload.Data.FeeRecipient,
-		"bid":              payload.Bid.Data.Message.Value,
-		"from_cache":       fromCache,
-		"numTx":            len(payload.Payload.Data.Transactions),
-	}).Info("payload fetched")
-
 	trace := structs.DeliveredTrace{
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
@@ -293,7 +281,12 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	logger.With(log.F{
 		"slot":             payloadRequest.Message.Slot,
 		"blockHash":        payload.Payload.Data.BlockHash,
+		"blockNumber":      payload.Payload.Data.BlockNumber,
+		"stateRoot":        payload.Payload.Data.StateRoot,
+		"feeRecipient":     payload.Payload.Data.FeeRecipient,
 		"bid":              payload.Bid.Data.Message.Value,
+		"from_cache":       fromCache,
+		"numTx":            len(payload.Payload.Data.Transactions),
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	}).Info("payload sent")
 
