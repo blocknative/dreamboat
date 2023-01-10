@@ -21,20 +21,25 @@ const (
 	RegistrationPrefix = "registration-"
 )
 
-type DB interface {
+type DBInter interface {
 	View(func(txn *badger.Txn) error) error
-	PutWithTTL(context.Context, ds.Key, []byte, time.Duration) error
+}
+
+type DB interface {
 	Get(context.Context, ds.Key) ([]byte, error)
+	PutWithTTL(context.Context, ds.Key, []byte, time.Duration) error
 }
 
 type Datastore struct {
 	DB
+	DBInter
 }
 
-func NewDatastore(t DB) (*Datastore, error) {
+func NewDatastore(t DB, i DBInter) *Datastore {
 	return &Datastore{
-		DB: t,
-	}, nil
+		DB:      t,
+		DBInter: i,
+	}
 }
 
 func (s *Datastore) PutRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration, ttl time.Duration) error {
@@ -65,7 +70,7 @@ func (s *Datastore) GetAllRegistration() (map[string]types.SignedValidatorRegist
 	b := bytes.NewReader(nil)
 	nDec := json.NewDecoder(b)
 
-	err := s.DB.View(func(txn *badger.Txn) error {
+	err := s.DBInter.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 		prefix := []byte("/" + RegistrationPrefix)

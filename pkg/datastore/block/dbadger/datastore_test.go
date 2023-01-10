@@ -1,4 +1,4 @@
-package datastore_test
+package dbadger_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	pkg "github.com/blocknative/dreamboat/pkg"
-	datastore "github.com/blocknative/dreamboat/pkg/datastore"
+	datastore "github.com/blocknative/dreamboat/pkg/datastore/block/dbadger"
 	realRelay "github.com/blocknative/dreamboat/pkg/relay"
 	lru "github.com/hashicorp/golang-lru/v2"
 

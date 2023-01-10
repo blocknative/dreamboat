@@ -8,7 +8,7 @@ import (
 
 	"github.com/blocknative/dreamboat/blstools"
 	pkg "github.com/blocknative/dreamboat/pkg"
-	"github.com/blocknative/dreamboat/pkg/datastore"
+	"github.com/blocknative/dreamboat/pkg/datastore/validators/dbadger"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	mock_relay "github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -67,7 +67,7 @@ func TestRegisterValidator(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := dbadger.NewDatastore(store, store.DB)
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -126,7 +126,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := dbadger.NewDatastore(store, store.DB)
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -203,7 +203,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := dbadger.NewDatastore(store, store.DB)
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, err := pkg.ComputeDomain(
@@ -258,9 +258,9 @@ func BenchmarkRegisterValidator(b *testing.B) {
 
 	ctrl := gomock.NewController(b)
 
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
+	var datadir = "/tmp/bench" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := dbadger.NewDatastore(store, store.DB)
 	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
@@ -314,9 +314,11 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
+	ctrl := gomock.NewController(b)
+	var datadir = "/tmp/bench" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := &datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}}
+	ds := dbadger.NewDatastore(store, store.DB)
+	bs := mock_relay.NewMockState(ctrl)
 
 	relaySigningDomain, _ := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -333,9 +335,6 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
-
-	ctrl := gomock.NewController(b)
-	bs := mock_relay.NewMockState(ctrl)
 
 	const N = 10_000
 

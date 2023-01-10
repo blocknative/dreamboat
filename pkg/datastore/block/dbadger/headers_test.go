@@ -1,4 +1,4 @@
-package datastore_test
+package dbadger_test
 
 import (
 	"context"
