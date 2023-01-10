@@ -22,8 +22,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 
-	"github.com/blocknative/dreamboat/pkg/datastore"
-	badger "github.com/ipfs/go-ds-badger2"
+	trBadger "github.com/blocknative/dreamboat/pkg/datastore/transport/badger"
+	valBadger "github.com/blocknative/dreamboat/pkg/datastore/validators/dbadger"
+
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -268,11 +269,6 @@ func run() cli.ActionFunc {
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
 
-		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
-		if err != nil {
-			logger.WithError(err).Error("failed to initialize datastore")
-			return err
-		}
 		logger.With(log.F{
 			"service":     "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
@@ -284,13 +280,16 @@ func run() cli.ActionFunc {
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
-		ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
+		storage, err := trBadger.Open(config.Datadir)
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
-		if err = datastore.InitDatastoreMetrics(m); err != nil {
+
+		if err = trBadger.InitDatastoreMetrics(m); err != nil {
 			return err
 		}
+
+		ds := valBadger.NewDatastore(storage, storage.DB)
 
 		if err = ds.FixOrphanHeaders(c.Context, config.TTL); err != nil {
 			return err
@@ -438,7 +437,7 @@ func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.
 	finish <- struct{}{}
 }
 
-func loadRegistrations(ds *datastore.Datastore, regMgr *validators.StoreManager, logger log.Logger) {
+func loadRegistrations(ds *valBadger.Datastore, regMgr *validators.StoreManager, logger log.Logger) {
 	reg, err := ds.GetAllRegistration()
 	if err == nil {
 		for k, v := range reg {

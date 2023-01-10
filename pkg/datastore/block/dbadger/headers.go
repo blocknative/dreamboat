@@ -405,7 +405,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 	buff := new(bytes.Buffer)
 	for slot, v := range slotDoesNotExist {
 		if v != nil || len(v) != 0 {
-			tempHC := NewHeaderController(100, time.Hour) // params doesn't matter here
+			tempHC := s.hc.NewHeaderController(100, time.Hour) // params doesn't matter here
 
 			buff.Reset()
 			sort.Slice(v, func(i, j int) bool {
