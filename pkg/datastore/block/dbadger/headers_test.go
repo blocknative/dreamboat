@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	datastore "github.com/blocknative/dreamboat/pkg/datastore"
+	datastore "github.com/blocknative/dreamboat/pkg/datastore/block/dbadger"
 	"github.com/flashbots/go-boost-utils/types"
 
 	"github.com/blocknative/dreamboat/pkg/structs"

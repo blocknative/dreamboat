@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/google/uuid"
 
 	ds "github.com/ipfs/go-datastore"
 
@@ -118,6 +119,51 @@ func TestPutGetPayload(t *testing.T) {
 	require.EqualValues(t, *payload, *gotPayload)
 }
 
+func TestPutGetRegistration(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	store := newMockDatastore()
+	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
+	ds := datastore.Datastore{TTLStorage: store, PayloadCache: cache}
+
+	registration := randomRegistration()
+	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
+
+	// put
+	err := ds.PutRegistration(ctx, key, registration, time.Minute)
+	require.NoError(t, err)
+
+	// get
+	gotRegistration, err := ds.GetRegistration(ctx, key)
+	require.NoError(t, err)
+	require.EqualValues(t, registration, gotRegistration)
+}
+
+func BenchmarkPutRegistration(b *testing.B) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var datadir = "/tmp/" + b.Name() + uuid.New().String()
+
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
+	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
+
+	registration := randomRegistration()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		err := ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration, time.Minute)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 func randomHeaderAndTrace() structs.HeaderAndTrace {
 	block := randomBlockBidAndTrace()
 	header, _ := types.PayloadToPayloadHeader(block.Payload.Data)
@@ -210,6 +256,19 @@ func randomTransactions(size int) []hexutil.Bytes {
 		txs = append(txs, tx)
 	}
 	return txs
+}
+
+func randomRegistration() types.SignedValidatorRegistration {
+	msg := &types.RegisterValidatorRequestMessage{
+		FeeRecipient: types.Address(random20Bytes()),
+		GasLimit:     rand.Uint64(),
+		Timestamp:    rand.Uint64(),
+		Pubkey:       types.PublicKey(random48Bytes()),
+	}
+	return types.SignedValidatorRegistration{
+		Message:   msg,
+		Signature: types.Signature(random96Bytes()),
+	}
 }
 
 func random32Bytes() (b [32]byte) {

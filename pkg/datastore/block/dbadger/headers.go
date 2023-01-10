@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/datastore/block/headerscontroller"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
@@ -82,7 +83,7 @@ func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot uint64) (struct
 var ErrNotFound = errors.New("not found")
 
 func (s *Datastore) getMaxHeader(ctx context.Context, slot uint64) (h structs.HeaderAndTrace, err error) {
-	txn := s.Badger.NewTransaction(false)
+	txn := s.DBInter.NewTransaction(false)
 	defer txn.Discard()
 
 	item, err := txn.Get(HeaderMaxNewKey(slot).Bytes())
@@ -108,7 +109,7 @@ func (s *Datastore) getMaxHeader(ctx context.Context, slot uint64) (h structs.He
 }
 
 func (s *Datastore) PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) (err error) {
-	if err := storeHeader(s.Badger, hd, ttl); err != nil {
+	if err := storeHeader(s.DBInter, hd, ttl); err != nil {
 		return err
 	}
 
@@ -130,7 +131,7 @@ func (s *Datastore) loadKeysAndCleanup(ctx context.Context, slot uint64) error {
 	defer s.l.Unlock()
 
 	// need to load keys to memory
-	data, err := s.TTLStorage.Get(ctx, HeaderKey(slot))
+	data, err := s.DB.Get(ctx, HeaderKey(slot))
 	if err != nil {
 		if errors.Is(err, ds.ErrNotFound) {
 			return nil // success - key is empty, nothing to load
@@ -145,7 +146,7 @@ func (s *Datastore) loadKeysAndCleanup(ctx context.Context, slot uint64) error {
 	return s.hc.PrependMultiple(slot, h)
 }
 
-func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
+func storeHeader(s DBInter, h structs.HeaderData, ttl time.Duration) error {
 	txn := s.NewTransaction(true)
 	defer txn.Discard()
 
@@ -174,7 +175,7 @@ func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]struct
 		return el, nil
 	}
 
-	data, err := s.TTLStorage.Get(ctx, HeaderKey(slot))
+	data, err := s.DB.Get(ctx, HeaderKey(slot))
 	if err != nil && errors.Is(err, ds.ErrNotFound) {
 		return el, err
 	}
@@ -188,7 +189,7 @@ func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]struct
 }
 
 func (s *Datastore) GetHeadersByBlockNum(ctx context.Context, blockNumber uint64) ([]structs.HeaderAndTrace, error) {
-	slot, err := s.TTLStorage.Get(ctx, HeaderNumKey(blockNumber))
+	slot, err := s.DB.Get(ctx, HeaderNumKey(blockNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -196,19 +197,19 @@ func (s *Datastore) GetHeadersByBlockNum(ctx context.Context, blockNumber uint64
 }
 
 func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error) {
-	slot, err := s.TTLStorage.Get(ctx, HeaderHashKey(hash))
+	slot, err := s.DB.Get(ctx, HeaderHashKey(hash))
 	if err != nil {
 		return nil, err
 	}
 
-	newContent, err := s.TTLStorage.Get(ctx, HeaderKeyContent(binary.LittleEndian.Uint64(slot), hash.String()))
+	newContent, err := s.DB.Get(ctx, HeaderKeyContent(binary.LittleEndian.Uint64(slot), hash.String()))
 	if err != nil {
 		if !errors.Is(err, badger.ErrKeyNotFound) { // do not fail on not found try others
 			return nil, err
 		}
 		// old code fallback - to be removed
 		if true {
-			newContent, err = s.TTLStorage.Get(ctx, HeaderKey(binary.LittleEndian.Uint64(slot)))
+			newContent, err = s.DB.Get(ctx, HeaderKey(binary.LittleEndian.Uint64(slot)))
 			if err != nil {
 				return nil, err
 			}
@@ -255,7 +256,7 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag 
 	readr := bytes.NewReader(nil)
 	dec := json.NewDecoder(readr)
 	for {
-		data, err := s.TTLStorage.Get(ctx, HeaderKey(initialSlot))
+		data, err := s.DB.Get(ctx, HeaderKey(initialSlot))
 		if err != nil {
 			if errors.Is(err, ds.ErrNotFound) {
 				return el, nil
@@ -295,7 +296,7 @@ func (s *Datastore) saveHeader(ctx context.Context, slot uint64, ttl time.Durati
 		return err
 	}
 
-	if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(types.Hash(maxP).String()), ttl); err != nil {
+	if err := s.DB.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(types.Hash(maxP).String()), ttl); err != nil {
 		return err
 	}
 
@@ -304,7 +305,7 @@ func (s *Datastore) saveHeader(ctx context.Context, slot uint64, ttl time.Durati
 	}
 
 	// revert the saveHeaders operation as revision changed
-	_ = s.Badger.Update(func(txn *badger.Txn) error {
+	_ = s.DBInter.Update(func(txn *badger.Txn) error {
 		return txn.Delete(HeaderKey(slot).Bytes())
 	})
 
@@ -325,7 +326,7 @@ func putHeaders(ctx context.Context, s *Datastore, slot uint64, cont []structs.H
 		}
 	}
 	buff.WriteString("]")
-	if err := s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
+	if err := s.DB.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
 		return err
 	}
 
@@ -345,7 +346,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 	slotExists := make(map[uint64]struct{})
 
 	// Get all headers, rebuild
-	err := s.Badger.View(func(txn *badger.Txn) error {
+	err := s.DBInter.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false
 
@@ -405,7 +406,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 	buff := new(bytes.Buffer)
 	for slot, v := range slotDoesNotExist {
 		if v != nil || len(v) != 0 {
-			tempHC := s.hc.NewHeaderController(100, time.Hour) // params doesn't matter here
+			tempHC := headerscontroller.NewHeaderController(100, time.Hour) // params doesn't matter here
 
 			buff.Reset()
 			sort.Slice(v, func(i, j int) bool {
@@ -428,7 +429,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 				}
 			}
 			buff.WriteString("]")
-			if err := s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
+			if err := s.DB.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
 				return err
 			}
 
@@ -436,7 +437,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) err
 			if !ok {
 				return errors.New("max profit from records not calculated")
 			}
-			if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace.BlockHash.String()), ttl); err != nil {
+			if err := s.DB.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace.BlockHash.String()), ttl); err != nil {
 				return err
 			}
 		}
