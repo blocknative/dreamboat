@@ -25,13 +25,12 @@ type Verifier interface {
 }
 
 var (
-	ErrNoPayloadFound        = errors.New("no payload found")
-	ErrMissingRequest        = errors.New("req is nil")
-	ErrMissingSecretKey      = errors.New("secret key is nil")
-	UnregisteredValidatorMsg = "unregistered validator"
-	ErrNoBuilderBid          = errors.New("no builder bid")
-	ErrOldSlot               = errors.New("requested slot is old")
-	ErrBadHeader             = "invalid block header from datastore"
+	ErrNoPayloadFound   = errors.New("no payload found")
+	ErrMissingRequest   = errors.New("req is nil")
+	ErrMissingSecretKey = errors.New("secret key is nil")
+	ErrNoBuilderBid     = errors.New("no builder bid")
+	ErrOldSlot          = errors.New("requested slot is old")
+	ErrBadHeader        = errors.New("invalid block header from datastore")
 )
 
 type Datastore interface {
@@ -155,7 +154,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	header := maxProfitBlock.Header
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
-		logger.Debug(ErrBadHeader)
+		logger.Debug(ErrBadHeader.Error())
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
