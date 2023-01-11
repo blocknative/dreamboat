@@ -147,7 +147,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	m.AppendSince(tGet, "getHeader", "get")
 
 	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
-		logger.Warnf("failed to cache block: %s", err.Error())
+		logger.WithError(err).Warn("failed to cache block")
 	}
 	logger.Debug("payload cached")
 

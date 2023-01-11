@@ -1,4 +1,5 @@
 //go:generate mockgen  -destination=./mocks/stream.go -package=mocks github.com/blocknative/dreamboat/pkg/stream Pubsub,RemoteDatastore
+
 package stream
 
 import (
@@ -85,12 +86,12 @@ func (s *StreamDatastore) RunSubscriber(ctx context.Context) error {
 		if sBlock.IsCache {
 			s.m.StreamRecvCounter.WithLabelValues("cache").Inc()
 			if err := s.cachePayload(ctx, block); err != nil {
-				s.Logger.With(block).Warnf("fail to cache payload: %s", err.Error())
+				s.Logger.WithError(err).With(block).Warn("failed to cache payload")
 			}
 		} else {
 			s.m.StreamRecvCounter.WithLabelValues("store").Inc()
 			if err := s.storePayload(ctx, block); err != nil {
-				s.Logger.With(block).Warnf("fail to store payload: %s", err.Error())
+				s.Logger.WithError(err).With(block).Warn("failed to store payload: %s")
 			}
 		}
 
