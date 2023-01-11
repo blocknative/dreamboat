@@ -208,6 +208,12 @@ var flags = []cli.Flag{
 		Value:   "relay/payload",
 		EnvVars: []string{"RELAY_DISTRIBUTION_PUBSUB_TOPIC"},
 	},
+	&cli.IntFlag{
+		Name:    "relay-distribution-publish-queue",
+		Usage:   "Pubsub publish queue size",
+		Value:   100,
+		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_QUEUE"},
+	},
 	&cli.StringFlag{
 		Name:    "relay-distribution-redis-uri",
 		Usage:   "Redis URI",
@@ -356,11 +362,12 @@ func run() cli.ActionFunc {
 			}
 
 			streamConfig := stream.StreamConfig{
-				Logger:      config.Log,
-				ID:          id,
-				TTL:         c.Duration("relay-distribution-ttl"),
-				PubsubTopic: c.String("relay-distribution-pubsub-topic"),
-				PublishAll:  c.Bool("relay-distribution-publish-all"),
+				Logger:          config.Log,
+				ID:              id,
+				TTL:             c.Duration("relay-distribution-ttl"),
+				PubsubTopic:     c.String("relay-distribution-pubsub-topic"),
+				PublishAll:      c.Bool("relay-distribution-publish-all"),
+				StreamQueueSize: c.Int("relay-distribution-publish-queue"),
 			}
 
 			streamDs := stream.NewStreamDatastore(badgerDs, pubsub, remoteDatastore, streamConfig)
@@ -370,11 +377,25 @@ func run() cli.ActionFunc {
 
 			go func(s *stream.StreamDatastore) error {
 				config.Log.With(log.F{
-					"relay-service": "stream",
+					"relay-service": "stream-publisher",
 					"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
 				}).Info("initialized")
 
-				err := s.Run(cContext)
+				err := s.RunPublisher(cContext)
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+					config.Log.Errorf("stream failed: %s", err.Error())
+					cancel()
+				}
+				return err
+			}(streamDs)
+
+			go func(s *stream.StreamDatastore) error {
+				config.Log.With(log.F{
+					"relay-service": "stream-subscriber",
+					"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
+				}).Info("initialized")
+
+				err := s.RunSubscriber(cContext)
 				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 					config.Log.Errorf("stream failed: %s", err.Error())
 					cancel()

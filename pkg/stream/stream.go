@@ -27,19 +27,23 @@ type RemoteDatastore interface {
 }
 
 type StreamConfig struct {
-	Logger      log.Logger
-	ID          string
-	TTL         time.Duration
-	PubsubTopic string // pubsub topic name for block submissions
-	PublishAll  bool
+	Logger          log.Logger
+	ID              string
+	TTL             time.Duration
+	PubsubTopic     string // pubsub topic name for block submissions
+	PublishAll      bool
+	StreamQueueSize int
 }
 
 type StreamDatastore struct {
 	*datastore.Datastore
 	Pubsub          Pubsub
 	RemoteDatastore RemoteDatastore
-	Config          StreamConfig
 
+	cacheRequests chan *structs.BlockAndTrace
+	storeRequests chan *structs.BlockAndTrace
+
+	Config StreamConfig
 	Logger log.Logger
 
 	m StreamMetrics
@@ -50,6 +54,8 @@ func NewStreamDatastore(ds *datastore.Datastore, ps Pubsub, rds RemoteDatastore,
 		Datastore:       ds,
 		Pubsub:          ps,
 		RemoteDatastore: rds,
+		cacheRequests:   make(chan *structs.BlockAndTrace, cfg.StreamQueueSize),
+		storeRequests:   make(chan *structs.BlockAndTrace, cfg.StreamQueueSize),
 		Config:          cfg,
 		Logger:          cfg.Logger.WithField("relay-service", "stream"),
 	}
@@ -59,7 +65,7 @@ func NewStreamDatastore(ds *datastore.Datastore, ps Pubsub, rds RemoteDatastore,
 	return &s
 }
 
-func (s *StreamDatastore) Run(ctx context.Context) error {
+func (s *StreamDatastore) RunSubscriber(ctx context.Context) error {
 	blocks, err := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic)
 	if err != nil {
 		return err
@@ -91,6 +97,45 @@ func (s *StreamDatastore) Run(ctx context.Context) error {
 	}
 
 	return ctx.Err()
+}
+
+func (s *StreamDatastore) RunPublisher(ctx context.Context) error {
+	for {
+		select {
+		case req := <-s.cacheRequests:
+			s.encodeAndPublish(ctx, req, true)
+			continue
+		default:
+		}
+
+		select {
+		case req := <-s.cacheRequests:
+			s.encodeAndPublish(ctx, req, true)
+		case req := <-s.storeRequests:
+			s.encodeAndPublish(ctx, req, false)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (s *StreamDatastore) encodeAndPublish(ctx context.Context, block *structs.BlockAndTrace, isCache bool) {
+	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "encode"))
+	protoBlock := ToStreamBlock(block, isCache, s.Config.ID)
+	rawBlock, err := proto.Marshal(protoBlock)
+	if err != nil {
+		s.Logger.Warnf("fail to encode encode and stream block: %s", err.Error())
+		timer1.ObserveDuration()
+		return
+	}
+	timer1.ObserveDuration()
+
+	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "publish"))
+	defer timer2.ObserveDuration()
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic, rawBlock); err != types.ErrNilPayload {
+		s.Logger.Warnf("fail to encode encode and stream block: %s", err.Error())
+		return
+	}
 }
 
 func (s *StreamDatastore) cachePayload(ctx context.Context, payload *structs.BlockAndTrace) error {
@@ -255,15 +300,12 @@ func (s *StreamDatastore) PutPayload(ctx context.Context, key structs.PayloadKey
 	timer1 = prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "pub"))
 	defer timer1.ObserveDuration()
 
-	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "encode"))
-	block := ToStreamBlock(payload, false, s.Config.ID)
-	rawBlock, err := proto.Marshal(block)
-	if err != nil {
-		return fmt.Errorf("fail to encode encode and stream block: %w", err)
+	select {
+	case s.storeRequests <- payload:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	timer2.ObserveDuration()
-
-	return s.Pubsub.Publish(ctx, s.Config.PubsubTopic, rawBlock)
 }
 
 func (s *StreamDatastore) CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error {
@@ -277,15 +319,12 @@ func (s *StreamDatastore) CacheBlock(ctx context.Context, block *structs.Complet
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("cacheBlock", "pub"))
 	defer timer1.ObserveDuration()
 
-	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("cacheBlock", "encode"))
-	sBlock := ToStreamBlock(&block.Payload, true, s.Config.ID)
-	b, err := proto.Marshal(sBlock)
-	if err != nil {
-		return fmt.Errorf("fail to encode stream block: %w", err)
+	select {
+	case s.cacheRequests <- &block.Payload:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	timer2.ObserveDuration()
-
-	return s.Pubsub.Publish(ctx, s.Config.PubsubTopic, b)
 }
 
 func payloadToKey(payload *structs.BlockAndTrace) structs.PayloadKey {

@@ -31,7 +31,7 @@ func (s *StreamDatastore) initMetrics() {
 		Subsystem: "stream",
 		Name:      "timing",
 		Help:      "Duration of requests per function",
-	}, []string{"function", "type"})
+	}, []string{"function", "type", "error"})
 }
 
 func (s *StreamDatastore) AttachMetrics(m *metrics.Metrics) {

@@ -146,12 +146,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	}
 	m.AppendSince(tGet, "getHeader", "get")
 
-	go func(ctx context.Context, maxProfitBlock *structs.CompleteBlockstruct) {
-		if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
-			logger.Warnf("failed to cache block: %s", err.Error())
-		}
-		logger.Debug("payload cached")
-	}(ctx, maxProfitBlock)
+	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+		logger.Warnf("failed to cache block: %s", err.Error())
+	}
+	logger.Debug("payload cached")
 
 	header := maxProfitBlock.Header
 
