@@ -324,8 +324,8 @@ func run() cli.ActionFunc {
 			return err
 		}
 		logger.With(log.F{
-			"relay-service":     "datastore",
-			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
+			"relay-service": "datastore",
+			"startTimeMs":   time.Since(timeDataStoreStart).Milliseconds(),
 		}).Info("initialized")
 
 		timeRelayStart := time.Now()
@@ -365,6 +365,8 @@ func run() cli.ActionFunc {
 
 			streamDs := stream.NewStreamDatastore(badgerDs, pubsub, remoteDatastore, streamConfig)
 			streamDs.AttachMetrics(m)
+
+			ds = streamDs
 
 			go func(s *stream.StreamDatastore) error {
 				config.Log.With(log.F{
@@ -427,8 +429,8 @@ func run() cli.ActionFunc {
 		v.RunVerify(c.Uint("relay-workers-verify"))
 
 		logger.With(log.F{
-			"relay-service":     "relay",
-			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
+			"relay-service": "relay",
+			"startTimeMs":   time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
 		go func(s *pkg.Service) error {
@@ -538,7 +540,7 @@ func loadRegistrations(ds Datastore, regMgr *validators.StoreManager, logger log
 		}
 
 		logger.With(log.F{
-			"relay-service":        "registration",
+			"relay-service":  "registration",
 			"count-elements": len(reg),
 		}).Info("registrations loaded")
 	}
