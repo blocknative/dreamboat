@@ -6,9 +6,9 @@ import (
 )
 
 type StreamMetrics struct {
-	StreamRecvCounter *prometheus.CounterVec
+	StreamRecvCounter       *prometheus.CounterVec
 	StreamPayloadHitCounter *prometheus.CounterVec
-	Timing            *prometheus.HistogramVec
+	Timing                  *prometheus.HistogramVec
 }
 
 func (s *StreamDatastore) initMetrics() {
@@ -37,4 +37,5 @@ func (s *StreamDatastore) initMetrics() {
 func (s *StreamDatastore) AttachMetrics(m *metrics.Metrics) {
 	m.Register(s.m.StreamRecvCounter)
 	m.Register(s.m.StreamPayloadHitCounter)
+	m.Register(s.m.Timing)
 }

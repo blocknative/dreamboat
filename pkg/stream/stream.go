@@ -204,7 +204,13 @@ func (s *StreamDatastore) GetPayload(ctx context.Context, key structs.PayloadKey
 	}(ctx, responses)
 
 	for i := 0; i < cap(responses); i++ {
-		resp := <-responses
+		var resp getPayloadResponse
+		select {
+		case resp = <-responses:
+		case <-ctx.Done():
+			return &structs.BlockAndTrace{}, false, ctx.Err()
+		}
+
 		if resp.block != nil && resp.err == nil {
 			if resp.isLocal {
 				s.m.StreamPayloadHitCounter.WithLabelValues("local").Inc()
