@@ -213,16 +213,18 @@ func (s *StreamDatastore) GetPayload(ctx context.Context, key structs.PayloadKey
 
 		if resp.block != nil && resp.err == nil {
 			if resp.isLocal {
-				s.m.StreamPayloadHitCounter.WithLabelValues("local").Inc()
+				s.m.StreamPayloadHitCounter.WithLabelValues("local", "hit").Inc()
 			} else {
-				s.m.StreamPayloadHitCounter.WithLabelValues("remote").Inc()
+				s.m.StreamPayloadHitCounter.WithLabelValues("remote", "hit").Inc()
 			}
 			return resp.block, resp.fromCache, resp.err
 		}
-		if resp.err != nil {
-			s.Logger.With(key).WithField("isLocal", resp.isLocal).Debugf("payload not found: %s", resp.err.Error())
+
+		s.Logger.With(key).WithField("isLocal", resp.isLocal).WithError(resp.err).Debug("payload not found")
+		if resp.isLocal {
+			s.m.StreamPayloadHitCounter.WithLabelValues("local", "miss").Inc()
 		} else {
-			s.Logger.With(key).WithField("isLocal", resp.isLocal).Debugf("payload not found")
+			s.m.StreamPayloadHitCounter.WithLabelValues("remote", "miss").Inc()
 		}
 	}
 

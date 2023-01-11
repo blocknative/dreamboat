@@ -24,7 +24,7 @@ func (s *StreamDatastore) initMetrics() {
 		Subsystem: "stream",
 		Name:      "payloadHit",
 		Help:      "Number of payloads hit",
-	}, []string{"type"})
+	}, []string{"source","type"})
 
 	s.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
