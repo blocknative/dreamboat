@@ -15,7 +15,6 @@ import (
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
@@ -524,18 +523,40 @@ type jsonError struct {
 }
 
 func unwrapError(err error, defaultMsg string) error {
-	if errors.Is(err, relay.ErrNoPayloadFound) {
-		return relay.ErrNoPayloadFound
-	} else if errors.Is(err, relay.ErrNoBuilderBid) {
-		return relay.ErrNoBuilderBid
-	} else if errors.Is(err, relay.ErrBadHeader) {
-		return relay.ErrBadHeader
-	} else if errors.Is(err, relay.ErrMissingRequest) {
-		return relay.ErrMissingRequest
-	} else if errors.Is(err, relay.ErrMissingSecretKey) {
-		return relay.ErrMissingSecretKey
-	} else if errors.Is(err, relay.ErrOldSlot) {
-		return relay.ErrOldSlot
+	if errors.Is(err, structs.ErrUnknownValue) {
+		return structs.ErrUnknownValue
+	} else if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
+		return structs.ErrPayloadAlreadyDelivered
+	} else if errors.Is(err, structs.ErrNoPayloadFound) {
+		return structs.ErrNoPayloadFound
+	} else if errors.Is(err, structs.ErrMissingRequest) {
+		return structs.ErrMissingRequest
+	} else if errors.Is(err, structs.ErrMissingSecretKey) {
+		return structs.ErrMissingSecretKey
+	} else if errors.Is(err, structs.ErrNoBuilderBid) {
+		return structs.ErrNoBuilderBid
+	} else if errors.Is(err, structs.ErrOldSlot) {
+		return structs.ErrOldSlot
+	} else if errors.Is(err, structs.ErrBadHeader) {
+		return structs.ErrBadHeader
+	} else if errors.Is(err, structs.ErrInvalidSignature) {
+		return structs.ErrInvalidSignature
+	} else if errors.Is(err, structs.ErrStore) {
+		return structs.ErrStore
+	} else if errors.Is(err, structs.ErrMarshal) {
+		return structs.ErrMarshal
+	} else if errors.Is(err, structs.ErrInternal) {
+		return structs.ErrInternal
+	} else if errors.Is(err, structs.ErrUnknownValidator) {
+		return structs.ErrUnknownValidator
+	} else if errors.Is(err, structs.ErrVerification) {
+		return structs.ErrVerification
+	} else if errors.Is(err, structs.ErrInvalidTimestamp) {
+		return structs.ErrInvalidTimestamp
+	} else if errors.Is(err, structs.ErrInvalidSlot) {
+		return structs.ErrInvalidSlot
+	} else if errors.Is(err, structs.ErrEmptyBlock) {
+		return structs.ErrEmptyBlock
 	}
 
 	return errors.New(defaultMsg)

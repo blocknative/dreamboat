@@ -24,15 +24,6 @@ type Verifier interface {
 	Enqueue(ctx context.Context, sig [96]byte, pubkey [48]byte, msg [32]byte) (err error)
 }
 
-var (
-	ErrNoPayloadFound   = errors.New("no payload found")
-	ErrMissingRequest   = errors.New("req is nil")
-	ErrMissingSecretKey = errors.New("secret key is nil")
-	ErrNoBuilderBid     = errors.New("no builder bid")
-	ErrOldSlot          = errors.New("requested slot is old")
-	ErrBadHeader        = errors.New("invalid block header from datastore")
-)
-
 type Datastore interface {
 	CheckSlotDelivered(context.Context, uint64) (bool, error)
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
@@ -138,10 +129,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	if !ok {
 		if slot < rs.beaconState.Beacon().HeadSlot()-1 {
 			rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
-			return nil, ErrOldSlot
+			return nil, structs.ErrOldSlot
 		}
 		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
-		return nil, ErrNoBuilderBid
+		return nil, structs.ErrNoBuilderBid
 	}
 
 	m.AppendSince(tGet, "getHeader", "get")
@@ -154,9 +145,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	header := maxProfitBlock.Header
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
-		logger.Debug(ErrBadHeader.Error())
+		logger.Debug(structs.ErrBadHeader.Error())
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
-		return nil, ErrNoBuilderBid
+		return nil, structs.ErrNoBuilderBid
 	}
 
 	bid := types.BuilderBid{
@@ -169,7 +160,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
 	m.AppendSince(tSignature, "getHeader", "signature")
 	if err != nil {
-		return nil, fmt.Errorf("internal server error")
+		return nil, structs.ErrInternal
 	}
 
 	logger.With(log.F{
@@ -192,12 +183,12 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	defer m.AppendSince(tStart, "getPayload", "all")
 
 	if len(payloadRequest.Signature) != 96 {
-		return nil, fmt.Errorf("invalid signature")
+		return nil, structs.ErrInvalidSignature
 	}
 
 	proposerPubkey, err := rs.beaconState.Beacon().KnownValidatorByIndex(payloadRequest.Message.ProposerIndex)
 	if err != nil && errors.Is(err, structs.ErrUnknownValue) {
-		return nil, fmt.Errorf("unknown validator for index %d", payloadRequest.Message.ProposerIndex)
+		return nil, fmt.Errorf("%w for index %d", structs.ErrUnknownValidator, payloadRequest.Message.ProposerIndex)
 	} else if err != nil {
 		return nil, err
 	}
@@ -218,11 +209,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain)
 	if err != nil {
-		return nil, fmt.Errorf("signature invalid") // err
+		return nil, structs.ErrInvalidSignature // err
 	}
 	ok, err := verify.VerifySignatureBytes(msg, payloadRequest.Signature[:], pk[:])
 	if err != nil || !ok {
-		return nil, fmt.Errorf("signature invalid")
+		return nil, structs.ErrInvalidSignature
 	}
 	m.AppendSince(tVerify, "getPayload", "verify")
 
@@ -235,7 +226,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, key)
 	if err != nil || payload == nil {
-		return nil, ErrNoPayloadFound
+		return nil, structs.ErrNoPayloadFound
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
@@ -299,11 +290,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 // SubmitBlockRequestToSignedBuilderBid converts a builders block submission to a bid compatible with mev-boost
 func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) { // TODO(l): remove FB type
 	if req == nil {
-		return nil, ErrMissingRequest
+		return nil, structs.ErrMissingRequest
 	}
 
 	if sk == nil {
-		return nil, ErrMissingSecretKey
+		return nil, structs.ErrMissingSecretKey
 	}
 
 	header, err := types.PayloadToPayloadHeader(req.ExecutionPayload)
@@ -344,7 +335,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
 	if err != nil {
-		return fmt.Errorf("verify block: %w", err)
+		return fmt.Errorf("%w: %s", structs.ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 
 	tCheckDelivered := time.Now()
@@ -361,14 +352,14 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	tVerify := time.Now()
 	msg, err := types.ComputeSigningRoot(submitBlockRequest.Message, rs.config.BuilderSigningDomain)
 	if err != nil {
-		return fmt.Errorf("signature invalid")
+		return structs.ErrInvalidSignature
 	}
 
 	err = rs.ver.Enqueue(ctx, submitBlockRequest.Signature, submitBlockRequest.Message.BuilderPubkey, msg)
 	m.AppendSince(tVerify, "submitBlock", "verify")
 
 	if err != nil {
-		return fmt.Errorf("verify block: %w", err)
+		return fmt.Errorf("%w: %s", structs.ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 
 	complete, err := rs.prepareContents(submitBlockRequest)
@@ -378,12 +369,12 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	b, err := json.Marshal(complete.Header)
 	if err != nil {
-		return fmt.Errorf("fail to marshal block as header: %w", err)
+		return fmt.Errorf("%w block as header: %s", structs.ErrMarshal, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 
 	tPutPayload := time.Now()
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
-		return fmt.Errorf("fail to store block as payload: %w", err)
+		return fmt.Errorf("%w block as payload: %s", structs.ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
 
@@ -398,7 +389,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 		HeaderAndTrace: complete.Header,
 	}, rs.config.TTL)
 	if err != nil {
-		return fmt.Errorf("fail to store block as header: %w", err)
+		return fmt.Errorf("%w block as header: %s", structs.ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutHeader, "submitBlock", "putHeader")
 
@@ -457,16 +448,16 @@ func (rs *Relay) prepareContents(submitBlockRequest *types.BuilderSubmitBlockReq
 
 func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconState *structs.BeaconState) (bool, error) { // TODO(l): remove FB type
 	if submitBlockRequest == nil || submitBlockRequest.Message == nil {
-		return false, fmt.Errorf("block empty")
+		return false, structs.ErrEmptyBlock
 	}
 
 	expectedTimestamp := beaconState.GenesisTime + (submitBlockRequest.Message.Slot * 12)
 	if submitBlockRequest.ExecutionPayload.Timestamp != expectedTimestamp {
-		return false, fmt.Errorf("builder submission with wrong timestamp. got %d, expected %d", submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
+		return false, fmt.Errorf("%w: got %d, expected %d", structs.ErrInvalidTimestamp, submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
 	if structs.Slot(submitBlockRequest.Message.Slot) < beaconState.CurrentSlot {
-		return false, fmt.Errorf("builder submission with wrong slot. got %d, expected %d", submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
+		return false, fmt.Errorf("%w: got %d, expected %d", structs.ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
 	}
 
 	return true, nil
