@@ -15,6 +15,7 @@ import (
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
@@ -146,7 +147,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 
 	m := structs.NewMetricGroup(4)
 	if err = a.reg.RegisterValidator(r.Context(), m, payload); err != nil {
-		m.ObserveWithError(a.m.RelayTiming, err)
+		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "register validator unknown"))
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
 			"code":     400,
@@ -170,7 +171,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 	m := structs.NewMetricGroup(4)
 	response, err := a.r.GetHeader(r.Context(), m, req)
 	if err != nil {
-		m.ObserveWithError(a.m.RelayTiming, err)
+		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "get header unknown"))
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
 		slot, _ := req.Slot()
 		proposer, _ := req.Pubkey()
@@ -209,7 +210,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 	m := structs.NewMetricGroup(4)
 	payload, err := a.r.GetPayload(r.Context(), m, &req)
 	if err != nil {
-		m.ObserveWithError(a.m.RelayTiming, err)
+		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "get payload unknown"))
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
 		a.l.With(log.F{
 			"code":      400,
@@ -250,7 +251,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	m := structs.NewMetricGroup(4)
 	if err := a.r.SubmitBlock(r.Context(), m, &req); err != nil {
-		m.ObserveWithError(a.m.RelayTiming, err)
+		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))
 		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
@@ -520,4 +521,22 @@ func ParseHeaderRequest(r *http.Request) structs.HeaderRequest {
 type jsonError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+func unwrapError(err error, defaultMsg string) error {
+	if errors.Is(err, relay.ErrNoPayloadFound) {
+		return relay.ErrNoPayloadFound
+	} else if errors.Is(err, relay.ErrNoBuilderBid) {
+		return relay.ErrNoBuilderBid
+	} else if errors.Is(err, relay.ErrBadHeader) {
+		return relay.ErrBadHeader
+	} else if errors.Is(err, relay.ErrMissingRequest) {
+		return relay.ErrMissingRequest
+	} else if errors.Is(err, relay.ErrMissingSecretKey) {
+		return relay.ErrMissingSecretKey
+	} else if errors.Is(err, relay.ErrOldSlot) {
+		return relay.ErrOldSlot
+	}
+
+	return errors.New(defaultMsg)
 }
