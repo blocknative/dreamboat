@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
@@ -182,6 +183,12 @@ var flags = []cli.Flag{
 		Usage:   "run relay as a distributed system with multiple replicas",
 		Value:   false,
 		EnvVars: []string{"RELAY_DISTRIBUTION"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-id",
+		Usage:   "the id of the relay to differentiate from other replicas",
+		Value:   "",
+		EnvVars: []string{"RELAY_DISTRIBUTION_ID"},
 	},
 	&cli.BoolFlag{
 		Name:    "relay-distribution-publish-all",
@@ -342,9 +349,15 @@ func run() cli.ActionFunc {
 
 			remoteDatastore := &stream.RedisDatastore{Redis: redisClient}
 			pubsub := &stream.RedisPubsub{Redis: redisClient}
+
+			id := c.String("relay-id")
+			if id == "" {
+				id = uuid.NewString()
+			}
+
 			streamConfig := stream.StreamConfig{
 				Logger:      config.Log,
-				ID:          "", // TODO: generate random ID (string)
+				ID:          id,
 				TTL:         c.Duration("relay-distribution-ttl"),
 				PubsubTopic: c.String("relay-distribution-pubsub-topic"),
 				PublishAll:  c.Bool("relay-distribution-publish-all"),
