@@ -59,7 +59,7 @@ func NewStreamDatastore(ds *datastore.Datastore, ps Pubsub, rds RemoteDatastore,
 	return &s
 }
 
-func (s *StreamDatastore) Run(ctx context.Context, logger log.Logger) error {
+func (s *StreamDatastore) Run(ctx context.Context) error {
 	blocks, err := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic)
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func (s *StreamDatastore) Run(ctx context.Context, logger log.Logger) error {
 	sBlock := StreamBlock{}
 	for rawSBlock := range blocks {
 		if err := proto.Unmarshal(rawSBlock, &sBlock); err != nil {
-			logger.Warnf("fail to decode stream block: %s", err.Error())
+			s.Logger.Warnf("fail to decode stream block: %s", err.Error())
 		}
 
 		if sBlock.Source == s.Config.ID {
@@ -79,12 +79,12 @@ func (s *StreamDatastore) Run(ctx context.Context, logger log.Logger) error {
 		if sBlock.IsCache {
 			s.m.StreamRecvCounter.WithLabelValues("cache").Inc()
 			if err := s.cachePayload(ctx, block); err != nil {
-				logger.With(block).Warnf("fail to cache payload: %s", err.Error())
+				s.Logger.With(block).Warnf("fail to cache payload: %s", err.Error())
 			}
 		} else {
 			s.m.StreamRecvCounter.WithLabelValues("store").Inc()
 			if err := s.storePayload(ctx, block); err != nil {
-				logger.With(block).Warnf("fail to store payload: %s", err.Error())
+				s.Logger.With(block).Warnf("fail to store payload: %s", err.Error())
 			}
 		}
 

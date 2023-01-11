@@ -324,9 +324,9 @@ func run() cli.ActionFunc {
 			return err
 		}
 		logger.With(log.F{
-			"service":     "datastore",
+			"relay-service":     "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
-		}).Info("data store initialized")
+		}).Info("initialized")
 
 		timeRelayStart := time.Now()
 		as := &pkg.AtomicState{}
@@ -368,11 +368,11 @@ func run() cli.ActionFunc {
 
 			go func(s *stream.StreamDatastore) error {
 				config.Log.With(log.F{
-					"service":     "relay-stream",
-					"startTimeMs": time.Since(timeStreamStart).Milliseconds(),
+					"relay-service": "stream",
+					"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
 				}).Info("initialized")
 
-				err := s.Run(cContext, config.Log)
+				err := s.Run(cContext)
 				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 					config.Log.Errorf("stream failed: %s", err.Error())
 					cancel()
@@ -427,7 +427,7 @@ func run() cli.ActionFunc {
 		v.RunVerify(c.Uint("relay-workers-verify"))
 
 		logger.With(log.F{
-			"service":     "relay",
+			"relay-service":     "relay",
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
@@ -538,7 +538,7 @@ func loadRegistrations(ds Datastore, regMgr *validators.StoreManager, logger log
 		}
 
 		logger.With(log.F{
-			"service":        "registration",
+			"relay-service":        "registration",
 			"count-elements": len(reg),
 		}).Info("registrations loaded")
 	}
