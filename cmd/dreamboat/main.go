@@ -185,7 +185,7 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_DISTRIBUTION"},
 	},
 	&cli.StringFlag{
-		Name:    "relay-id",
+		Name:    "relay-distribution-id",
 		Usage:   "the id of the relay to differentiate from other replicas",
 		Value:   "",
 		EnvVars: []string{"RELAY_DISTRIBUTION_ID"},
@@ -350,7 +350,7 @@ func run() cli.ActionFunc {
 			remoteDatastore := &stream.RedisDatastore{Redis: redisClient}
 			pubsub := &stream.RedisPubsub{Redis: redisClient}
 
-			id := c.String("relay-id")
+			id := c.String("relay-distribution-id")
 			if id == "" {
 				id = uuid.NewString()
 			}
