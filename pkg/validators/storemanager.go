@@ -9,7 +9,6 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -17,6 +16,11 @@ import (
 type RegistrationStore interface {
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
 	PutNewerRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration) error
+}
+
+type RegCache interface {
+	Add(types.PublicKey, CacheEntry) (evicted bool)
+	Get(types.PublicKey) (CacheEntry, bool)
 }
 
 // StoreReqItem is a payload requested to be stored
@@ -34,7 +38,7 @@ type CacheEntry struct {
 }
 
 type StoreManager struct {
-	RegistrationCache       *lru.Cache[types.PublicKey, CacheEntry]
+	RegistrationCache       RegCache
 	storeTTLHalftimeSeconds int
 
 	store RegistrationStore
@@ -49,20 +53,16 @@ type StoreManager struct {
 	m StoreManagerMetrics
 }
 
-func NewStoreManager(l log.Logger, storeTTLHalftimeSeconds int, storeSize uint, registrationCacheSize int) (*StoreManager, error) {
-	cache, err := lru.New[types.PublicKey, CacheEntry](registrationCacheSize)
-	if err != nil {
-		return nil, err
-	}
-
+func NewStoreManager(l log.Logger, cache RegCache, store RegistrationStore, storeTTLHalftimeSeconds int, storeSize uint) *StoreManager {
 	rm := &StoreManager{
 		l:                       l,
+		store:                   store,
 		storeTTLHalftimeSeconds: storeTTLHalftimeSeconds,
 		RegistrationCache:       cache,
 		StoreCh:                 make(chan StoreReq, storeSize),
 	}
 	rm.initMetrics()
-	return rm, nil
+	return rm
 }
 
 func (pm *StoreManager) Close(ctx context.Context) {
@@ -81,14 +81,6 @@ func (pm *StoreManager) Close(ctx context.Context) {
 func (rm *StoreManager) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
 	return rm.store.GetRegistration(ctx, pk)
 }
-
-func (rm *StoreManager) RunStore(num uint) {
-	for i := uint(0); i < num; i++ {
-		rm.storeWorkersCounter.Add(1)
-		go rm.ParallelStore(rm.store)
-	}
-}
-
 func (rm *StoreManager) Check(rvg *types.RegisterValidatorRequestMessage) bool {
 	v, ok := rm.RegistrationCache.Get(rvg.Pubkey)
 	if !ok {
@@ -100,6 +92,22 @@ func (rm *StoreManager) Check(rvg *types.RegisterValidatorRequestMessage) bool {
 	}
 
 	return v.Entry.FeeRecipient == rvg.FeeRecipient && v.Entry.GasLimit == rvg.GasLimit
+}
+
+func (rm *StoreManager) SendStore(request StoreReq) {
+	// lock needed for Close()
+	rm.storeMutex.RLock()
+	defer rm.storeMutex.RUnlock()
+	if atomic.LoadInt32(&(rm.isClosed)) == 0 {
+		rm.StoreCh <- request
+	}
+}
+
+func (rm *StoreManager) RunStore(num uint) {
+	for i := uint(0); i < num; i++ {
+		rm.storeWorkersCounter.Add(1)
+		go rm.ParallelStore(rm.store)
+	}
 }
 
 func (pm *StoreManager) ParallelStore(datas RegistrationStore) {
@@ -140,13 +148,4 @@ func (pm *StoreManager) storeRegistration(ctx context.Context, payload StoreReq)
 		t.ObserveDuration()
 	}
 	return nil
-}
-
-func (rm *StoreManager) SendStore(request StoreReq) {
-	// lock needed for Close()
-	rm.storeMutex.RLock()
-	defer rm.storeMutex.RUnlock()
-	if atomic.LoadInt32(&(rm.isClosed)) == 0 {
-		rm.StoreCh <- request
-	}
 }

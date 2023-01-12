@@ -21,10 +21,10 @@ import (
 	"github.com/blocknative/dreamboat/pkg/verify"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/blocknative/dreamboat/pkg/datastore/block/headerscontroller"
 	trBadger "github.com/blocknative/dreamboat/pkg/datastore/transport/badger"
-	valBadger "github.com/blocknative/dreamboat/pkg/datastore/validators/dbadger"
 
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
@@ -290,13 +290,13 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		ds := valBadger.NewDatastore(storage, storage.DB)
-		if err = ds.FixOrphanHeaders(c.Context, config.TTL); err != nil {
-			return err
-		}
+		//ds := valBadger.NewDatastore(storage, config.TTL)
+		/*	if err = ds.FixOrphanHeaders(c.Context, config.TTL); err != nil {
+				return err
+			}
 
-		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
-
+			go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
+		*/
 		beacon, err := initBeacon(c.Context, config)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
@@ -317,17 +317,21 @@ func run() cli.ActionFunc {
 
 		service := pkg.NewService(config.Log, config, ds, as)
 
-		regStr, err := validators.NewStoreManager(config.Log, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))
+		ds := valBadger.NewDatastore(storage, config.TTL)
+
+		cache, err := lru.New[types.PublicKey, validators.CacheEntry](c.Int("relay-registrations-cache-size"))
 		if err != nil {
-			return fmt.Errorf("fail to initialize store manager: %w", err)
+			return fmt.Errorf("fail to initialize validator cache: %w", err)
 		}
+		regStr := validators.NewStoreManager(config.Log, cache, ds, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
+
 		regStr.AttachMetrics(m)
 
-		regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr, ds)
+		regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr)
 		a := api.NewApi(config.Log, r, regM)
 		a.AttachMetrics(m)
 
-		regStr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
+		regStr.RunStore(c.Uint("relay-workers-store-validator"))
 		v.RunVerify(c.Uint("relay-workers-verify"))
 
 		logger.With(log.F{
