@@ -190,3 +190,28 @@ func randomRegistration() types.SignedValidatorRegistration {
 		Signature: types.Signature(random96Bytes()),
 	}
 }
+
+func random48Bytes() (b [48]byte) {
+	rand.Read(b[:])
+	return b
+}
+
+func random32Bytes() (b [32]byte) {
+	rand.Read(b[:])
+	return b
+}
+
+func random20Bytes() (b [20]byte) {
+	rand.Read(b[:])
+	return b
+}
+
+func random96Bytes() (b [96]byte) {
+	rand.Read(b[:])
+	return b
+}
+
+func random256Bytes() (b [256]byte) {
+	rand.Read(b[:])
+	return b
+}

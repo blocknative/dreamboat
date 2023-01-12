@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 
+	"github.com/blocknative/dreamboat/pkg/datastore/block/headerscontroller"
 	trBadger "github.com/blocknative/dreamboat/pkg/datastore/transport/badger"
 	valBadger "github.com/blocknative/dreamboat/pkg/datastore/validators/dbadger"
 
@@ -277,7 +278,7 @@ func run() cli.ActionFunc {
 		timeRelayStart := time.Now()
 		as := &pkg.AtomicState{}
 
-		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
+		hc := headerscontroller.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
 		storage, err := trBadger.Open(config.Datadir)
@@ -290,7 +291,6 @@ func run() cli.ActionFunc {
 		}
 
 		ds := valBadger.NewDatastore(storage, storage.DB)
-
 		if err = ds.FixOrphanHeaders(c.Context, config.TTL); err != nil {
 			return err
 		}
@@ -322,8 +322,6 @@ func run() cli.ActionFunc {
 			return fmt.Errorf("fail to initialize store manager: %w", err)
 		}
 		regStr.AttachMetrics(m)
-		loadRegistrations(ds, regStr, logger)
-		go regStr.RunCleanup(uint64(config.TTL), time.Hour)
 
 		regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr, ds)
 		a := api.NewApi(config.Log, r, regM)
@@ -435,20 +433,6 @@ func initBeacon(ctx context.Context, config pkg.Config) (pkg.BeaconClient, error
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager) {
 	regMgr.Close(ctx)
 	finish <- struct{}{}
-}
-
-func loadRegistrations(ds *valBadger.Datastore, regMgr *validators.StoreManager, logger log.Logger) {
-	reg, err := ds.GetAllRegistration()
-	if err == nil {
-		for k, v := range reg {
-			regMgr.Set(k, v.Message.Timestamp)
-		}
-
-		logger.With(log.F{
-			"service":        "registration",
-			"count-elements": len(reg),
-		}).Info("registrations loaded")
-	}
 }
 
 func logger(c *cli.Context) log.Logger {

@@ -22,34 +22,25 @@ type Verifier interface {
 	GetVerifyChan(stack uint) chan verify.Request
 }
 
-type RegistrationStore interface {
-	PutRegistration(context.Context, structs.PubKey, types.SignedValidatorRegistration, time.Duration) error
-	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
-}
-
 type RegistrationManager interface {
 	SendStore(sReq StoreReq)
+	GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error)
 	Check(rvg *types.RegisterValidatorRequestMessage) bool
-	//Get(k string) (value uint64, ok bool)
-	Get(pubkey string) (timestamp uint64, ok bool)
 }
 
 type Register struct {
-	d RegistrationStore
-
-	l log.Logger
-
+	regMngr     RegistrationManager
+	ver         Verifier
 	beaconState State
 
-	regMngr              RegistrationManager
-	ver                  Verifier
 	builderSigningDomain types.Domain
-	m                    RegisterMetrics
+
+	l log.Logger
+	m RegisterMetrics
 }
 
-func NewRegister(l log.Logger, builderSigningDomain types.Domain, beaconState State, ver Verifier, regMngr RegistrationManager, d RegistrationStore) *Register {
+func NewRegister(l log.Logger, builderSigningDomain types.Domain, beaconState State, ver Verifier, regMngr RegistrationManager) *Register {
 	reg := &Register{
-		d:                    d,
 		l:                    l,
 		ver:                  ver,
 		regMngr:              regMngr,
@@ -61,7 +52,7 @@ func NewRegister(l log.Logger, builderSigningDomain types.Domain, beaconState St
 }
 
 func (r *Register) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
-	return r.d.GetRegistration(ctx, structs.PubKey{PublicKey: pk})
+	return r.regMngr.GetRegistration(ctx, structs.PubKey{PublicKey: pk})
 }
 
 // ***** Builder Domain *****
@@ -137,11 +128,7 @@ SendPayloads:
 			p := payload[i]
 			request.Items[nextIter] = StoreReqItem{
 				Time:    p.Message.Timestamp,
-				Pubkey:  p.Message.Pubkey,
 				Payload: p,
-
-				FeeRecipient: p.Message.FeeRecipient,
-				GasLimit:     p.Message.GasLimit,
 			}
 		}
 		rs.regMngr.SendStore(request)
@@ -160,7 +147,7 @@ SendPayloads:
 }
 
 func verifyOther(beacon *structs.BeaconState, tsReg RegistrationManager, i int, sp types.SignedValidatorRegistration) (svresp verify.Resp, ok bool) {
-	if verifyTimestamp(sp.Message.Timestamp) {
+	if sp.Message.Timestamp > uint64(time.Now().Add(10*time.Second).Unix()) {
 		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String())}, false
 	}
 
@@ -170,13 +157,7 @@ func verifyOther(beacon *structs.BeaconState, tsReg RegistrationManager, i int, 
 		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String())}, false
 	}
 
-	previousValidatorTimestamp, ok := tsReg.Get(pk.String()) // Do not error on this
-	return verify.Resp{Commit: (!ok || sp.Message.Timestamp < previousValidatorTimestamp), ID: i}, true
-}
-
-// verifyTimestamp ensures timestamp is not too far in the future
-func verifyTimestamp(timestamp uint64) bool {
-	return timestamp > uint64(time.Now().Add(10*time.Second).Unix())
+	return verify.Resp{Commit: true, ID: i}, true
 }
 
 // GetValidators returns a list of registered block proposers in current and next epoch

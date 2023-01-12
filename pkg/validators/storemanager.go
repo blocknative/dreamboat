@@ -2,7 +2,6 @@ package validators
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -15,15 +14,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+type RegistrationStore interface {
+	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+	PutNewerRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration) error
+}
+
 // StoreReqItem is a payload requested to be stored
 type StoreReqItem struct {
 	Payload types.SignedValidatorRegistration
 	Time    uint64
-	Pubkey  types.PublicKey
-
-	// additional params
-	FeeRecipient types.Address
-	GasLimit     uint64
 }
 type StoreReq struct {
 	Items []StoreReqItem
@@ -38,8 +37,7 @@ type StoreManager struct {
 	RegistrationCache       *lru.Cache[types.PublicKey, CacheEntry]
 	storeTTLHalftimeSeconds int
 
-	LastRegTime map[string]uint64 // [pubkey]timestamp
-	lrtl        sync.RWMutex      // LastRegTime RWLock
+	store RegistrationStore
 
 	StoreCh             chan StoreReq
 	storeMutex          sync.RWMutex
@@ -60,7 +58,6 @@ func NewStoreManager(l log.Logger, storeTTLHalftimeSeconds int, storeSize uint, 
 	rm := &StoreManager{
 		l:                       l,
 		storeTTLHalftimeSeconds: storeTTLHalftimeSeconds,
-		LastRegTime:             make(map[string]uint64),
 		RegistrationCache:       cache,
 		StoreCh:                 make(chan StoreReq, storeSize),
 	}
@@ -81,47 +78,14 @@ func (pm *StoreManager) Close(ctx context.Context) {
 	pm.l.Info("All registrations stored")
 }
 
-func (rm *StoreManager) RunCleanup(checkinterval uint64, cleanupInterval time.Duration) {
-	for {
-		rm.cleanupCycle(checkinterval)
-		rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
-		time.Sleep(cleanupInterval)
-	}
+func (rm *StoreManager) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
+	return rm.store.GetRegistration(ctx, pk)
 }
 
-func (rm *StoreManager) cleanupCycle(checkinterval uint64) {
-	now := uint64(time.Now().Unix())
-	var keys []string
-	rm.lrtl.RLock()
-	for k, v := range rm.LastRegTime {
-		if checkinterval < now-v {
-			keys = append(keys, k)
-		}
-	}
-	rm.lrtl.RUnlock()
-
-	rm.lrtl.Lock()
-	for _, k := range keys {
-		delete(rm.LastRegTime, k)
-	}
-	rm.lrtl.Unlock()
-}
-
-func (rm *StoreManager) LoadAll(m map[string]uint64) {
-	rm.lrtl.Lock()
-	defer rm.lrtl.Unlock()
-
-	for k, v := range m {
-		rm.LastRegTime[k] = v
-	}
-
-	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
-}
-
-func (rm *StoreManager) RunStore(store RegistrationStore, ttl time.Duration, num uint) {
+func (rm *StoreManager) RunStore(num uint) {
 	for i := uint(0); i < num; i++ {
 		rm.storeWorkersCounter.Add(1)
-		go rm.ParallelStore(store, ttl)
+		go rm.ParallelStore(rm.store)
 	}
 }
 
@@ -138,7 +102,7 @@ func (rm *StoreManager) Check(rvg *types.RegisterValidatorRequestMessage) bool {
 	return v.Entry.FeeRecipient == rvg.FeeRecipient && v.Entry.GasLimit == rvg.GasLimit
 }
 
-func (pm *StoreManager) ParallelStore(datas RegistrationStore, ttl time.Duration) {
+func (pm *StoreManager) ParallelStore(datas RegistrationStore) {
 	defer pm.storeWorkersCounter.Done()
 
 	pm.m.RunningWorkers.WithLabelValues("ParallelStore").Inc()
@@ -148,58 +112,34 @@ func (pm *StoreManager) ParallelStore(datas RegistrationStore, ttl time.Duration
 
 	for payload := range pm.StoreCh {
 		pm.m.StoreSize.Observe(float64(len(payload.Items)))
-		if err := pm.storeRegistration(ctx, datas, ttl, payload); err != nil {
+		if err := pm.storeRegistration(ctx, payload); err != nil {
 			pm.l.Errorf("error storing registration - %w ", err)
 			continue
 		}
 	}
 }
 
-func (pm *StoreManager) storeRegistration(ctx context.Context, datas RegistrationStore, ttl time.Duration, payload StoreReq) (err error) {
-	defer func() { // better safe than sorry
-		if r := recover(); r != nil {
-			var isErr bool
-			err, isErr = r.(error)
-			if !isErr {
-				err = fmt.Errorf("storeRegistration panic: %v", r)
-			}
-		}
-	}()
-
-	pm.lrtl.Lock()
-	for _, v := range payload.Items {
-		pm.LastRegTime[v.Pubkey.String()] = v.Time
-	}
-	pm.m.MapSize.Set(float64(len(pm.LastRegTime)))
-	pm.lrtl.Unlock()
-
+func (pm *StoreManager) storeRegistration(ctx context.Context, payload StoreReq) (err error) {
 	for _, i := range payload.Items {
 		t := prometheus.NewTimer(pm.m.StoreTiming)
 		now := time.Now()
-		err := datas.PutRegistration(ctx, structs.PubKey{PublicKey: i.Pubkey}, i.Payload, ttl)
+		err := pm.store.PutNewerRegistration(ctx, structs.PubKey{PublicKey: i.Payload.Message.Pubkey}, i.Payload)
 		if err != nil {
 			pm.m.StoreErrorRate.Inc()
 			return err
 		}
-		pm.RegistrationCache.Add(i.Pubkey, CacheEntry{
+		pm.RegistrationCache.Add(i.Payload.Message.Pubkey, CacheEntry{
 			Time: now,
 			Entry: types.RegisterValidatorRequestMessage{
-				FeeRecipient: i.FeeRecipient,
-				Timestamp:    i.Time,
-				GasLimit:     i.GasLimit},
+				Timestamp:    i.Payload.Message.Timestamp,
+				FeeRecipient: i.Payload.Message.FeeRecipient,
+				GasLimit:     i.Payload.Message.GasLimit,
+			},
 		})
 
 		t.ObserveDuration()
 	}
 	return nil
-}
-
-func (rm *StoreManager) Set(k string, value uint64) {
-	rm.lrtl.Lock()
-	defer rm.lrtl.Unlock()
-
-	rm.LastRegTime[k] = value
-	rm.m.MapSize.Set(float64(len(rm.LastRegTime)))
 }
 
 func (rm *StoreManager) SendStore(request StoreReq) {
@@ -209,13 +149,4 @@ func (rm *StoreManager) SendStore(request StoreReq) {
 	if atomic.LoadInt32(&(rm.isClosed)) == 0 {
 		rm.StoreCh <- request
 	}
-
-}
-
-func (rm *StoreManager) Get(k string) (value uint64, ok bool) {
-	rm.lrtl.RLock()
-	defer rm.lrtl.RUnlock()
-
-	value, ok = rm.LastRegTime[k]
-	return value, ok
 }

@@ -1,28 +1,24 @@
 package dbadger
 
 import (
-	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
 
 func RegistrationKey(pk structs.PubKey) ds.Key {
-	return ds.NewKey(fmt.Sprintf("%s%s", RegistrationPrefix, pk.String()))
+	return ds.NewKey(fmt.Sprintf("%s%s", "registration-", pk.String()))
 }
 
-const (
-	RegistrationPrefix = "registration-"
-)
-
-type DBInter interface {
-	View(func(txn *badger.Txn) error) error
+func RegistrationTimeKey(pk structs.PubKey) ds.Key {
+	return ds.NewKey(fmt.Sprintf("%s%s", "reg-t-", pk.String()))
 }
 
 type DB interface {
@@ -32,26 +28,42 @@ type DB interface {
 
 type Datastore struct {
 	DB
-	DBInter
+	l   sync.Mutex
+	TTL time.Duration
 }
 
-func NewDatastore(t DB, i DBInter) *Datastore {
+func NewDatastore(t DB, ttl time.Duration) *Datastore {
 	return &Datastore{
-		DB:      t,
-		DBInter: i,
+		DB:  t,
+		TTL: ttl,
 	}
 }
 
-func (s *Datastore) PutRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration, ttl time.Duration) error {
+func (s *Datastore) PutNewerRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration) error {
 	data, err := json.Marshal(registration)
 	if err != nil {
 		return err
 	}
-	return s.DB.PutWithTTL(ctx, RegistrationKey(pk), data, ttl)
-}
 
-func (s *Datastore) PutRegistrationRaw(ctx context.Context, pk structs.PubKey, registration []byte, ttl time.Duration) error {
-	return s.DB.PutWithTTL(ctx, RegistrationKey(pk), registration, ttl)
+	s.l.Lock()
+	defer s.l.Unlock()
+	// check for newer in database
+	time, err := s.DB.Get(ctx, RegistrationTimeKey(pk))
+	if err == nil && len(time) == 8 {
+		if registration.Message.Timestamp < binary.LittleEndian.Uint64(time) {
+			return nil // already have newer
+		}
+	}
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, registration.Message.Timestamp)
+
+	// transaction maybe ?
+	if err := s.DB.PutWithTTL(ctx, RegistrationTimeKey(pk), b, s.TTL); err != nil {
+		return err
+	}
+
+	return s.DB.PutWithTTL(ctx, RegistrationKey(pk), data, s.TTL)
 }
 
 func (s *Datastore) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
@@ -62,39 +74,4 @@ func (s *Datastore) GetRegistration(ctx context.Context, pk structs.PubKey) (typ
 	var registration types.SignedValidatorRegistration
 	err = json.Unmarshal(data, &registration)
 	return registration, err
-}
-
-func (s *Datastore) GetAllRegistration() (map[string]types.SignedValidatorRegistration, error) {
-	m := make(map[string]types.SignedValidatorRegistration)
-
-	b := bytes.NewReader(nil)
-	nDec := json.NewDecoder(b)
-
-	err := s.DBInter.View(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-		prefix := []byte("/" + RegistrationPrefix)
-
-		lenP := len(RegistrationPrefix) + 1
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			k := item.Key()
-
-			err := item.Value(func(v []byte) error {
-				b.Reset(v)
-				sgr := types.SignedValidatorRegistration{}
-				if err := nDec.Decode(&sgr); err != nil {
-					return err
-				}
-				m[string(k)[lenP:]] = sgr
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-
-	return m, err
 }
