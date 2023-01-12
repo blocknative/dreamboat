@@ -150,7 +150,7 @@ func (s *RedisStream) encodeAndPublish(ctx context.Context, block *structs.Block
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "publish"))
 	defer timer2.ObserveDuration()
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic, rawBlock); err != types.ErrNilPayload {
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic, rawBlock); err != nil {
 		s.Logger.Warnf("fail to encode encode and stream block: %s", err.Error())
 		return
 	}
