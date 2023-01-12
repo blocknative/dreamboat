@@ -370,7 +370,7 @@ func run() cli.ActionFunc {
 			ds = ldDatastore
 
 			// init streamer
-			pubsub := &stream.RedisPubsub{Redis: redisClient}
+			pubsub := &stream.RedisPubsub{Redis: redisClient, Logger: config.Log}
 
 			id := c.String("relay-distribution-id")
 			if id == "" {
