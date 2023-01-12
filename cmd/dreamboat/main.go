@@ -191,7 +191,7 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_DISTRIBUTION_ID"},
 	},
 	&cli.BoolFlag{
-		Name:    "relay-distribution-publish-all",
+		Name:    "relay-distribution-publish-submissions",
 		Usage:   "publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published",
 		Value:   false,
 		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_ALL"},
@@ -340,7 +340,11 @@ func run() cli.ActionFunc {
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
-		var ds Datastore
+		var (
+			ds       Datastore
+			streamer relay.Streamer
+		)
+
 		badgerDs, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
@@ -353,7 +357,14 @@ func run() cli.ActionFunc {
 				Addr: c.String("relay-distribution-redis-uri"),
 			})
 
-			remoteDatastore := &stream.RedisDatastore{Redis: redisClient}
+			// init datastore
+			redisDatastore := &datastore.RedisDatastore{Redis: redisClient}
+			ldDatastore := datastore.NewLocalRemoteDatastore(badgerDs, redisDatastore, config.Log)
+			ldDatastore.AttachMetrics(m)
+
+			ds = ldDatastore
+
+			// init streamer
 			pubsub := &stream.RedisPubsub{Redis: redisClient}
 
 			id := c.String("relay-distribution-id")
@@ -366,16 +377,15 @@ func run() cli.ActionFunc {
 				ID:              id,
 				TTL:             c.Duration("relay-distribution-ttl"),
 				PubsubTopic:     c.String("relay-distribution-pubsub-topic"),
-				PublishAll:      c.Bool("relay-distribution-publish-all"),
 				StreamQueueSize: c.Int("relay-distribution-publish-queue"),
 			}
 
-			streamDs := stream.NewStreamDatastore(badgerDs, pubsub, remoteDatastore, streamConfig)
-			streamDs.AttachMetrics(m)
+			redisStreamer := stream.NewRedisStream(pubsub, streamConfig)
+			redisStreamer.AttachMetrics(m)
 
-			ds = streamDs
+			streamer = redisStreamer
 
-			go func(s *stream.StreamDatastore) error {
+			go func(s *stream.RedisStream) error {
 				config.Log.With(log.F{
 					"relay-service": "stream-publisher",
 					"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
@@ -387,21 +397,21 @@ func run() cli.ActionFunc {
 					cancel()
 				}
 				return err
-			}(streamDs)
+			}(redisStreamer)
 
-			go func(s *stream.StreamDatastore) error {
+			go func(s *stream.RedisStream) error {
 				config.Log.With(log.F{
 					"relay-service": "stream-subscriber",
 					"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
 				}).Info("initialized")
 
-				err := s.RunSubscriber(cContext)
+				err := s.RunSubscriber(cContext, ds)
 				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 					config.Log.Errorf("stream failed: %s", err.Error())
 					cancel()
 				}
 				return err
-			}(streamDs)
+			}(redisStreamer)
 		}
 
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
@@ -429,7 +439,9 @@ func run() cli.ActionFunc {
 			SecretKey:             config.SecretKey,
 			TTL:                   config.TTL,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, v, as, ds, auctioneer)
+			Distributed:           c.Bool("relay-distribution"),
+			StreamSubmissions:     c.Bool("relay-distribution-publish-submissions"),
+		}, beacon, v, streamer, as, ds, auctioneer)
 		r.AttachMetrics(m)
 
 		service := pkg.NewService(config.Log, config, ds, as)

@@ -11,7 +11,7 @@ type StreamMetrics struct {
 	Timing                  *prometheus.HistogramVec
 }
 
-func (s *StreamDatastore) initMetrics() {
+func (s *RedisStream) initMetrics() {
 	s.m.StreamRecvCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
 		Subsystem: "stream",
@@ -24,7 +24,7 @@ func (s *StreamDatastore) initMetrics() {
 		Subsystem: "stream",
 		Name:      "payloadHit",
 		Help:      "Number of payloads hit",
-	}, []string{"source","type"})
+	}, []string{"source", "type"})
 
 	s.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
@@ -34,7 +34,7 @@ func (s *StreamDatastore) initMetrics() {
 	}, []string{"function", "type"})
 }
 
-func (s *StreamDatastore) AttachMetrics(m *metrics.Metrics) {
+func (s *RedisStream) AttachMetrics(m *metrics.Metrics) {
 	m.Register(s.m.StreamRecvCounter)
 	m.Register(s.m.StreamPayloadHitCounter)
 	m.Register(s.m.Timing)

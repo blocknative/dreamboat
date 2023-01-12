@@ -63,6 +63,11 @@ type Beacon interface {
 	PublishBlock(block *types.SignedBeaconBlock) error
 }
 
+type Streamer interface {
+	PublishStoreBlock() chan *structs.BlockAndTrace
+	PublishCacheBlock() chan *structs.BlockAndTrace
+}
+
 type RelayConfig struct {
 	BuilderSigningDomain  types.Domain
 	ProposerSigningDomain types.Domain
@@ -70,6 +75,8 @@ type RelayConfig struct {
 	SecretKey             *bls.SecretKey
 
 	PublishBlock bool
+
+	Distributed, StreamSubmissions bool
 
 	TTL time.Duration
 }
@@ -83,6 +90,8 @@ type Relay struct {
 	ver    Verifier
 	config RelayConfig
 
+	s Streamer
+
 	beacon      Beacon
 	beaconState State
 
@@ -90,12 +99,13 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, ver Verifier, beaconState State, d Datastore, a Auctioneer) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, ver Verifier, s Streamer, beaconState State, d Datastore, a Auctioneer) *Relay {
 	rs := &Relay{
 		d:           d,
 		a:           a,
 		l:           l,
 		ver:         ver,
+		s:           s,
 		config:      config,
 		beacon:      beacon,
 		beaconState: beaconState,
@@ -150,6 +160,13 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		logger.WithError(err).Warn("failed to cache block")
 	}
 	logger.Debug("payload cached")
+
+	if rs.config.Distributed { // TODO: run inside goroutine? If so, what context to use?
+		select {
+		case rs.s.PublishCacheBlock() <- &maxProfitBlock.Payload:
+		default:
+		}
+	}
 
 	header := maxProfitBlock.Header
 
@@ -366,7 +383,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	err = rs.ver.Enqueue(ctx, submitBlockRequest.Signature, submitBlockRequest.Message.BuilderPubkey, msg)
 	m.AppendSince(tVerify, "submitBlock", "verify")
-
 	if err != nil {
 		return fmt.Errorf("verify block: %w", err)
 	}
@@ -374,6 +390,14 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	complete, err := rs.prepareContents(submitBlockRequest)
 	if err != nil {
 		return fmt.Errorf("fail to generate contents from block submission: %w", err)
+	}
+
+	if rs.config.Distributed && rs.config.StreamSubmissions {
+		select {
+		case rs.s.PublishStoreBlock() <- &complete.Payload:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	b, err := json.Marshal(complete.Header)

@@ -117,30 +117,12 @@ func randomTransactions(size int) []hexutil.Bytes {
 	return txs
 }
 
-func randomRegistration() types.SignedValidatorRegistration {
-	msg := &types.RegisterValidatorRequestMessage{
-		FeeRecipient: types.Address(random20Bytes()),
-		GasLimit:     rand.Uint64(),
-		Timestamp:    rand.Uint64(),
-		Pubkey:       types.PublicKey(random48Bytes()),
-	}
-	return types.SignedValidatorRegistration{
-		Message:   msg,
-		Signature: types.Signature(random96Bytes()),
-	}
-}
-
 func random32Bytes() (b [32]byte) {
 	rand.Read(b[:])
 	return b
 }
 
 func random48Bytes() (b [48]byte) {
-	rand.Read(b[:])
-	return b
-}
-
-func random96Bytes() (b [96]byte) {
 	rand.Read(b[:])
 	return b
 }
