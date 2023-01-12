@@ -7,7 +7,6 @@ import (
 func Open(datadir string) (*badg.Datastore, error) {
 	storage, err := badg.NewDatastore(datadir, &badg.DefaultOptions)
 	if err != nil {
-		//logger.WithError(err).Error("failed to initialize datastore")
 		return nil, err
 	}
 

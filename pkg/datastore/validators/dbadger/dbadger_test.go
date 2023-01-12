@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/datastore/validators/dbadger"
+
+	tBadger "github.com/blocknative/dreamboat/pkg/datastore/transport/badger"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/google/uuid"
-	lru "github.com/hashicorp/golang-lru/v2"
-	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,15 +22,16 @@ func TestPutGetRegistration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	store := newMockDatastore()
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := dbadger.Datastore{TTLStorage: store, PayloadCache: cache}
+	tB, err := tBadger.Open("/tmp/" + t.Name() + uuid.New().String())
+	require.NoError(t, err)
+	defer tB.Close()
 
+	ds := dbadger.NewDatastore(tB, time.Minute)
 	registration := randomRegistration()
 	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 
 	// put
-	err := ds.PutRegistration(ctx, key, registration, time.Minute)
+	err = ds.PutNewerRegistration(ctx, key, registration)
 	require.NoError(t, err)
 
 	// get
@@ -43,18 +44,18 @@ func BenchmarkPutRegistration(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
+	tB, err := tBadger.Open("/tmp/" + b.Name() + uuid.New().String())
+	require.NoError(b, err)
+	defer tB.Close()
 
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := dbadger.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
+	ds := dbadger.NewDatastore(tB, time.Minute)
 
 	registration := randomRegistration()
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration, time.Minute)
+		err := ds.PutNewerRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration)
 		if err != nil {
 			panic(err)
 		}
@@ -65,11 +66,11 @@ func BenchmarkPutRegistrationParallel(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
+	tB, err := tBadger.Open("/tmp/" + b.Name() + uuid.New().String())
+	require.NoError(b, err)
+	defer tB.Close()
 
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
+	ds := dbadger.NewDatastore(tB, time.Minute)
 
 	registration := randomRegistration()
 
@@ -83,7 +84,7 @@ func BenchmarkPutRegistrationParallel(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		go func() {
-			err := ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration, time.Minute)
+			err := ds.PutNewerRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration)
 			if err != nil {
 				panic(err)
 			}
@@ -96,16 +97,16 @@ func BenchmarkGetRegistration(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
+	tB, err := tBadger.Open("/tmp/" + b.Name() + uuid.New().String())
+	require.NoError(b, err)
+	defer tB.Close()
 
-	store, _ := dbadger.NewDatastore(datadir, &badger.DefaultOptions)
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
+	ds := dbadger.NewDatastore(tB, time.Minute)
 
 	registration := randomRegistration()
 	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 
-	_ = ds.PutRegistration(ctx, key, registration, time.Minute)
+	_ = ds.PutNewerRegistration(ctx, key, registration)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -118,46 +119,19 @@ func BenchmarkGetRegistration(b *testing.B) {
 	}
 }
 
-func TestGetRegistrationReal(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var datadir = "/tmp/" + t.Name() + uuid.New().String()
-
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.Datastore{
-		TTLStorage: &datastore.TTLDatastoreBatcher{
-			TTLDatastore: store},
-		Badger: store.DB}
-
-	registration := randomRegistration()
-	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
-
-	err := ds.PutRegistration(ctx, key, registration, time.Minute*2)
-	require.NoError(t, err)
-
-	regs, err := ds.GetAllRegistration()
-	require.NoError(t, err)
-
-	if _, ok := regs[registration.Message.Pubkey.String()]; !ok {
-		t.Error("reqistration doesn't exists")
-	}
-}
-
 func BenchmarkGetRegistrationParallel(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
+	tB, err := tBadger.Open("/tmp/" + b.Name() + uuid.New().String())
+	require.NoError(b, err)
+	defer tB.Close()
 
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
-
+	ds := dbadger.NewDatastore(tB, time.Minute)
 	registration := randomRegistration()
 	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
 
-	_ = ds.PutRegistration(ctx, key, registration, time.Minute)
+	_ = ds.PutNewerRegistration(ctx, key, registration)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -196,22 +170,12 @@ func random48Bytes() (b [48]byte) {
 	return b
 }
 
-func random32Bytes() (b [32]byte) {
-	rand.Read(b[:])
-	return b
-}
-
 func random20Bytes() (b [20]byte) {
 	rand.Read(b[:])
 	return b
 }
 
 func random96Bytes() (b [96]byte) {
-	rand.Read(b[:])
-	return b
-}
-
-func random256Bytes() (b [256]byte) {
 	rand.Read(b[:])
 	return b
 }
