@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -190,11 +189,17 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"RELAY_DISTRIBUTION_ID"},
 	},
+	&cli.UintFlag{
+		Name:    "relay-distribution-stream-workers",
+		Usage:   "number of workers publishing and processing subscriptions in the stream",
+		Value:   100,
+		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_WORKERS"},
+	},
 	&cli.BoolFlag{
 		Name:    "relay-distribution-publish-submissions",
 		Usage:   "publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published",
 		Value:   false,
-		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_ALL"},
+		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_SUBMISSIONS"},
 	},
 	&cli.DurationFlag{
 		Name:    "relay-distribution-ttl",
@@ -385,33 +390,19 @@ func run() cli.ActionFunc {
 
 			streamer = redisStreamer
 
-			go func(s *stream.RedisStream) error {
-				config.Log.With(log.F{
-					"relay-service": "stream-publisher",
-					"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
-				}).Info("initialized")
+			redisStreamer.RunPublisherParallel(cContext, c.Uint("relay-distribution-stream-workers"))
+			config.Log.With(log.F{
+				"relay-service": "stream-publisher",
+				"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
+			}).Info("initialized")
 
-				err := s.RunPublisher(cContext)
-				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-					config.Log.Errorf("stream failed: %s", err.Error())
-					cancel()
-				}
-				return err
-			}(redisStreamer)
-
-			go func(s *stream.RedisStream) error {
-				config.Log.With(log.F{
-					"relay-service": "stream-subscriber",
-					"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
-				}).Info("initialized")
-
-				err := s.RunSubscriber(cContext, ds)
-				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-					config.Log.Errorf("stream failed: %s", err.Error())
-					cancel()
-				}
-				return err
-			}(redisStreamer)
+			if err := redisStreamer.RunSubscriberParallel(cContext, ds, c.Uint("relay-distribution-stream-workers")); err != nil {
+				return fmt.Errorf("fail to start stream subscriber: %w", err)
+			}
+			config.Log.With(log.F{
+				"relay-service": "stream-subscriber",
+				"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
+			}).Info("initialized")
 		}
 
 		if err = datastore.InitDatastoreMetrics(m); err != nil {

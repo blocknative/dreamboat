@@ -60,13 +60,22 @@ func NewRedisStream(ps Pubsub, cfg StreamConfig) *RedisStream {
 	return &s
 }
 
-func (s *RedisStream) RunSubscriber(ctx context.Context, ds Datastore) error {
+func (s *RedisStream) RunSubscriberParallel(ctx context.Context, ds Datastore, num uint) error {
 	blocks, err := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic)
 	if err != nil {
 		return err
 	}
 
+	for i := uint(0); i < num; i++ {
+		go s.RunSubscriber(ctx, ds, blocks)
+	}
+
+	return nil
+}
+
+func (s *RedisStream) RunSubscriber(ctx context.Context, ds Datastore, blocks chan []byte) error {
 	sBlock := StreamBlock{}
+
 	for rawSBlock := range blocks {
 		if err := proto.Unmarshal(rawSBlock, &sBlock); err != nil {
 			s.Logger.Warnf("fail to decode stream block: %s", err.Error())
@@ -88,10 +97,15 @@ func (s *RedisStream) RunSubscriber(ctx context.Context, ds Datastore) error {
 				s.Logger.WithError(err).With(block).Warn("failed to store payload: %s")
 			}
 		}
-
 	}
 
 	return ctx.Err()
+}
+
+func (s *RedisStream) RunPublisherParallel(ctx context.Context, num uint) {
+	for i := uint(0); i < num; i++ {
+		go s.RunPublisher(ctx)
+	}
 }
 
 func (s *RedisStream) RunPublisher(ctx context.Context) error {
@@ -112,6 +126,7 @@ func (s *RedisStream) RunPublisher(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
+
 }
 
 func (s *RedisStream) PublishStoreBlock() chan *structs.BlockAndTrace {

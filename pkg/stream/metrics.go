@@ -6,9 +6,8 @@ import (
 )
 
 type StreamMetrics struct {
-	StreamRecvCounter       *prometheus.CounterVec
-	StreamPayloadHitCounter *prometheus.CounterVec
-	Timing                  *prometheus.HistogramVec
+	StreamRecvCounter *prometheus.CounterVec
+	Timing            *prometheus.HistogramVec
 }
 
 func (s *RedisStream) initMetrics() {
@@ -18,13 +17,6 @@ func (s *RedisStream) initMetrics() {
 		Name:      "recvcount",
 		Help:      "Number of blocks received from stream.",
 	}, []string{"type"})
-
-	s.m.StreamPayloadHitCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "dreamboat",
-		Subsystem: "stream",
-		Name:      "payloadHit",
-		Help:      "Number of payloads hit",
-	}, []string{"source", "type"})
 
 	s.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
@@ -36,6 +28,5 @@ func (s *RedisStream) initMetrics() {
 
 func (s *RedisStream) AttachMetrics(m *metrics.Metrics) {
 	m.Register(s.m.StreamRecvCounter)
-	m.Register(s.m.StreamPayloadHitCounter)
 	m.Register(s.m.Timing)
 }
