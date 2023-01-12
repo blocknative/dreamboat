@@ -162,10 +162,16 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	logger.Debug("payload cached")
 
 	if rs.config.Distributed { // TODO: run inside goroutine? If so, what context to use?
-		select {
-		case rs.s.PublishCacheBlock() <- &maxProfitBlock.Payload:
-		default:
-		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), DurationPerSlot)
+			defer cancel()
+			select {
+			case rs.s.PublishCacheBlock() <- &maxProfitBlock.Payload:
+			case <-ctx.Done():
+				logger.Warnf("fail to stream cache block: %s", ctx.Err())
+			}
+		}()
+
 	}
 
 	header := maxProfitBlock.Header
