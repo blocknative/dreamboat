@@ -23,7 +23,7 @@ func (r *RedisPubsub) Subscribe(ctx context.Context, topic string) (chan []byte,
 		defer close(sub)
 		for ctx.Err() == nil { // restart on failure
 			pubsub := r.Redis.Subscribe(ctx, topic)
-			r.Logger.Warn("redis subscription started")
+			r.Logger.Debug("redis subscription started")
 
 			redisSub := pubsub.Channel()
 			for data := range redisSub {
