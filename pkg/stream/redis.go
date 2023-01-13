@@ -16,7 +16,7 @@ func (r *RedisPubsub) Publish(ctx context.Context, topic string, data []byte) er
 	return r.Redis.Publish(ctx, topic, data).Err()
 }
 
-func (r *RedisPubsub) Subscribe(ctx context.Context, topic string) (chan []byte, error) {
+func (r *RedisPubsub) Subscribe(ctx context.Context, topic string) chan []byte {
 	sub := make(chan []byte)
 
 	go func() {
@@ -38,5 +38,5 @@ func (r *RedisPubsub) Subscribe(ctx context.Context, topic string) (chan []byte,
 
 	}()
 
-	return sub, nil
+	return sub
 }

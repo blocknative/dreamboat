@@ -17,7 +17,7 @@ import (
 
 type Pubsub interface {
 	Publish(context.Context, string, []byte) error
-	Subscribe(context.Context, string) (chan []byte, error)
+	Subscribe(context.Context, string) chan []byte
 }
 
 type Datastore interface {
@@ -61,10 +61,7 @@ func NewRedisStream(ps Pubsub, cfg StreamConfig) *RedisStream {
 }
 
 func (s *RedisStream) RunSubscriberParallel(ctx context.Context, ds Datastore, num uint) error {
-	blocks, err := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic)
-	if err != nil {
-		return err
-	}
+	blocks := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic)
 
 	for i := uint(0); i < num; i++ {
 		go s.RunSubscriber(ctx, ds, blocks)
