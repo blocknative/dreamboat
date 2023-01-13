@@ -37,8 +37,8 @@ type StreamConfig struct {
 type RedisStream struct {
 	Pubsub Pubsub
 
-	cacheRequests chan *structs.BlockAndTrace
-	storeRequests chan *structs.BlockAndTrace
+	cacheRequests chan structs.BlockAndTrace
+	storeRequests chan structs.BlockAndTrace
 
 	Config StreamConfig
 	Logger log.Logger
@@ -49,8 +49,8 @@ type RedisStream struct {
 func NewRedisStream(ps Pubsub, cfg StreamConfig) *RedisStream {
 	s := RedisStream{
 		Pubsub:        ps,
-		cacheRequests: make(chan *structs.BlockAndTrace, cfg.StreamQueueSize),
-		storeRequests: make(chan *structs.BlockAndTrace, cfg.StreamQueueSize),
+		cacheRequests: make(chan structs.BlockAndTrace, cfg.StreamQueueSize),
+		storeRequests: make(chan structs.BlockAndTrace, cfg.StreamQueueSize),
 		Config:        cfg,
 		Logger:        cfg.Logger.WithField("relay-service", "stream").WithField("type", "redis"),
 	}
@@ -112,16 +112,16 @@ func (s *RedisStream) RunPublisher(ctx context.Context) error {
 	for {
 		select {
 		case req := <-s.cacheRequests:
-			s.encodeAndPublish(ctx, req, true)
+			s.encodeAndPublish(ctx, &req, true)
 			continue
 		default:
 		}
 
 		select {
 		case req := <-s.cacheRequests:
-			s.encodeAndPublish(ctx, req, true)
+			s.encodeAndPublish(ctx, &req, true)
 		case req := <-s.storeRequests:
-			s.encodeAndPublish(ctx, req, false)
+			s.encodeAndPublish(ctx, &req, false)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -129,18 +129,17 @@ func (s *RedisStream) RunPublisher(ctx context.Context) error {
 
 }
 
-func (s *RedisStream) PublishStoreBlock() chan *structs.BlockAndTrace {
+func (s *RedisStream) PublishStoreBlock() chan structs.BlockAndTrace {
 	return s.storeRequests
 }
 
-func (s *RedisStream) PublishCacheBlock() chan *structs.BlockAndTrace {
+func (s *RedisStream) PublishCacheBlock() chan structs.BlockAndTrace {
 	return s.cacheRequests
 }
 
 func (s *RedisStream) encodeAndPublish(ctx context.Context, block *structs.BlockAndTrace, isCache bool) {
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "encode"))
-	protoBlock := ToStreamBlock(block, isCache, s.Config.ID)
-	rawBlock, err := proto.Marshal(protoBlock)
+	rawBlock, err := proto.Marshal(ToStreamBlock(block, isCache, s.Config.ID))
 	if err != nil {
 		s.Logger.Warnf("fail to encode encode and stream block: %s", err.Error())
 		timer1.ObserveDuration()

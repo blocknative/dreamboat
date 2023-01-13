@@ -64,8 +64,8 @@ type Beacon interface {
 }
 
 type Streamer interface {
-	PublishStoreBlock() chan *structs.BlockAndTrace
-	PublishCacheBlock() chan *structs.BlockAndTrace
+	PublishStoreBlock() chan structs.BlockAndTrace
+	PublishCacheBlock() chan structs.BlockAndTrace
 }
 
 type RelayConfig struct {
@@ -166,7 +166,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			ctx, cancel := context.WithTimeout(context.Background(), DurationPerSlot)
 			defer cancel()
 			select {
-			case rs.s.PublishCacheBlock() <- &maxProfitBlock.Payload:
+			case rs.s.PublishCacheBlock() <- maxProfitBlock.Payload:
 			case <-ctx.Done():
 				logger.Warnf("fail to stream cache block: %s", ctx.Err())
 			}
@@ -400,7 +400,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	if rs.config.Distributed && rs.config.StreamSubmissions {
 		select {
-		case rs.s.PublishStoreBlock() <- &complete.Payload:
+		case rs.s.PublishStoreBlock() <- complete.Payload:
 		case <-ctx.Done():
 			return ctx.Err()
 		}

@@ -21,11 +21,12 @@ func (r *RedisDatastore) GetPayload(ctx context.Context, key structs.PayloadKey)
 		return nil, fmt.Errorf("fail to get payload from Redis: %w", err)
 	}
 
-	return decodePayload([]byte(redisPayload))
+	var block structs.BlockAndTrace
+	return &block, json.Unmarshal([]byte(redisPayload), &block)
 }
 
 func (r *RedisDatastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload *structs.BlockAndTrace, ttl time.Duration) error {
-	redisPayload, err := encodePayload(payload)
+	redisPayload, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("fail to encode payload: %w", err)
 	}
@@ -35,13 +36,4 @@ func (r *RedisDatastore) PutPayload(ctx context.Context, key structs.PayloadKey,
 
 func payloadKeyToRedisKey(key structs.PayloadKey) string {
 	return fmt.Sprintf("p-%d-%s-%s", key.Slot, key.Proposer, key.BlockHash) // TODO: optimize key size
-}
-
-func decodePayload(data []byte) (*structs.BlockAndTrace, error) {
-	var block structs.BlockAndTrace
-	return &block, json.Unmarshal(data, &block)
-}
-
-func encodePayload(payload *structs.BlockAndTrace) ([]byte, error) {
-	return json.Marshal(payload)
 }
