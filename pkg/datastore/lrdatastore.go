@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -39,6 +40,7 @@ func NewLocalRemoteDatastore(local *Datastore, remote RemoteDatastore, l log.Log
 }
 
 type getPayloadResponse struct {
+	id        string
 	block     *structs.BlockAndTrace
 	isLocal   bool
 	fromCache bool
@@ -61,25 +63,27 @@ func (s *LocalRemoteDatastore) GetPayload(ctx context.Context, key structs.Paylo
 	responses := chanPool.Get().(chan getPayloadResponse)
 	defer chanPool.Put(responses)
 
-	go func(ctx context.Context, resp chan getPayloadResponse) {
+	id := uuid.NewString()
+
+	go func(ctx context.Context, resp chan getPayloadResponse, id string) {
 		timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "local"))
 		block, fromCache, err := s.Datastore.GetPayload(ctx, key)
 		timer1.ObserveDuration()
 		select {
-		case responses <- getPayloadResponse{block: block, isLocal: true, fromCache: fromCache, err: err}:
+		case responses <- getPayloadResponse{id: id, block: block, isLocal: true, fromCache: fromCache, err: err}:
 		case <-ctx.Done():
 		}
-	}(ctx, responses)
+	}(ctx, responses, id)
 
-	go func(ctx context.Context, resp chan getPayloadResponse) {
+	go func(ctx context.Context, resp chan getPayloadResponse, id string) {
 		timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "remote"))
 		block, err := s.Remote.GetPayload(ctx, key)
 		timer1.ObserveDuration()
 		select {
-		case responses <- getPayloadResponse{block: block, isLocal: false, fromCache: false, err: err}:
+		case responses <- getPayloadResponse{id: id, block: block, isLocal: false, fromCache: false, err: err}:
 		case <-ctx.Done():
 		}
-	}(ctx, responses)
+	}(ctx, responses, id)
 
 	for i := 0; i < cap(responses); i++ {
 		var resp getPayloadResponse
@@ -87,6 +91,11 @@ func (s *LocalRemoteDatastore) GetPayload(ctx context.Context, key structs.Paylo
 		case resp = <-responses:
 		case <-ctx.Done():
 			return &structs.BlockAndTrace{}, false, ctx.Err()
+		}
+
+		if resp.id != id { // to avoid wrong responses from previous requests
+			i -= 1
+			continue
 		}
 
 		if resp.block != nil && resp.err == nil {
