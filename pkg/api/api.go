@@ -17,6 +17,7 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/validators"
 )
 
 // Router paths
@@ -252,7 +253,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	m := structs.NewMetricGroup(4)
 	if err := a.r.SubmitBlock(r.Context(), m, &req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))
-		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
+		if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
@@ -524,18 +525,46 @@ type jsonError struct {
 }
 
 func unwrapError(err error, defaultMsg string) error {
-	if errors.Is(err, relay.ErrNoPayloadFound) {
+	if errors.Is(err, relay.ErrUnknownValue) {
+		return relay.ErrUnknownValue
+	} else if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
+		return relay.ErrPayloadAlreadyDelivered
+	} else if errors.Is(err, relay.ErrNoPayloadFound) {
 		return relay.ErrNoPayloadFound
-	} else if errors.Is(err, relay.ErrNoBuilderBid) {
-		return relay.ErrNoBuilderBid
-	} else if errors.Is(err, relay.ErrBadHeader) {
-		return relay.ErrBadHeader
 	} else if errors.Is(err, relay.ErrMissingRequest) {
 		return relay.ErrMissingRequest
 	} else if errors.Is(err, relay.ErrMissingSecretKey) {
 		return relay.ErrMissingSecretKey
+	} else if errors.Is(err, relay.ErrNoBuilderBid) {
+		return relay.ErrNoBuilderBid
 	} else if errors.Is(err, relay.ErrOldSlot) {
 		return relay.ErrOldSlot
+	} else if errors.Is(err, relay.ErrBadHeader) {
+		return relay.ErrBadHeader
+	} else if errors.Is(err, relay.ErrInvalidSignature) {
+		return relay.ErrInvalidSignature
+	} else if errors.Is(err, relay.ErrStore) {
+		return relay.ErrStore
+	} else if errors.Is(err, relay.ErrMarshal) {
+		return relay.ErrMarshal
+	} else if errors.Is(err, relay.ErrInternal) {
+		return relay.ErrInternal
+	} else if errors.Is(err, relay.ErrUnknownValidator) {
+		return relay.ErrUnknownValidator
+	} else if errors.Is(err, relay.ErrVerification) {
+		return relay.ErrVerification
+	} else if errors.Is(err, relay.ErrInvalidTimestamp) {
+		return relay.ErrInvalidTimestamp
+	} else if errors.Is(err, relay.ErrInvalidSlot) {
+		return relay.ErrInvalidSlot
+	} else if errors.Is(err, relay.ErrEmptyBlock) {
+		return relay.ErrEmptyBlock
+	} else if errors.Is(err, validators.ErrInvalidSignature) {
+		return validators.ErrInvalidSignature
+	} else if errors.Is(err, validators.ErrUnknownValidator) {
+		return validators.ErrUnknownValidator
+	} else if errors.Is(err, validators.ErrInvalidTimestamp) {
+		return validators.ErrInvalidTimestamp
 	}
 
 	return errors.New(defaultMsg)
