@@ -2,11 +2,14 @@ package structs
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
+
+var ErrUnknownValue = errors.New("value is unknown")
 
 type Slot uint64
 
