@@ -16,6 +16,26 @@ import (
 	"github.com/blocknative/dreamboat/pkg/verify"
 )
 
+var (
+	ErrUnknownValue            = errors.New("value is unknown")
+	ErrPayloadAlreadyDelivered = errors.New("slot payload already delivered")
+	ErrNoPayloadFound          = errors.New("no payload found")
+	ErrMissingRequest          = errors.New("req is nil")
+	ErrMissingSecretKey        = errors.New("secret key is nil")
+	ErrNoBuilderBid            = errors.New("no builder bid")
+	ErrOldSlot                 = errors.New("requested slot is old")
+	ErrBadHeader               = errors.New("invalid block header from datastore")
+	ErrInvalidSignature        = errors.New("invalid signature")
+	ErrStore                   = errors.New("failed to store")
+	ErrMarshal                 = errors.New("failed to marshal")
+	ErrInternal                = errors.New("internal server error")
+	ErrUnknownValidator        = errors.New("unknown validator")
+	ErrVerification            = errors.New("failed to verify")
+	ErrInvalidTimestamp        = errors.New("invalid timestamp")
+	ErrInvalidSlot             = errors.New("invalid slot")
+	ErrEmptyBlock              = errors.New("block is empty")
+)
+
 type State interface {
 	Beacon() *structs.BeaconState
 }
@@ -129,10 +149,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	if !ok {
 		if slot < rs.beaconState.Beacon().HeadSlot()-1 {
 			rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
-			return nil, structs.ErrOldSlot
+			return nil, ErrOldSlot
 		}
 		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
-		return nil, structs.ErrNoBuilderBid
+		return nil, ErrNoBuilderBid
 	}
 
 	m.AppendSince(tGet, "getHeader", "get")
@@ -145,9 +165,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	header := maxProfitBlock.Header
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
-		logger.Debug(structs.ErrBadHeader.Error())
+		logger.Debug(ErrBadHeader.Error())
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
-		return nil, structs.ErrNoBuilderBid
+		return nil, ErrNoBuilderBid
 	}
 
 	bid := types.BuilderBid{
@@ -160,7 +180,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
 	m.AppendSince(tSignature, "getHeader", "signature")
 	if err != nil {
-		return nil, structs.ErrInternal
+		return nil, ErrInternal
 	}
 
 	logger.With(log.F{
@@ -183,12 +203,12 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	defer m.AppendSince(tStart, "getPayload", "all")
 
 	if len(payloadRequest.Signature) != 96 {
-		return nil, structs.ErrInvalidSignature
+		return nil, ErrInvalidSignature
 	}
 
 	proposerPubkey, err := rs.beaconState.Beacon().KnownValidatorByIndex(payloadRequest.Message.ProposerIndex)
-	if err != nil && errors.Is(err, structs.ErrUnknownValue) {
-		return nil, fmt.Errorf("%w for index %d", structs.ErrUnknownValidator, payloadRequest.Message.ProposerIndex)
+	if err != nil && errors.Is(err, ErrUnknownValue) {
+		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.Message.ProposerIndex)
 	} else if err != nil {
 		return nil, err
 	}
@@ -209,11 +229,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain)
 	if err != nil {
-		return nil, structs.ErrInvalidSignature // err
+		return nil, ErrInvalidSignature // err
 	}
 	ok, err := verify.VerifySignatureBytes(msg, payloadRequest.Signature[:], pk[:])
 	if err != nil || !ok {
-		return nil, structs.ErrInvalidSignature
+		return nil, ErrInvalidSignature
 	}
 	m.AppendSince(tVerify, "getPayload", "verify")
 
@@ -226,7 +246,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, key)
 	if err != nil || payload == nil {
-		return nil, structs.ErrNoPayloadFound
+		return nil, ErrNoPayloadFound
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
@@ -290,11 +310,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 // SubmitBlockRequestToSignedBuilderBid converts a builders block submission to a bid compatible with mev-boost
 func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) { // TODO(l): remove FB type
 	if req == nil {
-		return nil, structs.ErrMissingRequest
+		return nil, ErrMissingRequest
 	}
 
 	if sk == nil {
-		return nil, structs.ErrMissingSecretKey
+		return nil, ErrMissingSecretKey
 	}
 
 	header, err := types.PayloadToPayloadHeader(req.ExecutionPayload)
@@ -335,7 +355,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	_, err := rs.verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
 	if err != nil {
-		return fmt.Errorf("%w: %s", structs.ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
+		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 
 	tCheckDelivered := time.Now()
@@ -343,7 +363,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
 	m.AppendSince(tCheckDelivered, "submitBlock", "checkDelivered")
 	if ok {
-		return structs.ErrPayloadAlreadyDelivered
+		return ErrPayloadAlreadyDelivered
 	}
 	if err != nil {
 		return err
@@ -352,14 +372,14 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	tVerify := time.Now()
 	msg, err := types.ComputeSigningRoot(submitBlockRequest.Message, rs.config.BuilderSigningDomain)
 	if err != nil {
-		return structs.ErrInvalidSignature
+		return ErrInvalidSignature
 	}
 
 	err = rs.ver.Enqueue(ctx, submitBlockRequest.Signature, submitBlockRequest.Message.BuilderPubkey, msg)
 	m.AppendSince(tVerify, "submitBlock", "verify")
 
 	if err != nil {
-		return fmt.Errorf("%w: %s", structs.ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
+		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 
 	complete, err := rs.prepareContents(submitBlockRequest)
@@ -369,12 +389,12 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	b, err := json.Marshal(complete.Header)
 	if err != nil {
-		return fmt.Errorf("%w block as header: %s", structs.ErrMarshal, err.Error()) // TODO: multiple err wrapping in Go 1.20
+		return fmt.Errorf("%w block as header: %s", ErrMarshal, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 
 	tPutPayload := time.Now()
 	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
-		return fmt.Errorf("%w block as payload: %s", structs.ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
+		return fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
 
@@ -389,7 +409,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 		HeaderAndTrace: complete.Header,
 	}, rs.config.TTL)
 	if err != nil {
-		return fmt.Errorf("%w block as header: %s", structs.ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
+		return fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutHeader, "submitBlock", "putHeader")
 
@@ -448,16 +468,16 @@ func (rs *Relay) prepareContents(submitBlockRequest *types.BuilderSubmitBlockReq
 
 func (rs *Relay) verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconState *structs.BeaconState) (bool, error) { // TODO(l): remove FB type
 	if submitBlockRequest == nil || submitBlockRequest.Message == nil {
-		return false, structs.ErrEmptyBlock
+		return false, ErrEmptyBlock
 	}
 
 	expectedTimestamp := beaconState.GenesisTime + (submitBlockRequest.Message.Slot * 12)
 	if submitBlockRequest.ExecutionPayload.Timestamp != expectedTimestamp {
-		return false, fmt.Errorf("%w: got %d, expected %d", structs.ErrInvalidTimestamp, submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
+		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
 	if structs.Slot(submitBlockRequest.Message.Slot) < beaconState.CurrentSlot {
-		return false, fmt.Errorf("%w: got %d, expected %d", structs.ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
+		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
 	}
 
 	return true, nil

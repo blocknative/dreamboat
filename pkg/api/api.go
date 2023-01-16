@@ -15,7 +15,9 @@ import (
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/validators"
 )
 
 // Router paths
@@ -251,7 +253,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 	m := structs.NewMetricGroup(4)
 	if err := a.r.SubmitBlock(r.Context(), m, &req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))
-		if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
+		if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
@@ -523,40 +525,46 @@ type jsonError struct {
 }
 
 func unwrapError(err error, defaultMsg string) error {
-	if errors.Is(err, structs.ErrUnknownValue) {
-		return structs.ErrUnknownValue
-	} else if errors.Is(err, structs.ErrPayloadAlreadyDelivered) {
-		return structs.ErrPayloadAlreadyDelivered
-	} else if errors.Is(err, structs.ErrNoPayloadFound) {
-		return structs.ErrNoPayloadFound
-	} else if errors.Is(err, structs.ErrMissingRequest) {
-		return structs.ErrMissingRequest
-	} else if errors.Is(err, structs.ErrMissingSecretKey) {
-		return structs.ErrMissingSecretKey
-	} else if errors.Is(err, structs.ErrNoBuilderBid) {
-		return structs.ErrNoBuilderBid
-	} else if errors.Is(err, structs.ErrOldSlot) {
-		return structs.ErrOldSlot
-	} else if errors.Is(err, structs.ErrBadHeader) {
-		return structs.ErrBadHeader
-	} else if errors.Is(err, structs.ErrInvalidSignature) {
-		return structs.ErrInvalidSignature
-	} else if errors.Is(err, structs.ErrStore) {
-		return structs.ErrStore
-	} else if errors.Is(err, structs.ErrMarshal) {
-		return structs.ErrMarshal
-	} else if errors.Is(err, structs.ErrInternal) {
-		return structs.ErrInternal
-	} else if errors.Is(err, structs.ErrUnknownValidator) {
-		return structs.ErrUnknownValidator
-	} else if errors.Is(err, structs.ErrVerification) {
-		return structs.ErrVerification
-	} else if errors.Is(err, structs.ErrInvalidTimestamp) {
-		return structs.ErrInvalidTimestamp
-	} else if errors.Is(err, structs.ErrInvalidSlot) {
-		return structs.ErrInvalidSlot
-	} else if errors.Is(err, structs.ErrEmptyBlock) {
-		return structs.ErrEmptyBlock
+	if errors.Is(err, relay.ErrUnknownValue) {
+		return relay.ErrUnknownValue
+	} else if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
+		return relay.ErrPayloadAlreadyDelivered
+	} else if errors.Is(err, relay.ErrNoPayloadFound) {
+		return relay.ErrNoPayloadFound
+	} else if errors.Is(err, relay.ErrMissingRequest) {
+		return relay.ErrMissingRequest
+	} else if errors.Is(err, relay.ErrMissingSecretKey) {
+		return relay.ErrMissingSecretKey
+	} else if errors.Is(err, relay.ErrNoBuilderBid) {
+		return relay.ErrNoBuilderBid
+	} else if errors.Is(err, relay.ErrOldSlot) {
+		return relay.ErrOldSlot
+	} else if errors.Is(err, relay.ErrBadHeader) {
+		return relay.ErrBadHeader
+	} else if errors.Is(err, relay.ErrInvalidSignature) {
+		return relay.ErrInvalidSignature
+	} else if errors.Is(err, relay.ErrStore) {
+		return relay.ErrStore
+	} else if errors.Is(err, relay.ErrMarshal) {
+		return relay.ErrMarshal
+	} else if errors.Is(err, relay.ErrInternal) {
+		return relay.ErrInternal
+	} else if errors.Is(err, relay.ErrUnknownValidator) {
+		return relay.ErrUnknownValidator
+	} else if errors.Is(err, relay.ErrVerification) {
+		return relay.ErrVerification
+	} else if errors.Is(err, relay.ErrInvalidTimestamp) {
+		return relay.ErrInvalidTimestamp
+	} else if errors.Is(err, relay.ErrInvalidSlot) {
+		return relay.ErrInvalidSlot
+	} else if errors.Is(err, relay.ErrEmptyBlock) {
+		return relay.ErrEmptyBlock
+	} else if errors.Is(err, validators.ErrInvalidSignature) {
+		return validators.ErrInvalidSignature
+	} else if errors.Is(err, validators.ErrUnknownValidator) {
+		return validators.ErrUnknownValidator
+	} else if errors.Is(err, validators.ErrInvalidTimestamp) {
+		return validators.ErrInvalidTimestamp
 	}
 
 	return errors.New(defaultMsg)

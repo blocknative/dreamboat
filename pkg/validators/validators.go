@@ -3,6 +3,7 @@ package validators
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,12 @@ import (
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
+)
+
+var (
+	ErrInvalidSignature = errors.New("invalid signature")
+	ErrUnknownValidator = errors.New("unknown validator")
+	ErrInvalidTimestamp = errors.New("invalid timestamp")
 )
 
 type State interface {
@@ -106,7 +113,7 @@ SendPayloads:
 
 		msg, err := types.ComputeSigningRoot(payload[i].Message, rs.builderSigningDomain)
 		if err != nil {
-			response.Close(i, structs.ErrInvalidSignature)
+			response.Close(i, ErrInvalidSignature)
 			break SendPayloads
 		}
 
@@ -160,13 +167,13 @@ SendPayloads:
 
 func verifyOther(beacon *structs.BeaconState, tsReg RegistrationManager, i int, sp types.SignedValidatorRegistration) (svresp verify.Resp, ok bool) {
 	if verifyTimestamp(sp.Message.Timestamp) {
-		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("%w: too far in future for %s", structs.ErrInvalidTimestamp, sp.Message.Pubkey.String())}, false
+		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("%w: too far in future for %s", ErrInvalidTimestamp, sp.Message.Pubkey.String())}, false
 	}
 
 	pk := structs.PubKey{PublicKey: sp.Message.Pubkey}
 	known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
 	if !known {
-		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("%w: %s not a known validator", structs.ErrUnknownValidator, sp.Message.Pubkey.String())}, false
+		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("%w: %s not a known validator", ErrUnknownValidator, sp.Message.Pubkey.String())}, false
 	}
 
 	previousValidatorTimestamp, ok := tsReg.Get(pk.String()) // Do not error on this
