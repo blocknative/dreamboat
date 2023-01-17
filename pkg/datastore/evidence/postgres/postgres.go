@@ -242,7 +242,12 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 	return bts, err
 }
 
-func (s *Datastore) CheckSlotDelivered(context.Context, uint64) (bool, error)
+func (s *Datastore) CheckSlotDelivered(_ context.Context, slot uint64) (bool, error) {
+	var count int
+	row := s.DB.QueryRow("SELECT COUNT(*) FROM payload_delivered WHERE slot = ?", slot)
+	err := row.Scan(&count)
+	return count > 0, err
+}
 
 type GetBuilderSubmissionsFilters struct {
 	Slot        uint64
