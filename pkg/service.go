@@ -98,6 +98,8 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case ev := <-events:
+			t := time.Now()
+
 			err := s.processNewSlot(ctx, client, ev)
 			if err != nil {
 				logger.
@@ -117,6 +119,7 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 				"numDuties":                 len(duties),
 				"numKnownValidators":        len(validators),
 				"knownValidatorsUpdateTime": s.knownValidatorsUpdateTime(),
+				"processingTimeMs":          time.Since(t),
 			}).Debug("processed new slot")
 		}
 	}
