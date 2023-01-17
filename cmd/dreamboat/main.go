@@ -24,6 +24,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 
+	blBadger "github.com/blocknative/dreamboat/pkg/datastore/block/badger"
 	"github.com/blocknative/dreamboat/pkg/datastore/block/headerscontroller"
 	evBadger "github.com/blocknative/dreamboat/pkg/datastore/evidence/badger"
 	evPostgres "github.com/blocknative/dreamboat/pkg/datastore/evidence/postgres"
@@ -321,13 +322,18 @@ func run() cli.ActionFunc {
 				return err
 			}
 
+			badgerBlock, err := blBadger.NewDatastore(storage, hc, 0) // TODO: set payload cache size
+			if err != nil {
+				return fmt.Errorf("fail to create block store: %w", err)
+			}
+
 			dsValidator = valBadger.NewDatastore(storage, config.TTL)
-			dsEvidence = evBadger.NewDatastore(storage, storage.DB, config.TTL)
-			if err = dsBlock.FixOrphanHeaders(c.Context, config.TTL); err != nil {
+			dsEvidence = evBadger.NewDatastore(&evBadger.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, config.TTL)
+			if err = badgerBlock.FixOrphanHeaders(c.Context, config.TTL); err != nil {
 				return err
 			}
 
-			go dsBlock.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
+			go badgerBlock.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 		}
 
 		logger.With(log.F{
