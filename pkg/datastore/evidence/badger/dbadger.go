@@ -107,7 +107,7 @@ func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, 
 	return (err == nil), err
 }
 
-func (s *Datastore) GetDelivered(ctx context.Context, headSlot uint64, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
+func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
 
 	var (
 		key ds.Key
@@ -220,6 +220,8 @@ func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []uint64) ([]
 
 	return traceBatch, err
 }
+
+func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
 
 func min[T constraints.Ordered](a, b T) T {
 	if a < b {

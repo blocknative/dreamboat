@@ -6,13 +6,13 @@ import (
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
-type AtomicState struct {
+type AtomicSharedState struct {
 	duties     atomic.Value
 	validators atomic.Value
 	genesis    atomic.Value
 }
 
-func (as *AtomicState) Beacon() *structs.BeaconState {
+func (as *AtomicSharedState) Beacon() *structs.BeaconState {
 	state := &structs.BeaconState{}
 
 	if val := as.duties.Load(); val != nil {

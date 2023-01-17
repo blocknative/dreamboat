@@ -38,12 +38,12 @@ type EvidenceStore interface {
 	CheckSlotDelivered(context.Context, uint64) (bool, error)
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 
-	GetDelivered(ctx context.Context, slot uint64, payload structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
-	GetBlocksReceived(ctx context.Context, slot uint64, payload structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
+	GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
 	// GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
 }
 
-type Datastore interface {
+type BlockStore interface {
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
 
@@ -78,8 +78,8 @@ type RelayConfig struct {
 }
 
 type Relay struct {
-	d       Datastore
-	evStore EvidenceStore
+	blockStore    BlockStore
+	evidenceStore EvidenceStore
 
 	a Auctioneer
 	l log.Logger
@@ -94,15 +94,16 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, ver Verifier, beaconState State, d Datastore, a Auctioneer) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, ver Verifier, beaconState State, bs BlockStore, es EvidenceStore, a Auctioneer) *Relay {
 	rs := &Relay{
-		d:           d,
-		a:           a,
-		l:           l,
-		ver:         ver,
-		config:      config,
-		beacon:      beacon,
-		beaconState: beaconState,
+		blockStore:    bs,
+		evidenceStore: es,
+		a:             a,
+		l:             l,
+		ver:           ver,
+		config:        config,
+		beacon:        beacon,
+		beaconState:   beaconState,
 	}
 	rs.initMetrics()
 	return rs
@@ -151,7 +152,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	m.AppendSince(tGet, "getHeader", "get")
 
-	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+	if err := rs.blockStore.CacheBlock(ctx, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
@@ -238,7 +239,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		Slot:      structs.Slot(payloadRequest.Message.Slot),
 	}
 
-	payload, fromCache, err := rs.d.GetPayload(ctx, key)
+	payload, fromCache, err := rs.blockStore.GetPayload(ctx, key)
 	if err != nil || payload == nil {
 		return nil, ErrNoPayloadFound
 	}
@@ -268,7 +269,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	// defer put delivered datastore write
 	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
-		if err := rs.evStore.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
+		if err := rs.evidenceStore.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
 
@@ -354,7 +355,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	tCheckDelivered := time.Now()
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
-	ok, err := rs.evStore.CheckSlotDelivered(ctx, uint64(slot)) // TODO(l): We should take is out from datastore, and it to cache memory
+	ok, err := rs.evidenceStore.CheckSlotDelivered(ctx, uint64(slot)) // TODO(l): We should take is out from datastore, and it to cache memory
 	m.AppendSince(tCheckDelivered, "submitBlock", "checkDelivered")
 	if ok {
 		return structs.ErrPayloadAlreadyDelivered
@@ -387,7 +388,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	}
 
 	tPutPayload := time.Now()
-	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
+	if err := rs.blockStore.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
 		return fmt.Errorf("fail to store block as payload: %w", err)
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
@@ -397,7 +398,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
 	tPutHeader := time.Now()
-	err = rs.d.PutHeader(ctx, structs.HeaderData{
+	err = rs.blockStore.PutHeader(ctx, structs.HeaderData{
 		Slot:           slot,
 		Marshaled:      b,
 		HeaderAndTrace: complete.Header,

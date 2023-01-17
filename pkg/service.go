@@ -36,12 +36,12 @@ type Service struct {
 	ready chan struct{}
 
 	// state
-	state        *AtomicState
+	state        *AtomicSharedState
 	headslotSlot structs.Slot
 	updateTime   atomic.Value
 }
 
-func NewService(l log.Logger, c Config, d Datastore, as *AtomicState) *Service {
+func NewService(l log.Logger, c Config, d Datastore, as *AtomicSharedState) *Service {
 	return &Service{
 		Log:       l.WithField("relay-service", "Service"),
 		Config:    c,

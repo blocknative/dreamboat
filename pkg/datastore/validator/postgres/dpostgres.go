@@ -26,7 +26,7 @@ func (s *Datastore) GetRegistration(ctx context.Context, pk structs.PubKey) (typ
 	return reg, err
 }
 
-func (s *Datastore) PutNewerRegistration(ctx context.Context, reg types.SignedValidatorRegistration) error {
+func (s *Datastore) PutNewerRegistration(ctx context.Context, pk structs.PubKey, reg types.SignedValidatorRegistration) error {
 	_, err := s.DB.ExecContext(ctx, `INSERT INTO validator_registrations(pubkey, signature, fee_recipient, gas_limit, reg_time)
 										VALUES ($1, $2, $3, $4, $5)
 										ON CONFLICT (pubkey)

@@ -7,11 +7,11 @@ import (
 )
 
 func (r *Relay) GetPayloadDelivered(ctx context.Context, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
-	return r.evStore.GetDelivered(ctx, uint64(r.beaconState.Beacon().HeadSlot()), query)
+	return r.evidenceStore.GetDeliveredPayloads(ctx, uint64(r.beaconState.Beacon().HeadSlot()), query)
 }
 
-func (r *Relay) GetBlockReceived(ctx context.Context, query structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
-	return r.evStore.GetBlocksReceived(ctx, uint64(r.beaconState.Beacon().HeadSlot()), query)
+func (r *Relay) GetBlockReceived(ctx context.Context, query structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+	return r.evidenceStore.GetBuilderBlockSubmissions(ctx, uint64(r.beaconState.Beacon().HeadSlot()), query)
 	/*
 		var (
 			events []structs.HeaderAndTrace

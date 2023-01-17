@@ -45,7 +45,9 @@ func (s *Datastore) SaveBuilderBlockSubmission(ctx context.Context, relayID int,
 	return err
 }
 
-func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, relayID int, filters structs.GetBuilderSubmissionsFilters) (bts []structs.BidTraceWithTimestamp, err error) {
+func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) (bts []structs.BidTraceWithTimestamp, err error) {
+	var filters structs.GetBuilderSubmissionsFilters // TODO: convert SubmissionTraceQuery to GetBuilderSubmissionsFilters
+
 	var i = 1
 	parts := []string{}
 	data := []interface{}{}
@@ -144,7 +146,7 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, payload
 	return err
 }
 
-func (s *Datastore) GetDelivered(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error) {
+func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error) {
 	//GetDeliveredPayloads(ctx context.Context, relayID int, queryArgs structs.GetDeliveredPayloadsFilters) (bts []structs.BidTraceExtended, err error) {
 	var i = 1
 	parts := []string{}
@@ -238,3 +240,5 @@ func (s *Datastore) GetDelivered(ctx context.Context, headSlot uint64, queryArgs
 	}
 	return bts, err
 }
+
+func (s *Datastore) CheckSlotDelivered(context.Context, uint64) (bool, error)

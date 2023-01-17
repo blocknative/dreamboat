@@ -90,27 +90,27 @@ type PayloadQuery struct {
 	Limit     uint64
 }
 
-// HeaderTraceQuery structure used to query header structure
-type HeaderTraceQuery struct {
+// SubmissionTraceQuery structure used to query header structure
+type SubmissionTraceQuery struct {
 	Slot      Slot
 	BlockHash types.Hash
 	BlockNum  uint64
 	Limit     uint64
 }
 
-func (q HeaderTraceQuery) HasSlot() bool {
+func (q SubmissionTraceQuery) HasSlot() bool {
 	return q.Slot != Slot(0)
 }
 
-func (q HeaderTraceQuery) HasBlockHash() bool {
+func (q SubmissionTraceQuery) HasBlockHash() bool {
 	return q.BlockHash != types.Hash{}
 }
 
-func (q HeaderTraceQuery) HasBlockNum() bool {
+func (q SubmissionTraceQuery) HasBlockNum() bool {
 	return q.BlockNum != 0
 }
 
-func (q HeaderTraceQuery) HasLimit() bool {
+func (q SubmissionTraceQuery) HasLimit() bool {
 	return q.Limit != 0
 }
 

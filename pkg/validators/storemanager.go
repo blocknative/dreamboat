@@ -13,7 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type RegistrationStore interface {
+type ValidatorStore interface {
 	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
 	PutNewerRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration) error
 }
@@ -41,7 +41,7 @@ type StoreManager struct {
 	RegistrationCache       RegCache
 	storeTTLHalftimeSeconds int
 
-	store RegistrationStore
+	store ValidatorStore
 
 	StoreCh             chan StoreReq
 	storeMutex          sync.RWMutex
@@ -53,7 +53,7 @@ type StoreManager struct {
 	m StoreManagerMetrics
 }
 
-func NewStoreManager(l log.Logger, cache RegCache, store RegistrationStore, storeTTLHalftimeSeconds int, storeSize uint) *StoreManager {
+func NewStoreManager(l log.Logger, cache RegCache, store ValidatorStore, storeTTLHalftimeSeconds int, storeSize uint) *StoreManager {
 	rm := &StoreManager{
 		l:                       l,
 		store:                   store,
@@ -111,7 +111,7 @@ func (rm *StoreManager) RunStore(num uint) {
 	}
 }
 
-func (pm *StoreManager) ParallelStore(datas RegistrationStore) {
+func (pm *StoreManager) ParallelStore(datas ValidatorStore) {
 	defer pm.storeWorkersCounter.Done()
 
 	pm.m.RunningWorkers.WithLabelValues("ParallelStore").Inc()

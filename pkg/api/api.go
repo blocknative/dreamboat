@@ -54,7 +54,7 @@ type Relay interface {
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
-	GetBlockReceived(context.Context, structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	GetBlockReceived(context.Context, structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
 }
 
 type Validators interface {
@@ -423,7 +423,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 		limit = DataLimit
 	}
 
-	query := structs.HeaderTraceQuery{
+	query := structs.SubmissionTraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,

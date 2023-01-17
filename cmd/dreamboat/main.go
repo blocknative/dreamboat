@@ -17,6 +17,7 @@ import (
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/blocknative/dreamboat/pkg/auction"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/validators"
 	"github.com/blocknative/dreamboat/pkg/verify"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -24,8 +25,12 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/blocknative/dreamboat/pkg/datastore/block/headerscontroller"
+	evBadger "github.com/blocknative/dreamboat/pkg/datastore/evidence/badger"
+	evPostgres "github.com/blocknative/dreamboat/pkg/datastore/evidence/postgres"
 	trBadger "github.com/blocknative/dreamboat/pkg/datastore/transport/badger"
-
+	trPostgres "github.com/blocknative/dreamboat/pkg/datastore/transport/postgres"
+	valBadger "github.com/blocknative/dreamboat/pkg/datastore/validator/badger"
+	valPostgres "github.com/blocknative/dreamboat/pkg/datastore/validator/postgres"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -177,6 +182,12 @@ var flags = []cli.Flag{
 		Value:   false,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
+	&cli.BoolFlag{
+		Name:    "relay-distribution",
+		Usage:   "run the relay as a distributed application",
+		Value:   false,
+		EnvVars: []string{"RELAY_DISTRIBUTION"},
+	},
 }
 
 var (
@@ -249,6 +260,28 @@ func setup() cli.BeforeFunc {
 	}
 }
 
+type BlockDatastore interface {
+	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
+
+	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
+	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
+	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
+}
+
+type ValidatorDatastore interface {
+	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+	PutNewerRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration) error
+}
+
+type EvidenceDatastore interface {
+	CheckSlotDelivered(context.Context, uint64) (bool, error)
+	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
+
+	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
+	GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+}
+
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
 		if err := config.Validate(); err != nil {
@@ -256,6 +289,51 @@ func run() cli.ActionFunc {
 		}
 
 		logger := config.Log
+		m := metrics.NewMetrics()
+
+		var (
+			dsBlock     BlockDatastore
+			dsValidator ValidatorDatastore
+			dsEvidence  EvidenceDatastore
+		)
+
+		// initialize datastores
+		timeStoreStart := time.Now()
+		if c.Bool("relay-distribution") {
+			storage, err := trPostgres.Open("", 0, 0, time.Hour) // TODO: add cli parameters for setting postgreSQL
+			if err != nil {
+				return fmt.Errorf("fail to create datastore: %w", err)
+			}
+
+			// TODO: initialize dsStore
+			dsValidator = valPostgres.NewDatastore(storage)
+			dsEvidence = evPostgres.NewDatastore(storage, 0) // TODO: add relay-id as parameter
+		} else {
+			hc := headerscontroller.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
+			hc.AttachMetrics(m)
+
+			storage, err := trBadger.Open(config.Datadir)
+			if err != nil {
+				return fmt.Errorf("fail to create datastore: %w", err)
+			}
+
+			if err = trBadger.InitDatastoreMetrics(m); err != nil {
+				return err
+			}
+
+			dsValidator = valBadger.NewDatastore(storage, config.TTL)
+			dsEvidence = evBadger.NewDatastore(storage, storage.DB, config.TTL)
+			if err = dsBlock.FixOrphanHeaders(c.Context, config.TTL); err != nil {
+				return err
+			}
+
+			go dsBlock.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
+		}
+
+		logger.With(log.F{
+			"service":     "datastore",
+			"startTimeMs": time.Since(timeStoreStart).Milliseconds(),
+		}).Info("data store initialized")
 
 		domainBuilder, err := pkg.ComputeDomain(types.DomainTypeAppBuilder, config.GenesisForkVersion, types.Root{}.String())
 		if err != nil {
@@ -267,72 +345,41 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		timeDataStoreStart := time.Now()
-		m := metrics.NewMetrics()
-
-		logger.With(log.F{
-			"service":     "datastore",
-			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
-		}).Info("data store initialized")
-
 		timeRelayStart := time.Now()
-		as := &pkg.AtomicState{}
 
-		hc := headerscontroller.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
-		hc.AttachMetrics(m)
+		state := &pkg.AtomicSharedState{}
 
-		storage, err := trBadger.Open(config.Datadir)
-		if err != nil {
-			return fmt.Errorf("fail to create datastore: %w", err)
-		}
-
-		if err = trBadger.InitDatastoreMetrics(m); err != nil {
-			return err
-		}
-
-		//ds := valBadger.NewDatastore(storage, config.TTL)
-		/*	if err = ds.FixOrphanHeaders(c.Context, config.TTL); err != nil {
-				return err
-			}
-
-			go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
-		*/
 		beacon, err := initBeacon(c.Context, config)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
 		beacon.AttachMetrics(m)
 
-		v := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
-		auctioneer := auction.NewAuctioneer()
-		r := relay.NewRelay(config.Log, relay.RelayConfig{
+		verificator := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
+		verificator.RunVerify(c.Uint("relay-workers-verify"))
+
+		blockRelay := relay.NewRelay(config.Log, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
 			ProposerSigningDomain: domainBeaconProposer,
 			PubKey:                config.PubKey,
 			SecretKey:             config.SecretKey,
 			TTL:                   config.TTL,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, v, as, ds, auctioneer)
-		r.AttachMetrics(m)
-
-		service := pkg.NewService(config.Log, config, ds, as)
-
-		ds := valBadger.NewDatastore(storage, config.TTL)
+		}, beacon, verificator, state, dsBlock, dsEvidence, auction.NewAuctioneer())
+		blockRelay.AttachMetrics(m)
 
 		cache, err := lru.New[types.PublicKey, validators.CacheEntry](c.Int("relay-registrations-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to initialize validator cache: %w", err)
 		}
-		regStr := validators.NewStoreManager(config.Log, cache, ds, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 
-		regStr.AttachMetrics(m)
+		validatorStoreManager := validators.NewStoreManager(config.Log, cache, dsValidator, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
+		validatorStoreManager.AttachMetrics(m)
+		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+		validatorRelay := validators.NewRegister(config.Log, domainBuilder, state, verificator, validatorStoreManager)
 
-		regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr)
-		a := api.NewApi(config.Log, r, regM)
+		a := api.NewApi(config.Log, blockRelay, validatorRelay)
 		a.AttachMetrics(m)
-
-		regStr.RunStore(c.Uint("relay-workers-store-validator"))
-		v.RunVerify(c.Uint("relay-workers-verify"))
 
 		logger.With(log.F{
 			"service":     "relay",
@@ -340,6 +387,8 @@ func run() cli.ActionFunc {
 		}).Info("initialized")
 
 		cContext, cancel := context.WithCancel(c.Context)
+
+		service := pkg.NewService(config.Log, config, dsValidator, state)
 		go func(s *pkg.Service) error {
 			config.Log.Info("initialized beacon")
 			err := s.RunBeacon(cContext, beacon)
@@ -409,7 +458,7 @@ func run() cli.ActionFunc {
 		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
 		defer closeC()
 		finish := make(chan struct{})
-		go closemanager(ctx, finish, regStr)
+		go closemanager(ctx, finish, validatorStoreManager)
 
 		select {
 		case <-finish:

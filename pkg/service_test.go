@@ -25,7 +25,7 @@ func TestBeaconClientState(t *testing.T) {
 	databaseMock := mock_relay.NewMockDatastore(ctrl)
 	beaconMock := mock_relay.NewMockBeaconClient(ctrl)
 
-	as := &relay.AtomicState{}
+	as := &relay.AtomicSharedState{}
 	service := relay.NewService(log.New(), relay.Config{}, databaseMock, as)
 	service.NewBeaconClient = func() (relay.BeaconClient, error) {
 		return beaconMock, nil
