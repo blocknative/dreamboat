@@ -3,14 +3,13 @@ package dbadger
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/datastore/block/headerscontroller"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/dgraph-io/badger/v2"
-	"github.com/flashbots/go-boost-utils/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 	ds "github.com/ipfs/go-datastore"
 )
@@ -59,7 +58,7 @@ func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payl
 	if err != nil {
 		return err
 	}
-	return s.DB.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
+	return s.DB.PutWithTTL(ctx, datastore.PayloadKeyKey(key), data, ttl)
 }
 
 func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error) {
@@ -68,23 +67,11 @@ func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*st
 		return memPayload, true, nil
 	}
 
-	data, err := s.DB.Get(ctx, PayloadKeyKey(key))
+	data, err := s.DB.Get(ctx, datastore.PayloadKeyKey(key))
 	if err != nil {
 		return nil, false, err
 	}
 	var payload structs.BlockBidAndTrace
 	err = json.Unmarshal(data, &payload)
 	return &payload, false, err
-}
-
-func HeaderHashKey(bh types.Hash) ds.Key {
-	return ds.NewKey(fmt.Sprintf("header-hash-%s", bh.String()))
-}
-
-func HeaderNumKey(bn uint64) ds.Key {
-	return ds.NewKey(fmt.Sprintf("header-num-%d", bn))
-}
-
-func PayloadKeyKey(key structs.PayloadKey) ds.Key {
-	return ds.NewKey(fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot))
 }

@@ -7,19 +7,20 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
+	ds "github.com/ipfs/go-datastore"
 )
 
 func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error) {
-
 	el, _ := s.hc.GetHeaders(slot, slot, 1)
 	if el != nil {
 		return el, nil
 	}
 
-	data, err := s.DB.Get(ctx, HeaderKey(slot))
+	data, err := s.DB.Get(ctx, datastore.HeaderKey(slot))
 	if err != nil && errors.Is(err, ds.ErrNotFound) {
 		return el, err
 	}
@@ -33,7 +34,7 @@ func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]struct
 }
 
 func (s *Datastore) GetHeadersByBlockNum(ctx context.Context, blockNumber uint64) ([]structs.HeaderAndTrace, error) {
-	slot, err := s.DB.Get(ctx, HeaderNumKey(blockNumber))
+	slot, err := s.DB.Get(ctx, datastore.HeaderNumKey(blockNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -41,19 +42,19 @@ func (s *Datastore) GetHeadersByBlockNum(ctx context.Context, blockNumber uint64
 }
 
 func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error) {
-	slot, err := s.DB.Get(ctx, HeaderHashKey(hash))
+	slot, err := s.DB.Get(ctx, datastore.HeaderHashKey(hash))
 	if err != nil {
 		return nil, err
 	}
 
-	newContent, err := s.DB.Get(ctx, HeaderKeyContent(binary.LittleEndian.Uint64(slot), hash.String()))
+	newContent, err := s.DB.Get(ctx, datastore.HeaderKeyContent(binary.LittleEndian.Uint64(slot), hash.String()))
 	if err != nil {
 		if !errors.Is(err, badger.ErrKeyNotFound) { // do not fail on not found try others
 			return nil, err
 		}
 		// old code fallback - to be removed
 		if true {
-			newContent, err = s.DB.Get(ctx, HeaderKey(binary.LittleEndian.Uint64(slot)))
+			newContent, err = s.DB.Get(ctx, datastore.HeaderKey(binary.LittleEndian.Uint64(slot)))
 			if err != nil {
 				return nil, err
 			}
@@ -100,7 +101,7 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag 
 	readr := bytes.NewReader(nil)
 	dec := json.NewDecoder(readr)
 	for {
-		data, err := s.DB.Get(ctx, HeaderKey(initialSlot))
+		data, err := s.DB.Get(ctx, datastore.HeaderKey(initialSlot))
 		if err != nil {
 			if errors.Is(err, ds.ErrNotFound) {
 				return el, nil

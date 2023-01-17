@@ -328,7 +328,7 @@ func run() cli.ActionFunc {
 			}
 
 			dsValidator = valBadger.NewDatastore(storage, config.TTL)
-			dsEvidence = evBadger.NewDatastore(&evBadger.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, config.TTL)
+			dsEvidence = evBadger.NewDatastore(&evBadger.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, config.TTL)
 			if err = badgerBlock.FixOrphanHeaders(c.Context, config.TTL); err != nil {
 				return err
 			}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/datastore/block/headerscontroller"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
@@ -60,14 +61,16 @@ func DeliveredPubkeyKey(pk types.PublicKey) ds.Key {
 type Datastore struct {
 	DB
 	DBInter
+	hc *headerscontroller.HeaderController
 
 	TTL time.Duration
 }
 
-func NewDatastore(t DB, d DBInter, ttl time.Duration) *Datastore {
+func NewDatastore(t DB, d DBInter, hc *headerscontroller.HeaderController, ttl time.Duration) *Datastore {
 	return &Datastore{
 		DB:      t,
 		DBInter: d,
+		hc:      hc,
 		TTL:     ttl,
 	}
 }
@@ -108,7 +111,6 @@ func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, 
 }
 
 func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
-
 	var (
 		key ds.Key
 		err error

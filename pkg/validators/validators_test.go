@@ -8,7 +8,7 @@ import (
 
 	"github.com/blocknative/dreamboat/blstools"
 	pkg "github.com/blocknative/dreamboat/pkg"
-	"github.com/blocknative/dreamboat/pkg/datastore/validators/dbadger"
+	dbadger "github.com/blocknative/dreamboat/pkg/datastore/validator/badger"
 	mock_relay "github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/validators"

@@ -3,6 +3,7 @@ package dspostgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 )
 
 var SlotsPerEpoch = 32
+var ErrNoRows = errors.New("no rows")
 
 type Datastore struct {
 	RelayID uint64
@@ -46,15 +48,15 @@ func (s *Datastore) SaveBuilderBlockSubmission(ctx context.Context, relayID int,
 }
 
 func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) (bts []structs.BidTraceWithTimestamp, err error) {
-	var filters structs.GetBuilderSubmissionsFilters // TODO: convert SubmissionTraceQuery to GetBuilderSubmissionsFilters
+	var filters GetBuilderSubmissionsFilters // TODO: convert SubmissionTraceQuery to GetBuilderSubmissionsFilters
 
 	var i = 1
 	parts := []string{}
 	data := []interface{}{}
 
-	if relayID > 0 {
+	if s.RelayID > 0 {
 		parts = append(parts, "relay_id = $"+strconv.Itoa(i))
-		data = append(data, relayID)
+		data = append(data, s.RelayID)
 		i++
 	}
 
@@ -101,7 +103,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
-		return nil, structs.ErrNoRows
+		return nil, ErrNoRows
 	case err != nil:
 		return nil, fmt.Errorf("query error: %w", err)
 	default:
@@ -206,13 +208,12 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		}
 	}
 
-	if queryArgs.OrderByValue > 0 {
-		qBuilder.WriteString(` ORDER BY value ASC `)
-	} else if queryArgs.OrderByValue < 0 {
-		qBuilder.WriteString(` ORDER BY value DESC `)
-	} else {
-		qBuilder.WriteString(` ORDER BY slot DESC, inserted_at DESC `)
-	}
+	// if filters.OrderByValue > 0 {
+	// 	qBuilder.WriteString(` ORDER BY value ASC `)
+	// } else if filters.OrderByValue < 0 {
+	// 	qBuilder.WriteString(` ORDER BY value DESC `)
+	// } else {
+	qBuilder.WriteString(` ORDER BY slot DESC, inserted_at DESC `)
 
 	if queryArgs.Limit > 0 {
 		qBuilder.WriteString(` LIMIT $` + strconv.Itoa(i))
@@ -222,7 +223,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
-		return nil, structs.ErrNoRows
+		return nil, ErrNoRows
 	case err != nil:
 		return nil, fmt.Errorf("query error: %w", err)
 	default:
@@ -242,3 +243,23 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 }
 
 func (s *Datastore) CheckSlotDelivered(context.Context, uint64) (bool, error)
+
+type GetBuilderSubmissionsFilters struct {
+	Slot        uint64
+	Limit       uint64
+	BlockHash   string
+	BlockNumber uint64
+	// Cursor      uint64
+	BuilderPubkey string
+}
+
+type GetDeliveredPayloadsFilters struct {
+	Slot           uint64
+	Cursor         uint64
+	Limit          uint64
+	BlockHash      string
+	BlockNumber    uint64
+	ProposerPubkey string
+	BuilderPubkey  string
+	OrderByValue   int8
+}
