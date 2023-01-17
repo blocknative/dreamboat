@@ -34,11 +34,13 @@ var (
 	ErrBadHeader             = "invalid block header from datastore"
 )
 
-type Datastore interface {
+type EvidenceStore interface {
 	CheckSlotDelivered(context.Context, uint64) (bool, error)
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
+	GetDelivered(ctx context.Context, slot uint64, payload structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
+}
 
+type Datastore interface {
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
 
@@ -74,7 +76,8 @@ type RelayConfig struct {
 }
 
 type Relay struct {
-	d Datastore
+	d       Datastore
+	evStore EvidenceStore
 
 	a Auctioneer
 	l log.Logger
@@ -263,7 +266,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	// defer put delivered datastore write
 	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
-		if err := rs.d.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
+		if err := rs.evStore.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
 
@@ -349,7 +352,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 
 	tCheckDelivered := time.Now()
 	slot := structs.Slot(submitBlockRequest.Message.Slot)
-	ok, err := rs.d.CheckSlotDelivered(ctx, uint64(slot))
+	ok, err := rs.evStore.CheckSlotDelivered(ctx, uint64(slot)) // TODO(l): We should take is out from datastore, and it to cache memory
 	m.AppendSince(tCheckDelivered, "submitBlock", "checkDelivered")
 	if ok {
 		return structs.ErrPayloadAlreadyDelivered

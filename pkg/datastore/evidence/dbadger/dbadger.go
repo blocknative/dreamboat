@@ -9,6 +9,7 @@ import (
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
+	"golang.org/x/exp/constraints"
 
 	ds "github.com/ipfs/go-datastore"
 )
@@ -34,6 +35,22 @@ type DB interface {
 	//PutWithTTL(context.Context, ds.Key, []byte, time.Duration) error
 	Get(context.Context, ds.Key) ([]byte, error)
 	GetBatch(ctx context.Context, keys []ds.Key) (batch [][]byte, err error)
+}
+
+func DeliveredKey(slot structs.Slot) ds.Key {
+	return ds.NewKey(fmt.Sprintf("delivered-%d", slot))
+}
+
+func DeliveredHashKey(bh types.Hash) ds.Key {
+	return ds.NewKey(fmt.Sprintf("delivered-hash-%s", bh.String()))
+}
+
+func DeliveredNumKey(bn uint64) ds.Key {
+	return ds.NewKey(fmt.Sprintf("delivered-num-%d", bn))
+}
+
+func DeliveredPubkeyKey(pk types.PublicKey) ds.Key {
+	return ds.NewKey(fmt.Sprintf("delivered-pk-%s", pk.String()))
 }
 
 type Datastore struct {
@@ -83,23 +100,44 @@ func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, 
 	return (err == nil), err
 }
 
-func (s *Datastore) GetDelivered(ctx context.Context, query structs.PayloadQuery) (structs.BidTraceWithTimestamp, error) {
-	key, err := s.queryToDeliveredKey(ctx, query)
-	if err != nil {
-		return structs.BidTraceWithTimestamp{}, err
-	}
-	return s.getDelivered(ctx, key)
-}
+func (s *Datastore) GetDelivered(ctx context.Context, headSlot uint64, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
 
-func (s *Datastore) getDelivered(ctx context.Context, key ds.Key) (structs.BidTraceWithTimestamp, error) {
+	var (
+		key ds.Key
+		err error
+	)
+
+	// TODO(l): check if that one is even needed (probably not)
+	if query.HasSlot() {
+		key, err = s.queryToDeliveredKey(ctx, structs.PayloadQuery{Slot: query.Slot})
+	} else if query.HasBlockHash() {
+		key, err = s.queryToDeliveredKey(ctx, structs.PayloadQuery{BlockHash: query.BlockHash})
+	} else if query.HasBlockNum() {
+		key, err = s.queryToDeliveredKey(ctx, structs.PayloadQuery{BlockNum: query.BlockNum})
+	} else if query.HasPubkey() {
+		key, err = s.queryToDeliveredKey(ctx, structs.PayloadQuery{PubKey: query.Pubkey})
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	if key.String() == "" {
+		start := headSlot
+		if query.Cursor != 0 {
+			start = min(headSlot, query.Cursor)
+		}
+		return s.getTailDelivered(ctx, start, query.Limit)
+	}
+
 	data, err := s.DB.Get(ctx, key)
 	if err != nil {
-		return structs.BidTraceWithTimestamp{}, err
+		return nil, err
 	}
 
 	var trace structs.BidTraceWithTimestamp
 	err = json.Unmarshal(data, &trace)
-	return trace, err
+
+	return []structs.BidTraceExtended{trace.BidTraceExtended}, err
 }
 
 func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error) {
@@ -127,22 +165,6 @@ func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []structs.Pay
 	}
 
 	return traceBatch, err
-}
-
-func DeliveredKey(slot structs.Slot) ds.Key {
-	return ds.NewKey(fmt.Sprintf("delivered-%d", slot))
-}
-
-func DeliveredHashKey(bh types.Hash) ds.Key {
-	return ds.NewKey(fmt.Sprintf("delivered-hash-%s", bh.String()))
-}
-
-func DeliveredNumKey(bn uint64) ds.Key {
-	return ds.NewKey(fmt.Sprintf("delivered-num-%d", bn))
-}
-
-func DeliveredPubkeyKey(pk types.PublicKey) ds.Key {
-	return ds.NewKey(fmt.Sprintf("delivered-pk-%s", pk.String()))
 }
 
 func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.PayloadQuery) (ds.Key, error) {
@@ -179,6 +201,41 @@ func (bb *TTLDatastoreBatcher) GetBatch(ctx context.Context, keys []ds.Key) (bat
 		}
 		batch = append(batch, data)
 	}
-
 	return
+}
+
+func (s *Datastore) getTailDelivered(ctx context.Context, start, limit uint64) ([]structs.BidTraceExtended, error) {
+
+	stop := start - min(structs.Slot(r.config.TTL/DurationPerSlot), start)
+
+	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
+	queries := make([]structs.PayloadQuery, 0, limit)
+
+	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= min(limit, highSlot) {
+		queries = queries[:0]
+		for s := highSlot; highSlot-limit < s && stop <= s; s-- {
+			queries = append(queries, structs.PayloadQuery{Slot: s})
+		}
+
+		nextBatch, err := s.GetDeliveredBatch(ctx, queries)
+		if err != nil {
+			// r.l.WithError(err).Warn("failed getting header batch")
+			continue
+		}
+
+		batch = append(batch, nextBatch[:min(int(limit)-len(batch), len(nextBatch))]...)
+	}
+
+	events := make([]structs.BidTraceExtended, 0, len(batch))
+	for _, event := range batch {
+		events = append(events, event.BidTraceExtended)
+	}
+	return events, nil
+}
+
+func min[T constraints.Ordered](a, b T) T {
+	if a < b {
+		return a
+	}
+	return b
 }

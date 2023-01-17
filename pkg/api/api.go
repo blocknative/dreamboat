@@ -367,16 +367,14 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		return http.StatusBadRequest, err
 	}
 
-	query := structs.PayloadTraceQuery{
+	payloads, err := a.r.GetPayloadDelivered(r.Context(), structs.PayloadTraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,
 		Pubkey:    pk,
 		Cursor:    cursor,
 		Limit:     limit,
-	}
-
-	payloads, err := a.r.GetPayloadDelivered(r.Context(), query)
+	})
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
 		return http.StatusInternalServerError, err
@@ -384,6 +382,8 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 
 	if payloads != nil {
 		a.m.ApiReqElCount.WithLabelValues("proposerPayloadsDelivered", "payload").Observe(float64(len(payloads)))
+	} else {
+		payloads = []structs.BidTraceExtended{} // return empty array and not zero
 	}
 
 	if err := json.NewEncoder(w).Encode(payloads); err != nil {
