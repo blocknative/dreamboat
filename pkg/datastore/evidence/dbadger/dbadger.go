@@ -14,6 +14,10 @@ import (
 	ds "github.com/ipfs/go-datastore"
 )
 
+var (
+	DurationPerSlot = time.Second * 12
+)
+
 /*
 type TTLStorage interface {
 	PutWithTTL(context.Context, ds.Key, []byte, time.Duration) error
@@ -56,12 +60,15 @@ func DeliveredPubkeyKey(pk types.PublicKey) ds.Key {
 type Datastore struct {
 	DB
 	DBInter
+
+	TTL time.Duration
 }
 
-func NewDatastore(t DB, d DBInter) *Datastore {
+func NewDatastore(t DB, d DBInter, ttl time.Duration) *Datastore {
 	return &Datastore{
 		DB:      t,
 		DBInter: d,
+		TTL:     ttl,
 	}
 }
 
@@ -140,33 +147,6 @@ func (s *Datastore) GetDelivered(ctx context.Context, headSlot uint64, query str
 	return []structs.BidTraceExtended{trace.BidTraceExtended}, err
 }
 
-func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error) {
-	keys := make([]ds.Key, 0, len(queries))
-	for _, query := range queries {
-		key, err := s.queryToDeliveredKey(ctx, query)
-		if err != nil {
-			return nil, err
-		}
-		keys = append(keys, key)
-	}
-
-	batch, err := s.DB.GetBatch(ctx, keys)
-	if err != nil {
-		return nil, err
-	}
-
-	traceBatch := make([]structs.BidTraceWithTimestamp, 0, len(batch))
-	for _, data := range batch {
-		var trace structs.BidTraceWithTimestamp
-		if err = json.Unmarshal(data, &trace); err != nil {
-			return nil, err
-		}
-		traceBatch = append(traceBatch, trace)
-	}
-
-	return traceBatch, err
-}
-
 func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.PayloadQuery) (ds.Key, error) {
 	var (
 		rawKey []byte
@@ -189,32 +169,17 @@ func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.Paylo
 	return ds.NewKey(string(rawKey)), nil
 }
 
-type TTLDatastoreBatcher struct {
-	ds.TTLDatastore
-}
-
-func (bb *TTLDatastoreBatcher) GetBatch(ctx context.Context, keys []ds.Key) (batch [][]byte, err error) {
-	for _, key := range keys {
-		data, err := bb.TTLDatastore.Get(ctx, key)
-		if err != nil {
-			continue
-		}
-		batch = append(batch, data)
-	}
-	return
-}
-
 func (s *Datastore) getTailDelivered(ctx context.Context, start, limit uint64) ([]structs.BidTraceExtended, error) {
 
-	stop := start - min(structs.Slot(r.config.TTL/DurationPerSlot), start)
-
+	stop := start - min(uint64(s.TTL/DurationPerSlot), start)
 	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
-	queries := make([]structs.PayloadQuery, 0, limit)
+
+	queries := make([]uint64, 0, limit)
 
 	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= min(limit, highSlot) {
 		queries = queries[:0]
 		for s := highSlot; highSlot-limit < s && stop <= s; s-- {
-			queries = append(queries, structs.PayloadQuery{Slot: s})
+			queries = append(queries, s)
 		}
 
 		nextBatch, err := s.GetDeliveredBatch(ctx, queries)
@@ -233,9 +198,47 @@ func (s *Datastore) getTailDelivered(ctx context.Context, start, limit uint64) (
 	return events, nil
 }
 
+func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []uint64) ([]structs.BidTraceWithTimestamp, error) {
+	keys := make([]ds.Key, 0, len(queries))
+	for _, query := range queries {
+		keys = append(keys, ds.NewKey(string(DeliveredKey(structs.Slot(query)).Bytes())))
+	}
+
+	batch, err := s.DB.GetBatch(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	traceBatch := make([]structs.BidTraceWithTimestamp, 0, len(batch))
+	for _, data := range batch {
+		var trace structs.BidTraceWithTimestamp
+		if err = json.Unmarshal(data, &trace); err != nil {
+			return nil, err
+		}
+		traceBatch = append(traceBatch, trace)
+	}
+
+	return traceBatch, err
+}
+
 func min[T constraints.Ordered](a, b T) T {
 	if a < b {
 		return a
 	}
 	return b
+}
+
+type TTLDatastoreBatcher struct {
+	ds.TTLDatastore
+}
+
+func (bb *TTLDatastoreBatcher) GetBatch(ctx context.Context, keys []ds.Key) (batch [][]byte, err error) {
+	for _, key := range keys {
+		data, err := bb.TTLDatastore.Get(ctx, key)
+		if err != nil {
+			continue
+		}
+		batch = append(batch, data)
+	}
+	return
 }

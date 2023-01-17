@@ -81,6 +81,7 @@ func (pm *StoreManager) Close(ctx context.Context) {
 func (rm *StoreManager) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
 	return rm.store.GetRegistration(ctx, pk)
 }
+
 func (rm *StoreManager) Check(rvg *types.RegisterValidatorRequestMessage) bool {
 	v, ok := rm.RegistrationCache.Get(rvg.Pubkey)
 	if !ok {

@@ -37,7 +37,10 @@ var (
 type EvidenceStore interface {
 	CheckSlotDelivered(context.Context, uint64) (bool, error)
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
+
 	GetDelivered(ctx context.Context, slot uint64, payload structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
+	GetBlocksReceived(ctx context.Context, slot uint64, payload structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	// GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
 }
 
 type Datastore interface {
@@ -49,11 +52,10 @@ type Datastore interface {
 	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	// to be changed
-	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
-	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
-	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
-	GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
-	GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
+	// GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
+	// GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
+	// GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
+	// GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
 }
 
 type Auctioneer interface {
