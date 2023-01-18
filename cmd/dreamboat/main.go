@@ -258,7 +258,7 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		logger := config.Log
+		logger := config.Log.WithField("fast-boot", c.Bool("relay-fast-boot"))
 
 		domainBuilder, err := pkg.ComputeDomain(types.DomainTypeAppBuilder, config.GenesisForkVersion, types.Root{}.String())
 		if err != nil {
