@@ -174,6 +174,12 @@ var flags = []cli.Flag{
 		Value:   false,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
+	&cli.BoolFlag{
+		Name:    "relay-fast-boot",
+		Usage:   "speed up booting up of relay, adding temporary inconsistency on the builder_blocks_received endpoint",
+		Value:   false,
+		EnvVars: []string{"RELAY_FAST_BOOT"},
+	},
 }
 
 var (
@@ -252,7 +258,7 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		logger := config.Log
+		logger := config.Log.WithField("fast-boot", c.Bool("relay-fast-boot"))
 
 		domainBuilder, err := pkg.ComputeDomain(types.DomainTypeAppBuilder, config.GenesisForkVersion, types.Root{}.String())
 		if err != nil {
@@ -291,8 +297,21 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		if err = ds.FixOrphanHeaders(c.Context, config.TTL); err != nil {
-			return err
+		errCh := make(chan error, 1)
+
+		go func(ctx context.Context, l log.Logger) {
+			if err := ds.FixOrphanHeaders(ctx, config.TTL); err != nil {
+				l.WithError(err).Error("fail to fix orphan headers")
+			} else {
+				l.Info("fixed orphan headers")
+			}
+			errCh <- err
+		}(c.Context, config.Log)
+
+		if !c.Bool("relay-fast-boot") {
+			if err := <-errCh; err != nil {
+				return fmt.Errorf("fail to fix orphan headers: %w", err)
+			}
 		}
 
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
@@ -322,7 +341,9 @@ func run() cli.ActionFunc {
 			return fmt.Errorf("fail to initialize store manager: %w", err)
 		}
 		regStr.AttachMetrics(m)
-		loadRegistrations(ds, regStr, logger)
+		if !c.Bool("relay-fast-boot") {
+			loadRegistrations(ds, regStr, logger)
+		}
 		go regStr.RunCleanup(uint64(config.TTL), time.Hour)
 
 		regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr, ds)
