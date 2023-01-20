@@ -119,7 +119,7 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 				"numDuties":                 len(duties),
 				"numKnownValidators":        len(validators),
 				"knownValidatorsUpdateTime": s.knownValidatorsUpdateTime(),
-				"processingTimeMs":          time.Since(t),
+				"processingTimeMs":          time.Since(t).Milliseconds(),
 			}).Debug("processed new slot")
 		}
 	}
