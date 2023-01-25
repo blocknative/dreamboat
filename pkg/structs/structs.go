@@ -266,30 +266,34 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.Signe
 	if block.Message.Body.AttesterSlashings == nil {
 		block.Message.Body.AttesterSlashings = []*types.AttesterSlashing{}
 	}
-	if block.Message.Body.Attestations == nil{
+	if block.Message.Body.Attestations == nil {
 		block.Message.Body.Attestations = []*types.Attestation{}
 	}
-	if block.Message.Body.Deposits == nil{
+	if block.Message.Body.Deposits == nil {
 		block.Message.Body.Deposits = []*types.Deposit{}
 	}
 
-	if block.Message.Body.VoluntaryExits == nil{
+	if block.Message.Body.VoluntaryExits == nil {
 		block.Message.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
 	}
 
-	if block.Message.Body.Eth1Data == nil{
+	if block.Message.Body.Eth1Data == nil {
 		block.Message.Body.Eth1Data = &types.Eth1Data{}
 	}
 
-	if block.Message.Body.SyncAggregate == nil{
+	if block.Message.Body.SyncAggregate == nil {
 		block.Message.Body.SyncAggregate = &types.SyncAggregate{}
 	}
 
-	if block.Message.Body.ExecutionPayload.ExtraData == nil{
+	if block.Message.Body.ExecutionPayload == nil {
+		block.Message.Body.ExecutionPayload = &types.ExecutionPayload{}
+	}
+
+	if block.Message.Body.ExecutionPayload.ExtraData == nil {
 		block.Message.Body.ExecutionPayload.ExtraData = types.ExtraData{}
 	}
 
-	if block.Message.Body.ExecutionPayload.Transactions == nil{
+	if block.Message.Body.ExecutionPayload.Transactions == nil {
 		block.Message.Body.ExecutionPayload.Transactions = []hexutil.Bytes{}
 	}
 
