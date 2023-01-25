@@ -18,15 +18,8 @@ func (r *Relay) initMetrics() {
 		Name:      "missHeader",
 		Help:      "Number of missed headers by reason (oldSlot, noSubmission)",
 	}, []string{"reason"})
-	r.m.RegistrationsCacheHits = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "dreamboat",
-		Subsystem: "relayprocess",
-		Name:      "registrationCache",
-		Help:      "cache hit/miss",
-	}, []string{"result"})
 }
 
 func (r *Relay) AttachMetrics(m *metrics.Metrics) {
 	m.Register(r.m.MissHeaderCount)
-	m.Register(r.m.RegistrationsCacheHits)
 }

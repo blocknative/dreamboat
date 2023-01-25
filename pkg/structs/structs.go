@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
@@ -237,7 +238,7 @@ type CompleteBlockstruct struct {
 }
 
 func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, executionPayload *types.ExecutionPayload) *types.SignedBeaconBlock {
-	return &types.SignedBeaconBlock{
+	block := &types.SignedBeaconBlock{
 		Signature: signedBlindedBeaconBlock.Signature,
 		Message: &types.BeaconBlock{
 			Slot:          signedBlindedBeaconBlock.Message.Slot,
@@ -258,4 +259,43 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.Signe
 			},
 		},
 	}
+
+	if block.Message.Body.ProposerSlashings == nil {
+		block.Message.Body.ProposerSlashings = []*types.ProposerSlashing{}
+	}
+	if block.Message.Body.AttesterSlashings == nil {
+		block.Message.Body.AttesterSlashings = []*types.AttesterSlashing{}
+	}
+	if block.Message.Body.Attestations == nil {
+		block.Message.Body.Attestations = []*types.Attestation{}
+	}
+	if block.Message.Body.Deposits == nil {
+		block.Message.Body.Deposits = []*types.Deposit{}
+	}
+
+	if block.Message.Body.VoluntaryExits == nil {
+		block.Message.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
+	}
+
+	if block.Message.Body.Eth1Data == nil {
+		block.Message.Body.Eth1Data = &types.Eth1Data{}
+	}
+
+	if block.Message.Body.SyncAggregate == nil {
+		block.Message.Body.SyncAggregate = &types.SyncAggregate{}
+	}
+
+	if block.Message.Body.ExecutionPayload == nil {
+		block.Message.Body.ExecutionPayload = &types.ExecutionPayload{}
+	}
+
+	if block.Message.Body.ExecutionPayload.ExtraData == nil {
+		block.Message.Body.ExecutionPayload.ExtraData = types.ExtraData{}
+	}
+
+	if block.Message.Body.ExecutionPayload.Transactions == nil {
+		block.Message.Body.ExecutionPayload.Transactions = []hexutil.Bytes{}
+	}
+
+	return block
 }
