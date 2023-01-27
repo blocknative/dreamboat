@@ -275,7 +275,7 @@ func (b *beaconClient) GetProposerDuties(epoch structs.Epoch) (*RegisteredPropos
 	// https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties
 	u.Path = fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch)
 	resp := new(RegisteredProposersResponse)
-	err := b.queryBeacon(&u, "GET", resp)
+	err := b.queryBeacon(&u, "GET", "/eth/v1/validator/duties/proposer", resp)
 	return resp, err
 }
 
@@ -285,7 +285,7 @@ func (b *beaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
 	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
 	u.Path = "/eth/v1/node/syncing"
 	resp := new(SyncStatusPayload)
-	err := b.queryBeacon(&u, "GET", resp)
+	err := b.queryBeacon(&u, "GET", "/eth/v1/node/syncing", resp)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +300,7 @@ func (b *beaconClient) KnownValidators(headSlot structs.Slot) (AllValidatorsResp
 	u.RawQuery = q.Encode()
 
 	var vd AllValidatorsResponse
-	err := b.queryBeacon(&u, "GET", &vd)
+	err := b.queryBeacon(&u, "GET", "/eth/v1/beacon/states/validators", &vd)
 
 	return vd, err
 }
@@ -310,7 +310,7 @@ func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 	u := *b.beaconEndpoint
 	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
 	u.Path = "/eth/v1/beacon/genesis"
-	err := b.queryBeacon(&u, "GET", &resp)
+	err := b.queryBeacon(&u, "GET", "/eth/v1/beacon/genesis", &resp)
 	return resp.Data, err
 }
 
@@ -320,7 +320,7 @@ func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
 		return fmt.Errorf("fail to marshal block: %w", err)
 	}
 
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues(b.beaconEndpoint.String() + "/eth/v1/beacon/blocks"))
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/blocks"))
 	defer t.ObserveDuration()
 
 	resp, err := http.Post(b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", "application/json", bytes.NewBuffer(bb))
@@ -366,14 +366,14 @@ func (b *beaconClient) AttachMetrics(m *metrics.Metrics) {
 	m.Register(b.m.Timing)
 }
 
-func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
+func (b *beaconClient) queryBeacon(u *url.URL, method, pathName string, dst any) error {
 	req, err := http.NewRequest(method, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("invalid request for %s: %w", u, err)
 	}
 	req.Header.Set("accept", "application/json")
 
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues(u.String()))
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues(pathName))
 	defer t.ObserveDuration()
 
 	resp, err := http.DefaultClient.Do(req)
