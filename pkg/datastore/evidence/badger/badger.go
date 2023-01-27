@@ -223,7 +223,9 @@ func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []uint64) ([]
 	return traceBatch, err
 }
 
-func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+	return nil, nil
+}
 
 func min[T constraints.Ordered](a, b T) T {
 	if a < b {

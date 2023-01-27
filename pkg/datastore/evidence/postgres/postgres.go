@@ -242,11 +242,13 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 	return bts, err
 }
 
-func (s *Datastore) CheckSlotDelivered(_ context.Context, slot uint64) (bool, error) {
-	var count int
-	row := s.DB.QueryRow("SELECT COUNT(*) FROM payload_delivered WHERE slot = ?", slot)
-	err := row.Scan(&count)
-	return count > 0, err
+func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, error) {
+	var sl uint64
+	err := s.DB.QueryRowContext(ctx, "SELECT slot FROM payload_delivered WHERE slot = ? LIMIT 1", slot).Scan(&sl)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return sl == slot, err
 }
 
 type GetBuilderSubmissionsFilters struct {

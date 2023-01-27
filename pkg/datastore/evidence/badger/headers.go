@@ -15,19 +15,14 @@ import (
 )
 
 func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error) {
-	el, _ := s.hc.GetHeaders(slot, slot, 1)
-	if el != nil {
-		return el, nil
-	}
-
 	data, err := s.DB.Get(ctx, datastore.HeaderKey(slot))
 	if err != nil && errors.Is(err, ds.ErrNotFound) {
-		return el, err
+		return nil, err
 	}
 
-	el = []structs.HeaderAndTrace{}
+	el := []structs.HeaderAndTrace{}
 	if err = json.Unmarshal(data, &el); err != nil {
-		return el, err
+		return nil, err
 	}
 
 	return el, err
