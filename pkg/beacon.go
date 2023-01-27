@@ -320,7 +320,7 @@ func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
 		return fmt.Errorf("fail to marshal block: %w", err)
 	}
 
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/blocks"))
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/blocks", "POST"))
 	defer t.ObserveDuration()
 
 	resp, err := http.Post(b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", "application/json", bytes.NewBuffer(bb))
@@ -359,7 +359,7 @@ func (b *beaconClient) initMetrics() {
 		Subsystem: "beacon",
 		Name:      "timing",
 		Help:      "Duration of requests per endpoint",
-	}, []string{"endpoint"})
+	}, []string{"endpoint", "method"})
 }
 
 func (b *beaconClient) AttachMetrics(m *metrics.Metrics) {
@@ -373,7 +373,7 @@ func (b *beaconClient) queryBeacon(u *url.URL, method, pathName string, dst any)
 	}
 	req.Header.Set("accept", "application/json")
 
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues(pathName))
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues(pathName, method))
 	defer t.ObserveDuration()
 
 	resp, err := http.DefaultClient.Do(req)
