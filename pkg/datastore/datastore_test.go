@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/google/uuid"
 
 	ds "github.com/ipfs/go-datastore"
 
@@ -118,168 +116,6 @@ func TestPutGetPayload(t *testing.T) {
 	gotPayload, _, err := ds.GetPayload(ctx, key)
 	require.NoError(t, err)
 	require.EqualValues(t, *payload, *gotPayload)
-}
-
-func TestPutGetRegistration(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	store := newMockDatastore()
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: store, PayloadCache: cache}
-
-	registration := randomRegistration()
-	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
-
-	// put
-	err := ds.PutRegistration(ctx, key, registration, time.Minute)
-	require.NoError(t, err)
-
-	// get
-	gotRegistration, err := ds.GetRegistration(ctx, key)
-	require.NoError(t, err)
-	require.EqualValues(t, registration, gotRegistration)
-}
-
-func BenchmarkPutRegistration(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
-
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
-
-	registration := randomRegistration()
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		err := ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration, time.Minute)
-		if err != nil {
-			panic(err)
-		}
-	}
-}
-
-func BenchmarkPutRegistrationParallel(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
-
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
-
-	registration := randomRegistration()
-
-	var wg sync.WaitGroup
-	defer wg.Wait()
-
-	wg.Add(b.N)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		go func() {
-			err := ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, registration, time.Minute)
-			if err != nil {
-				panic(err)
-			}
-			wg.Done()
-		}()
-	}
-}
-
-func BenchmarkGetRegistration(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
-
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
-
-	registration := randomRegistration()
-	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
-
-	_ = ds.PutRegistration(ctx, key, registration, time.Minute)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		_, err := ds.GetRegistration(ctx, key)
-		if err != nil {
-			panic(err)
-		}
-	}
-}
-
-func TestGetRegistrationReal(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var datadir = "/tmp/" + t.Name() + uuid.New().String()
-
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	ds := datastore.Datastore{
-		TTLStorage: &datastore.TTLDatastoreBatcher{
-			TTLDatastore: store},
-		Badger: store.DB}
-
-	registration := randomRegistration()
-	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
-
-	err := ds.PutRegistration(ctx, key, registration, time.Minute*2)
-	require.NoError(t, err)
-
-	regs, err := ds.GetAllRegistration()
-	require.NoError(t, err)
-
-	if _, ok := regs[registration.Message.Pubkey.String()]; !ok {
-		t.Error("reqistration doesn't exists")
-	}
-}
-
-func BenchmarkGetRegistrationParallel(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var datadir = "/tmp/" + b.Name() + uuid.New().String()
-
-	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: &datastore.TTLDatastoreBatcher{TTLDatastore: store}, PayloadCache: cache}
-
-	registration := randomRegistration()
-	key := structs.PubKey{PublicKey: registration.Message.Pubkey}
-
-	_ = ds.PutRegistration(ctx, key, registration, time.Minute)
-
-	var wg sync.WaitGroup
-	defer wg.Wait()
-
-	wg.Add(b.N)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		go func() {
-			_, err := ds.GetRegistration(ctx, key)
-			if err != nil {
-				panic(err)
-			}
-			wg.Done()
-		}()
-	}
 }
 
 func randomHeaderAndTrace() structs.HeaderAndTrace {
