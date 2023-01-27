@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
@@ -299,4 +300,9 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.Signe
 	}
 
 	return block
+}
+
+type ValidatorCacheEntry struct {
+	Time  time.Time
+	Entry types.RegisterValidatorRequestMessage
 }

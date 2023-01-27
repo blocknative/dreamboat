@@ -18,6 +18,7 @@ import (
 	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/validators"
 	"github.com/blocknative/dreamboat/pkg/verify"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -332,17 +333,6 @@ func run() cli.ActionFunc {
 		verificator := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
 		verificator.RunVerify(c.Uint("relay-workers-verify"))
 
-		auctioneer := auction.NewAuctioneer()
-		r := relay.NewRelay(config.Log, relay.RelayConfig{
-			BuilderSigningDomain:  domainBuilder,
-			ProposerSigningDomain: domainBeaconProposer,
-			PubKey:                config.PubKey,
-			SecretKey:             config.SecretKey,
-			TTL:                   config.TTL,
-			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, verificator, state, ds, auctioneer)
-		r.AttachMetrics(m)
-
 		// VALIDATOR MANAGEMENT
 		var valDS validators.ValidatorStore
 		if true {
@@ -356,16 +346,28 @@ func run() cli.ActionFunc {
 			valDS = valBadger.NewDatastore(storage, config.TTL)
 		}
 
-		cache, err := lru.New[types.PublicKey, validators.CacheEntry](c.Int("relay-registrations-cache-size"))
+		validatorCache, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](c.Int("relay-registrations-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to initialize validator cache: %w", err)
 		}
-		validatorStoreManager := validators.NewStoreManager(config.Log, cache, valDS, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
+		validatorStoreManager := validators.NewStoreManager(config.Log, validatorCache, valDS, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
 		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+
 		validatorRelay := validators.NewRegister(config.Log, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
 		service := pkg.NewService(config.Log, config, state)
+
+		auctioneer := auction.NewAuctioneer()
+		r := relay.NewRelay(config.Log, relay.RelayConfig{
+			BuilderSigningDomain:  domainBuilder,
+			ProposerSigningDomain: domainBeaconProposer,
+			PubKey:                config.PubKey,
+			SecretKey:             config.SecretKey,
+			TTL:                   config.TTL,
+			PublishBlock:          c.Bool("relay-publish-block"),
+		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer)
+		r.AttachMetrics(m)
 
 		/*
 			regStr, err := validators.NewStoreManager(config.Log, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))

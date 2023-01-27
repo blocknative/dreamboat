@@ -18,9 +18,9 @@ type ValidatorStore interface {
 	PutNewerRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration) error
 }
 
-type RegCache interface {
-	Add(types.PublicKey, CacheEntry) (evicted bool)
-	Get(types.PublicKey) (CacheEntry, bool)
+type ValidatorCache interface {
+	Add(types.PublicKey, structs.ValidatorCacheEntry) (evicted bool)
+	Get(types.PublicKey) (structs.ValidatorCacheEntry, bool)
 }
 
 // StoreReqItem is a payload requested to be stored
@@ -32,13 +32,8 @@ type StoreReq struct {
 	Items []StoreReqItem
 }
 
-type CacheEntry struct {
-	Time  time.Time
-	Entry types.RegisterValidatorRequestMessage
-}
-
 type StoreManager struct {
-	RegistrationCache       RegCache
+	RegistrationCache       ValidatorCache
 	storeTTLHalftimeSeconds int
 
 	store ValidatorStore
@@ -53,7 +48,7 @@ type StoreManager struct {
 	m StoreManagerMetrics
 }
 
-func NewStoreManager(l log.Logger, cache RegCache, store ValidatorStore, storeTTLHalftimeSeconds int, storeSize uint) *StoreManager {
+func NewStoreManager(l log.Logger, cache ValidatorCache, store ValidatorStore, storeTTLHalftimeSeconds int, storeSize uint) *StoreManager {
 	rm := &StoreManager{
 		l:                       l,
 		store:                   store,
@@ -137,7 +132,7 @@ func (pm *StoreManager) storeRegistration(ctx context.Context, payload StoreReq)
 			pm.m.StoreErrorRate.Inc()
 			return err
 		}
-		pm.RegistrationCache.Add(i.Payload.Message.Pubkey, CacheEntry{
+		pm.RegistrationCache.Add(i.Payload.Message.Pubkey, structs.ValidatorCacheEntry{
 			Time: now,
 			Entry: types.RegisterValidatorRequestMessage{
 				Timestamp:    i.Payload.Message.Timestamp,
