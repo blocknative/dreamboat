@@ -283,7 +283,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			}
 		}
 
-		if err := rs.d.PutDelivered(ctx, slot, trace, rs.config.TTL); err != nil {
+		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
 	}(rs, structs.Slot(payloadRequest.Message.Slot), trace)
