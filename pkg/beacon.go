@@ -320,6 +320,9 @@ func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
 		return fmt.Errorf("fail to marshal block: %w", err)
 	}
 
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues(b.beaconEndpoint.String() + "/eth/v1/beacon/blocks"))
+	defer t.ObserveDuration()
+
 	resp, err := http.Post(b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", "application/json", bytes.NewBuffer(bb))
 	if err != nil {
 		return fmt.Errorf("fail to publish block: %w", err)
