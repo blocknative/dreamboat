@@ -3,7 +3,6 @@ package relay
 import (
 	"errors"
 
-	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
@@ -38,11 +37,13 @@ type GetValidatorRelayResponse []struct {
 	} `json:"entry"`
 }
 
+/*
 type ErrBadProposer struct {
 	Want, Got structs.PubKey
 }
 
 func (ErrBadProposer) Error() string { return "peer is not proposer" }
+*/
 
 func Max[T constraints.Ordered](args ...T) T {
 	if len(args) == 0 {

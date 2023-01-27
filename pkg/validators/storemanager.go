@@ -14,8 +14,8 @@ import (
 )
 
 type ValidatorStore interface {
-	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
-	PutNewerRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration) error
+	GetRegistration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
+	PutNewerRegistration(ctx context.Context, pk types.PublicKey, registration types.SignedValidatorRegistration) error
 }
 
 type ValidatorCache interface {
@@ -73,7 +73,7 @@ func (pm *StoreManager) Close(ctx context.Context) {
 	pm.l.Info("All registrations stored")
 }
 
-func (rm *StoreManager) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
+func (rm *StoreManager) GetRegistration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
 	return rm.store.GetRegistration(ctx, pk)
 }
 
@@ -127,7 +127,7 @@ func (pm *StoreManager) storeRegistration(ctx context.Context, payload StoreReq)
 	for _, i := range payload.Items {
 		t := prometheus.NewTimer(pm.m.StoreTiming)
 		now := time.Now()
-		err := pm.store.PutNewerRegistration(ctx, structs.PubKey{PublicKey: i.Payload.Message.Pubkey}, i.Payload)
+		err := pm.store.PutNewerRegistration(ctx, i.Payload.Message.Pubkey, i.Payload)
 		if err != nil {
 			pm.m.StoreErrorRate.Inc()
 			return err

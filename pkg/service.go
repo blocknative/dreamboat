@@ -24,7 +24,7 @@ var (
 )
 
 type Datastore interface {
-	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+	GetRegistration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
 
 type Service struct {
@@ -227,7 +227,7 @@ func (s *Service) storeProposerDuties(ctx context.Context, d Datastore, headSlot
 	}
 
 	for _, e := range entries {
-		reg, err := d.GetRegistration(ctx, e.PubKey)
+		reg, err := d.GetRegistration(ctx, e.PubKey.PublicKey)
 		if err == nil {
 			state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
 				Slot:  e.Slot,

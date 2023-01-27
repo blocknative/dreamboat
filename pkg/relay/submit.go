@@ -4,7 +4,9 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -13,6 +15,8 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
+
+var ErrWrongFeeRecipient = errors.New("wrong fee recipient")
 
 // SubmitBlock Accepts block from trusted builder and stores
 func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
@@ -34,10 +38,16 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	}
 
 	tCheckDelivered := time.Now()
-	if err := rs.isPayloadDelivered(ctx, submitBlockRequest); err != nil {
+	if err := rs.isPayloadDelivered(ctx, submitBlockRequest.Message.Slot); err != nil {
 		return err
 	}
 	m.AppendSince(tCheckDelivered, "submitBlock", "checkDelivered")
+
+	tCheckRegistration := time.Now()
+	if err := rs.checkRegistration(ctx, submitBlockRequest.Message.ProposerPubkey, submitBlockRequest.Message.ProposerFeeRecipient); err != nil {
+		return err
+	}
+	m.AppendSince(tCheckRegistration, "submitBlock", "checkRegistration")
 
 	tVerify := time.Now()
 	if err := rs.verifySignature(ctx, submitBlockRequest); err != nil {
@@ -58,15 +68,15 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	return nil
 }
 
-func (rs *Relay) isPayloadDelivered(ctx context.Context, submitBlockRequest *types.BuilderSubmitBlockRequest) (err error) {
+func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error) {
 	rs.deliveredCacheLock.RLock()
-	_, ok := rs.deliveredCache[submitBlockRequest.Message.Slot]
+	_, ok := rs.deliveredCache[slot]
 	rs.deliveredCacheLock.RUnlock()
 	if ok {
 		return ErrPayloadAlreadyDelivered
 	}
 
-	ok, err = rs.d.CheckSlotDelivered(ctx, submitBlockRequest.Message.Slot)
+	ok, err = rs.d.CheckSlotDelivered(ctx, slot)
 	if ok {
 		rs.deliveredCacheLock.Lock()
 		if len(rs.deliveredCache) > 50 { // clean everything after every 50 slots
@@ -74,7 +84,7 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, submitBlockRequest *typ
 				delete(rs.deliveredCache, k)
 			}
 		}
-		rs.deliveredCache[submitBlockRequest.Message.Slot] = struct{}{}
+		rs.deliveredCache[slot] = struct{}{}
 		rs.deliveredCacheLock.Unlock()
 
 		return ErrPayloadAlreadyDelivered
@@ -97,6 +107,37 @@ func (rs *Relay) verifySignature(ctx context.Context, submitBlockRequest *types.
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	return
+}
+
+func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, proposerFeeRecipient types.Address) (err error) {
+	if v, ok := rs.cache.Get(pubkey); ok {
+		if int(time.Since(v.Time)) > rand.Intn(int(4*time.Hour))+int(time.Hour*20) {
+			rs.cache.Remove(pubkey)
+		}
+
+		if v.Entry.FeeRecipient == proposerFeeRecipient {
+			return
+		}
+	}
+
+	v, err := rs.vstore.GetRegistration(ctx, pubkey)
+	if err != nil {
+		return fmt.Errorf("fail to check registration: %w", err)
+	}
+
+	if v.Message.FeeRecipient != proposerFeeRecipient {
+		return ErrWrongFeeRecipient
+	}
+
+	rs.cache.Add(pubkey, structs.ValidatorCacheEntry{
+		Time: time.Now(),
+		Entry: types.RegisterValidatorRequestMessage{
+			FeeRecipient: v.Message.FeeRecipient,
+			GasLimit:     v.Message.GasLimit,
+			Timestamp:    v.Message.Timestamp,
+			Pubkey:       pubkey,
+		}})
+	return nil
 }
 
 func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, submitBlockRequest *types.BuilderSubmitBlockRequest) (newMax bool, err error) {

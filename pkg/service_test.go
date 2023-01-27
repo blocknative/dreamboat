@@ -26,7 +26,7 @@ func TestBeaconClientState(t *testing.T) {
 	beaconMock := mock_relay.NewMockBeaconClient(ctrl)
 
 	as := &relay.AtomicState{}
-	service := relay.NewService(log.New(), relay.Config{}, databaseMock, as)
+	service := relay.NewService(log.New(), relay.Config{}, as)
 	service.NewBeaconClient = func() (relay.BeaconClient, error) {
 		return beaconMock, nil
 	}
@@ -49,7 +49,7 @@ func TestBeaconClientState(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := service.RunBeacon(ctx)
+		err := service.RunBeacon(ctx, beaconMock, databaseMock)
 		require.Error(t, err, context.Canceled)
 	}()
 	<-service.Ready()

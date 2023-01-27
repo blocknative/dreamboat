@@ -103,8 +103,7 @@ func TestRegisterValidator(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 	for _, registration := range registrations {
-		key := structs.PubKey{PublicKey: registration.Message.Pubkey}
-		gotRegistration, err := ds.GetRegistration(ctx, key)
+		gotRegistration, err := ds.GetRegistration(ctx, registration.Message.Pubkey)
 		require.NoError(t, err)
 		require.EqualValues(t, registration, gotRegistration)
 	}
@@ -164,8 +163,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	var errored bool
 	for i, registration := range registrations {
-		key := structs.PubKey{PublicKey: registration.Message.Pubkey}
-		gotRegistration, err := ds.GetRegistration(ctx, key)
+		gotRegistration, err := ds.GetRegistration(ctx, registration.Message.Pubkey)
 		if !errored {
 			if i != N/2 {
 				if err == nil || err.Error() != "datastore: key not found" {

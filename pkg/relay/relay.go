@@ -37,12 +37,13 @@ var (
 )
 
 type ValidatorStore interface {
-	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+	GetRegistration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
 
 type ValidatorCache interface {
 	Add(types.PublicKey, structs.ValidatorCacheEntry) (evicted bool)
 	Get(types.PublicKey) (structs.ValidatorCacheEntry, bool)
+	Remove(types.PublicKey) (existed bool)
 }
 
 type State interface {

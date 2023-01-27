@@ -350,6 +350,7 @@ func run() cli.ActionFunc {
 		if err != nil {
 			return fmt.Errorf("fail to initialize validator cache: %w", err)
 		}
+
 		validatorStoreManager := validators.NewStoreManager(config.Log, validatorCache, valDS, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
 		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))

@@ -1,4 +1,4 @@
-package dbadger
+package badger
 
 import (
 	"context"
@@ -8,16 +8,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
 
-func RegistrationKey(pk structs.PubKey) ds.Key {
+// structs.PubKey{PublicKey:}
+func RegistrationKey(pk types.PublicKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("%s%s", "registration-", pk.String()))
 }
 
-func RegistrationTimeKey(pk structs.PubKey) ds.Key {
+func RegistrationTimeKey(pk types.PublicKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("%s%s", "reg-t-", pk.String()))
 }
 
@@ -39,7 +40,7 @@ func NewDatastore(t DB, ttl time.Duration) *Datastore {
 	}
 }
 
-func (s *Datastore) PutNewerRegistration(ctx context.Context, pk structs.PubKey, registration types.SignedValidatorRegistration) error {
+func (s *Datastore) PutNewerRegistration(ctx context.Context, pk types.PublicKey, registration types.SignedValidatorRegistration) error {
 	data, err := json.Marshal(registration)
 	if err != nil {
 		return err
@@ -66,12 +67,15 @@ func (s *Datastore) PutNewerRegistration(ctx context.Context, pk structs.PubKey,
 	return s.DB.PutWithTTL(ctx, RegistrationKey(pk), data, s.TTL)
 }
 
-func (s *Datastore) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
+func (s *Datastore) GetRegistration(ctx context.Context, pk types.PublicKey) (svr types.SignedValidatorRegistration, err error) {
 	data, err := s.DB.Get(ctx, RegistrationKey(pk))
 	if err != nil {
-		return types.SignedValidatorRegistration{}, err
+		if err == ds.ErrNotFound {
+			return svr, datastore.ErrNotFound
+		}
+		return svr, err
 	}
-	var registration types.SignedValidatorRegistration
-	err = json.Unmarshal(data, &registration)
-	return registration, err
+	svr = types.SignedValidatorRegistration{}
+	err = json.Unmarshal(data, &svr)
+	return svr, err
 }

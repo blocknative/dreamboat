@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/flashbots/go-boost-utils/types"
 )
 
@@ -16,15 +16,18 @@ func NewDatastore(db *sql.DB) *Datastore {
 	return &Datastore{DB: db}
 }
 
-func (s *Datastore) GetRegistration(ctx context.Context, pk structs.PubKey) (types.SignedValidatorRegistration, error) {
+func (s *Datastore) GetRegistration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
 	row := s.DB.QueryRowContext(ctx, `SELECT signature, fee_recipient, gas_limit, reg_time FROM validator_registrations WHERE pubkey = $1 LIMIT 1;`, pk)
 	reg := types.SignedValidatorRegistration{Message: &types.RegisterValidatorRequestMessage{}}
 
 	err := row.Scan(&reg.Signature, &reg.Message.FeeRecipient, &reg.Message.GasLimit, &reg.Message.Timestamp)
+	if err == sql.ErrNoRows {
+		return reg, datastore.ErrNotFound
+	}
 	return reg, err
 }
 
-func (s *Datastore) PutNewerRegistration(ctx context.Context, pk structs.PubKey, reg types.SignedValidatorRegistration) error {
+func (s *Datastore) PutNewerRegistration(ctx context.Context, pk types.PublicKey, reg types.SignedValidatorRegistration) error {
 	_, err := s.DB.ExecContext(ctx, `INSERT INTO validator_registrations(pubkey, signature, fee_recipient, gas_limit, reg_time, updated_at)
 										VALUES ($1, $2, $3, $4, $5, NOW())
 										ON CONFLICT (pubkey)

@@ -210,10 +210,6 @@ func PayloadKeyKey(key structs.PayloadKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot))
 }
 
-func ValidatorKey(pk structs.PubKey) ds.Key {
-	return ds.NewKey(fmt.Sprintf("valdator-%s", pk.String()))
-}
-
 type TTLDatastoreBatcher struct {
 	ds.TTLDatastore
 }
