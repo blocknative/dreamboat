@@ -507,3 +507,116 @@ func TestSubmitBlocksCancel(t *testing.T) {
 
 	require.EqualValues(t, header, gotHeaders.Header)
 }
+
+type vFeeProposer struct{ t structs.ValidatorCacheEntry }
+
+func VFeeProposer(t structs.ValidatorCacheEntry) gomock.Matcher {
+	return &vFeeProposer{t}
+}
+
+func (o *vFeeProposer) Matches(x interface{}) bool {
+
+	vce, ok := x.(structs.ValidatorCacheEntry)
+	if !ok {
+		return false
+	}
+
+	return vce.Entry.FeeRecipient == o.t.Entry.FeeRecipient
+}
+
+func (o *vFeeProposer) String() string {
+	return "is " + o.t.Entry.FeeRecipient.String()
+}
+
+func TestRegistartionCache(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctrl := gomock.NewController(t)
+
+	sk, _, _ := bls.GenerateNewKeypair()
+
+	var datadir = "/tmp/" + uuid.New().String()
+	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
+	hc := datastore.NewHeaderController(100, time.Hour)
+	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	require.NoError(t, err)
+
+	bs := mocks.NewMockState(ctrl)
+
+	genesisTime := uint64(time.Now().Unix())
+	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+
+	l := log.New()
+	ver := verify.NewVerificationManager(l, 20000)
+	ver.RunVerify(300)
+
+	relaySigningDomain, _ := pkg.ComputeDomain(
+		types.DomainTypeAppBuilder,
+		pkg.GenesisForkVersionRopsten,
+		types.Root{}.String())
+
+	config := relay.RelayConfig{
+		TTL:                  5 * time.Minute,
+		SecretKey:            sk, // pragma: allowlist secret
+		PubKey:               types.PublicKey(random48Bytes()),
+		BuilderSigningDomain: relaySigningDomain,
+	}
+
+	proposerPubkey := types.PublicKey(random48Bytes())
+	proposerFeeRecipient := types.Address(random20Bytes())
+	vCE := structs.ValidatorCacheEntry{
+		Entry: types.RegisterValidatorRequestMessage{
+			FeeRecipient: proposerFeeRecipient,
+			Pubkey:       proposerPubkey,
+		},
+	}
+
+	vCache := mocks.NewMockValidatorCache(ctrl)
+	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{}, false)
+	vCache.EXPECT().Add(proposerPubkey, VFeeProposer(vCE)).Return(false)
+
+	vStore := mocks.NewMockValidatorStore(ctrl)
+	vStore.EXPECT().GetRegistration(gomock.Any(), proposerPubkey).Return(types.SignedValidatorRegistration{
+		Message: &types.RegisterValidatorRequestMessage{
+			FeeRecipient: proposerFeeRecipient,
+			Pubkey:       proposerPubkey,
+		},
+	}, nil)
+
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer())
+
+	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
+	require.NoError(t, err)
+
+	slot := structs.Slot(rand.Uint64())
+	payloadB1 := randomPayload()
+	payloadB1.Timestamp = genesisTime + (uint64(slot) * 12)
+
+	msgB1 := &types.BidTrace{
+		Slot:                 uint64(slot),
+		ParentHash:           payloadB1.ParentHash,
+		BlockHash:            payloadB1.BlockHash,
+		BuilderPubkey:        pubKeyB1,
+		ProposerPubkey:       proposerPubkey,
+		ProposerFeeRecipient: proposerFeeRecipient,
+		Value:                types.IntToU256(1000),
+	}
+
+	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
+	require.NoError(t, err)
+
+	submitRequestOne := &types.BuilderSubmitBlockRequest{
+		Signature:        signatureB1,
+		Message:          msgB1,
+		ExecutionPayload: payloadB1,
+	}
+
+	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequestOne)
+	require.NoError(t, err)
+
+	_, err = ds.GetMaxProfitHeader(ctx, uint64(slot))
+	require.NoError(t, err)
+}
