@@ -1,8 +1,8 @@
 build:
 	go build ./cmd/dreamboat
 
-build-cli:
-	go build ./cmd/test-cli
+build-migration:
+	go build -o migration-postgres ./cmd/migration/postgres
 
 # Mock testing
 mocks: clean-mocks

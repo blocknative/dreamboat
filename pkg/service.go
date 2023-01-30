@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
-	ds "github.com/ipfs/go-datastore"
 	"github.com/lthibault/log"
 )
 
@@ -228,14 +228,16 @@ func (s *Service) storeProposerDuties(ctx context.Context, d Datastore, headSlot
 
 	for _, e := range entries {
 		reg, err := d.GetRegistration(ctx, e.PubKey.PublicKey)
-		if err == nil {
-			state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
-				Slot:  e.Slot,
-				Entry: &reg,
-			})
-		} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
-			logger.Warn(err)
+		if err != nil {
+			if !errors.Is(err, datastore.ErrNotFound) {
+				logger.Warn(err)
+			}
+			continue
 		}
+		state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
+			Slot:  e.Slot,
+			Entry: &reg,
+		})
 	}
 	s.state.duties.Store(state)
 }

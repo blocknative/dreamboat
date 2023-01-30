@@ -3,6 +3,8 @@ package postgres
 import (
 	"database/sql"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 func Open(dbURL string, maxOpen, maxIdle int, maxIdleTime time.Duration) (*sql.DB, error) {

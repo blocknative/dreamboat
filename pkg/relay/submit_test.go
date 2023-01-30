@@ -513,9 +513,7 @@ type vFeeProposer struct{ t structs.ValidatorCacheEntry }
 func VFeeProposer(t structs.ValidatorCacheEntry) gomock.Matcher {
 	return &vFeeProposer{t}
 }
-
 func (o *vFeeProposer) Matches(x interface{}) bool {
-
 	vce, ok := x.(structs.ValidatorCacheEntry)
 	if !ok {
 		return false

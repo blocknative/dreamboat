@@ -182,6 +182,12 @@ var flags = []cli.Flag{
 		Value:   false,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
+	&cli.StringFlag{
+		Name:    "relay-validator-database-url",
+		Usage:   "address of postgress database for validator registrations, if empty - default, badger will be used",
+		Value:   "",
+		EnvVars: []string{"RELAY_VALIDATOR_DATABASE_URL"},
+	},
 	&cli.BoolFlag{
 		Name:    "relay-fast-boot",
 		Usage:   "speed up booting up of relay, adding temporary inconsistency on the builder_blocks_received endpoint",
@@ -333,16 +339,17 @@ func run() cli.ActionFunc {
 		verificator := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
 		verificator.RunVerify(c.Uint("relay-workers-verify"))
 
+		dbURL := c.String("relay-validator-database-url")
 		// VALIDATOR MANAGEMENT
 		var valDS validators.ValidatorStore
-		if true {
-			valPG, err := trPostgres.Open("", 10, 10, 10) // TODO(l): make configurable
+		if dbURL != "" {
+			valPG, err := trPostgres.Open(dbURL, 10, 10, 10) // TODO(l): make configurable
 			if err != nil {
 				return fmt.Errorf("failed to connect to the database: %w", err)
 			}
-
+			m.RegisterDB(valPG, "registrations")
 			valDS = valPostgres.NewDatastore(valPG)
-		} else {
+		} else { // by default use existsing storage
 			valDS = valBadger.NewDatastore(storage, config.TTL)
 		}
 
