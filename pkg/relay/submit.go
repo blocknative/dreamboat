@@ -191,30 +191,29 @@ func prepareContents(submitBlockRequest *types.BuilderSubmitBlockRequest, conf R
 		return s, err
 	}
 
-	return structs.CompleteBlockstruct{
-		Payload: SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest),
-		Header: structs.HeaderAndTrace{
-			Header: header,
-			Trace: &structs.BidTraceWithTimestamp{
-				BidTraceExtended: structs.BidTraceExtended{
-					BidTrace: types.BidTrace{
-						Slot:                 submitBlockRequest.Message.Slot,
-						ParentHash:           s.Payload.Payload.Data.ParentHash,
-						BlockHash:            s.Payload.Payload.Data.BlockHash,
-						BuilderPubkey:        s.Payload.Trace.Message.BuilderPubkey,
-						ProposerPubkey:       s.Payload.Trace.Message.ProposerPubkey,
-						ProposerFeeRecipient: s.Payload.Trace.Message.ProposerFeeRecipient,
-						Value:                submitBlockRequest.Message.Value,
-						GasLimit:             s.Payload.Trace.Message.GasLimit,
-						GasUsed:              s.Payload.Trace.Message.GasUsed,
-					},
-					BlockNumber: s.Payload.Payload.Data.BlockNumber,
-					NumTx:       uint64(len(s.Payload.Payload.Data.Transactions)),
+	s.Payload = SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
+	s.Header = structs.HeaderAndTrace{
+		Header: header,
+		Trace: &structs.BidTraceWithTimestamp{
+			BidTraceExtended: structs.BidTraceExtended{
+				BidTrace: types.BidTrace{
+					Slot:                 submitBlockRequest.Message.Slot,
+					ParentHash:           s.Payload.Payload.Data.ParentHash,
+					BlockHash:            s.Payload.Payload.Data.BlockHash,
+					BuilderPubkey:        s.Payload.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       s.Payload.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: s.Payload.Trace.Message.ProposerFeeRecipient,
+					Value:                submitBlockRequest.Message.Value,
+					GasLimit:             s.Payload.Trace.Message.GasLimit,
+					GasUsed:              s.Payload.Trace.Message.GasUsed,
 				},
-				Timestamp: s.Payload.Payload.Data.Timestamp,
+				BlockNumber: s.Payload.Payload.Data.BlockNumber,
+				NumTx:       uint64(len(s.Payload.Payload.Data.Transactions)),
 			},
+			Timestamp: s.Payload.Payload.Data.Timestamp,
 		},
-	}, nil
+	}
+	return s, nil
 }
 
 func verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconState *structs.BeaconState) (bool, error) { // TODO(l): remove FB type
