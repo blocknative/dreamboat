@@ -459,7 +459,8 @@ func (rs *Relay) prepareContents(submitBlockRequest *types.BuilderSubmitBlockReq
 				BlockNumber: s.Payload.Payload.Data.BlockNumber,
 				NumTx:       uint64(len(s.Payload.Payload.Data.Transactions)),
 			},
-			Timestamp: s.Payload.Payload.Data.Timestamp,
+			Timestamp:   uint64(time.Now().UnixMilli() / 1_000),
+			TimestampMs: uint64(time.Now().UnixMilli()),
 		},
 	}
 

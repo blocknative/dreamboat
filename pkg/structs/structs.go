@@ -126,7 +126,8 @@ type BidTraceExtended struct {
 
 type BidTraceWithTimestamp struct {
 	BidTraceExtended
-	Timestamp uint64 `json:"timestamp,string"`
+	Timestamp   uint64 `json:"timestamp,string"`
+	TimestampMs uint64 `json:"timestamp_ms,string"`
 }
 
 type BuilderGetValidatorsResponseEntrySlice []types.BuilderGetValidatorsResponseEntry
