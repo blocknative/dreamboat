@@ -13,7 +13,6 @@ import (
 	ds "github.com/ipfs/go-datastore"
 )
 
-// structs.PubKey{PublicKey:}
 func RegistrationKey(pk types.PublicKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("%s%s", "registration-", pk.String()))
 }
