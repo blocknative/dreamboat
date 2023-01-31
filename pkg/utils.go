@@ -37,14 +37,6 @@ type GetValidatorRelayResponse []struct {
 	} `json:"entry"`
 }
 
-/*
-type ErrBadProposer struct {
-	Want, Got structs.PubKey
-}
-
-func (ErrBadProposer) Error() string { return "peer is not proposer" }
-*/
-
 func Max[T constraints.Ordered](args ...T) T {
 	if len(args) == 0 {
 		return *new(T) // zero value of T

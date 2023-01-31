@@ -134,13 +134,7 @@ func (pm *StoreManager) storeRegistration(ctx context.Context, payload StoreReq)
 		}
 		pm.RegistrationCache.Add(i.Payload.Message.Pubkey, structs.ValidatorCacheEntry{
 			Time:  now,
-			Entry: i.Payload, /* types.RegisterValidatorRequestMessage{
-			Timestamp:    i.Payload.Message.Timestamp,
-			FeeRecipient: i.Payload.Message.FeeRecipient,
-			GasLimit:     i.Payload.Message.GasLimit,
-			Pubkey:       i.Payload.Message.Pubkey,
-			},*/
-
+			Entry: i.Payload,
 		})
 
 		t.ObserveDuration()

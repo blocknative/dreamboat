@@ -59,7 +59,6 @@ func NewRegister(l log.Logger, builderSigningDomain types.Domain, beaconState St
 
 func (r *Register) Registration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
 	return r.regMngr.GetRegistration(ctx, pk)
-	//return r.regMngr.GetRegistration(ctx, structs.PubKey{PublicKey: pk})
 }
 
 // ***** Builder Domain *****

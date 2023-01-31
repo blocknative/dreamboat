@@ -44,19 +44,7 @@ func TestBeaconClientState(t *testing.T) {
 	)
 	beaconMock.EXPECT().KnownValidators(gomock.Any()).Return(relay.AllValidatorsResponse{Data: []relay.ValidatorResponseEntry{}}, nil).Times(1)
 	beaconMock.EXPECT().Genesis().Times(1).Return(structs.GenesisInfo{}, nil)
-	/*
-		vCE := structs.ValidatorCacheEntry{
-			Entry: types.SignedValidatorRegistration{
-				Message: &types.RegisterValidatorRequestMessage{
-					FeeRecipient: proposerFeeRecipient,
-					Pubkey:       proposerPubkey,
-				},
-			},
-		}
-	*/
 	vCache := mocks.NewMockValidatorCache(ctrl)
-	//vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{}, false)
-	//vCache.EXPECT().Add(proposerPubkey, VFeeProposer(vCE)).Return(false)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
