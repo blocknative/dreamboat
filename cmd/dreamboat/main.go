@@ -377,16 +377,6 @@ func run() cli.ActionFunc {
 		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer)
 		r.AttachMetrics(m)
 
-		/*
-			regStr, err := validators.NewStoreManager(config.Log, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))
-			if err != nil {
-				return fmt.Errorf("fail to initialize store manager: %w", err)
-			}
-
-			regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr, ds)
-
-		*/
-
 		a := api.NewApi(config.Log, r, validatorRelay)
 		a.AttachMetrics(m)
 		logger.With(log.F{

@@ -131,12 +131,6 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 	rs.cache.Add(pubkey, structs.ValidatorCacheEntry{
 		Time:  time.Now(),
 		Entry: v,
-		// Entry:  types.RegisterValidatorRequestMessage{
-		// 	FeeRecipient: v.Message.FeeRecipient,
-		// 	GasLimit:     v.Message.GasLimit,
-		// 	Timestamp:    v.Message.Timestamp,
-		// 	Pubkey:       pubkey,
-		// }
 	})
 	return nil
 }
@@ -212,7 +206,8 @@ func prepareContents(submitBlockRequest *types.BuilderSubmitBlockRequest, conf R
 				BlockNumber: s.Payload.Payload.Data.BlockNumber,
 				NumTx:       uint64(len(s.Payload.Payload.Data.Transactions)),
 			},
-			Timestamp: s.Payload.Payload.Data.Timestamp,
+			Timestamp:   uint64(time.Now().UnixMilli() / 1_000),
+			TimestampMs: uint64(time.Now().UnixMilli()),
 		},
 	}
 	return s, nil
