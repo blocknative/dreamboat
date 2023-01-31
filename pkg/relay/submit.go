@@ -114,7 +114,7 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 			rs.cache.Remove(pubkey)
 		}
 
-		if v.Entry.FeeRecipient == proposerFeeRecipient {
+		if v.Entry.Message.FeeRecipient == proposerFeeRecipient {
 			return
 		}
 	}
@@ -129,13 +129,15 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 	}
 
 	rs.cache.Add(pubkey, structs.ValidatorCacheEntry{
-		Time: time.Now(),
-		Entry: types.RegisterValidatorRequestMessage{
-			FeeRecipient: v.Message.FeeRecipient,
-			GasLimit:     v.Message.GasLimit,
-			Timestamp:    v.Message.Timestamp,
-			Pubkey:       pubkey,
-		}})
+		Time:  time.Now(),
+		Entry: v,
+		// Entry:  types.RegisterValidatorRequestMessage{
+		// 	FeeRecipient: v.Message.FeeRecipient,
+		// 	GasLimit:     v.Message.GasLimit,
+		// 	Timestamp:    v.Message.Timestamp,
+		// 	Pubkey:       pubkey,
+		// }
+	})
 	return nil
 }
 

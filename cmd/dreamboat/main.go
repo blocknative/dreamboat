@@ -397,7 +397,7 @@ func run() cli.ActionFunc {
 		cContext, cancel := context.WithCancel(c.Context)
 		go func(s *pkg.Service) error {
 			config.Log.Info("initialized beacon")
-			err := s.RunBeacon(cContext, beacon, validatorStoreManager)
+			err := s.RunBeacon(cContext, beacon, validatorStoreManager, validatorCache)
 			if err != nil {
 				cancel()
 			}

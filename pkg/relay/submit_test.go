@@ -76,9 +76,10 @@ func TestSubmitBlock(t *testing.T) {
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
-		Entry: types.RegisterValidatorRequestMessage{
-			FeeRecipient: submitRequest.Message.ProposerFeeRecipient,
-		},
+		Entry: types.SignedValidatorRegistration{
+			Message: &types.RegisterValidatorRequestMessage{
+				FeeRecipient: submitRequest.Message.ProposerFeeRecipient,
+			}},
 	}, true)
 
 	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer())
@@ -139,8 +140,10 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
-		Entry: types.RegisterValidatorRequestMessage{
-			FeeRecipient: submitRequest.Message.ProposerFeeRecipient,
+		Entry: types.SignedValidatorRegistration{
+			Message: &types.RegisterValidatorRequestMessage{
+				FeeRecipient: submitRequest.Message.ProposerFeeRecipient,
+			},
 		},
 	}, true).AnyTimes()
 
@@ -197,8 +200,10 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
-		Entry: types.RegisterValidatorRequestMessage{
-			FeeRecipient: submitRequest.Message.ProposerFeeRecipient,
+		Entry: types.SignedValidatorRegistration{
+			Message: &types.RegisterValidatorRequestMessage{
+				FeeRecipient: submitRequest.Message.ProposerFeeRecipient,
+			},
 		},
 	}, true).AnyTimes()
 
@@ -305,8 +310,10 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
-		Entry: types.RegisterValidatorRequestMessage{
-			FeeRecipient: proposerFeeRecipient,
+		Entry: types.SignedValidatorRegistration{
+			Message: &types.RegisterValidatorRequestMessage{
+				FeeRecipient: proposerFeeRecipient,
+			},
 		},
 	}, true).AnyTimes()
 
@@ -436,8 +443,10 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
-		Entry: types.RegisterValidatorRequestMessage{
-			FeeRecipient: proposerFeeRecipient,
+		Entry: types.SignedValidatorRegistration{
+			Message: &types.RegisterValidatorRequestMessage{
+				FeeRecipient: proposerFeeRecipient,
+			},
 		},
 	}, true).AnyTimes()
 
@@ -519,11 +528,11 @@ func (o *vFeeProposer) Matches(x interface{}) bool {
 		return false
 	}
 
-	return vce.Entry.FeeRecipient == o.t.Entry.FeeRecipient
+	return vce.Entry.Message.FeeRecipient == o.t.Entry.Message.FeeRecipient
 }
 
 func (o *vFeeProposer) String() string {
-	return "is " + o.t.Entry.FeeRecipient.String()
+	return "is " + o.t.Entry.Message.FeeRecipient.String()
 }
 
 func TestRegistartionCache(t *testing.T) {
@@ -566,9 +575,11 @@ func TestRegistartionCache(t *testing.T) {
 	proposerPubkey := types.PublicKey(random48Bytes())
 	proposerFeeRecipient := types.Address(random20Bytes())
 	vCE := structs.ValidatorCacheEntry{
-		Entry: types.RegisterValidatorRequestMessage{
-			FeeRecipient: proposerFeeRecipient,
-			Pubkey:       proposerPubkey,
+		Entry: types.SignedValidatorRegistration{
+			Message: &types.RegisterValidatorRequestMessage{
+				FeeRecipient: proposerFeeRecipient,
+				Pubkey:       proposerPubkey,
+			},
 		},
 	}
 

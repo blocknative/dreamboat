@@ -27,6 +27,10 @@ type Datastore interface {
 	GetRegistration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
 
+type ValidatorCache interface {
+	Get(types.PublicKey) (structs.ValidatorCacheEntry, bool)
+}
+
 type Service struct {
 	Log             log.Logger
 	Config          Config
@@ -64,7 +68,7 @@ func (s *Service) setReady() {
 	}
 }
 
-func (s *Service) RunBeacon(ctx context.Context, client BeaconClient, d Datastore) error {
+func (s *Service) RunBeacon(ctx context.Context, client BeaconClient, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "RunBeacon")
 
 	syncStatus, err := s.waitSynced(ctx, client)
@@ -85,7 +89,7 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient, d Datastor
 	if err != nil {
 		return err
 	}
-	s.storeProposerDuties(ctx, d, s.headslotSlot, entries)
+	s.storeProposerDuties(ctx, d, vCache, s.headslotSlot, entries)
 
 	defer logger.Debug("beacon loop stopped")
 
@@ -116,7 +120,7 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient, d Datastor
 					Warn("error processing slot (proposer duties)")
 				continue
 			}
-			s.storeProposerDuties(ctx, d, s.headslotSlot, entries)
+			s.storeProposerDuties(ctx, d, vCache, s.headslotSlot, entries)
 
 			validators := s.state.Beacon().KnownValidators()
 			duties := s.state.Beacon().ProposerDutiesResponse
@@ -212,7 +216,7 @@ func (s *Service) getProposerDuties(ctx context.Context, client BeaconClient, he
 	return append(entries, next.Data...), nil
 }
 
-func (s *Service) storeProposerDuties(ctx context.Context, d Datastore, headSlot structs.Slot, entries []RegisteredProposersResponseData) {
+func (s *Service) storeProposerDuties(ctx context.Context, d Datastore, vCache ValidatorCache, headSlot structs.Slot, entries []RegisteredProposersResponseData) {
 	epoch := headSlot.Epoch()
 	logger := s.Log.With(log.F{
 		"method":    "UpdateProposerDuties",
@@ -226,17 +230,21 @@ func (s *Service) storeProposerDuties(ctx context.Context, d Datastore, headSlot
 		ProposerDutiesResponse: make(structs.BuilderGetValidatorsResponseEntrySlice, 0, len(entries)),
 	}
 
+	var err error
 	for _, e := range entries {
-		reg, err := d.GetRegistration(ctx, e.PubKey.PublicKey)
-		if err != nil {
-			if !errors.Is(err, datastore.ErrNotFound) {
-				logger.Warn(err)
+		reg, ok := vCache.Get(e.PubKey.PublicKey)
+		if !ok {
+			reg.Entry, err = d.GetRegistration(ctx, e.PubKey.PublicKey)
+			if err != nil {
+				if !errors.Is(err, datastore.ErrNotFound) {
+					logger.Warn(err)
+				}
+				continue
 			}
-			continue
 		}
 		state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
 			Slot:  e.Slot,
-			Entry: &reg,
+			Entry: &reg.Entry,
 		})
 	}
 	s.state.duties.Store(state)

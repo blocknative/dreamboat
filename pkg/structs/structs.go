@@ -304,5 +304,5 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.Signe
 
 type ValidatorCacheEntry struct {
 	Time  time.Time
-	Entry types.RegisterValidatorRequestMessage
+	Entry types.SignedValidatorRegistration //types.RegisterValidatorRequestMessage
 }

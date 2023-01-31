@@ -87,7 +87,7 @@ func (rm *StoreManager) Check(rvg *types.RegisterValidatorRequestMessage) bool {
 		return false
 	}
 
-	return v.Entry.FeeRecipient == rvg.FeeRecipient && v.Entry.GasLimit == rvg.GasLimit
+	return v.Entry.Message.FeeRecipient == rvg.FeeRecipient && v.Entry.Message.GasLimit == rvg.GasLimit
 }
 
 func (rm *StoreManager) SendStore(request StoreReq) {
@@ -133,12 +133,14 @@ func (pm *StoreManager) storeRegistration(ctx context.Context, payload StoreReq)
 			return err
 		}
 		pm.RegistrationCache.Add(i.Payload.Message.Pubkey, structs.ValidatorCacheEntry{
-			Time: now,
-			Entry: types.RegisterValidatorRequestMessage{
-				Timestamp:    i.Payload.Message.Timestamp,
-				FeeRecipient: i.Payload.Message.FeeRecipient,
-				GasLimit:     i.Payload.Message.GasLimit,
-			},
+			Time:  now,
+			Entry: i.Payload, /* types.RegisterValidatorRequestMessage{
+			Timestamp:    i.Payload.Message.Timestamp,
+			FeeRecipient: i.Payload.Message.FeeRecipient,
+			GasLimit:     i.Payload.Message.GasLimit,
+			Pubkey:       i.Payload.Message.Pubkey,
+			},*/
+
 		})
 
 		t.ObserveDuration()
