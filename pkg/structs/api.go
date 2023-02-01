@@ -8,24 +8,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-/*
-type SignedValidatorRegistration struct {
-	types.SignedValidatorRegistration
-	Raw json.RawMessage
-}
-
-func (s *SignedValidatorRegistration) UnmarshalJSON(b []byte) error {
-	sv := types.SignedValidatorRegistration{}
-	err := json.Unmarshal(b, &sv)
-	if err != nil {
-		return err
-	}
-	s.SignedValidatorRegistration = sv
-	s.Raw = b
-	return nil
-}
-*/
-
 type HeaderRequest map[string]string
 
 func (hr HeaderRequest) Slot() (Slot, error) {

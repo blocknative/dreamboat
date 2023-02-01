@@ -18,10 +18,18 @@ import (
 	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/validators"
 	"github.com/blocknative/dreamboat/pkg/verify"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
+
+	trPostgres "github.com/blocknative/dreamboat/pkg/datastore/transport/postgres"
+	valPostgres "github.com/blocknative/dreamboat/pkg/datastore/validator/postgres"
+
+	valBadger "github.com/blocknative/dreamboat/pkg/datastore/validator/badger"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
@@ -168,11 +176,23 @@ var flags = []cli.Flag{
 		Value:   600_000,
 		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
 	},
+	&cli.DurationFlag{
+		Name:    "relay-registrations-cache-ttl",
+		Usage:   "registrations cache ttl",
+		Value:   time.Hour,
+		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_TTL"},
+	},
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
 		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
 		Value:   false,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-validator-database-url",
+		Usage:   "address of postgress database for validator registrations, if empty - default, badger will be used",
+		Value:   "",
+		EnvVars: []string{"RELAY_VALIDATOR_DATABASE_URL"},
 	},
 	&cli.BoolFlag{
 		Name:    "relay-fast-boot",
@@ -284,7 +304,7 @@ func run() cli.ActionFunc {
 		}).Info("data store initialized")
 
 		timeRelayStart := time.Now()
-		as := &pkg.AtomicState{}
+		state := &pkg.AtomicState{}
 
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
@@ -322,39 +342,50 @@ func run() cli.ActionFunc {
 		}
 		beacon.AttachMetrics(m)
 
-		v := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
+		verificator := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
+		verificator.RunVerify(c.Uint("relay-workers-verify"))
+
+		dbURL := c.String("relay-validator-database-url")
+		// VALIDATOR MANAGEMENT
+		var valDS validators.ValidatorStore
+		if dbURL != "" {
+			valPG, err := trPostgres.Open(dbURL, 10, 10, 10) // TODO(l): make configurable
+			if err != nil {
+				return fmt.Errorf("failed to connect to the database: %w", err)
+			}
+			m.RegisterDB(valPG, "registrations")
+			valDS = valPostgres.NewDatastore(valPG)
+		} else { // by default use existsing storage
+			valDS = valBadger.NewDatastore(storage, config.TTL)
+		}
+
+		validatorCache, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](c.Int("relay-registrations-cache-size"))
+		if err != nil {
+			return fmt.Errorf("fail to initialize validator cache: %w", err)
+		}
+
+		validatorStoreManager := validators.NewStoreManager(config.Log, validatorCache, valDS, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
+		validatorStoreManager.AttachMetrics(m)
+		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+
+		validatorRelay := validators.NewRegister(config.Log, domainBuilder, state, verificator, validatorStoreManager)
+		validatorRelay.AttachMetrics(m)
+		service := pkg.NewService(config.Log, config, state)
+
 		auctioneer := auction.NewAuctioneer()
 		r := relay.NewRelay(config.Log, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
 			ProposerSigningDomain: domainBeaconProposer,
 			PubKey:                config.PubKey,
 			SecretKey:             config.SecretKey,
+			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
 			TTL:                   config.TTL,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, v, as, ds, auctioneer)
+		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer)
 		r.AttachMetrics(m)
 
-		service := pkg.NewService(config.Log, config, ds, as)
-
-		regStr, err := validators.NewStoreManager(config.Log, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"), c.Int("relay-registrations-cache-size"))
-		if err != nil {
-			return fmt.Errorf("fail to initialize store manager: %w", err)
-		}
-		regStr.AttachMetrics(m)
-		if !c.Bool("relay-fast-boot") {
-			loadRegistrations(ds, regStr, logger)
-		}
-		go regStr.RunCleanup(uint64(config.TTL), time.Hour)
-
-		regM := validators.NewRegister(config.Log, domainBuilder, as, v, regStr, ds)
-		regM.AttachMetrics(m)
-		
-		a := api.NewApi(config.Log, r, regM)
+		a := api.NewApi(config.Log, r, validatorRelay)
 		a.AttachMetrics(m)
-
-		regStr.RunStore(ds, config.TTL, c.Uint("relay-workers-store-validator"))
-		v.RunVerify(c.Uint("relay-workers-verify"))
-
 		logger.With(log.F{
 			"service":     "relay",
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
@@ -363,7 +394,7 @@ func run() cli.ActionFunc {
 		cContext, cancel := context.WithCancel(c.Context)
 		go func(s *pkg.Service) error {
 			config.Log.Info("initialized beacon")
-			err := s.RunBeacon(cContext, beacon)
+			err := s.RunBeacon(cContext, beacon, validatorStoreManager, validatorCache)
 			if err != nil {
 				cancel()
 			}
@@ -430,7 +461,7 @@ func run() cli.ActionFunc {
 		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
 		defer closeC()
 		finish := make(chan struct{})
-		go closemanager(ctx, finish, regStr)
+		go closemanager(ctx, finish, validatorStoreManager)
 
 		select {
 		case <-finish:
@@ -458,20 +489,6 @@ func initBeacon(ctx context.Context, config pkg.Config) (pkg.BeaconClient, error
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager) {
 	regMgr.Close(ctx)
 	finish <- struct{}{}
-}
-
-func loadRegistrations(ds *datastore.Datastore, regMgr *validators.StoreManager, logger log.Logger) {
-	reg, err := ds.GetAllRegistration()
-	if err == nil {
-		for k, v := range reg {
-			regMgr.Set(k, v.Message.Timestamp)
-		}
-
-		logger.With(log.F{
-			"service":        "registration",
-			"count-elements": len(reg),
-		}).Info("registrations loaded")
-	}
 }
 
 func logger(c *cli.Context) log.Logger {

@@ -26,3 +26,5 @@ cmd/scratch/*
 # profiling
 *.prof
 *.svg
+
+.data

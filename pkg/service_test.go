@@ -7,6 +7,7 @@ import (
 	"time"
 
 	relay "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/pkg/mocks"
 	mock_relay "github.com/blocknative/dreamboat/pkg/mocks"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/golang/mock/gomock"
@@ -26,7 +27,7 @@ func TestBeaconClientState(t *testing.T) {
 	beaconMock := mock_relay.NewMockBeaconClient(ctrl)
 
 	as := &relay.AtomicState{}
-	service := relay.NewService(log.New(), relay.Config{}, databaseMock, as)
+	service := relay.NewService(log.New(), relay.Config{}, as)
 	service.NewBeaconClient = func() (relay.BeaconClient, error) {
 		return beaconMock, nil
 	}
@@ -43,13 +44,15 @@ func TestBeaconClientState(t *testing.T) {
 	)
 	beaconMock.EXPECT().KnownValidators(gomock.Any()).Return(relay.AllValidatorsResponse{Data: []relay.ValidatorResponseEntry{}}, nil).Times(1)
 	beaconMock.EXPECT().Genesis().Times(1).Return(structs.GenesisInfo{}, nil)
+	vCache := mocks.NewMockValidatorCache(ctrl)
+
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := service.RunBeacon(ctx)
+		err := service.RunBeacon(ctx, beaconMock, databaseMock, vCache)
 		require.Error(t, err, context.Canceled)
 	}()
 	<-service.Ready()

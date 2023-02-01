@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg Datastore,BeaconClient
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg Datastore,BeaconClient,ValidatorCache
 package relay
 
 import (
@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
-	ds "github.com/ipfs/go-datastore"
 	"github.com/lthibault/log"
 )
 
@@ -24,12 +24,16 @@ var (
 )
 
 type Datastore interface {
-	GetRegistration(context.Context, structs.PubKey) (types.SignedValidatorRegistration, error)
+	GetRegistration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
 }
+
+type ValidatorCache interface {
+	Get(types.PublicKey) (structs.ValidatorCacheEntry, bool)
+}
+
 type Service struct {
 	Log             log.Logger
 	Config          Config
-	Datastore       Datastore
 	NewBeaconClient func() (BeaconClient, error)
 
 	once  sync.Once
@@ -41,12 +45,11 @@ type Service struct {
 	updateTime   atomic.Value
 }
 
-func NewService(l log.Logger, c Config, d Datastore, as *AtomicState) *Service {
+func NewService(l log.Logger, c Config, as *AtomicState) *Service {
 	return &Service{
-		Log:       l.WithField("relay-service", "Service"),
-		Config:    c,
-		Datastore: d,
-		state:     as,
+		Log:    l.WithField("relay-service", "Service"),
+		Config: c,
+		state:  as,
 	}
 }
 
@@ -65,7 +68,7 @@ func (s *Service) setReady() {
 	}
 }
 
-func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
+func (s *Service) RunBeacon(ctx context.Context, client BeaconClient, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "RunBeacon")
 
 	syncStatus, err := s.waitSynced(ctx, client)
@@ -82,10 +85,11 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	err = s.updateProposerDuties(ctx, client, structs.Slot(syncStatus.HeadSlot))
+	entries, err := s.getProposerDuties(ctx, client, structs.Slot(syncStatus.HeadSlot))
 	if err != nil {
 		return err
 	}
+	s.storeProposerDuties(ctx, d, vCache, s.headslotSlot, entries)
 
 	defer logger.Debug("beacon loop stopped")
 
@@ -108,6 +112,15 @@ func (s *Service) RunBeacon(ctx context.Context, client BeaconClient) error {
 					Warn("error processing slot")
 				continue
 			}
+			entries, err := s.getProposerDuties(ctx, client, s.headslotSlot)
+			if err != nil {
+				logger.
+					With(ev).
+					WithError(err).
+					Warn("error processing slot (proposer duties)")
+				continue
+			}
+			s.storeProposerDuties(ctx, d, vCache, s.headslotSlot, entries)
 
 			validators := s.state.Beacon().KnownValidators()
 			duties := s.state.Beacon().ProposerDutiesResponse
@@ -161,18 +174,15 @@ func (s *Service) processNewSlot(ctx context.Context, client BeaconClient, event
 
 	// update proposer duties and known validators in the background
 	if (DurationPerEpoch / 2) < time.Since(s.knownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
-		go func() {
-			if err := s.updateKnownValidators(ctx, client, s.headslotSlot); err != nil {
+		go func(slot structs.Slot) {
+			if err := s.updateKnownValidators(ctx, client, slot); err != nil {
 				logger.WithError(err).Warn("failed to update known validators")
-			} else {
-				s.updateTime.Store(time.Now())
-				s.setReady()
+				return
 			}
-		}()
-	}
 
-	if err := s.updateProposerDuties(ctx, client, s.headslotSlot); err != nil {
-		return err
+			s.updateTime.Store(time.Now())
+			s.setReady()
+		}(received)
 	}
 
 	return nil
@@ -186,9 +196,28 @@ func (s *Service) knownValidatorsUpdateTime() time.Time {
 	return updateTime
 }
 
-func (s *Service) updateProposerDuties(ctx context.Context, client BeaconClient, headSlot structs.Slot) error {
+func (s *Service) getProposerDuties(ctx context.Context, client BeaconClient, headSlot structs.Slot) (entries []RegisteredProposersResponseData, err error) {
 	epoch := headSlot.Epoch()
 
+	// Query current epoch
+	current, err := client.GetProposerDuties(epoch)
+	if err != nil {
+		return nil, fmt.Errorf("current epoch: get proposer duties: %w", err)
+	}
+
+	entries = current.Data
+
+	// Query next epoch
+	next, err := client.GetProposerDuties(epoch + 1)
+	if err != nil {
+		return nil, fmt.Errorf("next epoch: get proposer duties: %w", err)
+	}
+
+	return append(entries, next.Data...), nil
+}
+
+func (s *Service) storeProposerDuties(ctx context.Context, d Datastore, vCache ValidatorCache, headSlot structs.Slot, entries []RegisteredProposersResponseData) {
+	epoch := headSlot.Epoch()
 	logger := s.Log.With(log.F{
 		"method":    "UpdateProposerDuties",
 		"slot":      headSlot,
@@ -196,41 +225,29 @@ func (s *Service) updateProposerDuties(ctx context.Context, client BeaconClient,
 		"epochTo":   epoch + 1,
 	})
 
-	state := structs.DutiesState{}
-
-	// Query current epoch
-	current, err := client.GetProposerDuties(epoch)
-	if err != nil {
-		return fmt.Errorf("current epoch: get proposer duties: %w", err)
+	state := structs.DutiesState{
+		CurrentSlot:            headSlot,
+		ProposerDutiesResponse: make(structs.BuilderGetValidatorsResponseEntrySlice, 0, len(entries)),
 	}
 
-	entries := current.Data
-
-	// Query next epoch
-	next, err := client.GetProposerDuties(epoch + 1)
-	if err != nil {
-		return fmt.Errorf("next epoch: get proposer duties: %w", err)
-	}
-	entries = append(entries, next.Data...)
-
-	state.ProposerDutiesResponse = make(structs.BuilderGetValidatorsResponseEntrySlice, 0, len(entries))
-	state.CurrentSlot = headSlot
-
+	var err error
 	for _, e := range entries {
-		reg, err := s.Datastore.GetRegistration(ctx, e.PubKey)
-		if err == nil {
-			state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
-				Slot:  e.Slot,
-				Entry: &reg,
-			})
-		} else if err != nil && !errors.Is(err, ds.ErrNotFound) {
-			logger.Warn(err)
+		reg, ok := vCache.Get(e.PubKey.PublicKey)
+		if !ok {
+			reg.Entry, err = d.GetRegistration(ctx, e.PubKey.PublicKey)
+			if err != nil {
+				if !errors.Is(err, datastore.ErrNotFound) {
+					logger.Warn(fmt.Errorf("fail retrieve validator %s: %w", e.PubKey.PublicKey.String(), err))
+				}
+				continue
+			}
 		}
+		state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
+			Slot:  e.Slot,
+			Entry: &reg.Entry,
+		})
 	}
-
 	s.state.duties.Store(state)
-
-	return nil
 }
 
 func (s *Service) updateKnownValidators(ctx context.Context, client BeaconClient, current structs.Slot) error {
