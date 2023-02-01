@@ -110,7 +110,7 @@ func (rs *Relay) verifySignature(ctx context.Context, submitBlockRequest *types.
 
 func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, proposerFeeRecipient types.Address) (err error) {
 	if v, ok := rs.cache.Get(pubkey); ok {
-		if int(time.Since(v.Time)) > rand.Intn(int(4*time.Hour))+int(time.Hour*20) {
+		if int(time.Since(v.Time)) > rand.Intn(int(rs.config.RegistrationCacheTTL))+int(rs.config.RegistrationCacheTTL) {
 			rs.cache.Remove(pubkey)
 		}
 

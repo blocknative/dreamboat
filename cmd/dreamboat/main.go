@@ -176,6 +176,12 @@ var flags = []cli.Flag{
 		Value:   600_000,
 		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
 	},
+	&cli.DurationFlag{
+		Name:    "relay-registrations-cache-ttl",
+		Usage:   "registrations cache ttl",
+		Value:   time.Hour,
+		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_TTL"},
+	},
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
 		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
@@ -372,6 +378,7 @@ func run() cli.ActionFunc {
 			ProposerSigningDomain: domainBeaconProposer,
 			PubKey:                config.PubKey,
 			SecretKey:             config.SecretKey,
+			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
 			TTL:                   config.TTL,
 			PublishBlock:          c.Bool("relay-publish-block"),
 		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer)

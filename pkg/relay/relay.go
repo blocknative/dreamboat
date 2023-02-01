@@ -92,6 +92,8 @@ type RelayConfig struct {
 	PublishBlock bool
 
 	TTL time.Duration
+
+	RegistrationCacheTTL time.Duration
 }
 
 type Relay struct {
