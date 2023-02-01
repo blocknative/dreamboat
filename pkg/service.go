@@ -237,7 +237,7 @@ func (s *Service) storeProposerDuties(ctx context.Context, d Datastore, vCache V
 			reg.Entry, err = d.GetRegistration(ctx, e.PubKey.PublicKey)
 			if err != nil {
 				if !errors.Is(err, datastore.ErrNotFound) {
-					logger.Warn(err)
+					logger.Warn(fmt.Errorf("fail retrieve validator %s: %w", e.PubKey.PublicKey.String(), err))
 				}
 				continue
 			}
