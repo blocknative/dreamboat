@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/datastore"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
@@ -77,4 +78,9 @@ func (s *Datastore) GetRegistration(ctx context.Context, pk types.PublicKey) (sv
 	svr = types.SignedValidatorRegistration{}
 	err = json.Unmarshal(data, &svr)
 	return svr, err
+}
+
+func (s *Datastore) PopulateAllRegistrations(ctx context.Context, out chan structs.ValidatorCacheEntry) error {
+	// NOOP - to be supported
+	return nil
 }

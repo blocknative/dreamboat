@@ -206,13 +206,6 @@ var (
 	config pkg.Config
 )
 
-func waitForSignal(cancel context.CancelFunc, osSig chan os.Signal) {
-	for range osSig {
-		cancel()
-		return
-	}
-}
-
 // Main starts the relay
 func main() {
 	app := &cli.App{
@@ -347,7 +340,7 @@ func run() cli.ActionFunc {
 
 		dbURL := c.String("relay-validator-database-url")
 		// VALIDATOR MANAGEMENT
-		var valDS validators.ValidatorStore
+		var valDS ValidatorStore
 		if dbURL != "" {
 			valPG, err := trPostgres.Open(dbURL, 10, 10, 10) // TODO(l): make configurable
 			if err != nil {
@@ -363,6 +356,9 @@ func run() cli.ActionFunc {
 		if err != nil {
 			return fmt.Errorf("fail to initialize validator cache: %w", err)
 		}
+
+		// lazyload validators cache, it's optional and we don't care if it errors out
+		go preloadValidators(c.Context, logger, valDS, validatorCache)
 
 		validatorStoreManager := validators.NewStoreManager(config.Log, validatorCache, valDS, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
@@ -418,7 +414,6 @@ func run() cli.ActionFunc {
 			}
 			return err
 		}(m)
-
 		// wait for the relay service to be ready
 		select {
 		case <-cContext.Done():
@@ -471,6 +466,37 @@ func run() cli.ActionFunc {
 
 		return nil
 	}
+}
+
+type ValidatorStore interface {
+	GetRegistration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
+	PutNewerRegistration(ctx context.Context, pk types.PublicKey, registration types.SignedValidatorRegistration) error
+	PopulateAllRegistrations(ctx context.Context, out chan structs.ValidatorCacheEntry) error
+}
+
+func waitForSignal(cancel context.CancelFunc, osSig chan os.Signal) {
+	for range osSig {
+		cancel()
+		return
+	}
+}
+
+func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs ValidatorStore, ch chan structs.ValidatorCacheEntry) {
+	defer close(ch)
+	err := vs.PopulateAllRegistrations(ctx, ch)
+	if err != nil {
+		l.WithError(err).Warn("Cache population error")
+	}
+}
+
+func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc *lru.Cache[types.PublicKey, structs.ValidatorCacheEntry]) {
+	ch := make(chan structs.ValidatorCacheEntry, 100)
+	go asyncPopulateAllRegistrations(ctx, l, vs, ch)
+	for v := range ch {
+		v := v
+		vc.ContainsOrAdd(v.Entry.Message.Pubkey, v)
+	}
+	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
 func initBeacon(ctx context.Context, config pkg.Config) (pkg.BeaconClient, error) {
