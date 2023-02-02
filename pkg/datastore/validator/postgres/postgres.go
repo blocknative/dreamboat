@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/datastore"
+	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 )
@@ -16,6 +17,68 @@ type Datastore struct {
 
 func NewDatastore(db *sql.DB) *Datastore {
 	return &Datastore{DB: db}
+}
+
+func (s *Datastore) PopulateAllRegistrations(ctx context.Context, out chan structs.ValidatorCacheEntry) error {
+	rows, err := s.DB.QueryContext(ctx, `SELECT signature, updated_at, pubkey, fee_recipient, gas_limit, reg_time FROM validator_registrations`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var (
+		signature        string
+		feeRecipient     string
+		pubkey           string
+		registrationTime time.Time
+	)
+
+	for rows.Next() {
+		vce := structs.ValidatorCacheEntry{
+			Entry: types.SignedValidatorRegistration{
+				Message: &types.RegisterValidatorRequestMessage{},
+			},
+		}
+
+		if err := rows.Scan(&signature, &vce.Time, &pubkey, &feeRecipient, &vce.Entry.Message.GasLimit, &registrationTime); err != nil {
+			if err == sql.ErrNoRows {
+				return datastore.ErrNotFound
+			}
+			return err
+		}
+
+		vce.Entry.Message.Timestamp = uint64(registrationTime.Unix())
+
+		decsig, err := hexutil.Decode(signature)
+		if err != nil {
+			return err
+		}
+
+		if err = vce.Entry.Signature.FromSlice(decsig); err != nil {
+			return err
+		}
+
+		decRecip, err := hexutil.Decode(feeRecipient)
+		if err != nil {
+			return err
+		}
+
+		if err = vce.Entry.Message.FeeRecipient.FromSlice(decRecip); err != nil {
+			return err
+		}
+
+		decPub, err := hexutil.Decode(pubkey)
+		if err != nil {
+			return err
+		}
+
+		if err = vce.Entry.Message.Pubkey.FromSlice(decPub); err != nil {
+			return err
+		}
+
+		out <- vce
+	}
+	return nil
 }
 
 func (s *Datastore) GetRegistration(ctx context.Context, pk types.PublicKey) (types.SignedValidatorRegistration, error) {
@@ -31,7 +94,10 @@ func (s *Datastore) GetRegistration(ctx context.Context, pk types.PublicKey) (ty
 		t            time.Time
 	)
 
-	if err := row.Scan(&signature, &feeRecipient, &reg.Message.GasLimit, &t); err == sql.ErrNoRows {
+	if err := row.Scan(&signature, &feeRecipient, &reg.Message.GasLimit, &t); err != nil {
+		if err == sql.ErrNoRows {
+			return reg, datastore.ErrNotFound
+		}
 		return reg, datastore.ErrNotFound
 	}
 
