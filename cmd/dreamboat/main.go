@@ -414,7 +414,6 @@ func run() cli.ActionFunc {
 			}
 			return err
 		}(m)
-		<-time.After(time.Second * 10)
 		// wait for the relay service to be ready
 		select {
 		case <-cContext.Done():
