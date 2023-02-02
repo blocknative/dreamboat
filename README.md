@@ -32,13 +32,13 @@ Documentation can be found [here](https://docs.blocknative.com/mev-relay-instruc
 
 Dreamboat is a relay for Ethereum 2.0, it ships blocks from builders to validators.  Dreamboat is for anyone who wants to strengthen the Eth network by running their own relay.  Dreamboat's all-in-one design, modular code base and stunning performance will dazzle beginners and seasoned hackers alike.  All aboard!
 
-More precisely, Dreamboat is a spec-compliant [builder](https://github.com/ethereum/builder-specs) and [relay](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5) that allows block-builders and validators to interface with eachother through [MEV-boost](https://github.com/flashbots/mev-boost).
+More precisely, Dreamboat is a spec-compliant [builder](https://github.com/ethereum/builder-specs) and [relay](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5) that allows block-builders and validators to interface with each other through [MEV-boost](https://github.com/flashbots/mev-boost).
 
 Eventually Dreamboat will vanish, as if a dream, once in-protocol PBS is live.  Until then, it sails the ephemeral seas of block space, delivering its trusted cargo of blocks to validators, guided simply by a lighthouse.
 
 ## Design Goals
 
-Special thanks to Flashbots for their commiment to open source. This project was orginally based on the relay in Flashobot's [boost-geth-builder](https://github.com/flashbots/boost-geth-builder) and [mev-boost-relay](https://github.com/flashbots/mev-boost-relay).  We hope to continue to diverge in implementation over time to help strengthen #RelayDiversity as we continue to work on Dreamboat's core design goals:
+Special thanks to Flashbots for their commitment to open source. This project was originally based on the relay in Flashobot's [boost-geth-builder](https://github.com/flashbots/boost-geth-builder) and [mev-boost-relay](https://github.com/flashbots/mev-boost-relay).  We hope to continue to diverge in implementation over time to help strengthen #RelayDiversity as we continue to work on Dreamboat's core design goals:
 
 1. **Extensibility.**  Dreamboat provides well-factored interfaces that make it easy to change its behavior.  We use [Go Datastore](https://pkg.go.dev/github.com/ipfs/go-datastore) for its persistence layer, so you can swap out the default [BadgerDB](https://github.com/dgraph-io/badger) store with your favorite database, and provide a clean separation between core relay logic, the beacon-chain client, and the HTTP server.
 2. **Reliability.** Work is ongoing implement a [supervision-tree architecture](https://ferd.ca/the-zen-of-erlang.html) in Dreamboat, so that you never miss a block.
