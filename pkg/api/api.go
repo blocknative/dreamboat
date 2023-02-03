@@ -114,6 +114,8 @@ func status(w http.ResponseWriter, r *http.Request) {
 
 // proposer related handlers
 func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("registerValidator"))
 	defer timer.ObserveDuration()
 
@@ -156,6 +158,8 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getHeader"))
 	defer timer.ObserveDuration()
 
@@ -195,6 +199,8 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
 	defer timer.ObserveDuration()
 
@@ -243,6 +249,8 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 
 // builder related handlers
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 
@@ -294,6 +302,8 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getValidators(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getValidators"))
 	defer timer.ObserveDuration()
 
@@ -320,6 +330,8 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) {
 
 // data API related handlers
 func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("specificRegistration"))
 	defer timer.ObserveDuration()
 
@@ -356,83 +368,17 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) {
-	slot, err := specificSlot(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad slot").Inc()
+	w.Header().Set("Content-Type", "application/json")
+
+	query, kind, err := validateProposerPayloadsDelivered(r)
+	if err != nil {
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad "+kind).Inc()
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(jsonError{
 			Code:    http.StatusBadRequest,
 			Message: err.Error(),
 		})
 		return
-	}
-
-	bh, err := blockHash(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad hash").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	bn, err := blockNumber(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad number").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	pk, err := publickKey(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad key").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	limit, err := limit(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad limit").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	if errors.Is(err, ErrParamNotFound) {
-		limit = DataLimit
-	}
-
-	cursor, err := cursor(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad cursor").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	query := structs.PayloadTraceQuery{
-		Slot:      slot,
-		BlockHash: bh,
-		BlockNum:  bn,
-		Pubkey:    pk,
-		Cursor:    cursor,
-		Limit:     limit,
 	}
 
 	payloads, err := a.r.GetPayloadDelivered(r.Context(), query)
@@ -459,59 +405,17 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
-	slot, err := specificSlot(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad slot").Inc()
+	query, kind, err := validateBuilderBlocksReceived(r)
+	if err != nil {
+		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad "+kind).Inc()
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(jsonError{
 			Code:    http.StatusBadRequest,
 			Message: err.Error(),
 		})
 		return
-	}
-
-	bh, err := blockHash(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad hash").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	bn, err := blockNumber(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad number").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	limit, err := limit(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad limit").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		return
-	}
-	if errors.Is(err, ErrParamNotFound) {
-		limit = DataLimit
-	}
-
-	query := structs.HeaderTraceQuery{
-		Slot:      slot,
-		BlockHash: bh,
-		BlockNum:  bn,
-		Limit:     limit,
 	}
 
 	blocks, err := a.r.GetBlockReceived(r.Context(), query)
@@ -535,11 +439,86 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200", "").Inc()
-
 }
 
-func isInvalidParameter(err error) bool {
-	return err != nil && !errors.Is(err, ErrParamNotFound)
+func validateBuilderBlocksReceived(r *http.Request) (query structs.HeaderTraceQuery, kind string, err error) {
+
+	slot, err := specificSlot(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "slot", err
+	}
+
+	bh, err := blockHash(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "hash", err
+	}
+
+	bn, err := blockNumber(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "number", err
+	}
+
+	limit, err := limit(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "limit", err
+	}
+
+	if errors.Is(err, ErrParamNotFound) {
+		limit = DataLimit
+	}
+
+	return structs.HeaderTraceQuery{
+		Slot:      slot,
+		BlockHash: bh,
+		BlockNum:  bn,
+		Limit:     limit,
+	}, "", nil
+}
+
+func validateProposerPayloadsDelivered(r *http.Request) (query structs.PayloadTraceQuery, kind string, err error) {
+
+	slot, err := specificSlot(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "slot", err
+	}
+
+	bh, err := blockHash(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "hash", err
+	}
+
+	bn, err := blockNumber(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "number", err
+	}
+
+	pk, err := publickKey(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "key", err
+	}
+
+	limit, err := limit(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "limit", err
+	}
+
+	if errors.Is(err, ErrParamNotFound) {
+		limit = DataLimit
+	}
+
+	cursor, err := cursor(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "cursor", err
+	}
+
+	return structs.PayloadTraceQuery{
+		Slot:      slot,
+		BlockHash: bh,
+		BlockNum:  bn,
+		Pubkey:    pk,
+		Cursor:    cursor,
+		Limit:     limit,
+	}, "", nil
 }
 
 func specificSlot(r *http.Request) (structs.Slot, error) {

@@ -24,7 +24,6 @@ func withAddons(l log.Logger) mux.MiddlewareFunc {
 				}
 			}()
 
-			w.Header().Set("Content-Type", "application/json")
 			next.ServeHTTP(w, r)
 		})
 	}
