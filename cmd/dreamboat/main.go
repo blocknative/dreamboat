@@ -202,10 +202,22 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_FAST_BOOT"},
 	},
 	&cli.StringFlag{
-		Name:    "allow-listed-builder",
+		Name:    "relay-allow-listed-builder",
 		Usage:   "comma separated list of allowed builder pubkeys",
 		Value:   "",
-		EnvVars: []string{"ALLOW_LISTED_BUILDER"},
+		EnvVars: []string{"RELAY_ALLOW_LISTED_BUILDER"},
+	},
+	&cli.DurationFlag{
+		Name:    "relay-submission-limit-rate",
+		Usage:   "bundle submission limit rate",
+		Value:   time.Millisecond * 500,
+		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_RATE"},
+	},
+	&cli.IntFlag{
+		Name:    "relay-submission-limit-burst",
+		Usage:   "bundle submission limit burst",
+		Value:   50,
+		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_BURST"},
 	},
 }
 
@@ -388,7 +400,7 @@ func run() cli.ActionFunc {
 		r.AttachMetrics(m)
 
 		var allowed map[[48]byte]struct{}
-		albString := c.String("allow-listed-builder")
+		albString := c.String("relay-allow-listed-builder")
 		if albString != "" {
 			allowed = make(map[[48]byte]struct{})
 			for _, k := range strings.Split(albString, ",") {
@@ -400,7 +412,7 @@ func run() cli.ActionFunc {
 				allowed[pk] = struct{}{}
 			}
 		}
-		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(time.Second, 50, allowed))
+		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Duration("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",
