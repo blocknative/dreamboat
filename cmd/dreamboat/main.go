@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"time"
@@ -200,6 +201,12 @@ var flags = []cli.Flag{
 		Value:   false,
 		EnvVars: []string{"RELAY_FAST_BOOT"},
 	},
+	&cli.StringFlag{
+		Name:    "allow-listed-builder",
+		Usage:   "comma separated list of allowed builder pubkeys",
+		Value:   "",
+		EnvVars: []string{"ALLOW_LISTED_BUILDER"},
+	},
 }
 
 var (
@@ -380,7 +387,20 @@ func run() cli.ActionFunc {
 		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer)
 		r.AttachMetrics(m)
 
-		a := api.NewApi(config.Log, r, validatorRelay)
+		var allowed map[[48]byte]struct{}
+		albString := c.String("allow-listed-builder")
+		if albString != "" {
+			allowed = make(map[[48]byte]struct{})
+			for _, k := range strings.Split(albString, ",") {
+				var pk types.PublicKey
+				if err := pk.UnmarshalText([]byte(k)); err != nil {
+					config.Log.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
+					continue
+				}
+				allowed[pk] = struct{}{}
+			}
+		}
+		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",

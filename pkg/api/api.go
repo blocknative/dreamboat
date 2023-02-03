@@ -68,16 +68,22 @@ type Registrations interface {
 	GetValidators(*structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
 }
 
+type RateLimitter interface {
+	Allow(ctx context.Context, pubkey [48]byte) error
+}
+
 type API struct {
 	l   log.Logger
 	r   Relay
 	reg Registrations
 
+	lim RateLimitter
+
 	m APIMetrics
 }
 
-func NewApi(l log.Logger, r Relay, reg Registrations) (a *API) {
-	a = &API{l: l, r: r, reg: reg}
+func NewApi(l log.Logger, r Relay, reg Registrations, lim RateLimitter) (a *API) {
+	a = &API{l: l, r: r, reg: reg, lim: lim}
 	a.initMetrics()
 	return a
 }
@@ -263,6 +269,20 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			Code:    http.StatusBadRequest,
 			Message: "invalid payload",
 		})
+		return
+	}
+
+	if req.Message == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(jsonError{
+			Code:    http.StatusBadRequest,
+			Message: "invalid payload",
+		})
+		return
+	}
+
+	if err := a.lim.Allow(r.Context(), req.Message.BuilderPubkey); err != nil {
+		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
 
