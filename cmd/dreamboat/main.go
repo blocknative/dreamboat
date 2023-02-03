@@ -400,7 +400,7 @@ func run() cli.ActionFunc {
 				allowed[pk] = struct{}{}
 			}
 		}
-		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(allowed))
+		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(time.Second, 50, allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",

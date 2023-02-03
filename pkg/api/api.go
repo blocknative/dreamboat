@@ -282,6 +282,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.lim.Allow(r.Context(), req.Message.BuilderPubkey); err != nil {
+		a.m.ApiReqCounter.WithLabelValues("submitBlock", "429", "rate limitted").Inc()
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
