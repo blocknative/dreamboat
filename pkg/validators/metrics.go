@@ -51,21 +51,14 @@ func (rm *StoreManager) AttachMetrics(m *metrics.Metrics) {
 }
 
 type RegisterMetrics struct {
-	Timing                 *prometheus.HistogramVec
 	RegistrationsCacheHits *prometheus.CounterVec
 }
 
 func (r *Register) initMetrics() {
-	r.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "dreamboat",
-		Subsystem: "relay",
-		Name:      "timing",
-		Help:      "Duration of requests per function",
-	}, []string{"function", "type"})
 
 	r.m.RegistrationsCacheHits = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
-		Subsystem: "relayprocess",
+		Subsystem: "validators",
 		Name:      "registrationCache",
 		Help:      "cache hit/miss",
 	}, []string{"result"})
@@ -73,6 +66,5 @@ func (r *Register) initMetrics() {
 }
 
 func (r *Register) AttachMetrics(m *metrics.Metrics) {
-	m.Register(r.m.Timing)
 	m.Register(r.m.RegistrationsCacheHits)
 }
