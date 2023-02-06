@@ -58,14 +58,14 @@ type RegisterMetrics struct {
 func (r *Register) initMetrics() {
 	r.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "dreamboat",
-		Subsystem: "relay",
+		Subsystem: "validators",
 		Name:      "timing",
 		Help:      "Duration of requests per function",
 	}, []string{"function", "type"})
 
 	r.m.RegistrationsCacheHits = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
-		Subsystem: "relayprocess",
+		Subsystem: "validators",
 		Name:      "registrationCache",
 		Help:      "cache hit/miss",
 	}, []string{"result"})
