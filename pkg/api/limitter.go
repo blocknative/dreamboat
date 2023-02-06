@@ -9,6 +9,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const LimitterCacheSize = 100
+
 var ErrTooManyCalls = errors.New("too many calls")
 
 type Limitter struct {
@@ -19,7 +21,7 @@ type Limitter struct {
 }
 
 func NewLimitter(ratel time.Duration, burst int, ab map[[48]byte]struct{}) *Limitter {
-	c, _ := lru.New[[48]byte, *rate.Limiter](100)
+	c, _ := lru.New[[48]byte, *rate.Limiter](LimitterCacheSize)
 	return &Limitter{
 		AllowedBuilders: ab,
 		c:               c,
