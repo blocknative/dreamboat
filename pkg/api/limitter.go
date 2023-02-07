@@ -25,7 +25,7 @@ func NewLimitter(ratel time.Duration, burst int, ab map[[48]byte]struct{}) *Limi
 	return &Limitter{
 		AllowedBuilders: ab,
 		c:               c,
-		RateLimit:       rate.Every(ratel),
+		RateLimit:       rate.Every(ratel / time.Duration(burst)),
 		Burst:           burst,
 	}
 }
