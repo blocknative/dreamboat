@@ -122,11 +122,8 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 	payload := []types.SignedValidatorRegistration{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "input decoding").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: "invalid payload",
-		})
+
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 		return
 	}
 
@@ -145,11 +142,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 			"payload":  payload,
 		}).WithError(err).Debug("failed registerValidator")
 
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -179,11 +172,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 			"proposer": proposer,
 		}).WithError(err).Debug("failed getHeader")
 
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -192,6 +181,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 	if err = json.NewEncoder(w).Encode(response); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "500", "response encode").Inc()
+		// we don't write response as encoder already crashed
 		return
 	}
 
@@ -207,11 +197,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	var req types.SignedBlindedBeaconBlock
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: "invalid payload",
-		})
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 		return
 	}
 
@@ -227,12 +213,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			"slot":      req.Message.Slot,
 			"blockHash": req.Message.Body.Eth1Data.BlockHash,
 		}).WithError(err).Debug("failed getPayload")
-
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -241,6 +222,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "500", "encode response").Inc()
+		// we don't write response as encoder already crashed
 		return
 	}
 
@@ -257,12 +239,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	var req types.BuilderSubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: "invalid payload",
-		})
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 		return
 	}
 
@@ -289,11 +266,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			}).WithError(err).Debug("failed block submission")
 		}
 
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -322,6 +295,7 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewEncoder(w).Encode(vs); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getValidators", "500", "response encode").Inc()
+		// we don't write response as encoder already crashed
 		return
 	}
 
@@ -340,27 +314,20 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) {
 	var pk types.PublicKey
 	if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "400", "unmarshaling pk").Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	registration, err := a.reg.Registration(r.Context(), pk)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "registration").Inc()
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	if err := json.NewEncoder(w).Encode(registration); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "encode response").Inc()
+		// we don't write response as encoder already crashed
 		return
 	}
 
@@ -373,22 +340,14 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 	query, kind, err := validateProposerPayloadsDelivered(r)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad "+kind).Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	payloads, err := a.r.GetPayloadDelivered(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -398,6 +357,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 
 	if err := json.NewEncoder(w).Encode(payloads); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "encode response").Inc()
+		// we don't write response as encoder already crashed
 		return
 	}
 
@@ -410,22 +370,14 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 	query, kind, err := validateBuilderBlocksReceived(r)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad "+kind).Inc()
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	blocks, err := a.r.GetBlockReceived(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(jsonError{
-			Code:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -435,10 +387,19 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewEncoder(w).Encode(blocks); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "encode response").Inc()
+		// we don't write response as encoder already crashed
 		return
 	}
 
 	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200", "").Inc()
+}
+
+func writeError(w http.ResponseWriter, code int, err error) {
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(jsonError{
+		Code:    code,
+		Message: err.Error(),
+	})
 }
 
 func validateBuilderBlocksReceived(r *http.Request) (query structs.HeaderTraceQuery, kind string, err error) {
