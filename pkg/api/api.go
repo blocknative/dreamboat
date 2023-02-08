@@ -91,40 +91,21 @@ func (a *API) AttachToHandler(m *http.ServeMux) {
 
 	// proposer related
 	router.HandleFunc(PathStatus, status).Methods(http.MethodGet)
-	router.HandleFunc(PathRegisterValidator, handler(a.registerValidator)).Methods(http.MethodPost)
-	router.HandleFunc(PathGetHeader, handler(a.getHeader)).Methods(http.MethodGet)
-	router.HandleFunc(PathGetPayload, handler(a.getPayload)).Methods(http.MethodPost)
+	router.HandleFunc(PathRegisterValidator, a.registerValidator).Methods(http.MethodPost)
+	router.HandleFunc(PathGetHeader, a.getHeader).Methods(http.MethodGet)
+	router.HandleFunc(PathGetPayload, a.getPayload).Methods(http.MethodPost)
 
 	// builder related
-	router.HandleFunc(PathSubmitBlock, handler(a.submitBlock)).Methods(http.MethodPost)
-	router.HandleFunc(PathGetValidators, handler(a.getValidators)).Methods(http.MethodGet)
+	router.HandleFunc(PathSubmitBlock, a.submitBlock).Methods(http.MethodPost)
+	router.HandleFunc(PathGetValidators, a.getValidators).Methods(http.MethodGet)
 
 	// data API related
-	router.HandleFunc(PathProposerPayloadsDelivered, handler(a.proposerPayloadsDelivered)).Methods(http.MethodGet)
-	router.HandleFunc(PathBuilderBlocksReceived, handler(a.builderBlocksReceived)).Methods(http.MethodGet)
-	router.HandleFunc(PathSpecificRegistration, handler(a.specificRegistration)).Methods(http.MethodGet)
+	router.HandleFunc(PathProposerPayloadsDelivered, a.proposerPayloadsDelivered).Methods(http.MethodGet)
+	router.HandleFunc(PathBuilderBlocksReceived, a.builderBlocksReceived).Methods(http.MethodGet)
+	router.HandleFunc(PathSpecificRegistration, a.specificRegistration).Methods(http.MethodGet)
 
 	router.Use(mux.CORSMethodMiddleware(router))
 	m.Handle("/", router)
-}
-
-func handler(f func(http.ResponseWriter, *http.Request) (int, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		status, err := f(w, r)
-
-		if status == 0 || status == http.StatusOK {
-			status = http.StatusOK
-		}
-
-		w.WriteHeader(status)
-
-		if err != nil {
-			_ = json.NewEncoder(w).Encode(jsonError{
-				Code:    status,
-				Message: err.Error(),
-			})
-		}
-	}
 }
 
 func status(w http.ResponseWriter, r *http.Request) {
@@ -132,14 +113,18 @@ func status(w http.ResponseWriter, r *http.Request) {
 }
 
 // proposer related handlers
-func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status int, err error) {
+func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("registerValidator"))
 	defer timer.ObserveDuration()
 
 	payload := []types.SignedValidatorRegistration{}
-	if err = json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "input decoding").Inc()
-		return http.StatusBadRequest, errors.New("invalid payload")
+
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+		return
 	}
 
 	if payload != nil {
@@ -147,7 +132,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 	}
 
 	m := structs.NewMetricGroup(4)
-	if err = a.reg.RegisterValidator(r.Context(), m, payload); err != nil {
+	if err := a.reg.RegisterValidator(r.Context(), m, payload); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "register validator unknown"))
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
@@ -156,15 +141,18 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) (status 
 			"type":     "single",
 			"payload":  payload,
 		}).WithError(err).Debug("failed registerValidator")
-		return http.StatusBadRequest, err
+
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 
 	m.Observe(a.m.RelayTiming)
 	a.m.ApiReqCounter.WithLabelValues("registerValidator", "200", "").Inc()
-	return http.StatusOK, err
 }
 
-func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
+func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getHeader"))
 	defer timer.ObserveDuration()
 
@@ -183,7 +171,9 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 			"slot":     slot,
 			"proposer": proposer,
 		}).WithError(err).Debug("failed getHeader")
-		return http.StatusBadRequest, err
+
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 
 	m.Observe(a.m.RelayTiming)
@@ -191,21 +181,24 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) (int, error) {
 	if err = json.NewEncoder(w).Encode(response); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "500", "response encode").Inc()
-		return http.StatusInternalServerError, err
+		// we don't write response as encoder already crashed
+		return
 	}
 
 	a.m.ApiReqCounter.WithLabelValues("getHeader", "200", "").Inc()
-	return http.StatusOK, nil
 }
 
-func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
+func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
 	defer timer.ObserveDuration()
 
 	var req types.SignedBlindedBeaconBlock
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
-		return http.StatusBadRequest, errors.New("invalid payload")
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+		return
 	}
 
 	m := structs.NewMetricGroup(4)
@@ -220,7 +213,8 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 			"slot":      req.Message.Slot,
 			"blockHash": req.Message.Body.Eth1Data.BlockHash,
 		}).WithError(err).Debug("failed getPayload")
-		return http.StatusBadRequest, err
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 
 	m.Observe(a.m.RelayTiming)
@@ -228,22 +222,25 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) (int, error) {
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "500", "encode response").Inc()
-		return http.StatusInternalServerError, err
+		// we don't write response as encoder already crashed
+		return
 	}
 
 	a.m.ApiReqCounter.WithLabelValues("getPayload", "200", "").Inc()
-	return http.StatusOK, nil
 }
 
 // builder related handlers
-func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
+func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 
 	var req types.BuilderSubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-		return http.StatusBadRequest, errors.New("invalid payload")
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+		return
 	}
 
 	if req.ExecutionPayload != nil && req.ExecutionPayload.Transactions != nil {
@@ -268,15 +265,18 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) (int, error) {
 				"builder":   req.Message.BuilderPubkey,
 			}).WithError(err).Debug("failed block submission")
 		}
-		return http.StatusBadRequest, err
+
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 
 	m.Observe(a.m.RelayTiming)
 	a.m.ApiReqCounter.WithLabelValues("submitBlock", "200", "").Inc()
-	return http.StatusOK, nil
 }
 
-func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error) {
+func (a *API) getValidators(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getValidators"))
 	defer timer.ObserveDuration()
 
@@ -295,15 +295,17 @@ func (a *API) getValidators(w http.ResponseWriter, r *http.Request) (int, error)
 
 	if err := json.NewEncoder(w).Encode(vs); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getValidators", "500", "response encode").Inc()
-		return http.StatusInternalServerError, err
+		// we don't write response as encoder already crashed
+		return
 	}
 
 	a.m.ApiReqCounter.WithLabelValues("getValidators", "200", "").Inc()
-	return http.StatusOK, nil
 }
 
 // data API related handlers
-func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) (int, error) {
+func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("specificRegistration"))
 	defer timer.ObserveDuration()
 
@@ -312,76 +314,41 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) (int,
 	var pk types.PublicKey
 	if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "400", "unmarshaling pk").Inc()
-		return http.StatusBadRequest, err
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 
 	registration, err := a.reg.Registration(r.Context(), pk)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "registration").Inc()
-		return http.StatusInternalServerError, err
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	if err := json.NewEncoder(w).Encode(registration); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "500", "encode response").Inc()
-		return http.StatusInternalServerError, err
+		// we don't write response as encoder already crashed
+		return
 	}
 
 	a.m.ApiReqCounter.WithLabelValues("specificRegistration", "200", "").Inc()
-	return http.StatusOK, nil
 }
 
-func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) (int, error) {
-	slot, err := specificSlot(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad slot").Inc()
-		return http.StatusBadRequest, err
-	}
+func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
-	bh, err := blockHash(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad hash").Inc()
-		return http.StatusBadRequest, err
-	}
-
-	bn, err := blockNumber(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad number").Inc()
-		return http.StatusBadRequest, err
-	}
-
-	pk, err := publickKey(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad key").Inc()
-		return http.StatusBadRequest, err
-	}
-
-	limit, err := limit(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad limit").Inc()
-		return http.StatusBadRequest, err
-	} else if errors.Is(err, ErrParamNotFound) {
-		limit = DataLimit
-	}
-
-	cursor, err := cursor(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad cursor").Inc()
-		return http.StatusBadRequest, err
-	}
-
-	query := structs.PayloadTraceQuery{
-		Slot:      slot,
-		BlockHash: bh,
-		BlockNum:  bn,
-		Pubkey:    pk,
-		Cursor:    cursor,
-		Limit:     limit,
+	query, kind, err := validateProposerPayloadsDelivered(r)
+	if err != nil {
+		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad "+kind).Inc()
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 
 	payloads, err := a.r.GetPayloadDelivered(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
-		return http.StatusInternalServerError, err
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	if payloads != nil {
@@ -390,52 +357,28 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 
 	if err := json.NewEncoder(w).Encode(payloads); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "encode response").Inc()
-		return http.StatusInternalServerError, err
+		// we don't write response as encoder already crashed
+		return
 	}
 
 	a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "200", "").Inc()
-	return http.StatusOK, nil
 }
 
-func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int, error) {
+func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
-	slot, err := specificSlot(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad slot").Inc()
-		return http.StatusBadRequest, err
-	}
-
-	bh, err := blockHash(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad hash").Inc()
-		return http.StatusBadRequest, err
-	}
-
-	bn, err := blockNumber(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad number").Inc()
-		return http.StatusBadRequest, err
-	}
-
-	limit, err := limit(r)
-	if isInvalidParameter(err) {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad limit").Inc()
-		return http.StatusBadRequest, err
-	} else if errors.Is(err, ErrParamNotFound) {
-		limit = DataLimit
-	}
-
-	query := structs.HeaderTraceQuery{
-		Slot:      slot,
-		BlockHash: bh,
-		BlockNum:  bn,
-		Limit:     limit,
+	query, kind, err := validateBuilderBlocksReceived(r)
+	if err != nil {
+		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad "+kind).Inc()
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 
 	blocks, err := a.r.GetBlockReceived(r.Context(), query)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
-		return http.StatusInternalServerError, err
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	if blocks != nil {
@@ -444,15 +387,99 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) (int
 
 	if err := json.NewEncoder(w).Encode(blocks); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "encode response").Inc()
-		return http.StatusInternalServerError, err
+		// we don't write response as encoder already crashed
+		return
 	}
 
 	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200", "").Inc()
-	return http.StatusOK, nil
 }
 
-func isInvalidParameter(err error) bool {
-	return err != nil && !errors.Is(err, ErrParamNotFound)
+func writeError(w http.ResponseWriter, code int, err error) {
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(jsonError{
+		Code:    code,
+		Message: err.Error(),
+	})
+}
+
+func validateBuilderBlocksReceived(r *http.Request) (query structs.HeaderTraceQuery, kind string, err error) {
+
+	slot, err := specificSlot(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "slot", err
+	}
+
+	bh, err := blockHash(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "hash", err
+	}
+
+	bn, err := blockNumber(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "number", err
+	}
+
+	limit, err := limit(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "limit", err
+	}
+
+	if errors.Is(err, ErrParamNotFound) {
+		limit = DataLimit
+	}
+
+	return structs.HeaderTraceQuery{
+		Slot:      slot,
+		BlockHash: bh,
+		BlockNum:  bn,
+		Limit:     limit,
+	}, "", nil
+}
+
+func validateProposerPayloadsDelivered(r *http.Request) (query structs.PayloadTraceQuery, kind string, err error) {
+
+	slot, err := specificSlot(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "slot", err
+	}
+
+	bh, err := blockHash(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "hash", err
+	}
+
+	bn, err := blockNumber(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "number", err
+	}
+
+	pk, err := publickKey(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "key", err
+	}
+
+	limit, err := limit(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "limit", err
+	}
+
+	if errors.Is(err, ErrParamNotFound) {
+		limit = DataLimit
+	}
+
+	cursor, err := cursor(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "cursor", err
+	}
+
+	return structs.PayloadTraceQuery{
+		Slot:      slot,
+		BlockHash: bh,
+		BlockNum:  bn,
+		Pubkey:    pk,
+		Cursor:    cursor,
+		Limit:     limit,
+	}, "", nil
 }
 
 func specificSlot(r *http.Request) (structs.Slot, error) {
