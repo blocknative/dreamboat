@@ -68,16 +68,22 @@ type Registrations interface {
 	GetValidators(*structs.MetricGroup) structs.BuilderGetValidatorsResponseEntrySlice
 }
 
+type RateLimitter interface {
+	Allow(ctx context.Context, pubkey [48]byte) error
+}
+
 type API struct {
 	l   log.Logger
 	r   Relay
 	reg Registrations
 
+	lim RateLimitter
+
 	m APIMetrics
 }
 
-func NewApi(l log.Logger, r Relay, reg Registrations) (a *API) {
-	a = &API{l: l, r: r, reg: reg}
+func NewApi(l log.Logger, r Relay, reg Registrations, lim RateLimitter) (a *API) {
+	a = &API{l: l, r: r, reg: reg, lim: lim}
 	a.initMetrics()
 	return a
 }
@@ -121,8 +127,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 
 	payload := []types.SignedValidatorRegistration{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "input decoding").Inc()
-
+		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "input decoding").Inc() 
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 		return
 	}
@@ -141,7 +146,6 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 			"type":     "single",
 			"payload":  payload,
 		}).WithError(err).Debug("failed registerValidator")
-
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -171,7 +175,6 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 			"slot":     slot,
 			"proposer": proposer,
 		}).WithError(err).Debug("failed getHeader")
-
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -243,6 +246,17 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Message == nil {
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+		return
+	}
+
+	if err := a.lim.Allow(r.Context(), req.Message.BuilderPubkey); err != nil {
+		a.m.ApiReqCounter.WithLabelValues("submitBlock", "429", "rate limitted").Inc()
+		w.WriteHeader(http.StatusTooManyRequests)
+		return
+	}
+
 	if req.ExecutionPayload != nil && req.ExecutionPayload.Transactions != nil {
 		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload.Transactions)))
 	}
@@ -265,7 +279,6 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 				"builder":   req.Message.BuilderPubkey,
 			}).WithError(err).Debug("failed block submission")
 		}
-
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
