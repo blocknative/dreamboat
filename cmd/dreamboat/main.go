@@ -207,16 +207,16 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"RELAY_ALLOW_LISTED_BUILDER"},
 	},
-	&cli.DurationFlag{
+	&cli.IntFlag{
 		Name:    "relay-submission-limit-rate",
-		Usage:   "bundle submission limit rate",
-		Value:   time.Second,
+		Usage:   "bundle submission limit rate per second",
+		Value:   2,
 		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_RATE"},
 	},
 	&cli.IntFlag{
 		Name:    "relay-submission-limit-burst",
 		Usage:   "bundle submission limit burst",
-		Value:   150,
+		Value:   2,
 		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_BURST"},
 	},
 }
@@ -412,7 +412,7 @@ func run() cli.ActionFunc {
 				allowed[pk] = struct{}{}
 			}
 		}
-		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Duration("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
+		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",

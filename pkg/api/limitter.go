@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/time/rate"
@@ -20,12 +19,12 @@ type Limitter struct {
 	Burst           int
 }
 
-func NewLimitter(ratel time.Duration, burst int, ab map[[48]byte]struct{}) *Limitter {
+func NewLimitter(ratel int, burst int, ab map[[48]byte]struct{}) *Limitter {
 	c, _ := lru.New[[48]byte, *rate.Limiter](LimitterCacheSize)
 	return &Limitter{
 		AllowedBuilders: ab,
 		c:               c,
-		RateLimit:       rate.Every(ratel / time.Duration(burst)),
+		RateLimit:       rate.Limit(ratel),
 		Burst:           burst,
 	}
 }
