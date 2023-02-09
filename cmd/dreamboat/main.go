@@ -209,13 +209,13 @@ var flags = []cli.Flag{
 	},
 	&cli.IntFlag{
 		Name:    "relay-submission-limit-rate",
-		Usage:   "bundle submission limit rate per second",
+		Usage:   "submission request limit - rate per second",
 		Value:   2,
 		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_RATE"},
 	},
 	&cli.IntFlag{
 		Name:    "relay-submission-limit-burst",
-		Usage:   "bundle submission limit burst",
+		Usage:   "submission request limit - burst",
 		Value:   2,
 		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_BURST"},
 	},
