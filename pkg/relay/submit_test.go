@@ -57,6 +57,7 @@ func TestSubmitBlock(t *testing.T) {
 	config := relay.RelayConfig{
 		TTL:                  time.Minute,
 		SecretKey:            sk,
+		RegistrationCacheTTL: time.Minute,
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
@@ -72,6 +73,8 @@ func TestSubmitBlock(t *testing.T) {
 
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 
+	bVCli := mocks.NewMockBlockValidationClient(ctrl)
+	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
@@ -82,7 +85,7 @@ func TestSubmitBlock(t *testing.T) {
 			}},
 	}, true)
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequest)
 	require.NoError(t, err)
@@ -127,6 +130,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 
 	config := relay.RelayConfig{
 		TTL:                  5 * time.Minute,
+		RegistrationCacheTTL: time.Minute,
 		SecretKey:            pk, // pragma: allowlist secret
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
@@ -136,6 +140,8 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
+	bVCli := mocks.NewMockBlockValidationClient(ctrl)
+	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
@@ -147,7 +153,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -187,6 +193,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	pk, _, _ := bls.GenerateNewKeypair()
 	config := relay.RelayConfig{
 		TTL:                  5 * time.Minute,
+		RegistrationCacheTTL: time.Minute,
 		SecretKey:            pk, // pragma: allowlist secret
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
@@ -196,6 +203,8 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
+	bVCli := mocks.NewMockBlockValidationClient(ctrl)
+	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
@@ -207,7 +216,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -242,6 +251,8 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 
 	l := log.New()
 
+	bVCli := mocks.NewMockBlockValidationClient(ctrl)
+	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
@@ -253,12 +264,13 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 
 	config := relay.RelayConfig{
 		TTL:                  5 * time.Minute,
+		RegistrationCacheTTL: time.Minute,
 		SecretKey:            sk, // pragma: allowlist secret
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -298,6 +310,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 
 	config := relay.RelayConfig{
 		TTL:                  5 * time.Minute,
+		RegistrationCacheTTL: time.Minute,
 		SecretKey:            sk, // pragma: allowlist secret
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
@@ -306,6 +319,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	proposerPubkey := types.PublicKey(random48Bytes())
 	proposerFeeRecipient := types.Address(random20Bytes())
 
+	bVCli := mocks.NewMockBlockValidationClient(ctrl)
+	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(2)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{
@@ -317,7 +332,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	// generate and send 1st block
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
@@ -431,6 +446,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 
 	config := relay.RelayConfig{
 		TTL:                  5 * time.Minute,
+		RegistrationCacheTTL: time.Minute,
 		SecretKey:            sk, // pragma: allowlist secret
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
@@ -439,6 +455,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	proposerPubkey := types.PublicKey(random48Bytes())
 	proposerFeeRecipient := types.Address(random20Bytes())
 
+	bVCli := mocks.NewMockBlockValidationClient(ctrl)
+	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(2)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{
@@ -450,7 +468,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
@@ -567,6 +585,7 @@ func TestRegistartionCache(t *testing.T) {
 
 	config := relay.RelayConfig{
 		TTL:                  5 * time.Minute,
+		RegistrationCacheTTL: time.Minute,
 		SecretKey:            sk, // pragma: allowlist secret
 		PubKey:               types.PublicKey(random48Bytes()),
 		BuilderSigningDomain: relaySigningDomain,
@@ -582,6 +601,8 @@ func TestRegistartionCache(t *testing.T) {
 			},
 		},
 	}
+	bVCli := mocks.NewMockBlockValidationClient(ctrl)
+	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{}, false)
@@ -595,7 +616,7 @@ func TestRegistartionCache(t *testing.T) {
 		},
 	}, nil)
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)

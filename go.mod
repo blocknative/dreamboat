@@ -79,6 +79,7 @@ require (
 require (
 	github.com/flashbots/go-boost-utils v1.2.2
 	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/websocket v1.5.0
 	github.com/r3labs/sse/v2 v2.8.1
 	golang.org/x/sys v0.1.0 // indirect
 )

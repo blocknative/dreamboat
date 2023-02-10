@@ -115,6 +115,7 @@ func (a *API) AttachToHandler(m *http.ServeMux) {
 }
 
 func status(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -127,7 +128,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 
 	payload := []types.SignedValidatorRegistration{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "input decoding").Inc() 
+		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "input decoding").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 		return
 	}

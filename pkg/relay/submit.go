@@ -31,7 +31,18 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 		"bid":       submitBlockRequest.Message.Value.String(),
 	})
 
-	_, err := verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
+	b, _ := json.Marshal([]*types.BuilderSubmitBlockRequest{submitBlockRequest})
+	resp, err := rs.bvc.ValidateBlock(ctx, b)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
+	}
+	if resp.Error != nil {
+		return fmt.Errorf("%w: %s", ErrVerification, resp.Error.Message) // TODO: multiple err wrapping in Go 1.20
+	}
+
+	rs.l.With(log.F{"resp": resp}).Debug("d")
+
+	_, err = verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}

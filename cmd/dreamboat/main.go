@@ -17,6 +17,9 @@ import (
 	pkg "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/blocknative/dreamboat/pkg/auction"
+	"github.com/blocknative/dreamboat/pkg/client/sim/fallback"
+	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethhttp"
+	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethws"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -219,6 +222,18 @@ var flags = []cli.Flag{
 		Value:   2,
 		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_BURST"},
 	},
+	&cli.StringFlag{
+		Name:    "block-validation-endpoint-http",
+		Usage:   "http block validation endpoint address",
+		Value:   "",
+		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_HTTP"},
+	},
+	&cli.StringFlag{
+		Name:    "block-validation-endpoint-ws",
+		Usage:   "http block validation endpoint address",
+		Value:   "",
+		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_WS"},
+	},
 }
 
 var (
@@ -354,6 +369,14 @@ func run() cli.ActionFunc {
 		}
 		beacon.AttachMetrics(m)
 
+		// SIM Client
+		input := make(chan []byte, 1000)
+		simWSConn := gethws.NewReConn(logger)
+		go simWSConn.KeepConnection(c.String("block-validation-endpoint-ws"), input)
+		simWSCli := gethws.NewClient(simWSConn, "eth", logger)
+		simHTTPCli := gethhttp.NewClient(c.String("block-validation-endpoint-http"), "eth", logger)
+		simFallb := fallback.NewFallback(simWSCli, simHTTPCli)
+
 		verificator := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
 		verificator.RunVerify(c.Uint("relay-workers-verify"))
 
@@ -396,7 +419,7 @@ func run() cli.ActionFunc {
 			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
 			TTL:                   config.TTL,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer)
+		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
 		var allowed map[[48]byte]struct{}
