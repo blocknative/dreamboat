@@ -186,7 +186,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	header := maxProfitBlock.Header
 
 	if header.Header == nil || (header.Header.ParentHash != parentHash) {
-		logger.Debug(ErrBadHeader.Error())
+		if header.Header.ParentHash != parentHash {
+			logger.WithField("expected", parentHash).WithField("got", parentHash).Debug("invalid parentHash")
+		}
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
