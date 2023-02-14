@@ -5,7 +5,6 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/ethereum/go-ethereum/rpc"
-	fbtypes "github.com/flashbots/go-boost-utils/types"
 )
 
 type Client struct {
@@ -26,7 +25,7 @@ func (c *Client) Dial(ctx context.Context) (err error) {
 	return err
 }
 
-func (c *Client) ValidateBlock(ctx context.Context, block *fbtypes.BuilderSubmitBlockRequest) (rrr types.RpcRawResponse, err error) {
+func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (rrr types.RpcRawResponse, err error) {
 	var intI error
 	if err := c.C.CallContext(ctx, &intI, c.namespace+"_validateBuilderSubmissionV1", block); err != nil {
 		return rrr, err

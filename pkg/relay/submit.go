@@ -12,6 +12,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
@@ -30,10 +31,11 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 		"proposer":  submitBlockRequest.Message.ProposerPubkey,
 		"bid":       submitBlockRequest.Message.Value.String(),
 	})
-	//b, _ := json.Marshal([]*types.BuilderSubmitBlockRequest{submitBlockRequest})
-	//resp, err := rs.bvc.ValidateBlock(ctx, b)
 
-	resp, err := rs.bvc.ValidateBlock(ctx, submitBlockRequest)
+	resp, err := rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
+		BuilderSubmitBlockRequest: *submitBlockRequest,
+		RegisteredGasLimit:        10000000000,
+	})
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}

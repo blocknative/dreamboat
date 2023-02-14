@@ -395,7 +395,7 @@ func (m *MockBlockValidationClient) EXPECT() *MockBlockValidationClientMockRecor
 }
 
 // ValidateBlock mocks base method.
-func (m *MockBlockValidationClient) ValidateBlock(arg0 context.Context, arg1 *types0.BuilderSubmitBlockRequest) (types.RpcRawResponse, error) {
+func (m *MockBlockValidationClient) ValidateBlock(arg0 context.Context, arg1 *types.BuilderBlockValidationRequest) (types.RpcRawResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidateBlock", arg0, arg1)
 	ret0, _ := ret[0].(types.RpcRawResponse)

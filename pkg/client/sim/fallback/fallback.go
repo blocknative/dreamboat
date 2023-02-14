@@ -6,12 +6,10 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/client"
 	"github.com/blocknative/dreamboat/pkg/client/sim/types"
-
-	fbtypes "github.com/flashbots/go-boost-utils/types"
 )
 
 type Client interface {
-	ValidateBlock(ctx context.Context, block *fbtypes.BuilderSubmitBlockRequest) (rrr types.RpcRawResponse, err error)
+	ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (rrr types.RpcRawResponse, err error)
 }
 
 type Fallback struct {
@@ -30,7 +28,7 @@ func (f *Fallback) Len() int {
 	return len(f.clients)
 }
 
-func (f *Fallback) ValidateBlock(ctx context.Context, block *fbtypes.BuilderSubmitBlockRequest) (rrr types.RpcRawResponse, err error) {
+func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (rrr types.RpcRawResponse, err error) {
 	if len(f.clients) == 0 {
 		return rrr, client.ErrNotFound
 	}
