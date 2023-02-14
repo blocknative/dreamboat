@@ -380,9 +380,9 @@ func run() cli.ActionFunc {
 		// SIM Client
 		simFallb := fallback.NewFallback()
 		if simHttpAddr := c.String("block-validation-endpoint-rpc"); simHttpAddr != "" {
-			simRPCCli := gethrpc.NewClient(simHttpAddr, "flashbots")
+			simRPCCli := gethrpc.NewClient("flashbots", simHttpAddr)
 			if err := simRPCCli.Dial(c.Context); err != nil {
-				return fmt.Errorf("fail to initialize rpc connection: %w", err)
+				return fmt.Errorf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
 			}
 			simFallb.AddClient(simRPCCli)
 		}
