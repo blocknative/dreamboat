@@ -33,7 +33,7 @@ func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockVal
 		return rrr, client.ErrNotFound
 	}
 
-	params, err := json.Marshal(block)
+	params, err := json.Marshal([]*types.BuilderBlockValidationRequest{block})
 	if err != nil {
 		return rrr, err
 	}
