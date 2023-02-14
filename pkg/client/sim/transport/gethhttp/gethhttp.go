@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/blocknative/dreamboat/pkg/client/sim/types"
+	fbtypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 )
 
@@ -28,8 +28,19 @@ func NewClient(address string, namespace string, l log.Logger) *Client {
 	}
 }
 
-func (c *Client) ValidateBlock(ctx context.Context, params []byte) (rrr types.RpcRawResponse, err error) {
-	return justsend(ctx, c.client, c.address, io.MultiReader(strings.NewReader(`{"id": 1, "method": "`+c.namespace+`_validateBuilderSubmissionV1","params": `), bytes.NewReader(params), strings.NewReader(`}`)))
+func (c *Client) ValidateBlock(ctx context.Context, block *fbtypes.BuilderSubmitBlockRequest) (rrr types.RpcRawResponse, err error) {
+	buff := new(bytes.Buffer)
+	enc := json.NewEncoder(buff)
+	if err := enc.Encode(
+		types.RpcRequest{
+			ID:     1,
+			Method: c.namespace + "_validateBuilderSubmissionV1",
+			Params: []interface{}{block},
+		}); err != nil {
+		return rrr, err
+	}
+
+	return justsend(ctx, c.client, c.address, buff)
 }
 
 func justsend(ctx context.Context, client *http.Client, url string, body io.Reader) (rrr types.RpcRawResponse, err error) {

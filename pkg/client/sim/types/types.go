@@ -9,6 +9,13 @@ type RpcRawResponse struct {
 	ID         uint64          `json:"id"`
 }
 
+type RpcRequest struct {
+	VersionTag string        `json:"jsonrpc"`
+	ID         uint64        `json:"id"`
+	Method     string        `json:"method"`
+	Params     []interface{} `json:"params"`
+}
+
 type RpcError struct {
 	Code    int64  `json:"code"`
 	Message string `json:"message"`

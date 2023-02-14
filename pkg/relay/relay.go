@@ -38,7 +38,8 @@ var (
 )
 
 type BlockValidationClient interface {
-	ValidateBlock(ctx context.Context, params []byte) (rrr rpctypes.RpcRawResponse, err error)
+	//ValidateBlock(ctx context.Context, params []byte) (rrr rpctypes.RpcRawResponse, err error)
+	ValidateBlock(ctx context.Context, block *types.BuilderSubmitBlockRequest) (rrr rpctypes.RpcRawResponse, err error)
 }
 
 type ValidatorStore interface {
