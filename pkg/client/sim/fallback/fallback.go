@@ -45,7 +45,7 @@ func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockV
 			return
 		}
 
-		if !(errors.Is(err, client.ErrNotFound) && errors.Is(err, client.ErrConnectionFailure)) {
+		if !(errors.Is(err, client.ErrNotFound) || errors.Is(err, client.ErrConnectionFailure)) {
 			f.m.ServedFrom.WithLabelValues(c.Kind(), "error").Inc()
 			return err
 		}
