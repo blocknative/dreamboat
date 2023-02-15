@@ -441,16 +441,6 @@ func run() cli.ActionFunc {
 		service := pkg.NewService(config.Log, config, state)
 
 		auctioneer := auction.NewAuctioneer()
-		r := relay.NewRelay(config.Log, relay.RelayConfig{
-			BuilderSigningDomain:  domainBuilder,
-			ProposerSigningDomain: domainBeaconProposer,
-			PubKey:                config.PubKey,
-			SecretKey:             config.SecretKey,
-			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
-			TTL:                   config.TTL,
-			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
-		r.AttachMetrics(m)
 
 		var allowed map[[48]byte]struct{}
 		albString := c.String("relay-allow-listed-builder")
@@ -465,6 +455,19 @@ func run() cli.ActionFunc {
 				allowed[pk] = struct{}{}
 			}
 		}
+
+		r := relay.NewRelay(config.Log, relay.RelayConfig{
+			BuilderSigningDomain:  domainBuilder,
+			ProposerSigningDomain: domainBeaconProposer,
+			PubKey:                config.PubKey,
+			SecretKey:             config.SecretKey,
+			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
+			TTL:                   config.TTL,
+			AllowedListedBuilders: allowed,
+			PublishBlock:          c.Bool("relay-publish-block"),
+		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
+		r.AttachMetrics(m)
+
 		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{

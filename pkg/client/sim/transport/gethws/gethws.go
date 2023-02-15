@@ -151,8 +151,8 @@ func (conn *Conn) writeHandler() {
 	conn.lastRead = time.Now()
 	for {
 		select {
-		case t := <-conn.input:
-			err := conn.c.WriteMessage(websocket.TextMessage, t)
+		case in := <-conn.input:
+			err := conn.c.WriteMessage(websocket.TextMessage, in)
 			if err != nil {
 				conn.l.WithError(err).Warn("error writing from ws")
 				return

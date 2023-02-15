@@ -94,6 +94,8 @@ type RelayConfig struct {
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
 
+	AllowedListedBuilders map[[48]byte]struct{}
+
 	PublishBlock bool
 
 	TTL time.Duration

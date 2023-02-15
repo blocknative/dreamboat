@@ -103,9 +103,14 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error
 }
 
 func (rs *Relay) validateBlock(ctx context.Context, submitBlockRequest types.BuilderSubmitBlockRequest) (err error) {
+	if rs.config.AllowedListedBuilders != nil && submitBlockRequest.Message != nil {
+		if _, ok := rs.config.AllowedListedBuilders[submitBlockRequest.Message.BuilderPubkey]; ok {
+			return nil
+		}
+	}
+
 	err = rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
 		BuilderSubmitBlockRequest: submitBlockRequest,
-		// RegisteredGasLimit:        10000000000,
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
