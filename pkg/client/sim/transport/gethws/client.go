@@ -45,7 +45,7 @@ func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockVal
 
 	resp, err := conn.RequestRPC(ctx, c.namespace+"_validateBuilderSubmissionV1", params)
 	if err != nil {
-		return err
+		return client.ErrConnectionFailure //err
 	}
 	if resp.Error != nil && resp.Error.Message != "" {
 		return errors.New(resp.Error.Message)
