@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -27,7 +28,11 @@ func NewClient(address string, namespace string, l log.Logger) *Client {
 	}
 }
 
-func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (rrr types.RpcRawResponse, err error) {
+func (c *Client) Kind() string {
+	return "http"
+}
+
+func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
 	buff := new(bytes.Buffer)
 	enc := json.NewEncoder(buff)
 	if err := enc.Encode(
@@ -36,10 +41,17 @@ func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockVal
 			Method: c.namespace + "_validateBuilderSubmissionV1",
 			Params: []interface{}{block},
 		}); err != nil {
-		return rrr, err
+		return err
 	}
 
-	return justsend(ctx, c.client, c.address, buff)
+	resp, err := justsend(ctx, c.client, c.address, buff)
+	if err != nil {
+		return err
+	}
+	if resp.Error != nil && resp.Error.Message != "" {
+		return errors.New(resp.Error.Message)
+	}
+	return nil
 }
 
 func justsend(ctx context.Context, client *http.Client, url string, body io.Reader) (rrr types.RpcRawResponse, err error) {

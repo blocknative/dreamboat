@@ -232,7 +232,7 @@ var flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:    "block-validation-endpoint-ws",
-		Usage:   "http block validation endpoint address",
+		Usage:   "ws block validation endpoint address (comma separated list)",
 		Value:   "",
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_WS"},
 	},
@@ -243,6 +243,10 @@ var flags = []cli.Flag{
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
 }
+
+const (
+	gethSimNamespace = "flashbots"
+)
 
 var (
 	config pkg.Config
@@ -379,8 +383,9 @@ func run() cli.ActionFunc {
 
 		// SIM Client
 		simFallb := fallback.NewFallback()
+		simFallb.AttachMetrics(m)
 		if simHttpAddr := c.String("block-validation-endpoint-rpc"); simHttpAddr != "" {
-			simRPCCli := gethrpc.NewClient("flashbots", simHttpAddr)
+			simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
 			if err := simRPCCli.Dial(c.Context); err != nil {
 				return fmt.Errorf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
 			}
@@ -388,15 +393,17 @@ func run() cli.ActionFunc {
 		}
 
 		if simWSAddr := c.String("block-validation-endpoint-ws"); simWSAddr != "" {
-			input := make(chan []byte, 1000)
 			simWSConn := gethws.NewReConn(logger)
-			go simWSConn.KeepConnection(simWSAddr, input)
-			simWSCli := gethws.NewClient(simWSConn, "flashbots", logger)
+			for _, s := range strings.Split(simWSAddr, ",") {
+				input := make(chan []byte, 1000)
+				go simWSConn.KeepConnection(s, input)
+			}
+			simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, logger)
 			simFallb.AddClient(simWSCli)
 		}
 
 		if simHttpAddr := c.String("block-validation-endpoint-http"); simHttpAddr != "" {
-			simHTTPCli := gethhttp.NewClient(simHttpAddr, "flashbots", logger)
+			simHTTPCli := gethhttp.NewClient(simHttpAddr, gethSimNamespace, logger)
 			simFallb.AddClient(simHTTPCli)
 		}
 

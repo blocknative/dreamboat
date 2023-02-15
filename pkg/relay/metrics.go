@@ -7,8 +7,6 @@ import (
 
 type RelayMetrics struct {
 	MissHeaderCount *prometheus.CounterVec
-
-	RegistrationsCacheHits *prometheus.CounterVec
 }
 
 func (r *Relay) initMetrics() {

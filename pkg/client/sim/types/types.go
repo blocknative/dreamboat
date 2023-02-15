@@ -2,8 +2,6 @@ package types
 
 import (
 	"encoding/json"
-
-	"github.com/flashbots/go-boost-utils/types"
 )
 
 type RpcRawResponse struct {
@@ -35,9 +33,4 @@ type Payload struct {
 	Method   string
 	Payload  []byte
 	Attached []byte
-}
-
-type BuilderBlockValidationRequest struct {
-	types.BuilderSubmitBlockRequest
-	RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
 }

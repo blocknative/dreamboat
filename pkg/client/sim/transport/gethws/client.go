@@ -3,6 +3,7 @@ package gethws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/blocknative/dreamboat/pkg/client"
 	"github.com/blocknative/dreamboat/pkg/client/sim/types"
@@ -27,20 +28,27 @@ func NewClient(nodeConn Connectionner, namespace string, l log.Logger) *Client {
 	}
 }
 
-func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (rrr types.RpcRawResponse, err error) {
+func (c *Client) Kind() string {
+	return "ws"
+}
+
+func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
 	conn, err := c.nodeConn.Get()
 	if err != nil {
-		return rrr, client.ErrNotFound
+		return client.ErrNotFound
 	}
 
 	params, err := json.Marshal([]*types.BuilderBlockValidationRequest{block})
 	if err != nil {
-		return rrr, err
+		return err
 	}
 
 	resp, err := conn.RequestRPC(ctx, c.namespace+"_validateBuilderSubmissionV1", params)
 	if err != nil {
-		return rrr, err
+		return err
 	}
-	return resp, nil
+	if resp.Error != nil && resp.Error.Message != "" {
+		return errors.New(resp.Error.Message)
+	}
+	return nil
 }

@@ -32,18 +32,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 		"bid":       submitBlockRequest.Message.Value.String(),
 	})
 
-	resp, err := rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
-		BuilderSubmitBlockRequest: *submitBlockRequest,
-		RegisteredGasLimit:        10000000000,
-	})
-	if err != nil {
-		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
-	}
-	if resp.Error != nil {
-		return fmt.Errorf("%w: %s", ErrVerification, resp.Error.Message) // TODO: multiple err wrapping in Go 1.20
-	}
-
-	_, err = verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
+	_, err := verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
@@ -65,6 +54,12 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 		return err
 	}
 	m.AppendSince(tVerify, "submitBlock", "verify")
+
+	tValidateBlock := time.Now()
+	if err := rs.validateBlock(ctx, *submitBlockRequest); err != nil {
+		return err
+	}
+	m.AppendSince(tValidateBlock, "submitBlock", "validateBlock")
 
 	isNewMax, err := rs.storeSubmission(ctx, m, submitBlockRequest)
 	if err != nil {
@@ -104,6 +99,17 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error
 		return err
 	}
 
+	return nil
+}
+
+func (rs *Relay) validateBlock(ctx context.Context, submitBlockRequest types.BuilderSubmitBlockRequest) (err error) {
+	err = rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
+		BuilderSubmitBlockRequest: submitBlockRequest,
+		// RegisteredGasLimit:        10000000000,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
+	}
 	return nil
 }
 

@@ -16,7 +16,11 @@ import (
 	"github.com/lthibault/log"
 )
 
-const healthInterval = 2 * time.Second
+const (
+	healthInterval      = 2 * time.Second
+	decodeWorkersNumber = 10
+	workersQueueLen     = 50
+)
 
 type Conn struct {
 	c  *websocket.Conn
@@ -122,15 +126,14 @@ func (conn *Conn) rpcDecoder(in <-chan []byte) {
 }
 
 func (conn *Conn) readHandler() {
-
 	// run parallel decoder
-	ch := make(chan []byte, 50)
+	ch := make(chan []byte, workersQueueLen)
 	defer close(ch)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < decodeWorkersNumber; i++ {
 		go conn.rpcDecoder(ch)
 	}
 	for {
-		_, message, err := conn.c.ReadMessage() // why not NextReader? We allocate more and process faster jsonDecode workers
+		_, message, err := conn.c.ReadMessage() // why not NextReader? We allocate more but process jsonDecode faster in workers
 		if err != nil {
 			conn.l.WithError(err).Warn("error reading from ws")
 			return
@@ -160,7 +163,7 @@ func (conn *Conn) writeHandler() {
 				return
 			}
 
-			err := conn.c.WriteMessage(websocket.TextMessage, []byte(`{"jsonrpc": "2.0","id": 1,"method": "net_version"}`))
+			err := conn.c.WriteMessage(websocket.TextMessage, []byte(`{"jsonrpc": "2.0", "id": 1, "method": "net_version"}`))
 			if err != nil {
 				conn.l.WithError(err).Warn("error writing from ws")
 				return
