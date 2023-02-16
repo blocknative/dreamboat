@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient
 package relay
 
 import (
@@ -12,6 +12,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/verify"
 )
@@ -35,6 +36,10 @@ var (
 	ErrInvalidSlot             = errors.New("invalid slot")
 	ErrEmptyBlock              = errors.New("block is empty")
 )
+
+type BlockValidationClient interface {
+	ValidateBlock(ctx context.Context, block *rpctypes.BuilderBlockValidationRequest) (err error)
+}
 
 type ValidatorStore interface {
 	GetRegistration(context.Context, types.PublicKey) (types.SignedValidatorRegistration, error)
@@ -89,6 +94,8 @@ type RelayConfig struct {
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
 
+	AllowedListedBuilders map[[48]byte]struct{}
+
 	PublishBlock bool
 
 	TTL time.Duration
@@ -108,6 +115,8 @@ type Relay struct {
 	cache  ValidatorCache
 	vstore ValidatorStore
 
+	bvc BlockValidationClient
+
 	beacon      Beacon
 	beaconState State
 
@@ -118,11 +127,12 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, a Auctioneer) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, a Auctioneer, bvc BlockValidationClient) *Relay {
 	rs := &Relay{
 		d:              d,
 		a:              a,
 		l:              l,
+		bvc:            bvc,
 		ver:            ver,
 		config:         config,
 		cache:          cache,

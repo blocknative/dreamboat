@@ -70,7 +70,7 @@ func TestGetHeader(t *testing.T) {
 	a := auction.NewAuctioneer()
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
-	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, a)
+	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, a, nil)
 	require.NoError(t, err)
 
 	genesisTime := uint64(time.Now().Unix())
@@ -163,7 +163,7 @@ func TestGetPayload(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(t, proposerSigningDomain, genesisTime)
@@ -280,7 +280,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -365,7 +365,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -460,7 +460,7 @@ func BenchmarkGetPayload(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -577,7 +577,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		PubKey:                types.PublicKey(random48Bytes()),
 		ProposerSigningDomain: proposerSigningDomain,
 	}
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer())
+	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)

@@ -12,6 +12,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
@@ -54,6 +55,12 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 	}
 	m.AppendSince(tVerify, "submitBlock", "verify")
 
+	tValidateBlock := time.Now()
+	if err := rs.validateBlock(ctx, *submitBlockRequest); err != nil {
+		return err
+	}
+	m.AppendSince(tValidateBlock, "submitBlock", "validateBlock")
+
 	isNewMax, err := rs.storeSubmission(ctx, m, submitBlockRequest)
 	if err != nil {
 		return err
@@ -92,6 +99,22 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error
 		return err
 	}
 
+	return nil
+}
+
+func (rs *Relay) validateBlock(ctx context.Context, submitBlockRequest types.BuilderSubmitBlockRequest) (err error) {
+	if rs.config.AllowedListedBuilders != nil && submitBlockRequest.Message != nil {
+		if _, ok := rs.config.AllowedListedBuilders[submitBlockRequest.Message.BuilderPubkey]; ok {
+			return nil
+		}
+	}
+
+	err = rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
+		BuilderSubmitBlockRequest: submitBlockRequest,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
+	}
 	return nil
 }
 

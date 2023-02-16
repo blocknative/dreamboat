@@ -17,6 +17,11 @@ import (
 	pkg "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/blocknative/dreamboat/pkg/auction"
+	"github.com/blocknative/dreamboat/pkg/client/sim/fallback"
+	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethhttp"
+	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethrpc"
+	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethws"
+
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -219,7 +224,29 @@ var flags = []cli.Flag{
 		Value:   2,
 		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_BURST"},
 	},
+	&cli.StringFlag{
+		Name:    "block-validation-endpoint-http",
+		Usage:   "http block validation endpoint address",
+		Value:   "",
+		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_HTTP"},
+	},
+	&cli.StringFlag{
+		Name:    "block-validation-endpoint-ws",
+		Usage:   "ws block validation endpoint address (comma separated list)",
+		Value:   "",
+		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_WS"},
+	},
+	&cli.StringFlag{
+		Name:    "block-validation-endpoint-rpc",
+		Usage:   "rpc block validation rawurl (eg. ipc path)",
+		Value:   "",
+		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
+	},
 }
+
+const (
+	gethSimNamespace = "flashbots"
+)
 
 var (
 	config pkg.Config
@@ -354,6 +381,32 @@ func run() cli.ActionFunc {
 		}
 		beacon.AttachMetrics(m)
 
+		// SIM Client
+		simFallb := fallback.NewFallback()
+		simFallb.AttachMetrics(m)
+		if simHttpAddr := c.String("block-validation-endpoint-rpc"); simHttpAddr != "" {
+			simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
+			if err := simRPCCli.Dial(c.Context); err != nil {
+				return fmt.Errorf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
+			}
+			simFallb.AddClient(simRPCCli)
+		}
+
+		if simWSAddr := c.String("block-validation-endpoint-ws"); simWSAddr != "" {
+			simWSConn := gethws.NewReConn(logger)
+			for _, s := range strings.Split(simWSAddr, ",") {
+				input := make(chan []byte, 1000)
+				go simWSConn.KeepConnection(s, input)
+			}
+			simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, logger)
+			simFallb.AddClient(simWSCli)
+		}
+
+		if simHttpAddr := c.String("block-validation-endpoint-http"); simHttpAddr != "" {
+			simHTTPCli := gethhttp.NewClient(simHttpAddr, gethSimNamespace, logger)
+			simFallb.AddClient(simHTTPCli)
+		}
+
 		verificator := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
 		verificator.RunVerify(c.Uint("relay-workers-verify"))
 
@@ -388,16 +441,6 @@ func run() cli.ActionFunc {
 		service := pkg.NewService(config.Log, config, state)
 
 		auctioneer := auction.NewAuctioneer()
-		r := relay.NewRelay(config.Log, relay.RelayConfig{
-			BuilderSigningDomain:  domainBuilder,
-			ProposerSigningDomain: domainBeaconProposer,
-			PubKey:                config.PubKey,
-			SecretKey:             config.SecretKey,
-			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
-			TTL:                   config.TTL,
-			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer)
-		r.AttachMetrics(m)
 
 		var allowed map[[48]byte]struct{}
 		albString := c.String("relay-allow-listed-builder")
@@ -412,6 +455,19 @@ func run() cli.ActionFunc {
 				allowed[pk] = struct{}{}
 			}
 		}
+
+		r := relay.NewRelay(config.Log, relay.RelayConfig{
+			BuilderSigningDomain:  domainBuilder,
+			ProposerSigningDomain: domainBeaconProposer,
+			PubKey:                config.PubKey,
+			SecretKey:             config.SecretKey,
+			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
+			TTL:                   config.TTL,
+			AllowedListedBuilders: allowed,
+			PublishBlock:          c.Bool("relay-publish-block"),
+		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
+		r.AttachMetrics(m)
+
 		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
