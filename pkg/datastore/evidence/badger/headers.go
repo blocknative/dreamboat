@@ -1,6 +1,7 @@
 package badger
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -24,6 +25,62 @@ func HeaderNumKey(bn uint64) ds.Key {
 
 func HeaderSlot(bn uint64) ds.Key {
 	return ds.NewKey(fmt.Sprintf("hs-%d", bn))
+}
+
+func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.HeaderData, isMostProfitable bool) (err error) {
+	data, err := json.Marshal(bid)
+	if err != nil {
+		return err
+	}
+
+	txn := s.DBInter.NewTransaction(true)
+	defer txn.Discard()
+	slot := make([]byte, 8)
+	binary.LittleEndian.PutUint64(slot, uint64(bid.Slot))
+
+	// another write of the same data.
+	if err := txn.SetEntry(badger.NewEntry(datastore.HeaderKeyContent(uint64(bid.Slot), bid.Header.BlockHash.String()).Bytes(), data).WithTTL(s.TTL)); err != nil {
+		return err
+	}
+	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(bid.Header.BlockHash).Bytes(), slot).WithTTL(s.TTL)); err != nil {
+		return err
+	}
+
+	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(bid.Header.BlockNumber).Bytes(), slot).WithTTL(s.TTL)); err != nil {
+		return err
+	}
+
+	return txn.Commit()
+}
+
+func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, query structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+
+	var (
+		events []structs.HeaderAndTrace
+		err    error
+	)
+	if query.HasSlot() {
+		events, err = s.GetHeadersBySlot(ctx, uint64(query.Slot))
+	} else if query.HasBlockHash() {
+		events, err = s.GetHeadersByBlockHash(ctx, query.BlockHash)
+	} else if query.HasBlockNum() {
+		events, err = s.GetHeadersByBlockNum(ctx, query.BlockNum)
+	} else {
+		events, err = s.GetLatestHeaders(ctx, headSlot, int(query.Limit), uint64(s.TTL/DurationPerSlot))
+	}
+
+	if err == nil {
+		traces := make([]structs.BidTraceWithTimestamp, 0, len(events))
+		for _, event := range events {
+			traces = append(traces, *event.Trace)
+		}
+		return traces, err
+	}
+
+	if errors.Is(err, ds.ErrNotFound) {
+		return []structs.BidTraceWithTimestamp{}, nil
+	}
+	return nil, err
 }
 
 func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error) {
@@ -54,58 +111,23 @@ func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 		return nil, err
 	}
 
-	newContent, err := s.DB.Get(ctx, datastore.HeaderKeyContent(binary.LittleEndian.Uint64(slot), hash.String()))
+	content, err := s.DB.Get(ctx, datastore.HeaderKeyContent(binary.LittleEndian.Uint64(slot), hash.String()))
 	if err != nil {
 		if !errors.Is(err, badger.ErrKeyNotFound) { // do not fail on not found try others
 			return nil, err
 		}
-		// old code fallback - to be removed
-		if true {
-			newContent, err = s.DB.Get(ctx, datastore.HeaderKey(binary.LittleEndian.Uint64(slot)))
-			if err != nil {
-				return nil, err
-			}
-
-			el := []structs.HeaderAndTrace{}
-			if err = json.Unmarshal(newContent, &el); err != nil {
-				return el, err
-			}
-
-			newEl := []structs.HeaderAndTrace{}
-			for _, v := range el {
-				if v.Header.BlockHash == hash {
-					elem := v
-					newEl = append(newEl, elem)
-				}
-			}
-			return newEl, nil
-		}
-
 	}
 
 	el := structs.HeaderAndTrace{}
-	if err = json.Unmarshal(newContent, &el); err != nil {
+	if err = json.Unmarshal(content, &el); err != nil {
 		return nil, err
 	}
 	return []structs.HeaderAndTrace{el}, nil
 }
 
-/*
-func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error) {
-	ls := s.hc.GetLatestSlot()
-	stop := ls - stopLag
-	el, lastSlot := s.hc.GetHeaders(ls, stop, int(limit))
+func (s *Datastore) GetLatestHeaders(ctx context.Context, headSlot uint64, limit int, stopLag uint64) (el []structs.HeaderAndTrace, err error) {
 
-	if el == nil {
-		el = []structs.HeaderAndTrace{}
-	}
-
-	// all from memory
-	if len(el) >= int(limit) {
-		return el[:limit], nil
-	}
-
-	initialSlot := lastSlot
+	initialSlot := headSlot - 1
 	readr := bytes.NewReader(nil)
 	dec := json.NewDecoder(readr)
 	for {
@@ -121,10 +143,20 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag 
 		if err := dec.Decode(&hnt); err != nil {
 			return nil, err
 		}
-
+		sum := len(el) + len(hnt)
+		if sum >= limit {
+			numEl := limit - len(el)
+			if numEl != 0 {
+				if len(hnt) <= numEl {
+					el = append(el, hnt[0:numEl-1]...)
+				} else {
+					el = append(el, hnt[0:len(hnt)-1]...)
+				}
+			}
+			return el, err
+		}
 		el = append(el, hnt...)
+
 		initialSlot--
-		// introduce limit?
 	}
 }
-*/

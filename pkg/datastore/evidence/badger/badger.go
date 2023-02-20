@@ -2,12 +2,10 @@ package badger
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
@@ -216,38 +214,6 @@ func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []uint64) ([]
 	}
 
 	return traceBatch, err
-}
-
-func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
-	return nil, nil
-}
-
-//func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.BidTraceWithTimestamp, isMostProfitable bool) (err error) {
-
-func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.HeaderData, isMostProfitable bool) (err error) {
-	data, err := json.Marshal(bid)
-	if err != nil {
-		return err
-	}
-
-	txn := s.DBInter.NewTransaction(true)
-	defer txn.Discard()
-	slot := make([]byte, 8)
-	binary.LittleEndian.PutUint64(slot, uint64(bid.Slot))
-
-	// another write of the same data.
-	if err := txn.SetEntry(badger.NewEntry(datastore.HeaderKeyContent(uint64(bid.Slot), bid.Header.BlockHash.String()).Bytes(), data).WithTTL(s.TTL)); err != nil {
-		return err
-	}
-	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(bid.Header.BlockHash).Bytes(), slot).WithTTL(s.TTL)); err != nil {
-		return err
-	}
-
-	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(bid.Header.BlockNumber).Bytes(), slot).WithTTL(s.TTL)); err != nil {
-		return err
-	}
-
-	return txn.Commit()
 }
 
 func min[T constraints.Ordered](a, b T) T {

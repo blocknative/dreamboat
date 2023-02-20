@@ -2,6 +2,7 @@ package relay_test
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"sync"
 	"testing"
@@ -26,6 +27,30 @@ import (
 
 	badger "github.com/ipfs/go-ds-badger2"
 )
+
+type HeaderDataMatcher struct {
+	hd structs.HeaderData
+}
+
+func (p *HeaderDataMatcher) Matches(x interface{}) bool {
+	k, ok := x.(structs.HeaderData)
+	if !ok {
+		return false
+	}
+
+	if k.Slot != p.hd.Slot {
+		return false
+	}
+
+	if k.Header.BlockHash != p.hd.Header.BlockHash {
+		return false
+	}
+	return true
+}
+
+func (p *HeaderDataMatcher) String() string {
+	return fmt.Sprintf("{HeaderData - Slot:%d Data:%+v}", p.hd.Slot, p.hd.HeaderAndTrace)
+}
 
 func TestSubmitBlock(t *testing.T) {
 	t.Parallel()
@@ -76,9 +101,6 @@ func TestSubmitBlock(t *testing.T) {
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
 	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	vCache := mocks.NewMockValidatorCache(ctrl)
-	vStore := mocks.NewMockValidatorStore(ctrl)
-	daStore := mocks.NewMockDataAPIStore(ctrl)
-
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
 		Entry: types.SignedValidatorRegistration{
@@ -86,6 +108,20 @@ func TestSubmitBlock(t *testing.T) {
 				FeeRecipient: submitRequest.Message.ProposerFeeRecipient,
 			}},
 	}, true)
+
+	vStore := mocks.NewMockValidatorStore(ctrl)
+	daStore := mocks.NewMockDataAPIStore(ctrl)
+	daStore.EXPECT().CheckSlotDelivered(gomock.Any(), submitRequest.Message.Slot).Times(1)
+
+	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
+	require.NoError(t, err)
+
+	daStore.EXPECT().PutBuilderBlockSubmission(gomock.Any(), &HeaderDataMatcher{
+		hd: structs.HeaderData{
+			HeaderAndTrace: structs.HeaderAndTrace{Header: header},
+			Slot:           structs.Slot(submitRequest.Message.Slot),
+		},
+	}, true).Times(1)
 
 	r := relay.NewRelay(l, config, nil, vCache, vStore, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
@@ -96,13 +132,6 @@ func TestSubmitBlock(t *testing.T) {
 	gotPayload, _, err := ds.GetPayload(ctx, key)
 	require.NoError(t, err)
 	require.EqualValues(t, payload, *gotPayload)
-
-	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
-	require.NoError(t, err)
-	gotHeaders, err := ds.GetHeadersBySlot(ctx, submitRequest.Message.Slot)
-	require.NoError(t, err)
-	require.Len(t, gotHeaders, 1)
-	require.EqualValues(t, header, gotHeaders[0].Header)
 }
 
 func BenchmarkSubmitBlock(b *testing.B) {
@@ -143,16 +172,28 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
-	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
+	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).AnyTimes()
 	vCache := mocks.NewMockValidatorCache(ctrl)
-	vStore := mocks.NewMockValidatorStore(ctrl)
-	daStore := mocks.NewMockDataAPIStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
 		Entry: types.SignedValidatorRegistration{
 			Message: &types.RegisterValidatorRequestMessage{
 				FeeRecipient: submitRequest.Message.ProposerFeeRecipient,
 			},
+		},
+	}, true).AnyTimes()
+
+	vStore := mocks.NewMockValidatorStore(ctrl)
+	daStore := mocks.NewMockDataAPIStore(ctrl)
+	daStore.EXPECT().CheckSlotDelivered(gomock.Any(), submitRequest.Message.Slot).AnyTimes()
+
+	header, err := types.PayloadToPayloadHeader(submitRequest.ExecutionPayload)
+	require.NoError(b, err)
+
+	daStore.EXPECT().PutBuilderBlockSubmission(gomock.Any(), &HeaderDataMatcher{
+		hd: structs.HeaderData{
+			HeaderAndTrace: structs.HeaderAndTrace{Header: header},
+			Slot:           structs.Slot(submitRequest.Message.Slot),
 		},
 	}, true).AnyTimes()
 
@@ -249,7 +290,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
+	//ds := &datastore.Datastore{TTLStorage: newMockDatastore()}
 	bs := mocks.NewMockState(ctrl)
 	sk, _, _ := bls.GenerateNewKeypair()
 
@@ -276,7 +317,8 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	r := relay.NewRelay(l, config, nil, nil, nil, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	//r := relay.NewRelay(l, config, nil, nil, nil, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, nil, nil, daStore, ver, bs, nil, auction.NewAuctioneer(), bVCli)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
