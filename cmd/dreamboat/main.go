@@ -416,7 +416,7 @@ func run() cli.ActionFunc {
 		}
 
 		dbdApiURL := c.String("relay-dataapi-database-url")
-		// VALIDATOR MANAGEMENT
+		// DATAAPI
 		var daDS relay.DataAPIStore
 		if dbdApiURL != "" {
 			valPG, err := trPostgres.Open(dbdApiURL, 10, 10, 10) // TODO(l): make configurable
@@ -426,7 +426,7 @@ func run() cli.ActionFunc {
 			m.RegisterDB(valPG, "dataapi")
 			daDS = daPostgres.NewDatastore(valPG, 0)
 		} else { // by default use existsing storage
-			daDS = daBadger.NewDatastore(storage, config.TTL)
+			daDS = daBadger.NewDatastore(storage, storage.DB, config.TTL)
 		}
 
 		// lazyload validators cache, it's optional and we don't care if it errors out
