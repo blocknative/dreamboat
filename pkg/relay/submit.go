@@ -82,7 +82,7 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error
 		return ErrPayloadAlreadyDelivered
 	}
 
-	ok, err = rs.d.CheckSlotDelivered(ctx, slot)
+	ok, err = rs.dastore.CheckSlotDelivered(ctx, slot)
 	if ok {
 		rs.deliveredCacheLock.Lock()
 		if len(rs.deliveredCache) > 50 { // clean everything after every 50 slots
@@ -180,6 +180,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, su
 	if err != nil {
 		return newMax, fmt.Errorf("%w block as header: %s", ErrMarshal, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
+
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           structs.Slot(submitBlockRequest.Message.Slot),
 		Marshaled:      b,
@@ -189,6 +190,14 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, su
 		return newMax, fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutHeader, "submitBlock", "putHeader")
+
+	err = rs.dastore.PutBuilderBlockSubmission(ctx, structs.HeaderData{
+		Slot:           structs.Slot(submitBlockRequest.Message.Slot),
+		HeaderAndTrace: complete.Header,
+	}, newMax)
+	if err != nil {
+		return newMax, fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
+	}
 
 	return newMax, nil
 }

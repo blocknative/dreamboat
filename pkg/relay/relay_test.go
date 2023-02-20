@@ -28,8 +28,6 @@ import (
 	"github.com/lthibault/log"
 	"github.com/stretchr/testify/require"
 
-	ds "github.com/ipfs/go-datastore"
-	ds_sync "github.com/ipfs/go-datastore/sync"
 	badger "github.com/ipfs/go-ds-badger2"
 )
 
@@ -50,7 +48,7 @@ func TestGetHeader(t *testing.T) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mocks.NewMockState(ctrl)
@@ -70,7 +68,7 @@ func TestGetHeader(t *testing.T) {
 	a := auction.NewAuctioneer()
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
-	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, a, nil)
+	r := relay.NewRelay(log.New(), config, nil, nil, nil, nil, ver, bs, ds, a, nil)
 	require.NoError(t, err)
 
 	genesisTime := uint64(time.Now().Unix())
@@ -139,7 +137,7 @@ func TestGetPayload(t *testing.T) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	hc := datastore.NewHeaderController(100, time.Hour)
 
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mocks.NewMockState(ctrl)
@@ -163,7 +161,7 @@ func TestGetPayload(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
+	r := relay.NewRelay(l, config, nil, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(t, proposerSigningDomain, genesisTime)
@@ -260,7 +258,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(b, err)
 
 	bs := mocks.NewMockState(ctrl)
@@ -280,7 +278,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
+	r := relay.NewRelay(log.New(), config, nil, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -346,7 +344,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
@@ -365,7 +363,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
+	r := relay.NewRelay(log.New(), config, nil, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -439,7 +437,7 @@ func BenchmarkGetPayload(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
@@ -460,7 +458,7 @@ func BenchmarkGetPayload(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
+	r := relay.NewRelay(l, config, nil, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -558,7 +556,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	var datadir = "/tmp/" + b.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
@@ -577,7 +575,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		PubKey:                types.PublicKey(random48Bytes()),
 		ProposerSigningDomain: proposerSigningDomain,
 	}
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
+	r := relay.NewRelay(l, config, nil, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
@@ -768,31 +766,4 @@ func randomTransactions(size int) []hexutil.Bytes {
 		txs = append(txs, tx)
 	}
 	return txs
-}
-
-type mockDatastore struct{ ds.Datastore }
-
-func newMockDatastore() mockDatastore {
-	return mockDatastore{ds_sync.MutexWrap(ds.NewMapDatastore())}
-}
-
-func (d mockDatastore) PutWithTTL(ctx context.Context, key ds.Key, value []byte, ttl time.Duration) error {
-	go func() {
-		time.Sleep(ttl)
-		d.Delete(ctx, key)
-	}()
-
-	return d.Datastore.Put(ctx, key, value)
-}
-
-func (d mockDatastore) GetBatch(ctx context.Context, keys []ds.Key) (batch [][]byte, err error) {
-	for _, key := range keys {
-		data, err := d.Datastore.Get(ctx, key)
-		if err != nil {
-			continue
-		}
-		batch = append(batch, data)
-	}
-
-	return
 }

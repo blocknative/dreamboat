@@ -41,7 +41,7 @@ func TestSubmitBlock(t *testing.T) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(t, err)
 	bs := mocks.NewMockState(ctrl)
 
@@ -77,6 +77,8 @@ func TestSubmitBlock(t *testing.T) {
 	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
+	daStore := mocks.NewMockDataAPIStore(ctrl)
+
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
 		Entry: types.SignedValidatorRegistration{
@@ -85,7 +87,7 @@ func TestSubmitBlock(t *testing.T) {
 			}},
 	}, true)
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequest)
 	require.NoError(t, err)
@@ -117,7 +119,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(b, err)
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -144,6 +146,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
+	daStore := mocks.NewMockDataAPIStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
 		Entry: types.SignedValidatorRegistration{
@@ -153,7 +156,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -176,7 +179,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
@@ -207,6 +210,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
+	daStore := mocks.NewMockDataAPIStore(ctrl)
 	vCache.EXPECT().Get(submitRequest.Message.ProposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
 		Entry: types.SignedValidatorRegistration{
@@ -216,7 +220,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -256,6 +260,8 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
+	daStore := mocks.NewMockDataAPIStore(ctrl)
+
 	relaySigningDomain, err := pkg.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
@@ -270,7 +276,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, nil, nil, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -293,7 +299,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(t, err)
 	bs := mocks.NewMockState(ctrl)
 
@@ -323,6 +329,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(2)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
+	daStore := mocks.NewMockDataAPIStore(ctrl)
 	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
 		Entry: types.SignedValidatorRegistration{
@@ -332,7 +339,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	// generate and send 1st block
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
@@ -427,7 +434,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mocks.NewMockState(ctrl)
@@ -459,6 +466,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(2)
 	vCache := mocks.NewMockValidatorCache(ctrl)
 	vStore := mocks.NewMockValidatorStore(ctrl)
+	daStore := mocks.NewMockDataAPIStore(ctrl)
 	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{
 		Time: time.Now(),
 		Entry: types.SignedValidatorRegistration{
@@ -468,7 +476,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
@@ -566,7 +574,7 @@ func TestRegistartionCache(t *testing.T) {
 	var datadir = "/tmp/" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	hc := datastore.NewHeaderController(100, time.Hour)
-	ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: store}, store.DB, hc, 100)
+	ds, err := datastore.NewDatastore(store, store.DB, hc, 100)
 	require.NoError(t, err)
 
 	bs := mocks.NewMockState(ctrl)
@@ -608,6 +616,8 @@ func TestRegistartionCache(t *testing.T) {
 	vCache.EXPECT().Get(proposerPubkey).Return(structs.ValidatorCacheEntry{}, false)
 	vCache.EXPECT().Add(proposerPubkey, VFeeProposer(vCE)).Return(false)
 
+	daStore := mocks.NewMockDataAPIStore(ctrl)
+
 	vStore := mocks.NewMockValidatorStore(ctrl)
 	vStore.EXPECT().GetRegistration(gomock.Any(), proposerPubkey).Return(types.SignedValidatorRegistration{
 		Message: &types.RegisterValidatorRequestMessage{
@@ -616,7 +626,7 @@ func TestRegistartionCache(t *testing.T) {
 		},
 	}, nil)
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, daStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)

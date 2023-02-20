@@ -31,9 +31,12 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 
 	trPostgres "github.com/blocknative/dreamboat/pkg/datastore/transport/postgres"
-	valPostgres "github.com/blocknative/dreamboat/pkg/datastore/validator/postgres"
 
 	valBadger "github.com/blocknative/dreamboat/pkg/datastore/validator/badger"
+	valPostgres "github.com/blocknative/dreamboat/pkg/datastore/validator/postgres"
+
+	daBadger "github.com/blocknative/dreamboat/pkg/datastore/evidence/badger"
+	daPostgres "github.com/blocknative/dreamboat/pkg/datastore/evidence/postgres"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	badger "github.com/ipfs/go-ds-badger2"
@@ -348,7 +351,7 @@ func run() cli.ActionFunc {
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
-		ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
+		ds, err := datastore.NewDatastore(storage, storage.DB, hc, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
@@ -371,8 +374,8 @@ func run() cli.ActionFunc {
 			simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
 			if err := simRPCCli.Dial(c.Context); err != nil {
 				return fmt.Errorf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
+				simFallb.AddClient(simRPCCli)
 			}
-			simFallb.AddClient(simRPCCli)
 		}
 
 		if simWSAddr := c.String("block-validation-endpoint-ws"); simWSAddr != "" {
@@ -412,6 +415,20 @@ func run() cli.ActionFunc {
 			return fmt.Errorf("fail to initialize validator cache: %w", err)
 		}
 
+		dbdApiURL := c.String("relay-dataapi-database-url")
+		// VALIDATOR MANAGEMENT
+		var daDS relay.DataAPIStore
+		if dbdApiURL != "" {
+			valPG, err := trPostgres.Open(dbdApiURL, 10, 10, 10) // TODO(l): make configurable
+			if err != nil {
+				return fmt.Errorf("failed to connect to the database: %w", err)
+			}
+			m.RegisterDB(valPG, "dataapi")
+			daDS = daPostgres.NewDatastore(valPG, 0)
+		} else { // by default use existsing storage
+			daDS = daBadger.NewDatastore(storage, config.TTL)
+		}
+
 		// lazyload validators cache, it's optional and we don't care if it errors out
 		go preloadValidators(c.Context, logger, valDS, validatorCache)
 
@@ -448,7 +465,7 @@ func run() cli.ActionFunc {
 			TTL:                   config.TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
+		}, beacon, validatorCache, valDS, daDS, verificator, state, ds, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
 		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))

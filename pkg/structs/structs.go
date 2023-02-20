@@ -87,6 +87,30 @@ func (q PayloadTraceQuery) HasLimit() bool {
 	return q.Limit != 0
 }
 
+// SubmissionTraceQuery structure used to query header structure
+type SubmissionTraceQuery struct {
+	Slot      Slot
+	BlockHash types.Hash
+	BlockNum  uint64
+	Limit     uint64
+}
+
+func (q SubmissionTraceQuery) HasSlot() bool {
+	return q.Slot != Slot(0)
+}
+
+func (q SubmissionTraceQuery) HasBlockHash() bool {
+	return q.BlockHash != types.Hash{}
+}
+
+func (q SubmissionTraceQuery) HasBlockNum() bool {
+	return q.BlockNum != 0
+}
+
+func (q SubmissionTraceQuery) HasLimit() bool {
+	return q.Limit != 0
+}
+
 type PayloadQuery struct {
 	Slot      Slot
 	BlockHash types.Hash

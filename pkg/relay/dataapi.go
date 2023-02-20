@@ -2,13 +2,9 @@ package relay
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"golang.org/x/exp/constraints"
-
-	ds "github.com/ipfs/go-datastore"
 )
 
 var (
@@ -16,19 +12,28 @@ var (
 )
 
 func (r *Relay) GetPayloadDelivered(ctx context.Context, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
+	return r.dastore.GetDeliveredPayloads(ctx, uint64(r.beaconState.Beacon().HeadSlot()), query)
+}
+
+func (r *Relay) GetBlockReceived(ctx context.Context, query structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+	return r.dastore.GetBuilderBlockSubmissions(ctx, uint64(r.beaconState.Beacon().HeadSlot()), query)
+}
+
+/*
+func (r *Relay) GetPayloadDelivered(ctx context.Context, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
 	var (
 		event structs.BidTraceWithTimestamp
 		err   error
 	)
 
 	if query.HasSlot() {
-		event, err = r.d.GetDelivered(ctx, structs.PayloadQuery{Slot: query.Slot})
+		event, err = r.dastore.GetDelivered(ctx, structs.PayloadQuery{Slot: query.Slot})
 	} else if query.HasBlockHash() {
-		event, err = r.d.GetDelivered(ctx, structs.PayloadQuery{BlockHash: query.BlockHash})
+		event, err = r.dastore.GetDelivered(ctx, structs.PayloadQuery{BlockHash: query.BlockHash})
 	} else if query.HasBlockNum() {
-		event, err = r.d.GetDelivered(ctx, structs.PayloadQuery{BlockNum: query.BlockNum})
+		event, err = r.dastore.GetDelivered(ctx, structs.PayloadQuery{BlockNum: query.BlockNum})
 	} else if query.HasPubkey() {
-		event, err = r.d.GetDelivered(ctx, structs.PayloadQuery{PubKey: query.Pubkey})
+		event, err = r.dastore.GetDelivered(ctx, structs.PayloadQuery{PubKey: query.Pubkey})
 	} else {
 		return r.getTailDelivered(ctx, query.Limit, query.Cursor)
 	}
@@ -59,7 +64,7 @@ func (r *Relay) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]s
 			queries = append(queries, structs.PayloadQuery{Slot: s})
 		}
 
-		nextBatch, err := r.d.GetDeliveredBatch(ctx, queries)
+		nextBatch, err := r.dastore.GetDeliveredBatch(ctx, queries)
 		if err != nil {
 			r.l.WithError(err).Warn("failed getting header batch")
 		} else {
@@ -81,13 +86,13 @@ func (r *Relay) GetBlockReceived(ctx context.Context, query structs.HeaderTraceQ
 	)
 
 	if query.HasSlot() {
-		events, err = r.d.GetHeadersBySlot(ctx, uint64(query.Slot))
+		events, err = r.dastore.GetHeadersBySlot(ctx, uint64(query.Slot))
 	} else if query.HasBlockHash() {
-		events, err = r.d.GetHeadersByBlockHash(ctx, query.BlockHash)
+		events, err = r.dastore.GetHeadersByBlockHash(ctx, query.BlockHash)
 	} else if query.HasBlockNum() {
-		events, err = r.d.GetHeadersByBlockNum(ctx, query.BlockNum)
+		events, err = r.dastore.GetHeadersByBlockNum(ctx, query.BlockNum)
 	} else {
-		events, err = r.d.GetLatestHeaders(ctx, query.Limit, uint64(r.config.TTL/DurationPerSlot))
+		events, err = r.dastore.GetLatestHeaders(ctx, query.Limit, uint64(r.config.TTL/DurationPerSlot))
 	}
 
 	if err == nil {
@@ -108,3 +113,4 @@ func min[T constraints.Ordered](a, b T) T {
 	}
 	return b
 }
+*/

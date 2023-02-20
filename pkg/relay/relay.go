@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient,DataAPIStore
 package relay
 
 import (
@@ -51,6 +51,16 @@ type ValidatorCache interface {
 	Remove(types.PublicKey) (existed bool)
 }
 
+type DataAPIStore interface {
+	CheckSlotDelivered(context.Context, uint64) (bool, error)
+
+	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
+	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
+
+	PutBuilderBlockSubmission(ctx context.Context, bid structs.HeaderData, isMostProfitable bool) (err error)
+	GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+}
+
 type State interface {
 	Beacon() *structs.BeaconState
 }
@@ -60,23 +70,12 @@ type Verifier interface {
 }
 
 type Datastore interface {
-	CheckSlotDelivered(context.Context, uint64) (bool, error)
-	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
-
-	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
-
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
 	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
-	// to be changed
-	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
-	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
-	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
-	GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
-	GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
+	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
 }
 
 type Auctioneer interface {
@@ -115,6 +114,8 @@ type Relay struct {
 	cache  ValidatorCache
 	vstore ValidatorStore
 
+	dastore DataAPIStore
+
 	bvc BlockValidationClient
 
 	beacon      Beacon
@@ -127,7 +128,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, a Auctioneer, bvc BlockValidationClient) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, dastore DataAPIStore, ver Verifier, beaconState State, d Datastore, a Auctioneer, bvc BlockValidationClient) *Relay {
 	rs := &Relay{
 		d:              d,
 		a:              a,
@@ -136,6 +137,7 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		ver:            ver,
 		config:         config,
 		cache:          cache,
+		dastore:        dastore,
 		vstore:         vstore,
 		beacon:         beacon,
 		beaconState:    beaconState,
@@ -316,7 +318,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			}
 		}
 
-		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
+		if err := rs.dastore.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
 	}(rs, structs.Slot(payloadRequest.Message.Slot), trace)
