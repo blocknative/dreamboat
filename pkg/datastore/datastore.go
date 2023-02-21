@@ -30,14 +30,14 @@ type Badger interface {
 type Datastore struct {
 	TTLStorage
 	Badger
-	PayloadCache *lru.Cache[structs.PayloadKey, *structs.BlockBidAndTrace]
+	PayloadCache *lru.Cache[structs.PayloadKey, *structs.BlockAndTrace]
 
 	hc *HeaderController
 	l  sync.Mutex
 }
 
 func NewDatastore(t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize int) (*Datastore, error) {
-	cache, err := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](payloadCacheSize)
+	cache, err := lru.New[structs.PayloadKey, *structs.BlockAndTrace](payloadCacheSize)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []structs.Pay
 	return traceBatch, err
 }
 
-func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload *structs.BlockBidAndTrace, ttl time.Duration) error {
+func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload *structs.BlockAndTrace, ttl time.Duration) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -145,7 +145,7 @@ func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payl
 	return s.TTLStorage.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
 }
 
-func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error) {
+func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockAndTrace, bool, error) {
 	memPayload, ok := s.PayloadCache.Get(key)
 	if ok {
 		return memPayload, true, nil
@@ -155,7 +155,7 @@ func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*st
 	if err != nil {
 		return nil, false, err
 	}
-	var payload structs.BlockBidAndTrace
+	var payload structs.BlockAndTrace
 	err = json.Unmarshal(data, &payload)
 	return &payload, false, err
 }

@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/dgraph-io/badger/v2 v2.2007.3
 	github.com/ethereum/go-ethereum v1.10.25
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
@@ -22,6 +23,7 @@ require (
 	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20220907003533-145caa8ea1d0
 	golang.org/x/time v0.3.0
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
@@ -39,6 +41,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/dgraph-io/ristretto v0.0.4-0.20210318174700-74754f61e018 // indirect
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/ferranbt/fastssz v0.1.2-0.20220723134332-b3d3034a4575 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
@@ -71,7 +74,6 @@ require (
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.1.0 // indirect
 	golang.org/x/net v0.1.0 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

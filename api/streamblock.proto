@@ -1,0 +1,54 @@
+syntax = "proto3";
+package stream;
+
+option go_package = "pkg/stream";
+
+message StreamBlock {
+    string source = 1;
+    bool isCache = 2;
+    PayloadAndTrace block = 3;
+}
+
+message PayloadAndTrace {
+    SignedBidTrace trace = 2;   
+    PayloadWithVersion payload = 1;
+}
+
+message SignedBidTrace {
+    bytes signature = 1;
+    BidTrace message = 2;
+}
+
+message BidTrace{
+    uint64 Slot = 1;
+	bytes ParentHash = 2;
+	bytes BlockHash     = 3;
+	bytes BuilderPubkey    = 4;
+	bytes ProposerPubkey      = 5;
+	bytes ProposerFeeRecipient = 6;
+	uint64 GasLimit             = 7;
+	uint64 GasUsed              = 8;
+	bytes Value                = 9;
+}
+
+message PayloadWithVersion {
+     string version = 1;
+     ExecutionPayload payload = 2;
+}
+
+message ExecutionPayload {
+    bytes parentHash = 1;
+    bytes feeRecipient = 2;
+	bytes stateRoot = 3;
+	bytes receiptsRoot = 4;
+	bytes logsBloom = 5;
+	bytes random   = 6;
+	uint64 blockNumber = 7;
+	uint64 gasLimit   = 8;
+	uint64 gasUsed    = 9;
+	uint64 timestamp  = 10;
+	bytes extraData   = 11;
+	bytes baseFeePerGas = 12;
+	bytes blockHash    = 13;
+	repeated bytes transactions = 14;
+}

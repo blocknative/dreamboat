@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient,Streamer
 package relay
 
 import (
@@ -64,8 +64,8 @@ type Datastore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
-	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
+	PutPayload(context.Context, structs.PayloadKey, *structs.BlockAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockAndTrace, bool, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
@@ -88,6 +88,11 @@ type Beacon interface {
 	PublishBlock(block *types.SignedBeaconBlock) error
 }
 
+type Streamer interface {
+	PublishStoreBlock() chan structs.BlockAndTrace
+	PublishCacheBlock() chan structs.BlockAndTrace
+}
+
 type RelayConfig struct {
 	BuilderSigningDomain  types.Domain
 	ProposerSigningDomain types.Domain
@@ -101,6 +106,8 @@ type RelayConfig struct {
 	TTL time.Duration
 
 	RegistrationCacheTTL time.Duration
+
+	Distributed, StreamSubmissions bool
 }
 
 type Relay struct {
@@ -117,6 +124,8 @@ type Relay struct {
 
 	bvc BlockValidationClient
 
+	s Streamer
+
 	beacon      Beacon
 	beaconState State
 
@@ -127,12 +136,13 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, a Auctioneer, bvc BlockValidationClient) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, a Auctioneer, bvc BlockValidationClient, s Streamer) *Relay {
 	rs := &Relay{
 		d:              d,
 		a:              a,
 		l:              l,
 		bvc:            bvc,
+		s:              s,
 		ver:            ver,
 		config:         config,
 		cache:          cache,
@@ -214,6 +224,18 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	m.AppendSince(tSignature, "getHeader", "signature")
 	if err != nil {
 		return nil, ErrInternal
+	}
+
+	if rs.config.Distributed { // TODO: run inside goroutine? If so, what context to use?
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), DurationPerSlot)
+			defer cancel()
+			select {
+			case rs.s.PublishCacheBlock() <- maxProfitBlock.Payload:
+			case <-ctx.Done():
+				logger.Warnf("fail to stream cache block: %s", ctx.Err())
+			}
+		}()
 	}
 
 	logger.With(log.F{
@@ -327,7 +349,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"blockNumber":      payload.Payload.Data.BlockNumber,
 		"stateRoot":        payload.Payload.Data.StateRoot,
 		"feeRecipient":     payload.Payload.Data.FeeRecipient,
-		"bid":              payload.Bid.Data.Message.Value,
+		"bid":              payload.Trace.Message.Value,
 		"from_cache":       fromCache,
 		"numTx":            len(payload.Payload.Data.Transactions),
 		"processingTimeMs": time.Since(tStart).Milliseconds(),

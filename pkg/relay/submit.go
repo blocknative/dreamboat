@@ -190,6 +190,14 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, su
 	}
 	m.AppendSince(tPutHeader, "submitBlock", "putHeader")
 
+	if rs.config.Distributed && rs.config.StreamSubmissions {
+		select {
+		case rs.s.PublishStoreBlock() <- complete.Payload:
+		case <-ctx.Done():
+			return newMax, ctx.Err()
+		}
+	}
+
 	return newMax, nil
 }
 
@@ -294,12 +302,7 @@ func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.Payloa
 	}
 }
 
-func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
-	getHeaderResponse := types.GetHeaderResponse{
-		Version: "bellatrix",
-		Data:    signedBuilderBid,
-	}
-
+func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockAndTrace { // TODO(l): remove FB type
 	getPayloadResponse := types.GetPayloadResponse{
 		Version: "bellatrix",
 		Data:    submitBlockRequest.ExecutionPayload,
@@ -310,9 +313,8 @@ func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderB
 		Signature: submitBlockRequest.Signature,
 	}
 
-	return structs.BlockBidAndTrace{
+	return structs.BlockAndTrace{
 		Trace:   &signedBidTrace,
-		Bid:     &getHeaderResponse,
 		Payload: &getPayloadResponse,
 	}
 }

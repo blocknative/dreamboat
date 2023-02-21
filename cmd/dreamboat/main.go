@@ -21,8 +21,12 @@ import (
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethhttp"
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethrpc"
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethws"
+	"github.com/blocknative/dreamboat/pkg/stream"
+	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 
 	"github.com/blocknative/dreamboat/pkg/datastore"
+	blockRedis "github.com/blocknative/dreamboat/pkg/datastore/block/redis"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/validators"
@@ -242,6 +246,55 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
+
+	// streaming layer flags
+	&cli.BoolFlag{
+		Name:    "relay-distribution",
+		Usage:   "run relay as a distributed system with multiple replicas",
+		Value:   false,
+		EnvVars: []string{"RELAY_DISTRIBUTION"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-distribution-id",
+		Usage:   "the id of the relay to differentiate from other replicas",
+		Value:   "",
+		EnvVars: []string{"RELAY_DISTRIBUTION_ID"},
+	},
+	&cli.UintFlag{
+		Name:    "relay-distribution-stream-workers",
+		Usage:   "number of workers publishing and processing subscriptions in the stream",
+		Value:   100,
+		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_WORKERS"},
+	},
+	&cli.BoolFlag{
+		Name:    "relay-distribution-publish-submissions",
+		Usage:   "publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published",
+		Value:   false,
+		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_SUBMISSIONS"},
+	},
+	&cli.DurationFlag{
+		Name:    "relay-distribution-ttl",
+		Usage:   "TTL of the data that is distributed",
+		Value:   time.Minute,
+		EnvVars: []string{"RELAY_DISTRIBUTION_TTL"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-distribution-pubsub-topic",
+		Usage:   "Pubsub topic for streaming payloads",
+		Value:   "relay/payload",
+		EnvVars: []string{"RELAY_DISTRIBUTION_PUBSUB_TOPIC"},
+	},
+	&cli.IntFlag{
+		Name:    "relay-distribution-publish-queue",
+		Usage:   "Pubsub publish queue size",
+		Value:   100,
+		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_QUEUE"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-distribution-redis-uri",
+		Usage:   "Redis URI",
+		EnvVars: []string{"RELAY_DISTRIBUTION_REDIS_URI"},
+	},
 }
 
 const (
@@ -251,6 +304,12 @@ const (
 var (
 	config pkg.Config
 )
+
+type Datastore interface {
+	relay.Datastore
+	FixOrphanHeaders(context.Context, time.Duration) error
+	MemoryCleanup(context.Context, time.Duration, time.Duration) error
+}
 
 // Main starts the relay
 func main() {
@@ -313,6 +372,8 @@ func setup() cli.BeforeFunc {
 
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
+		cContext, cancel := context.WithCancel(c.Context)
+
 		if err := config.Validate(); err != nil {
 			return err
 		}
@@ -332,11 +393,17 @@ func run() cli.ActionFunc {
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
 
+		var (
+			ds       Datastore
+			streamer relay.Streamer
+		)
+
 		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
 		if err != nil {
 			logger.WithError(err).Error("failed to initialize datastore")
 			return err
 		}
+
 		logger.With(log.F{
 			"service":     "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
@@ -348,7 +415,7 @@ func run() cli.ActionFunc {
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
 
-		ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
+		ds, err = datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
@@ -371,6 +438,55 @@ func run() cli.ActionFunc {
 			if err := <-errCh; err != nil {
 				return fmt.Errorf("fail to fix orphan headers: %w", err)
 			}
+		}
+
+		if c.Bool("relay-distribution") {
+			timeStreamStart := time.Now()
+			redisClient := redis.NewClient(&redis.Options{
+				Addr: c.String("relay-distribution-redis-uri"),
+			})
+
+			// init datastore
+			redisDatastore := &blockRedis.RedisDatastore{Redis: redisClient}
+			ldDatastore := datastore.NewLocalRemoteDatastore(ds, redisDatastore, config.Log)
+			ldDatastore.AttachMetrics(m)
+
+			ds = ldDatastore
+
+			// init streamer
+			pubsub := &stream.RedisPubsub{Redis: redisClient, Logger: config.Log}
+
+			id := c.String("relay-distribution-id")
+			if id == "" {
+				id = uuid.NewString()
+			}
+
+			streamConfig := stream.StreamConfig{
+				Logger:          config.Log,
+				ID:              id,
+				TTL:             c.Duration("relay-distribution-ttl"),
+				PubsubTopic:     c.String("relay-distribution-pubsub-topic"),
+				StreamQueueSize: c.Int("relay-distribution-publish-queue"),
+			}
+
+			redisStreamer := stream.NewRedisStream(pubsub, streamConfig)
+			redisStreamer.AttachMetrics(m)
+
+			streamer = redisStreamer
+
+			redisStreamer.RunPublisherParallel(cContext, c.Uint("relay-distribution-stream-workers"))
+			config.Log.With(log.F{
+				"relay-service": "stream-publisher",
+				"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
+			}).Info("initialized")
+
+			if err := redisStreamer.RunSubscriberParallel(cContext, ds, c.Uint("relay-distribution-stream-workers")); err != nil {
+				return fmt.Errorf("fail to start stream subscriber: %w", err)
+			}
+			config.Log.With(log.F{
+				"relay-service": "stream-subscriber",
+				"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
+			}).Info("initialized")
 		}
 
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
@@ -465,7 +581,9 @@ func run() cli.ActionFunc {
 			TTL:                   config.TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
+			Distributed:           c.Bool("relay-distribution"),
+			StreamSubmissions:     c.Bool("relay-distribution-publish-submissions"),
+		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb, streamer)
 		r.AttachMetrics(m)
 
 		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
@@ -475,7 +593,7 @@ func run() cli.ActionFunc {
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
-		cContext, cancel := context.WithCancel(c.Context)
+		
 		go func(s *pkg.Service) error {
 			config.Log.Info("initialized beacon")
 			err := s.RunBeacon(cContext, beacon, validatorStoreManager, validatorCache)

@@ -85,7 +85,7 @@ func TestSubmitBlock(t *testing.T) {
 			}},
 	}, true)
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli, nil)
 
 	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequest)
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli, nil)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -216,7 +216,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli, nil)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -270,7 +270,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 		BuilderSigningDomain: relaySigningDomain,
 	}
 
-	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), bVCli, nil)
 
 	genesisTime := uint64(time.Now().Unix())
 	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
@@ -332,7 +332,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli, nil)
 
 	// generate and send 1st block
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
@@ -468,7 +468,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		},
 	}, true).AnyTimes()
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli, nil)
 
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
@@ -616,7 +616,7 @@ func TestRegistartionCache(t *testing.T) {
 		},
 	}, nil)
 
-	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli, nil)
 
 	skB1, pubKeyB1, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
