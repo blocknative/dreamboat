@@ -586,6 +586,14 @@ func run() cli.ActionFunc {
 		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb, streamer)
 		r.AttachMetrics(m)
 
+		go func(s *pkg.Service) error {
+			err := r.RunSlotDeliveredUpdater(cContext)
+			if err != nil {
+				cancel()
+			}
+			return err
+		}(service)
+
 		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
@@ -593,7 +601,6 @@ func run() cli.ActionFunc {
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
-		
 		go func(s *pkg.Service) error {
 			config.Log.Info("initialized beacon")
 			err := s.RunBeacon(cContext, beacon, validatorStoreManager, validatorCache)

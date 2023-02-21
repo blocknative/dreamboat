@@ -89,8 +89,10 @@ type Beacon interface {
 }
 
 type Streamer interface {
-	PublishStoreBlock() chan structs.BlockAndTrace
-	PublishCacheBlock() chan structs.BlockAndTrace
+	PublishStoreBlock() chan<- structs.BlockAndTrace
+	PublishCacheBlock() chan<- structs.BlockAndTrace
+	PublishSlotDelivered() chan<- structs.Slot
+	SlotDeliveredChan() <-chan structs.Slot
 }
 
 type RelayConfig struct {
@@ -133,6 +135,9 @@ type Relay struct {
 	deliveredCacheLock sync.RWMutex
 
 	m RelayMetrics
+
+	slotDelivered structs.Slot
+	slotMu        sync.RWMutex
 }
 
 // NewRelay relay service
@@ -153,6 +158,26 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 	}
 	rs.initMetrics()
 	return rs
+}
+
+func (rs *Relay) RunSlotDeliveredUpdater(ctx context.Context) error {
+	for {
+		select {
+		case slot := <-rs.s.SlotDeliveredChan():
+			rs.updateSlotDelivered(slot)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (rs *Relay) updateSlotDelivered(slot structs.Slot) {
+	rs.slotMu.Lock()
+	defer rs.slotMu.Unlock()
+
+	if rs.slotDelivered < slot {
+		rs.slotDelivered = slot
+	}
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
@@ -340,6 +365,14 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), DurationPerSlot)
+		defer cancel()
+		select {
+		case rs.s.PublishSlotDelivered() <- slot:
+		case <-ctx.Done():
+			logger.Warnf("fail to stream delivered slot: %s", ctx.Err())
 		}
 	}(rs, structs.Slot(payloadRequest.Message.Slot), trace)
 

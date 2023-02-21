@@ -37,22 +37,27 @@ type StreamConfig struct {
 type RedisStream struct {
 	Pubsub Pubsub
 
-	cacheRequests chan structs.BlockAndTrace
-	storeRequests chan structs.BlockAndTrace
+	cacheRequests         chan structs.BlockAndTrace
+	storeRequests         chan structs.BlockAndTrace
+	slotDeliveredRequests chan structs.Slot
 
 	Config StreamConfig
 	Logger log.Logger
 
 	m StreamMetrics
+
+	slotDelivered chan structs.Slot
 }
 
 func NewRedisStream(ps Pubsub, cfg StreamConfig) *RedisStream {
 	s := RedisStream{
-		Pubsub:        ps,
-		cacheRequests: make(chan structs.BlockAndTrace, cfg.StreamQueueSize),
-		storeRequests: make(chan structs.BlockAndTrace, cfg.StreamQueueSize),
-		Config:        cfg,
-		Logger:        cfg.Logger.WithField("relay-service", "stream").WithField("type", "redis"),
+		Pubsub:                ps,
+		cacheRequests:         make(chan structs.BlockAndTrace, cfg.StreamQueueSize),
+		storeRequests:         make(chan structs.BlockAndTrace, cfg.StreamQueueSize),
+		slotDeliveredRequests: make(chan structs.Slot, cfg.StreamQueueSize),
+		slotDelivered:         make(chan structs.Slot, cfg.StreamQueueSize),
+		Config:                cfg,
+		Logger:                cfg.Logger.WithField("relay-service", "stream").WithField("type", "redis"),
 	}
 
 	s.initMetrics()
@@ -61,16 +66,19 @@ func NewRedisStream(ps Pubsub, cfg StreamConfig) *RedisStream {
 }
 
 func (s *RedisStream) RunSubscriberParallel(ctx context.Context, ds Datastore, num uint) error {
-	blocks := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic)
+	blocks := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+"/blocks")
+	delivered := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+"/delivered")
 
 	for i := uint(0); i < num; i++ {
-		go s.RunSubscriber(ctx, ds, blocks)
+		go s.RunBlockSubscriber(ctx, ds, blocks)
 	}
+
+	go s.RunSlotDeliveredSubscriber(ctx, delivered)
 
 	return nil
 }
 
-func (s *RedisStream) RunSubscriber(ctx context.Context, ds Datastore, blocks chan []byte) error {
+func (s *RedisStream) RunBlockSubscriber(ctx context.Context, ds Datastore, blocks chan []byte) error {
 	sBlock := StreamBlock{}
 
 	for rawSBlock := range blocks {
@@ -93,6 +101,24 @@ func (s *RedisStream) RunSubscriber(ctx context.Context, ds Datastore, blocks ch
 			if err := s.storePayload(ctx, ds, block); err != nil {
 				s.Logger.WithError(err).With(block).Warn("failed to store payload: %s")
 			}
+		}
+	}
+
+	return ctx.Err()
+}
+
+func (s *RedisStream) RunSlotDeliveredSubscriber(ctx context.Context, slots chan []byte) error {
+	slotDelivered := SlotDelivered{}
+
+	for rawSlot := range slots {
+		if err := proto.Unmarshal(rawSlot, &slotDelivered); err != nil {
+			s.Logger.Warnf("fail to decode stream slot delivered: %s", err.Error())
+		}
+
+		select {
+		case s.slotDelivered <- structs.Slot(slotDelivered.Slot):
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
@@ -126,12 +152,20 @@ func (s *RedisStream) RunPublisher(ctx context.Context) error {
 
 }
 
-func (s *RedisStream) PublishStoreBlock() chan structs.BlockAndTrace {
+func (s *RedisStream) PublishStoreBlock() chan<- structs.BlockAndTrace {
 	return s.storeRequests
 }
 
-func (s *RedisStream) PublishCacheBlock() chan structs.BlockAndTrace {
+func (s *RedisStream) PublishCacheBlock() chan<- structs.BlockAndTrace {
 	return s.cacheRequests
+}
+
+func (s *RedisStream) PublishSlotDelivered() chan<- structs.Slot {
+	return s.slotDeliveredRequests
+}
+
+func (s *RedisStream) SlotDeliveredChan() <-chan structs.Slot {
+	return s.slotDelivered
 }
 
 func (s *RedisStream) encodeAndPublish(ctx context.Context, block *structs.BlockAndTrace, isCache bool) {

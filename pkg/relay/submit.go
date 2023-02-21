@@ -75,6 +75,12 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 }
 
 func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error) {
+	// check if delivered in stream layer
+	if rs.isPayloadDeliveredInStream(slot) {
+		return ErrPayloadAlreadyDelivered
+	}
+
+	// check if delivered in local cache and DB
 	rs.deliveredCacheLock.RLock()
 	_, ok := rs.deliveredCache[slot]
 	rs.deliveredCacheLock.RUnlock()
@@ -100,6 +106,12 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error
 	}
 
 	return nil
+}
+
+func (rs *Relay) isPayloadDeliveredInStream(slot uint64) bool {
+	rs.slotMu.RLock()
+	defer rs.slotMu.RLock()
+	return slot <= uint64(rs.slotDelivered)
 }
 
 func (rs *Relay) validateBlock(ctx context.Context, submitBlockRequest types.BuilderSubmitBlockRequest) (err error) {

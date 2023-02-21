@@ -1,0 +1,8 @@
+syntax = "proto3";
+package stream;
+
+option go_package = "pkg/stream";
+
+message SlotDelivered {
+    uint64 slot = 1;
+}
