@@ -109,7 +109,7 @@ func (s *LocalRemoteDatastore) GetPayload(ctx context.Context, key structs.Paylo
 		}
 	}(ctx, responses, id)
 
-	for i := 0; i < cap(responses); i++ {
+	for i := 0; i < 2; i++ {
 		var resp getPayloadResponse
 		select {
 		case resp = <-responses:
