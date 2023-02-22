@@ -54,10 +54,10 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.H
 }
 
 func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) (bts []structs.BidTraceWithTimestamp, err error) {
-
-	var i = 2
+	var i = 1
 	parts := []string{"relay_id = $" + strconv.Itoa(i)}
 	data := []interface{}{s.RelayID}
+	i++
 
 	if payload.Slot > 0 {
 		parts = append(parts, "slot = $"+strconv.Itoa(i))
@@ -98,7 +98,6 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 
 	qBuilder.WriteString(` ORDER BY slot DESC, block_time DESC, block_hash DESC LIMIT $` + strconv.Itoa(i))
 	data = append(data, payload.Limit)
-
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
@@ -148,10 +147,10 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, payload
 }
 
 func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error) {
-	//GetDeliveredPayloads(ctx context.Context, relayID int, queryArgs structs.GetDeliveredPayloadsFilters) (bts []structs.BidTraceExtended, err error) {
-	var i = 2
+	var i = 1
 	parts := []string{"relay_id = $" + strconv.Itoa(i)}
 	data := []interface{}{s.RelayID}
+	i++
 
 	if queryArgs.Slot > 0 {
 		parts = append(parts, "slot = $"+strconv.Itoa(i))
