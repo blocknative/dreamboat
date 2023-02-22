@@ -65,7 +65,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		i++
 	}
 
-	if payload.BlockHash.String() != "" {
+	if payload.BlockHash != [32]byte{} {
 		parts = append(parts, "block_hash = $"+strconv.Itoa(i))
 		data = append(data, payload.BlockHash.String())
 		i++
@@ -162,7 +162,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		i++
 	}
 
-	if queryArgs.BlockHash.String() != "" {
+	if queryArgs.BlockHash != [32]byte{} {
 		parts = append(parts, "block_hash = $"+strconv.Itoa(i))
 		data = append(data, queryArgs.BlockHash)
 		i++
