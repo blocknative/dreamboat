@@ -108,16 +108,32 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 	}
 
 	defer rows.Close()
-
+	var (
+		builderpubkey        []byte
+		proposerPubkey       []byte
+		proposerFeeRecipient []byte
+		parentHash           []byte
+		blockHash            []byte
+		value                []byte
+	)
 	for rows.Next() {
+
 		bt := structs.BidTraceWithTimestamp{}
 		t := time.Time{}
-		err = rows.Scan(&t, &bt.Slot, &bt.BuilderPubkey, &bt.ProposerPubkey,
-			&bt.ProposerFeeRecipient, &bt.ParentHash, &bt.BlockHash, &bt.Value, &bt.GasUsed, &bt.GasLimit, &bt.BlockNumber, &bt.NumTx)
+		err = rows.Scan(&t, &bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &value,
+			&bt.GasUsed, &bt.GasLimit, &bt.BlockNumber, &bt.NumTx)
 		if err != nil {
 			return nil, err
 		}
+		bt.BuilderPubkey.UnmarshalText(builderpubkey)
+		bt.ProposerPubkey.UnmarshalText(proposerPubkey)
+		bt.ProposerFeeRecipient.UnmarshalText(proposerFeeRecipient)
+		bt.ParentHash.UnmarshalText(parentHash)
+		bt.BlockHash.UnmarshalText(blockHash)
+		bt.Value.UnmarshalText(value)
+
 		bt.Timestamp = uint64(t.Unix())
+		bt.TimestampMs = uint64(t.UnixMicro())
 		bts = append(bts, bt)
 	}
 	return bts, err
@@ -224,12 +240,28 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 
 	defer rows.Close()
 
+	var (
+		builderpubkey        []byte
+		proposerPubkey       []byte
+		proposerFeeRecipient []byte
+		parentHash           []byte
+		blockHash            []byte
+		value                []byte
+	)
 	for rows.Next() {
 		bt := structs.BidTraceExtended{}
-		err = rows.Scan(&bt.Slot, &bt.BuilderPubkey, &bt.ProposerPubkey, &bt.ProposerFeeRecipient, &bt.ParentHash, &bt.BlockHash, &bt.BlockNumber, &bt.NumTx, &bt.Value, &bt.GasUsed, &bt.GasLimit)
+		err = rows.Scan(&bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &bt.BlockNumber, &bt.NumTx, &value, &bt.GasUsed, &bt.GasLimit)
 		if err != nil {
 			return nil, err
 		}
+
+		bt.BuilderPubkey.UnmarshalText(builderpubkey)
+		bt.ProposerPubkey.UnmarshalText(proposerPubkey)
+		bt.ProposerFeeRecipient.UnmarshalText(proposerFeeRecipient)
+		bt.ParentHash.UnmarshalText(parentHash)
+		bt.BlockHash.UnmarshalText(blockHash)
+		bt.Value.UnmarshalText(value)
+
 		bts = append(bts, bt)
 	}
 	return bts, err
