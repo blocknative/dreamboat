@@ -48,7 +48,7 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.H
 		inserted_at = NOW()`,
 		s.RelayID, bid.Slot, bid.HeaderAndTrace.Header.ParentHash.String(), bid.HeaderAndTrace.Header.BlockHash.String(), bid.HeaderAndTrace.Trace.BuilderPubkey.String(),
 		bid.HeaderAndTrace.Trace.ProposerPubkey.String(), bid.HeaderAndTrace.Trace.ProposerFeeRecipient.String(), bid.HeaderAndTrace.Header.GasUsed,
-		bid.HeaderAndTrace.Header.GasLimit, bid.HeaderAndTrace.Trace.Value, uint64(bid.Slot)/uint64(SlotsPerEpoch), bid.HeaderAndTrace.Trace.NumTx,
+		bid.HeaderAndTrace.Header.GasLimit, bid.HeaderAndTrace.Trace.Value.String(), uint64(bid.Slot)/uint64(SlotsPerEpoch), bid.HeaderAndTrace.Trace.NumTx,
 		bid.HeaderAndTrace.Header.BlockNumber, isMostProfitable, time.Unix(int64(bid.HeaderAndTrace.Header.Timestamp), 0))
 	return err
 }
@@ -143,7 +143,7 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, payload
 		s.RelayID, uint64(slot), uint64(slot)/uint64(SlotsPerEpoch), payload.Trace.BidTraceExtended.BuilderPubkey.String(), payload.Trace.BidTraceExtended.ProposerPubkey.String(),
 		payload.Trace.BidTraceExtended.ProposerFeeRecipient.String(), payload.Trace.BidTraceExtended.ParentHash.String(), payload.Trace.BidTraceExtended.BlockHash.String(),
 		payload.Trace.BidTraceExtended.NumTx, payload.BlockNumber, payload.Trace.BidTraceExtended.GasUsed, payload.Trace.BidTraceExtended.GasLimit,
-		payload.Trace.BidTraceExtended.Value)
+		payload.Trace.BidTraceExtended.Value.String())
 	return err
 }
 
