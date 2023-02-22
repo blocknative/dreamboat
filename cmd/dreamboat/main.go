@@ -203,6 +203,12 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"RELAY_VALIDATOR_DATABASE_URL"},
 	},
+	&cli.StringFlag{
+		Name:    "relay-dataapi-database-url",
+		Usage:   "address of postgress database for data api, if empty - default, badger will be used",
+		Value:   "",
+		EnvVars: []string{"RELAY_DATAAPI_DATABASE_URL"},
+	},
 	&cli.BoolFlag{
 		Name:    "relay-fast-boot",
 		Usage:   "speed up booting up of relay, adding temporary inconsistency on the builder_blocks_received endpoint",
@@ -374,8 +380,8 @@ func run() cli.ActionFunc {
 			simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
 			if err := simRPCCli.Dial(c.Context); err != nil {
 				return fmt.Errorf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
-				simFallb.AddClient(simRPCCli)
 			}
+			simFallb.AddClient(simRPCCli)
 		}
 
 		if simWSAddr := c.String("block-validation-endpoint-ws"); simWSAddr != "" {
@@ -406,6 +412,7 @@ func run() cli.ActionFunc {
 			}
 			m.RegisterDB(valPG, "registrations")
 			valDS = valPostgres.NewDatastore(valPG)
+			defer valPG.Close()
 		} else { // by default use existsing storage
 			valDS = valBadger.NewDatastore(storage, config.TTL)
 		}
@@ -425,6 +432,7 @@ func run() cli.ActionFunc {
 			}
 			m.RegisterDB(valPG, "dataapi")
 			daDS = daPostgres.NewDatastore(valPG, 0)
+			defer valPG.Close()
 		} else { // by default use existsing storage
 			daDS = daBadger.NewDatastore(storage, storage.DB, config.TTL)
 		}
