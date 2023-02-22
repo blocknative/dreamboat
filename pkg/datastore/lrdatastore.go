@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/google/uuid"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
@@ -15,35 +14,18 @@ import (
 )
 
 type LocalDatastore interface {
-	CheckSlotDelivered(context.Context, uint64) (bool, error)
-	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
-
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockAndTrace, bool, error)
-
-	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
-	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
-
-	// to be changed
-	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
-	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
-	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
-	GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
-	GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
-
-	FixOrphanHeaders(context.Context, time.Duration) error
-	MemoryCleanup(context.Context, time.Duration, time.Duration) error
 }
 
 type RemoteDatastore interface {
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockAndTrace, error)
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockAndTrace, bool, error)
 	PutPayload(context.Context, structs.PayloadKey, *structs.BlockAndTrace, time.Duration) error
 }
 
 type LocalRemoteDatastore struct {
-	LocalDatastore
+	Local  LocalDatastore
 	Remote RemoteDatastore
 
 	Logger log.Logger
@@ -53,9 +35,9 @@ type LocalRemoteDatastore struct {
 
 func NewLocalRemoteDatastore(local LocalDatastore, remote RemoteDatastore, l log.Logger) *LocalRemoteDatastore {
 	s := LocalRemoteDatastore{
-		LocalDatastore: local,
-		Remote:         remote,
-		Logger:         l.WithField("relay-service", "stream-datastore"),
+		Local:  local,
+		Remote: remote,
+		Logger: l.WithField("relay-service", "stream-datastore"),
 	}
 
 	s.initMetrics()
@@ -91,7 +73,7 @@ func (s *LocalRemoteDatastore) GetPayload(ctx context.Context, key structs.Paylo
 
 	go func(ctx context.Context, resp chan getPayloadResponse, id string) {
 		timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "local"))
-		block, fromCache, err := s.LocalDatastore.GetPayload(ctx, key)
+		block, fromCache, err := s.Local.GetPayload(ctx, key)
 		timer1.ObserveDuration()
 		select {
 		case responses <- getPayloadResponse{id: id, block: block, isLocal: true, fromCache: fromCache, err: err}:
@@ -101,10 +83,10 @@ func (s *LocalRemoteDatastore) GetPayload(ctx context.Context, key structs.Paylo
 
 	go func(ctx context.Context, resp chan getPayloadResponse, id string) {
 		timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("getPayload", "remote"))
-		block, err := s.Remote.GetPayload(ctx, key)
+		block, isCache, err := s.Remote.GetPayload(ctx, key)
 		timer1.ObserveDuration()
 		select {
-		case responses <- getPayloadResponse{id: id, block: block, isLocal: false, fromCache: false, err: err}:
+		case responses <- getPayloadResponse{id: id, block: block, isLocal: false, fromCache: isCache, err: err}:
 		case <-ctx.Done():
 		}
 	}(ctx, responses, id)
@@ -155,5 +137,5 @@ func (s *LocalRemoteDatastore) PutPayload(ctx context.Context, key structs.Paylo
 	timer1 = prometheus.NewTimer(s.m.Timing.WithLabelValues("putPayload", "localStore"))
 	defer timer1.ObserveDuration()
 
-	return s.LocalDatastore.PutPayload(ctx, key, payload, ttl)
+	return s.Local.PutPayload(ctx, key, payload, ttl)
 }

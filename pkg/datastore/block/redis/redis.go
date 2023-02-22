@@ -14,15 +14,15 @@ type RedisDatastore struct {
 	Redis *redis.Client
 }
 
-func (r *RedisDatastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockAndTrace, error) {
+func (r *RedisDatastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockAndTrace, bool, error) {
 	cmd := r.Redis.Get(ctx, payloadKeyToRedisKey(key))
 	redisPayload, err := cmd.Result()
 	if err != nil {
-		return nil, fmt.Errorf("fail to get payload from Redis: %w", err)
+		return nil, false, fmt.Errorf("fail to get payload from Redis: %w", err)
 	}
 
 	var block structs.BlockAndTrace
-	return &block, json.Unmarshal([]byte(redisPayload), &block)
+	return &block, false, json.Unmarshal([]byte(redisPayload), &block)
 }
 
 func (r *RedisDatastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload *structs.BlockAndTrace, ttl time.Duration) error {

@@ -64,11 +64,8 @@ type Datastore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
-	PutPayload(context.Context, structs.PayloadKey, *structs.BlockAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockAndTrace, bool, error)
-
-	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
+	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	// to be changed
@@ -77,6 +74,11 @@ type Datastore interface {
 	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
 	GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
 	GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
+}
+
+type BlockDatastore interface {
+	PutPayload(context.Context, structs.PayloadKey, *structs.BlockAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockAndTrace, bool, error)
 }
 
 type Auctioneer interface {
@@ -113,7 +115,8 @@ type RelayConfig struct {
 }
 
 type Relay struct {
-	d Datastore
+	d  Datastore
+	bd BlockDatastore
 
 	a Auctioneer
 	l log.Logger
@@ -141,9 +144,10 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, a Auctioneer, bvc BlockValidationClient, s Streamer) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, bd BlockDatastore, a Auctioneer, bvc BlockValidationClient, s Streamer) *Relay {
 	rs := &Relay{
 		d:              d,
+		bd:             bd,
 		a:              a,
 		l:              l,
 		bvc:            bvc,
@@ -324,7 +328,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		Slot:      structs.Slot(payloadRequest.Message.Slot),
 	}
 
-	payload, fromCache, err := rs.d.GetPayload(ctx, key)
+	payload, fromCache, err := rs.bd.GetPayload(ctx, key)
 	if err != nil || payload == nil {
 		return nil, ErrNoPayloadFound
 	}

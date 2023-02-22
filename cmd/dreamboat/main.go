@@ -307,6 +307,7 @@ var (
 
 type Datastore interface {
 	relay.Datastore
+	relay.BlockDatastore
 	FixOrphanHeaders(context.Context, time.Duration) error
 	MemoryCleanup(context.Context, time.Duration, time.Duration) error
 }
@@ -395,6 +396,7 @@ func run() cli.ActionFunc {
 
 		var (
 			ds       Datastore
+			bds      relay.BlockDatastore
 			streamer relay.Streamer
 		)
 
@@ -422,6 +424,7 @@ func run() cli.ActionFunc {
 		if err = datastore.InitDatastoreMetrics(m); err != nil {
 			return err
 		}
+		bds = ds
 
 		errCh := make(chan error, 1)
 
@@ -451,7 +454,7 @@ func run() cli.ActionFunc {
 			ldDatastore := datastore.NewLocalRemoteDatastore(ds, redisDatastore, config.Log)
 			ldDatastore.AttachMetrics(m)
 
-			ds = ldDatastore
+			bds = ldDatastore
 
 			// init streamer
 			pubsub := &stream.RedisPubsub{Redis: redisClient, Logger: config.Log}
@@ -583,7 +586,7 @@ func run() cli.ActionFunc {
 			PublishBlock:          c.Bool("relay-publish-block"),
 			Distributed:           c.Bool("relay-distribution"),
 			StreamSubmissions:     c.Bool("relay-distribution-publish-submissions"),
-		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb, streamer)
+		}, beacon, validatorCache, valDS, verificator, state, ds, bds, auctioneer, simFallb, streamer)
 		r.AttachMetrics(m)
 
 		go func(s *pkg.Service) error {
