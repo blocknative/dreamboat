@@ -46,8 +46,8 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.H
 		was_most_profitable = EXCLUDED.was_most_profitable,
 		block_time = EXCLUDED.block_time,
 		inserted_at = NOW()`,
-		s.RelayID, bid.Slot, bid.HeaderAndTrace.Header.ParentHash, bid.HeaderAndTrace.Header.BlockHash, bid.HeaderAndTrace.Trace.BuilderPubkey,
-		bid.HeaderAndTrace.Trace.ProposerPubkey, bid.HeaderAndTrace.Trace.ProposerFeeRecipient, bid.HeaderAndTrace.Header.GasUsed,
+		s.RelayID, bid.Slot, bid.HeaderAndTrace.Header.ParentHash.String(), bid.HeaderAndTrace.Header.BlockHash.String(), bid.HeaderAndTrace.Trace.BuilderPubkey.String(),
+		bid.HeaderAndTrace.Trace.ProposerPubkey.String(), bid.HeaderAndTrace.Trace.ProposerFeeRecipient.String(), bid.HeaderAndTrace.Header.GasUsed,
 		bid.HeaderAndTrace.Header.GasLimit, bid.HeaderAndTrace.Trace.Value, uint64(bid.Slot)/uint64(SlotsPerEpoch), bid.HeaderAndTrace.Trace.NumTx,
 		bid.HeaderAndTrace.Header.BlockNumber, isMostProfitable, time.Unix(int64(bid.HeaderAndTrace.Header.Timestamp), 0))
 	return err
@@ -140,8 +140,8 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, payload
 		num_tx = EXCLUDED.num_tx,
 		block_number = EXCLUDED.block_number,
 		inserted_at = NOW()`,
-		s.RelayID, uint64(slot), uint64(slot)/uint64(SlotsPerEpoch), payload.Trace.BidTraceExtended.BuilderPubkey, payload.Trace.BidTraceExtended.ProposerPubkey,
-		payload.Trace.BidTraceExtended.ProposerFeeRecipient, payload.Trace.BidTraceExtended.ParentHash, payload.Trace.BidTraceExtended.BlockHash,
+		s.RelayID, uint64(slot), uint64(slot)/uint64(SlotsPerEpoch), payload.Trace.BidTraceExtended.BuilderPubkey.String(), payload.Trace.BidTraceExtended.ProposerPubkey.String(),
+		payload.Trace.BidTraceExtended.ProposerFeeRecipient.String(), payload.Trace.BidTraceExtended.ParentHash.String(), payload.Trace.BidTraceExtended.BlockHash.String(),
 		payload.Trace.BidTraceExtended.NumTx, payload.BlockNumber, payload.Trace.BidTraceExtended.GasUsed, payload.Trace.BidTraceExtended.GasLimit,
 		payload.Trace.BidTraceExtended.Value)
 	return err
@@ -238,7 +238,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 
 func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, error) {
 	var sl uint64
-	err := s.DB.QueryRowContext(ctx, "SELECT slot FROM payload_delivered WHERE slot = ? LIMIT 1", slot).Scan(&sl)
+	err := s.DB.QueryRowContext(ctx, "SELECT slot FROM payload_delivered WHERE slot = $1 LIMIT 1", slot).Scan(&sl)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
