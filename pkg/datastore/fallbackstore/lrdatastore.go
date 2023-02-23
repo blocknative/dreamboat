@@ -1,4 +1,4 @@
-package datastore
+package fallbackstore
 
 import (
 	"context"

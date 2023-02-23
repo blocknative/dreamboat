@@ -7,16 +7,16 @@ import (
 	"github.com/lthibault/log"
 )
 
-type RedisPubsub struct {
+type Pubsub struct {
 	Redis  *redis.Client
 	Logger log.Logger
 }
 
-func (r *RedisPubsub) Publish(ctx context.Context, topic string, data []byte) error {
+func (r *Pubsub) Publish(ctx context.Context, topic string, data []byte) error {
 	return r.Redis.Publish(ctx, topic, data).Err()
 }
 
-func (r *RedisPubsub) Subscribe(ctx context.Context, topic string) chan []byte {
+func (r *Pubsub) Subscribe(ctx context.Context, topic string) chan []byte {
 	sub := make(chan []byte)
 
 	go func() {

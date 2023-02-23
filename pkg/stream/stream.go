@@ -34,7 +34,7 @@ type StreamConfig struct {
 	StreamQueueSize int
 }
 
-type RedisStream struct {
+type Client struct {
 	Pubsub Pubsub
 
 	cacheRequests         chan structs.BlockAndTrace
@@ -49,8 +49,8 @@ type RedisStream struct {
 	slotDelivered chan structs.Slot
 }
 
-func NewRedisStream(ps Pubsub, cfg StreamConfig) *RedisStream {
-	s := RedisStream{
+func NewClient(ps Pubsub, cfg StreamConfig) *Client {
+	s := Client{
 		Pubsub:                ps,
 		cacheRequests:         make(chan structs.BlockAndTrace, cfg.StreamQueueSize),
 		storeRequests:         make(chan structs.BlockAndTrace, cfg.StreamQueueSize),
@@ -65,7 +65,7 @@ func NewRedisStream(ps Pubsub, cfg StreamConfig) *RedisStream {
 	return &s
 }
 
-func (s *RedisStream) RunSubscriberParallel(ctx context.Context, ds Datastore, num uint) error {
+func (s *Client) RunSubscriberParallel(ctx context.Context, ds Datastore, num uint) error {
 	blocks := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+"/blocks")
 	delivered := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+"/delivered")
 
@@ -78,7 +78,7 @@ func (s *RedisStream) RunSubscriberParallel(ctx context.Context, ds Datastore, n
 	return nil
 }
 
-func (s *RedisStream) RunBlockSubscriber(ctx context.Context, ds Datastore, blocks chan []byte) error {
+func (s *Client) RunBlockSubscriber(ctx context.Context, ds Datastore, blocks chan []byte) error {
 	sBlock := StreamBlock{}
 
 	for rawSBlock := range blocks {
@@ -107,7 +107,7 @@ func (s *RedisStream) RunBlockSubscriber(ctx context.Context, ds Datastore, bloc
 	return ctx.Err()
 }
 
-func (s *RedisStream) RunSlotDeliveredSubscriber(ctx context.Context, slots chan []byte) error {
+func (s *Client) RunSlotDeliveredSubscriber(ctx context.Context, slots chan []byte) error {
 	slotDelivered := SlotDelivered{}
 
 	for rawSlot := range slots {
@@ -125,13 +125,13 @@ func (s *RedisStream) RunSlotDeliveredSubscriber(ctx context.Context, slots chan
 	return ctx.Err()
 }
 
-func (s *RedisStream) RunPublisherParallel(ctx context.Context, num uint) {
+func (s *Client) RunPublisherParallel(ctx context.Context, num uint) {
 	for i := uint(0); i < num; i++ {
 		go s.RunPublisher(ctx)
 	}
 }
 
-func (s *RedisStream) RunPublisher(ctx context.Context) error {
+func (s *Client) RunPublisher(ctx context.Context) error {
 	for {
 		select {
 		case req := <-s.cacheRequests:
@@ -152,23 +152,23 @@ func (s *RedisStream) RunPublisher(ctx context.Context) error {
 
 }
 
-func (s *RedisStream) PublishStoreBlock() chan<- structs.BlockAndTrace {
+func (s *Client) PublishStoreBlock() chan<- structs.BlockAndTrace {
 	return s.storeRequests
 }
 
-func (s *RedisStream) PublishCacheBlock() chan<- structs.BlockAndTrace {
+func (s *Client) PublishCacheBlock() chan<- structs.BlockAndTrace {
 	return s.cacheRequests
 }
 
-func (s *RedisStream) PublishSlotDelivered() chan<- structs.Slot {
+func (s *Client) PublishSlotDelivered() chan<- structs.Slot {
 	return s.slotDeliveredRequests
 }
 
-func (s *RedisStream) SlotDeliveredChan() <-chan structs.Slot {
+func (s *Client) SlotDeliveredChan() <-chan structs.Slot {
 	return s.slotDelivered
 }
 
-func (s *RedisStream) encodeAndPublish(ctx context.Context, block *structs.BlockAndTrace, isCache bool) {
+func (s *Client) encodeAndPublish(ctx context.Context, block *structs.BlockAndTrace, isCache bool) {
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "encode"))
 	rawBlock, err := proto.Marshal(ToStreamBlock(block, isCache, s.Config.ID))
 	if err != nil {
@@ -186,7 +186,7 @@ func (s *RedisStream) encodeAndPublish(ctx context.Context, block *structs.Block
 	}
 }
 
-func (s *RedisStream) cachePayload(ctx context.Context, ds Datastore, payload *structs.BlockAndTrace) error {
+func (s *Client) cachePayload(ctx context.Context, ds Datastore, payload *structs.BlockAndTrace) error {
 	header, err := types.PayloadToPayloadHeader(payload.Payload.Data)
 	if err != nil {
 		return err
@@ -222,7 +222,7 @@ func (s *RedisStream) cachePayload(ctx context.Context, ds Datastore, payload *s
 	return ds.CacheBlock(ctx, &completeBlock)
 }
 
-func (s *RedisStream) storePayload(ctx context.Context, ds Datastore, payload *structs.BlockAndTrace) error {
+func (s *Client) storePayload(ctx context.Context, ds Datastore, payload *structs.BlockAndTrace) error {
 	if err := ds.PutPayload(ctx, payloadToKey(payload), payload, s.Config.TTL); err != nil {
 		return err
 	}

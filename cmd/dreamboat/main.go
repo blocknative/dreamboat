@@ -22,6 +22,7 @@ import (
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethrpc"
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethws"
 	"github.com/blocknative/dreamboat/pkg/stream"
+	redisStream "github.com/blocknative/dreamboat/pkg/stream/transport/redis"
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 
@@ -312,6 +313,11 @@ type Datastore interface {
 	MemoryCleanup(context.Context, time.Duration, time.Duration) error
 }
 
+type Streamer interface{
+	relay.Streamer
+	AttachMetrics(m *metrics.Metrics)
+}
+
 // Main starts the relay
 func main() {
 	app := &cli.App{
@@ -450,14 +456,10 @@ func run() cli.ActionFunc {
 			})
 
 			// init datastore
-			redisDatastore := &blockRedis.RedisDatastore{Redis: redisClient}
-			ldDatastore := datastore.NewLocalRemoteDatastore(ds, redisDatastore, config.Log)
-			ldDatastore.AttachMetrics(m)
-
-			bds = ldDatastore
+			bds = &blockRedis.RedisDatastore{Redis: redisClient}
 
 			// init streamer
-			pubsub := &stream.RedisPubsub{Redis: redisClient, Logger: config.Log}
+			pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: config.Log}
 
 			id := c.String("relay-distribution-id")
 			if id == "" {
@@ -472,16 +474,16 @@ func run() cli.ActionFunc {
 				StreamQueueSize: c.Int("relay-distribution-publish-queue"),
 			}
 
-			redisStreamer := stream.NewRedisStream(pubsub, streamConfig)
+			redisStreamer := stream.NewClient(pubsub, streamConfig)
 			redisStreamer.AttachMetrics(m)
 
 			streamer = redisStreamer
 
 			redisStreamer.RunPublisherParallel(cContext, c.Uint("relay-distribution-stream-workers"))
-			config.Log.With(log.F{
-				"relay-service": "stream-publisher",
-				"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
-			}).Info("initialized")
+
+			if err := redisStreamer.RunSubscriberParallel(cContext, ds, c.Uint("relay-distribution-stream-workers")); err != nil {
+				return fmt.Errorf("fail to start stream subscriber: %w", err)
+			}
 
 			if err := redisStreamer.RunSubscriberParallel(cContext, ds, c.Uint("relay-distribution-stream-workers")); err != nil {
 				return fmt.Errorf("fail to start stream subscriber: %w", err)
