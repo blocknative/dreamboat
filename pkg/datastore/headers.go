@@ -367,7 +367,7 @@ func (s *Datastore) getOrphanedHeaders(ctx context.Context, slot uint64) (items 
 func (s *Datastore) FixOrphanHeaders(ctx context.Context, latestSlot uint64, ttl time.Duration) error {
 	buff := new(bytes.Buffer)
 	for slot := latestSlot - FixSlotLag; slot < latestSlot+1; slot++ {
-		items, err := s.getOrphanedHeaders(ctx, latestSlot)
+		items, err := s.getOrphanedHeaders(ctx, slot)
 		if err != nil {
 			return err
 		}
