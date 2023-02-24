@@ -493,7 +493,7 @@ func TestGetPutComplex(t *testing.T) {
 	_, err = ds.GetHeadersBySlot(ctx, uint64(slot))
 	require.Error(t, datastore.ErrNotFound, err)
 
-	err = ds.FixOrphanHeaders(ctx, time.Hour)
+	err = ds.FixOrphanHeaders(ctx, uint64(slot), time.Hour)
 	require.NoError(t, err)
 
 	har, err := ds.GetHeadersBySlot(ctx, uint64(slot))

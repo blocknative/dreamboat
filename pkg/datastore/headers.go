@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"regexp"
 	"sort"
 	"strconv"
 	"time"
@@ -23,6 +22,8 @@ import (
 const (
 	HeaderPrefix        = "header-"
 	HeaderContentPrefix = "hc/"
+
+	FixSlotLag = 5
 )
 
 var (
@@ -338,110 +339,78 @@ type LoadItem struct {
 	Content []byte
 }
 
-// FixOrphanHeaders is reading all the orphan headers from
-func (s *Datastore) FixOrphanHeaders(ctx context.Context, ttl time.Duration) error {
-	slotDoesNotExist := make(map[uint64][]LoadItem)
-
-	slotExists := make(map[uint64]struct{})
-
-	// Get all headers, rebuild
-	err := s.Badger.View(func(txn *badger.Txn) error {
+func (s *Datastore) getOrphanedHeaders(ctx context.Context, slot uint64) (items []LoadItem, err error) {
+	err = s.Badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false
 
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 
-		prefix := []byte("/" + HeaderContentPrefix)
-		re := regexp.MustCompile(`\/hc\/([^\/]+)\/([^\/]+)`)
-
+		prefix := []byte("/" + HeaderContentPrefix + "/" + strconv.FormatUint(slot, 10) + "/")
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
-			subM := re.FindSubmatch(item.Key())
-			if len(subM) != 3 {
-				continue
-			}
-			slot, err := strconv.ParseUint(string(subM[1]), 10, 64)
-			if err != nil {
-				continue
-			}
-
-			if _, ok := slotExists[slot]; ok { // we know it already exists
-				continue
-			}
-
-			if content, ok := slotDoesNotExist[slot]; ok { // we know it doesn't exists
-				li := LoadItem{Time: item.Version()}
-				li.Content, err = item.ValueCopy(nil)
-				if err != nil {
-					return err
-				}
-				slotDoesNotExist[slot] = append(content, li)
-				continue
-			}
-
-			_, err = txn.Get(HeaderKey(slot).Bytes())
-			if err == nil {
-				slotExists[slot] = struct{}{}
-				continue
-			}
-			if !errors.Is(err, badger.ErrKeyNotFound) {
-				return err
-			}
-
 			li := LoadItem{Time: item.Version()}
 			li.Content, err = item.ValueCopy(nil)
 			if err != nil {
 				return err
 			}
-			slotDoesNotExist[slot] = append([]LoadItem{}, li)
+			items = append(items, li)
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
 
+	return items, err
+}
+
+// FixOrphanHeaders is reading all the orphan headers from
+func (s *Datastore) FixOrphanHeaders(ctx context.Context, latestSlot uint64, ttl time.Duration) error {
 	buff := new(bytes.Buffer)
-	for slot, v := range slotDoesNotExist {
-		if v != nil || len(v) != 0 {
-			tempHC := NewHeaderController(100, time.Hour) // params doesn't matter here
+	for slot := latestSlot - FixSlotLag; slot < latestSlot+1; slot++ {
+		items, err := s.getOrphanedHeaders(ctx, slot)
+		if err != nil {
+			return err
+		}
 
-			buff.Reset()
-			sort.Slice(v, func(i, j int) bool {
-				return v[i].Time > v[j].Time
-			})
+		if items != nil || len(items) == 0 {
+			continue
+		}
+		tempHC := NewHeaderController(100, time.Hour) // params doesn't matter here
 
-			buff.WriteString("[")
-			for i, payload := range v {
-				if i > 0 {
-					buff.WriteString(",")
-				}
-				io.Copy(buff, bytes.NewReader(payload.Content))
-				hnt := structs.HeaderAndTrace{}
-				if err := json.Unmarshal(payload.Content, &hnt); err != nil {
-					return err
-				}
+		buff.Reset()
+		sort.Slice(items, func(i, j int) bool {
+			return items[i].Time > items[j].Time
+		})
 
-				if _, err := tempHC.Add(slot, hnt); err != nil {
-					return err
-				}
+		buff.WriteString("[")
+		for i, payload := range items {
+			if i > 0 {
+				buff.WriteString(",")
 			}
-			buff.WriteString("]")
-			if err := s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
+			io.Copy(buff, bytes.NewReader(payload.Content))
+			hnt := structs.HeaderAndTrace{}
+			if err := json.Unmarshal(payload.Content, &hnt); err != nil {
 				return err
 			}
 
-			maxProfit, ok := tempHC.GetMaxProfit(slot)
-			if !ok {
-				return errors.New("max profit from records not calculated")
-			}
-			if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace.BlockHash.String()), ttl); err != nil {
+			if _, err := tempHC.Add(slot, hnt); err != nil {
 				return err
 			}
 		}
+		buff.WriteString("]")
+		if err := s.TTLStorage.PutWithTTL(ctx, HeaderKey(slot), buff.Bytes(), ttl); err != nil {
+			return err
+		}
+
+		maxProfit, ok := tempHC.GetMaxProfit(slot)
+		if !ok {
+			continue
+		}
+		if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace.BlockHash.String()), ttl); err != nil {
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 func (s *Datastore) MemoryCleanup(ctx context.Context, slotPurgeDuration time.Duration, ttl time.Duration) error {

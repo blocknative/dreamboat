@@ -356,23 +356,6 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		errCh := make(chan error, 1)
-
-		go func(ctx context.Context, l log.Logger) {
-			if err := ds.FixOrphanHeaders(ctx, config.TTL); err != nil {
-				l.WithError(err).Error("fail to fix orphan headers")
-			} else {
-				l.Info("fixed orphan headers")
-			}
-			errCh <- err
-		}(c.Context, config.Log)
-
-		if !c.Bool("relay-fast-boot") {
-			if err := <-errCh; err != nil {
-				return fmt.Errorf("fail to fix orphan headers: %w", err)
-			}
-		}
-
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 
 		beacon, err := initBeacon(c.Context, config)
@@ -510,6 +493,34 @@ func run() cli.ActionFunc {
 		}
 
 		logger.Info("relay service ready")
+
+		errCh := make(chan error, 1)
+		go func(ctx context.Context, errCh chan error, l log.Logger, st *pkg.AtomicState) {
+			for {
+				cs := uint64(st.Beacon().CurrentSlot)
+				if cs == 0 {
+					time.Sleep(time.Second)
+					l.Warn("retrying on getting current slot")
+					continue
+				}
+
+				if err := ds.FixOrphanHeaders(ctx, cs, config.TTL); err != nil {
+					l.WithError(err).Error("failed to fix orphan headers")
+					errCh <- err
+					return
+				}
+
+				errCh <- nil
+				l.Info("fixed orphan headers")
+				return
+			}
+		}(c.Context, errCh, config.Log, state)
+
+		if !c.Bool("relay-fast-boot") {
+			if err := <-errCh; err != nil {
+				return fmt.Errorf("fail to fix orphan headers: %w", err)
+			}
+		}
 
 		mux := http.NewServeMux()
 		a.AttachToHandler(mux)
