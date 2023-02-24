@@ -340,7 +340,6 @@ type LoadItem struct {
 }
 
 func (s *Datastore) getOrphanedHeaders(ctx context.Context, slot uint64) (items []LoadItem, err error) {
-
 	err = s.Badger.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false
@@ -366,16 +365,14 @@ func (s *Datastore) getOrphanedHeaders(ctx context.Context, slot uint64) (items 
 
 // FixOrphanHeaders is reading all the orphan headers from
 func (s *Datastore) FixOrphanHeaders(ctx context.Context, latestSlot uint64, ttl time.Duration) error {
-
 	buff := new(bytes.Buffer)
 	for slot := latestSlot - FixSlotLag; slot < latestSlot+1; slot++ {
-
 		items, err := s.getOrphanedHeaders(ctx, latestSlot)
 		if err != nil {
 			return err
 		}
 
-		if items != nil && len(items) > 0 {
+		if items != nil || len(items) == 0 {
 			continue
 		}
 		tempHC := NewHeaderController(100, time.Hour) // params doesn't matter here
@@ -407,7 +404,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, latestSlot uint64, ttl
 
 		maxProfit, ok := tempHC.GetMaxProfit(slot)
 		if !ok {
-			return errors.New("max profit from records not calculated")
+			continue
 		}
 		if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace.BlockHash.String()), ttl); err != nil {
 			return err
