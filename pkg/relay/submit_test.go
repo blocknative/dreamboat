@@ -87,6 +87,8 @@ func TestSubmitBlock(t *testing.T) {
 
 	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
+	bs.EXPECT().HeadSlot().AnyTimes().Return(structs.Slot(submitRequest.Message.Slot))
+
 	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequest)
 	require.NoError(t, err)
 
@@ -252,7 +254,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	l := log.New()
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
-	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
+	//bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
@@ -351,6 +353,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		ProposerFeeRecipient: proposerFeeRecipient,
 		Value:                types.IntToU256(10),
 	}
+
+	bs.EXPECT().HeadSlot().AnyTimes().Return(structs.Slot(msgB1.Slot))
 
 	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
 	require.NoError(t, err)
@@ -486,6 +490,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		ProposerFeeRecipient: proposerFeeRecipient,
 		Value:                types.IntToU256(1000),
 	}
+
+	bs.EXPECT().HeadSlot().AnyTimes().Return(slot)
 
 	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
 	require.NoError(t, err)
@@ -634,6 +640,8 @@ func TestRegistartionCache(t *testing.T) {
 		ProposerFeeRecipient: proposerFeeRecipient,
 		Value:                types.IntToU256(1000),
 	}
+
+	bs.EXPECT().HeadSlot().AnyTimes().Return(structs.Slot(slot))
 
 	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
 	require.NoError(t, err)
