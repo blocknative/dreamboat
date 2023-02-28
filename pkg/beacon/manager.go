@@ -1,10 +1,12 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/beacon Datastore,ValidatorCache,BeaconClient,State
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/beacon Datastore,ValidatorCache,BeaconClient
 package beacon
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	bcli "github.com/blocknative/dreamboat/pkg/beacon/client"
@@ -40,36 +42,44 @@ type BeaconClient interface {
 	PublishBlock(block *types.SignedBeaconBlock) error
 }
 
-type State interface {
-	SetReady()
-
-	SetGenesis(structs.GenesisInfo)
-
-	Duties() structs.DutiesState
-	SetDuties(structs.DutiesState)
-
-	KnownValidators() structs.ValidatorsState
-	KnownValidatorsUpdateTime() time.Time
-	SetKnownValidators(structs.ValidatorsState)
-
-	HeadSlot() structs.Slot
-	SetHeadSlot(structs.Slot)
-}
-
 type Manager struct {
 	Log log.Logger
+
+	once  sync.Once
+	ready chan struct{}
+
+	// state
+	state        *AtomicState
+	headslotSlot structs.Slot
+	updateTime   atomic.Value
 }
 
-func NewManager(l log.Logger) *Manager {
+func NewManager(l log.Logger, as *AtomicState) *Manager {
 	return &Manager{
-		Log: l.WithField("relay-service", "Service"),
+		Log:   l.WithField("relay-service", "Service"),
+		state: as,
 	}
 }
 
-func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d Datastore, vCache ValidatorCache) error {
-	logger := s.Log.WithField("method", "Init")
+func (s *Manager) Ready() <-chan struct{} {
+	s.once.Do(func() {
+		s.ready = make(chan struct{})
+	})
+	return s.ready
+}
 
-	_, err := s.waitSynced(ctx, client)
+func (s *Manager) setReady() {
+	select {
+	case <-s.Ready():
+	default:
+		close(s.ready)
+	}
+}
+
+func (s *Manager) RunBeacon(ctx context.Context, client BeaconClient, d Datastore, vCache ValidatorCache) error {
+	logger := s.Log.WithField("method", "RunBeacon")
+
+	syncStatus, err := s.waitSynced(ctx, client)
 	if err != nil {
 		return err
 	}
@@ -78,45 +88,16 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 	if err != nil {
 		return fmt.Errorf("fail to get genesis from beacon: %w", err)
 	}
-	state.SetGenesis(genesis)
+	s.state.genesis.Store(genesis)
 	logger.
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	
-	events := make(chan bcli.HeadEvent, 1)
-
-	ctx, cancel := context.WithCancel(ctx)  // for stopping subscription after init is done
-	defer cancel()
-
-	client.SubscribeToHeadEvents(ctx, events)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case event := <-events:
-			headSlot := structs.Slot(event.Slot)
-			state.SetHeadSlot(headSlot)
-
-			// update proposer duties and known validators
-			if err := s.updateKnownValidators(ctx, state, client, headSlot); err != nil {
-				logger.WithError(err).Warn("failed to update known validators")
-				continue
-			}
-
-			entries, err := s.getProposerDuties(ctx, client, headSlot)
-			if err != nil {
-				return err
-			}
-			s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
-			return nil
-		}
+	entries, err := s.getProposerDuties(ctx, client, structs.Slot(syncStatus.HeadSlot))
+	if err != nil {
+		return err
 	}
-}
-
-func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d Datastore, vCache ValidatorCache) error {
-	logger := s.Log.WithField("method", "RunBeacon")
+	s.storeProposerDuties(ctx, d, vCache, s.headslotSlot, entries)
 
 	defer logger.Debug("beacon loop stopped")
 
@@ -131,7 +112,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 		case ev := <-events:
 			t := time.Now()
 
-			err := s.processNewSlot(ctx, state, client, ev, d, vCache)
+			err := s.processNewSlot(ctx, client, ev, d, vCache)
 			if err != nil {
 				logger.
 					With(ev).
@@ -140,17 +121,16 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				continue
 			}
 
-			validators := state.KnownValidators()
-			duties := state.Duties()
-			headSlot := state.HeadSlot()
+			validators := s.state.Beacon().KnownValidators()
+			duties := s.state.Beacon().ProposerDutiesResponse
 
 			logger.With(log.F{
-				"epoch":                     headSlot.Epoch(),
-				"slotHead":                  headSlot,
-				"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
-				"numDuties":                 len(duties.ProposerDutiesResponse),
-				"numKnownValidators":        len(validators.KnownValidators),
-				"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
+				"epoch":                     s.headslotSlot.Epoch(),
+				"slotHead":                  s.headslotSlot,
+				"slotStartNextEpoch":        structs.Slot(s.headslotSlot.Epoch()+1) * structs.SlotsPerEpoch,
+				"numDuties":                 len(duties),
+				"numKnownValidators":        len(validators),
+				"knownValidatorsUpdateTime": s.knownValidatorsUpdateTime(),
 				"processingTimeMs":          time.Since(t).Milliseconds(),
 			}).Debug("processed new slot")
 		}
@@ -175,42 +155,50 @@ func (s *Manager) waitSynced(ctx context.Context, client BeaconClient) (*bcli.Sy
 	}
 }
 
-func (s *Manager) processNewSlot(ctx context.Context, state State, client BeaconClient, event bcli.HeadEvent, d Datastore, vCache ValidatorCache) error {
+func (s *Manager) processNewSlot(ctx context.Context, client BeaconClient, event bcli.HeadEvent, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "ProcessNewSlot")
 
 	received := structs.Slot(event.Slot)
-	headSlot := state.HeadSlot()
-	if received <= headSlot {
+	if received <= s.headslotSlot {
 		return nil
 	}
 
-	if headSlot > 0 {
-		for slot := headSlot + 1; slot < received; slot++ {
+	if s.headslotSlot > 0 {
+		for slot := s.headslotSlot + 1; slot < received; slot++ {
 			s.Log.Warnf("missedSlot %d", slot)
 		}
 	}
 
-	state.SetHeadSlot(received)
-	headSlot = received
+	s.headslotSlot = received
 
 	// update proposer duties and known validators in the background
-	if (DurationPerEpoch / 2) < time.Since(state.KnownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
+	if (DurationPerEpoch / 2) < time.Since(s.knownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
 		go func(slot structs.Slot) {
-			if err := s.updateKnownValidators(ctx, state, client, slot); err != nil {
+			if err := s.updateKnownValidators(ctx, client, slot); err != nil {
 				logger.WithError(err).Warn("failed to update known validators")
 				return
 			}
-			state.SetReady()
+
+			s.updateTime.Store(time.Now())
+			s.setReady()
 		}(received)
 	}
 
-	entries, err := s.getProposerDuties(ctx, client, headSlot)
+	entries, err := s.getProposerDuties(ctx, client, s.headslotSlot)
 	if err != nil {
 		return err
 	}
-	s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
+	s.storeProposerDuties(ctx, d, vCache, s.headslotSlot, entries)
 
 	return nil
+}
+
+func (s *Manager) knownValidatorsUpdateTime() time.Time {
+	updateTime, ok := s.updateTime.Load().(time.Time)
+	if !ok {
+		return time.Time{}
+	}
+	return updateTime
 }
 
 func (s *Manager) getProposerDuties(ctx context.Context, client BeaconClient, headSlot structs.Slot) (entries []bcli.RegisteredProposersResponseData, err error) {
@@ -233,7 +221,7 @@ func (s *Manager) getProposerDuties(ctx context.Context, client BeaconClient, he
 	return append(entries, next.Data...), nil
 }
 
-func (s *Manager) storeProposerDuties(ctx context.Context, state State, d Datastore, vCache ValidatorCache, headSlot structs.Slot, entries []bcli.RegisteredProposersResponseData) {
+func (s *Manager) storeProposerDuties(ctx context.Context, d Datastore, vCache ValidatorCache, headSlot structs.Slot, entries []bcli.RegisteredProposersResponseData) {
 	epoch := headSlot.Epoch()
 	logger := s.Log.With(log.F{
 		"method":    "UpdateProposerDuties",
@@ -242,7 +230,7 @@ func (s *Manager) storeProposerDuties(ctx context.Context, state State, d Datast
 		"epochTo":   epoch + 1,
 	})
 
-	newState := structs.DutiesState{
+	state := structs.DutiesState{
 		CurrentSlot:            headSlot,
 		ProposerDutiesResponse: make(structs.BuilderGetValidatorsResponseEntrySlice, 0, len(entries)),
 	}
@@ -259,16 +247,16 @@ func (s *Manager) storeProposerDuties(ctx context.Context, state State, d Datast
 				continue
 			}
 		}
-		newState.ProposerDutiesResponse = append(newState.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
+		state.ProposerDutiesResponse = append(state.ProposerDutiesResponse, types.BuilderGetValidatorsResponseEntry{
 			Slot:  e.Slot,
 			Entry: &reg.Entry,
 		})
 	}
-	state.SetDuties(newState)
+	s.state.duties.Store(state)
 }
 
-func (s *Manager) updateKnownValidators(ctx context.Context, state State, client BeaconClient, current structs.Slot) error {
-	newState := structs.ValidatorsState{}
+func (s *Manager) updateKnownValidators(ctx context.Context, client BeaconClient, current structs.Slot) error {
+	state := structs.ValidatorsState{}
 	validators, err := client.KnownValidators(current)
 	if err != nil {
 		return err
@@ -281,10 +269,10 @@ func (s *Manager) updateKnownValidators(ctx context.Context, state State, client
 		knownValidatorsByIndex[vs.Index] = types.NewPubkeyHex(vs.Validator.Pubkey)
 	}
 
-	newState.KnownValidators = knownValidators
-	newState.KnownValidatorsByIndex = knownValidatorsByIndex
+	state.KnownValidators = knownValidators
+	state.KnownValidatorsByIndex = knownValidatorsByIndex
 
-	state.SetKnownValidators(newState)
+	s.state.validators.Store(state)
 
 	return nil
 }
