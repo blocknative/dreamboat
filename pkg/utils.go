@@ -9,6 +9,8 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
+const Version = "0.3.6"
+
 type UserAgent string
 
 // ComputeDomain computes the signing domain
