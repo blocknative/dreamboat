@@ -25,6 +25,7 @@ func TestBeaconClientState(t *testing.T) {
 
 	databaseMock := mocks.NewMockDatastore(ctrl)
 	beaconMock := mocks.NewMockBeaconClient(ctrl)
+	stateMock := mocks.NewMockState(ctrl)
 
 	as := &beacon.AtomicState{}
 	bm := beacon.NewManager(log.New(), as)
@@ -49,10 +50,9 @@ func TestBeaconClientState(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := bm.RunBeacon(ctx, beaconMock, databaseMock, vCache)
+		err := bm.Run(ctx, stateMock, beaconMock, databaseMock, vCache)
 		require.Error(t, err, context.Canceled)
 	}()
-	<-bm.Ready()
 
 	time.Sleep(time.Second) // give time for the beacon state manager to kick-off
 

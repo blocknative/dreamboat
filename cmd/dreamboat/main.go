@@ -463,7 +463,7 @@ func run() cli.ActionFunc {
 		cContext, cancel := context.WithCancel(c.Context)
 		go func(s *beacon.Manager) error {
 			config.Log.Info("initialized beacon")
-			err := s.RunBeacon(cContext, beaconCli, validatorStoreManager, validatorCache)
+			err := s.Run(cContext, state, beaconCli, validatorStoreManager, validatorCache)
 			if err != nil {
 				cancel()
 			}
@@ -487,11 +487,12 @@ func run() cli.ActionFunc {
 			}
 			return err
 		}(m)
-		// wait for the relay service to be ready
+
+		// wait for the relay beacon state to be ready
 		select {
 		case <-cContext.Done():
 			return err
-		case <-service.Ready():
+		case <-state.Ready():
 		}
 
 		logger.Info("relay service ready")
@@ -499,7 +500,7 @@ func run() cli.ActionFunc {
 		errCh := make(chan error, 1)
 		go func(ctx context.Context, errCh chan error, l log.Logger, st *beacon.AtomicState) {
 			for {
-				cs := uint64(st.Beacon().CurrentSlot)
+				cs := uint64(st.Duties().CurrentSlot)
 				if cs == 0 {
 					time.Sleep(time.Second)
 					l.Warn("retrying on getting current slot")

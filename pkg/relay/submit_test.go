@@ -71,7 +71,7 @@ func TestSubmitBlock(t *testing.T) {
 	require.NoError(t, err)
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
 	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
@@ -137,7 +137,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	}
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
@@ -200,7 +200,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	}
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
@@ -273,7 +273,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime+1) // +1 in order to make timestamp invalid
 
 	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequest)
@@ -298,7 +298,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	bs := mocks.NewMockState(ctrl)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
@@ -433,7 +433,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	bs := mocks.NewMockState(ctrl)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
 	l := log.New()
 	ver := verify.NewVerificationManager(l, 20000)
@@ -572,7 +572,7 @@ func TestRegistartionCache(t *testing.T) {
 	bs := mocks.NewMockState(ctrl)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
 	l := log.New()
 	ver := verify.NewVerificationManager(l, 20000)
