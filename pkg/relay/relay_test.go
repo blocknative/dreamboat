@@ -238,8 +238,10 @@ func TestGetPayload(t *testing.T) {
 			request.Message.ProposerIndex: registration.Message.Pubkey.PubkeyHex(),
 		},
 	}
+	genesisState := structs.GenesisInfo{GenesisTime: genesisTime}
 
 	bs.EXPECT().KnownValidators().Return(validatorState).Times(1)
+	bs.EXPECT().Genesis().Return(genesisState).Times(1)
 
 	response, err := r.GetPayload(ctx, structs.NewMetricGroup(4), request)
 	require.NoError(t, err)
