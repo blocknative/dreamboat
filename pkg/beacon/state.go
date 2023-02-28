@@ -10,7 +10,7 @@ import (
 
 type AtomicState struct {
 	duties               atomic.Value
-	validators           atomic.Value
+	knownValidators           atomic.Value
 	validatorsUpdateTime atomic.Value
 	genesis              atomic.Value
 	headSlot             atomic.Value
@@ -33,7 +33,7 @@ func (as *AtomicState) SetGenesis(genesis structs.GenesisInfo) {
 }
 
 func (as *AtomicState) Duties() structs.DutiesState {
-	if val := as.genesis.Load(); val != nil {
+	if val := as.duties.Load(); val != nil {
 		return val.(structs.DutiesState)
 	}
 
@@ -45,7 +45,7 @@ func (as *AtomicState) SetDuties(duties structs.DutiesState) {
 }
 
 func (as *AtomicState) KnownValidators() structs.ValidatorsState {
-	if val := as.genesis.Load(); val != nil {
+	if val := as.knownValidators.Load(); val != nil {
 		return val.(structs.ValidatorsState)
 	}
 
@@ -53,7 +53,7 @@ func (as *AtomicState) KnownValidators() structs.ValidatorsState {
 }
 
 func (as *AtomicState) SetKnownValidators(validators structs.ValidatorsState) {
-	as.validators.Store(validators)
+	as.knownValidators.Store(validators)
 	as.validatorsUpdateTime.Store(time.Now())
 }
 
