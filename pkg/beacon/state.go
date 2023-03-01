@@ -10,10 +10,11 @@ import (
 
 type AtomicState struct {
 	duties               atomic.Value
-	knownValidators           atomic.Value
+	knownValidators      atomic.Value
 	validatorsUpdateTime atomic.Value
 	genesis              atomic.Value
 	headSlot             atomic.Value
+	withdrawals          atomic.Value
 
 	// is the state initialized?
 	once  sync.Once
@@ -75,6 +76,18 @@ func (as *AtomicState) HeadSlot() structs.Slot {
 
 func (as *AtomicState) SetHeadSlot(headSlot structs.Slot) {
 	as.headSlot.Store(headSlot)
+}
+
+func (as *AtomicState) Withdrawals() structs.WithdrawalsState {
+	if val := as.withdrawals.Load(); val != nil {
+		return val.(structs.WithdrawalsState)
+	}
+
+	return structs.WithdrawalsState{}
+}
+
+func (as *AtomicState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
+	as.withdrawals.Store(withdrawals)
 }
 
 func (as *AtomicState) Ready() <-chan struct{} {

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
@@ -135,6 +136,19 @@ func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 	u.Path = "/eth/v1/beacon/genesis"
 	err := b.queryBeacon(&u, "GET", &resp)
 	return resp.Data, err
+}
+
+// GetWithdrawals - /eth/v1/beacon/states/<slot>/withdrawals
+func (b *beaconClient) GetWithdrawals(slot structs.Slot) (*GetWithdrawalsResponse, error) {
+	resp := new(GetWithdrawalsResponse)
+	u := *b.beaconEndpoint
+	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/withdrawals", "GET"))
+	defer t.ObserveDuration()
+
+	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/withdrawals", slot)
+	err := b.queryBeacon(&u, "GET", &resp)
+	return resp, err
 }
 
 func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
@@ -279,4 +293,10 @@ type ValidatorResponseValidatorData struct {
 
 type GenesisResponse struct {
 	Data structs.GenesisInfo
+}
+
+type GetWithdrawalsResponse struct {
+	Data struct {
+		Withdrawals []*capella.Withdrawal `json:"withdrawals"`
+	}
 }

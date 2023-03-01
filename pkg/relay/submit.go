@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
@@ -16,7 +17,11 @@ import (
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
-var ErrWrongFeeRecipient = errors.New("wrong fee recipient")
+var (
+	ErrWrongFeeRecipient     = errors.New("wrong fee recipient")
+	ErrInvalidWithdrawalSlot = errors.New("invalid withdrawal slot")
+	ErrInvalidWithdrawalRoot = errors.New("invalid withdrawal root")
+)
 
 // SubmitBlock Accepts block from trusted builder and stores
 func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
@@ -250,7 +255,32 @@ func verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconStat
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.HeadSlot())
 	}
 
+	if err := verifyWithdrawals(beaconState, submitBlockRequest); err != nil {
+		return false, fmt.Errorf("failed to verify withdrawals: %w", err)
+	}
+
 	return true, nil
+}
+
+func verifyWithdrawals(state State, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
+	var withdrawals []*capella.Withdrawal
+	//withdrawals := payload.Withdrawals()
+
+	if withdrawals != nil {
+		// get latest withdrawals and verify the roots match
+		withdrawalState := state.Withdrawals()
+		withdrawalsRoot, err := structs.ComputeWithdrawalsRoot(withdrawals)
+		if err != nil {
+			return fmt.Errorf("failed to compute withdrawals root: %w", err)
+		}
+		if withdrawalState.Slot != structs.Slot(submitBlockRequest.Message.Slot) { // we still don't have the withdrawals yet
+			return fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Message.Slot, withdrawalState.Slot)
+		} else if withdrawalState.Root != withdrawalsRoot {
+			return fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, withdrawalsRoot.String(), withdrawalState.Root.String())
+		}
+	}
+
+	return nil
 }
 
 // ***** Relay Domain *****

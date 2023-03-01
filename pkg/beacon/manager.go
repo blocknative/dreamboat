@@ -38,6 +38,7 @@ type BeaconClient interface {
 	KnownValidators(structs.Slot) (bcli.AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
 	PublishBlock(block *types.SignedBeaconBlock) error
+	GetWithdrawals(structs.Slot) (*bcli.GetWithdrawalsResponse, error)
 }
 
 type State interface {
@@ -54,6 +55,9 @@ type State interface {
 
 	HeadSlot() structs.Slot
 	SetHeadSlot(structs.Slot)
+
+	Withdrawals() structs.WithdrawalsState
+	SetWithdrawals(structs.WithdrawalsState)
 }
 
 type Manager struct {
@@ -83,10 +87,9 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	
 	events := make(chan bcli.HeadEvent, 1)
 
-	ctx, cancel := context.WithCancel(ctx)  // for stopping subscription after init is done
+	ctx, cancel := context.WithCancel(ctx) // for stopping subscription after init is done
 	defer cancel()
 
 	client.SubscribeToHeadEvents(ctx, events)
@@ -204,6 +207,9 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		}(received)
 	}
 
+	// query expected withdrawals root
+	go s.updatedExpectedWithdrawals(headSlot, state, client)
+
 	entries, err := s.getProposerDuties(ctx, client, headSlot)
 	if err != nil {
 		return err
@@ -211,6 +217,34 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
 
 	return nil
+}
+
+func (m *Manager) updatedExpectedWithdrawals(slot structs.Slot, state State, client BeaconClient) {
+	logger := m.Log.WithField("method", "UpdatedExpectedWithdrawals").WithField("slot", slot)
+	current := state.Withdrawals()
+	latestKnownSlot := current.Slot
+	if slot < latestKnownSlot {
+		return
+	}
+
+	// get withdrawals from BN
+	withdrawals, err := client.GetWithdrawals(slot)
+	if err != nil {
+		if errors.Is(err, bcli.ErrWithdrawalsUnsupported) {
+			logger.WithError(err).Debug("attempted to fetch withdrawals before capella")
+		} else {
+			logger.WithError(err).Error("failed to get withdrawals from beacon node")
+		}
+		return
+	}
+
+	root, err := structs.ComputeWithdrawalsRoot(withdrawals.Data.Withdrawals)
+	if err != nil {
+		logger.WithError(err).Warn("failed to compute withdrawals root")
+		return
+	}
+
+	state.SetWithdrawals(structs.WithdrawalsState{Slot: slot, Root: root})
 }
 
 func (s *Manager) getProposerDuties(ctx context.Context, client BeaconClient, headSlot structs.Slot) (entries []bcli.RegisteredProposersResponseData, err error) {

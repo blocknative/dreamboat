@@ -4,6 +4,7 @@ package client
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -13,7 +14,8 @@ import (
 )
 
 var (
-	ErrBeaconNodeSyncing = errors.New("beacon node is syncing")
+	ErrBeaconNodeSyncing      = errors.New("beacon node is syncing")
+	ErrWithdrawalsUnsupported = errors.New("withdrawals are not supported")
 )
 
 type BeaconNode interface {
@@ -24,6 +26,7 @@ type BeaconNode interface {
 	Genesis() (structs.GenesisInfo, error)
 	PublishBlock(block *types.SignedBeaconBlock) error
 	Endpoint() string
+	GetWithdrawals(structs.Slot) (*GetWithdrawalsResponse, error)
 }
 
 type MultiBeaconClient struct {
@@ -155,6 +158,27 @@ func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err erro
 	}
 
 	return genesisInfo, err
+}
+
+func (b *MultiBeaconClient) GetWithdrawals(slot structs.Slot) (withdrawalsResp *GetWithdrawalsResponse, err error) {
+	for _, client := range b.clientsByLastResponse() {
+		if withdrawalsResp, err = client.GetWithdrawals(slot); err != nil {
+			if strings.Contains(err.Error(), "Withdrawals not enabled before capella") {
+				break
+			}
+			b.Log.WithError(err).
+				WithField("endpoint", client.Endpoint()).
+				Warn("failed to get withdrawals")
+			continue
+		}
+		return withdrawalsResp, nil
+	}
+
+	if strings.Contains(err.Error(), "Withdrawals not enabled before capella") {
+		return nil, ErrWithdrawalsUnsupported
+	}
+
+	return nil, err
 }
 
 func (b *MultiBeaconClient) Endpoint() string {

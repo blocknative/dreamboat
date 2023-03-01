@@ -55,6 +55,7 @@ type State interface {
 	KnownValidators() structs.ValidatorsState
 	HeadSlot() structs.Slot
 	Genesis() structs.GenesisInfo
+	Withdrawals() structs.WithdrawalsState
 }
 
 type Verifier interface {

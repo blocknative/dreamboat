@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
@@ -305,4 +307,14 @@ func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.Signe
 type ValidatorCacheEntry struct {
 	Time  time.Time
 	Entry types.SignedValidatorRegistration
+}
+
+type WithdrawalsState struct {
+	Slot Slot
+	Root phase0.Root
+}
+
+func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
+	withdrawals := capella.Withdrawals{Withdrawals: w}
+	return withdrawals.HashTreeRoot()
 }
