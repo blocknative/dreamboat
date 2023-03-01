@@ -139,16 +139,30 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
-// Beacon mocks base method.
-func (m *MockState) Beacon() *structs.BeaconState {
+// Duties mocks base method.
+func (m *MockState) Duties() structs.DutiesState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Beacon")
-	ret0, _ := ret[0].(*structs.BeaconState)
+	ret := m.ctrl.Call(m, "Duties")
+	ret0, _ := ret[0].(structs.DutiesState)
 	return ret0
 }
 
-// Beacon indicates an expected call of Beacon.
-func (mr *MockStateMockRecorder) Beacon() *gomock.Call {
+// Duties indicates an expected call of Duties.
+func (mr *MockStateMockRecorder) Duties() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Beacon", reflect.TypeOf((*MockState)(nil).Beacon))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockState)(nil).Duties))
+}
+
+// KnownValidators mocks base method.
+func (m *MockState) KnownValidators() structs.ValidatorsState {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "KnownValidators")
+	ret0, _ := ret[0].(structs.ValidatorsState)
+	return ret0
+}
+
+// KnownValidators indicates an expected call of KnownValidators.
+func (mr *MockStateMockRecorder) KnownValidators() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockState)(nil).KnownValidators))
 }

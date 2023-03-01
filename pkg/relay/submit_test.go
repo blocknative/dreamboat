@@ -71,7 +71,7 @@ func TestSubmitBlock(t *testing.T) {
 	require.NoError(t, err)
 	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
 
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
 	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
@@ -86,6 +86,8 @@ func TestSubmitBlock(t *testing.T) {
 	}, true)
 
 	r := relay.NewRelay(l, config, nil, vCache, vStore, ver, bs, ds, auction.NewAuctioneer(), bVCli)
+
+	bs.EXPECT().HeadSlot().AnyTimes().Return(structs.Slot(submitRequest.Message.Slot))
 
 	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequest)
 	require.NoError(t, err)
@@ -137,7 +139,7 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	}
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
@@ -200,7 +202,7 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	}
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(b, relaySigningDomain, genesisTime)
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
@@ -252,7 +254,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	l := log.New()
 
 	bVCli := mocks.NewMockBlockValidationClient(ctrl)
-	bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
+	//bVCli.EXPECT().ValidateBlock(gomock.Any(), gomock.Any()).Times(1)
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
@@ -273,7 +275,7 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), bVCli)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime+1) // +1 in order to make timestamp invalid
 
 	err = r.SubmitBlock(ctx, structs.NewMetricGroup(4), submitRequest)
@@ -298,7 +300,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	bs := mocks.NewMockState(ctrl)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
@@ -351,6 +353,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		ProposerFeeRecipient: proposerFeeRecipient,
 		Value:                types.IntToU256(10),
 	}
+
+	bs.EXPECT().HeadSlot().AnyTimes().Return(structs.Slot(msgB1.Slot))
 
 	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
 	require.NoError(t, err)
@@ -433,7 +437,7 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	bs := mocks.NewMockState(ctrl)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
 	l := log.New()
 	ver := verify.NewVerificationManager(l, 20000)
@@ -486,6 +490,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 		ProposerFeeRecipient: proposerFeeRecipient,
 		Value:                types.IntToU256(1000),
 	}
+
+	bs.EXPECT().HeadSlot().AnyTimes().Return(slot)
 
 	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
 	require.NoError(t, err)
@@ -572,7 +578,7 @@ func TestRegistartionCache(t *testing.T) {
 	bs := mocks.NewMockState(ctrl)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
 	l := log.New()
 	ver := verify.NewVerificationManager(l, 20000)
@@ -634,6 +640,8 @@ func TestRegistartionCache(t *testing.T) {
 		ProposerFeeRecipient: proposerFeeRecipient,
 		Value:                types.IntToU256(1000),
 	}
+
+	bs.EXPECT().HeadSlot().AnyTimes().Return(structs.Slot(slot))
 
 	signatureB1, err := types.SignMessage(msgB1, relaySigningDomain, skB1)
 	require.NoError(t, err)

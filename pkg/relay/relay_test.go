@@ -74,7 +74,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(t, relaySigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(t, relaySigningDomain)
 
@@ -233,16 +233,13 @@ func TestGetPayload(t *testing.T) {
 
 	require.NoError(t, err)
 
-	fbn := &structs.BeaconState{
-		ValidatorsState: structs.ValidatorsState{
-			KnownValidatorsByIndex: map[uint64]types.PubkeyHex{
-				request.Message.ProposerIndex: registration.Message.Pubkey.PubkeyHex(),
-			},
+	validatorState := structs.ValidatorsState{
+		KnownValidatorsByIndex: map[uint64]types.PubkeyHex{
+			request.Message.ProposerIndex: registration.Message.Pubkey.PubkeyHex(),
 		},
-		GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime},
 	}
 
-	bs.EXPECT().Beacon().Return(fbn).Times(1)
+	bs.EXPECT().KnownValidators().Return(validatorState).Times(1)
 
 	response, err := r.GetPayload(ctx, structs.NewMetricGroup(4), request)
 	require.NoError(t, err)
@@ -283,7 +280,7 @@ func BenchmarkGetHeader(b *testing.B) {
 	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(b, proposerSigningDomain)
 
@@ -368,7 +365,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	r := relay.NewRelay(log.New(), config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
 	genesisTime := uint64(time.Now().Unix())
-	bs.EXPECT().Beacon().AnyTimes().Return(&structs.BeaconState{GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime}})
+	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 	submitRequest := validSubmitBlockRequest(b, proposerSigningDomain, genesisTime)
 	registration, _ := validValidatorRegistration(b, proposerSigningDomain)
 
@@ -526,15 +523,15 @@ func BenchmarkGetPayload(b *testing.B) {
 
 	//	_ = ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, *registration, time.Minute)
 
-	fbn := &structs.BeaconState{
-		ValidatorsState: structs.ValidatorsState{
-			KnownValidatorsByIndex: map[uint64]types.PubkeyHex{
-				request.Message.ProposerIndex: registration.Message.Pubkey.PubkeyHex(),
-			},
+	validatorsState := structs.ValidatorsState{
+		KnownValidatorsByIndex: map[uint64]types.PubkeyHex{
+			request.Message.ProposerIndex: registration.Message.Pubkey.PubkeyHex(),
 		},
-		GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime},
 	}
-	bs.EXPECT().Beacon().Return(fbn).AnyTimes()
+	genesisState := structs.GenesisInfo{GenesisTime: genesisTime}
+
+	bs.EXPECT().KnownValidators().Return(validatorsState).AnyTimes()
+	bs.EXPECT().Genesis().Return(genesisState).AnyTimes()
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -645,15 +642,15 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 
 	// _ = ds.PutRegistration(ctx, structs.PubKey{PublicKey: registration.Message.Pubkey}, *registration, time.Minute)
 
-	fbn := &structs.BeaconState{
-		ValidatorsState: structs.ValidatorsState{
-			KnownValidatorsByIndex: map[uint64]types.PubkeyHex{
-				request.Message.ProposerIndex: registration.Message.Pubkey.PubkeyHex(),
-			},
+	validatorsState := structs.ValidatorsState{
+		KnownValidatorsByIndex: map[uint64]types.PubkeyHex{
+			request.Message.ProposerIndex: registration.Message.Pubkey.PubkeyHex(),
 		},
-		GenesisInfo: structs.GenesisInfo{GenesisTime: genesisTime},
 	}
-	bs.EXPECT().Beacon().Return(fbn).AnyTimes()
+	genesisState := structs.GenesisInfo{GenesisTime: genesisTime}
+
+	bs.EXPECT().KnownValidators().Return(validatorsState).AnyTimes()
+	bs.EXPECT().Genesis().Return(genesisState).AnyTimes()
 	var wg sync.WaitGroup
 	defer wg.Wait()
 

@@ -52,7 +52,9 @@ type ValidatorCache interface {
 }
 
 type State interface {
-	Beacon() *structs.BeaconState
+	KnownValidators() structs.ValidatorsState
+	HeadSlot() structs.Slot
+	Genesis() structs.GenesisInfo
 }
 
 type Verifier interface {
@@ -178,7 +180,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
 	if !ok {
-		if slot < rs.beaconState.Beacon().HeadSlot()-1 {
+		if slot < rs.beaconState.HeadSlot()-1 {
 			rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
 			return nil, ErrOldSlot
 		}
@@ -239,11 +241,9 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, ErrInvalidSignature
 	}
 
-	proposerPubkey, err := rs.beaconState.Beacon().KnownValidatorByIndex(payloadRequest.Message.ProposerIndex)
-	if err != nil && errors.Is(err, ErrUnknownValue) {
+	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.Message.ProposerIndex]
+	if !ok {
 		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.Message.ProposerIndex)
-	} else if err != nil {
-		return nil, err
 	}
 
 	tVerify := time.Now()
@@ -264,7 +264,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	if err != nil {
 		return nil, ErrInvalidSignature // err
 	}
-	ok, err := verify.VerifySignatureBytes(msg, payloadRequest.Signature[:], pk[:])
+	ok, err = verify.VerifySignatureBytes(msg, payloadRequest.Signature[:], pk[:])
 	if err != nil || !ok {
 		return nil, ErrInvalidSignature
 	}

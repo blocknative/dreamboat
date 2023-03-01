@@ -21,7 +21,8 @@ var (
 )
 
 type State interface {
-	Beacon() *structs.BeaconState
+	Duties() structs.DutiesState
+	KnownValidators() structs.ValidatorsState
 }
 
 type Verifier interface {
@@ -69,8 +70,6 @@ func (rs *Register) RegisterValidator(ctx context.Context, m *structs.MetricGrou
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "registerValidator", "all")
 
-	be := rs.beaconState.Beacon()
-
 	verifyChan := rs.ver.GetVerifyChan(verify.ResponseQueueRegister)
 	response := verify.NewRespC(len(payload))
 
@@ -95,7 +94,7 @@ SendPayloads:
 		rs.m.RegistrationsCacheHits.WithLabelValues("miss").Inc()
 
 		checkTime := time.Now()
-		o, ok := verifyOther(be, rs.regMngr, i, p)
+		o, ok := verifyOther(rs.beaconState, rs.regMngr, i, p)
 		if !ok {
 			response.Close(i, o.Err)
 			break SendPayloads
@@ -152,14 +151,14 @@ SendPayloads:
 	return err
 }
 
-func verifyOther(beacon *structs.BeaconState, tsReg RegistrationManager, i int, sp types.SignedValidatorRegistration) (svresp verify.Resp, ok bool) {
+func verifyOther(beacon State, tsReg RegistrationManager, i int, sp types.SignedValidatorRegistration) (svresp verify.Resp, ok bool) {
 	if sp.Message.Timestamp > uint64(time.Now().Add(10*time.Second).Unix()) {
 		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String())}, false
 	}
 
 	pk := structs.PubKey{PublicKey: sp.Message.Pubkey}
-	known, _ := beacon.IsKnownValidator(pk.PubkeyHex())
-	if !known {
+	_, ok = beacon.KnownValidators().KnownValidators[pk.PubkeyHex()]
+	if !ok {
 		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("%s not a known validator", sp.Message.Pubkey.String())}, false
 	}
 
@@ -171,6 +170,5 @@ func (rs *Register) GetValidators(m *structs.MetricGroup) structs.BuilderGetVali
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getValidators", "all")
 
-	validators := rs.beaconState.Beacon().ValidatorsMap()
-	return validators
+	return rs.beaconState.Duties().ProposerDutiesResponse
 }

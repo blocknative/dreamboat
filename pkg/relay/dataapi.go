@@ -42,7 +42,7 @@ func (r *Relay) GetPayloadDelivered(ctx context.Context, query structs.PayloadTr
 }
 
 func (r *Relay) getTailDelivered(ctx context.Context, limit, cursor uint64) ([]structs.BidTraceExtended, error) {
-	headSlot := r.beaconState.Beacon().HeadSlot()
+	headSlot := r.beaconState.HeadSlot()
 	start := headSlot
 	if cursor != 0 {
 		start = min(headSlot, structs.Slot(cursor))
