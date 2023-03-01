@@ -133,7 +133,6 @@ func (b *MultiBeaconClient) KnownValidators(headSlot structs.Slot) (AllValidator
 			log.WithError(err).Error("failed to fetch validators")
 			continue
 		}
-
 		b.bestBeaconIndex.Store(int64(i))
 
 		// Received successful response. Set this index as last successful beacon node
