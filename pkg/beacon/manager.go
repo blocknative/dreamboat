@@ -60,16 +60,16 @@ type Manager struct {
 	Log log.Logger
 }
 
-func NewManager(l log.Logger, as *AtomicState) *Manager {
+func NewManager(l log.Logger) *Manager {
 	return &Manager{
 		Log: l.WithField("relay-service", "Service"),
 	}
 }
 
-func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d Datastore, vCache ValidatorCache) error {
-	logger := s.Log.WithField("method", "RunBeacon")
+func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d Datastore, vCache ValidatorCache) error {
+	logger := s.Log.WithField("method", "Init")
 
-	syncStatus, err := s.waitSynced(ctx, client)
+	_, err := s.waitSynced(ctx, client)
 	if err != nil {
 		return err
 	}
@@ -83,12 +83,40 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	entries, err := s.getProposerDuties(ctx, client, structs.Slot(syncStatus.HeadSlot))
-	if err != nil {
-		return err
-	}
+	
+	events := make(chan bcli.HeadEvent, 1)
 
-	s.storeProposerDuties(ctx, state, d, vCache, structs.Slot(syncStatus.HeadSlot), entries)
+	ctx, cancel := context.WithCancel(ctx)  // for stopping subscription after init is done
+	defer cancel()
+
+	client.SubscribeToHeadEvents(ctx, events)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case event := <-events:
+			headSlot := structs.Slot(event.Slot)
+			state.SetHeadSlot(headSlot)
+
+			// update proposer duties and known validators
+			if err := s.updateKnownValidators(ctx, state, client, headSlot); err != nil {
+				logger.WithError(err).Warn("failed to update known validators")
+				continue
+			}
+
+			entries, err := s.getProposerDuties(ctx, client, headSlot)
+			if err != nil {
+				return err
+			}
+			s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
+			return nil
+		}
+	}
+}
+
+func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d Datastore, vCache ValidatorCache) error {
+	logger := s.Log.WithField("method", "RunBeacon")
 
 	defer logger.Debug("beacon loop stopped")
 
