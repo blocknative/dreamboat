@@ -93,7 +93,7 @@ func TestGetHeader(t *testing.T) {
 		relaySigningDomain,
 	)
 
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := relay.SubmissionToKey(submitRequest)
@@ -156,7 +156,7 @@ func TestGetPayload(t *testing.T) {
 		SecretKey:             pk, //pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
 		TTL:                   time.Minute,
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 		BuilderSigningDomain:  types.DomainBuilder,
 	}
 
@@ -206,7 +206,7 @@ func TestGetPayload(t *testing.T) {
 		proposerSigningDomain,
 	)
 
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := structs.PayloadKey{
@@ -272,7 +272,7 @@ func BenchmarkGetHeader(b *testing.B) {
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 	}
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -296,7 +296,7 @@ func BenchmarkGetHeader(b *testing.B) {
 		&config.PubKey,
 		proposerSigningDomain,
 	)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := relay.SubmissionToKey(submitRequest)
@@ -356,7 +356,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 	}
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -380,7 +380,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		&config.PubKey,
 		proposerSigningDomain,
 	)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := relay.SubmissionToKey(submitRequest)
@@ -448,7 +448,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 	}
 
 	l := log.New()
@@ -495,7 +495,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		&config.PubKey,
 		proposerSigningDomain,
 	)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := structs.PayloadKey{
@@ -570,7 +570,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 	}
 	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
@@ -611,7 +611,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		&config.PubKey,
 		proposerSigningDomain,
 	)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := structs.PayloadKey{
