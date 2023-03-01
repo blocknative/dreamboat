@@ -52,7 +52,7 @@ type Relay interface {
 	GetPayload(context.Context, *structs.MetricGroup, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	SubmitBlock(context.Context, *structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
+	SubmitBlock(context.Context, *structs.MetricGroup, structs.BuilderSubmitBlockRequest) error
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
@@ -240,7 +240,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 
-	var req types.BuilderSubmitBlockRequest
+	var req structs.BuilderSubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
@@ -252,7 +252,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.lim.Allow(r.Context(), req.Message.BuilderPubkey); err != nil {
+	if err := a.lim.Allow(r.Context(), req.BuilderPubkey()); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "429", "rate limitted").Inc()
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
@@ -263,7 +263,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m := structs.NewMetricGroup(4)
-	if err := a.r.SubmitBlock(r.Context(), m, &req); err != nil {
+	if err := a.r.SubmitBlock(r.Context(), m, req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))
 		if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
@@ -273,11 +273,11 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 				"code":      400,
 				"endpoint":  "submitBlock",
 				"payload":   req,
-				"slot":      req.Message.Slot,
-				"blockHash": req.ExecutionPayload.BlockHash,
-				"bidValue":  req.Message.Value,
-				"proposer":  req.Message.ProposerPubkey,
-				"builder":   req.Message.BuilderPubkey,
+				"slot":      req.Slot(),
+				"blockHash": req.BlockHash(),
+				"bidValue":  req.Value(),
+				"proposer":  req.ProposerPubkey(),
+				"builder":   req.BuilderPubkey(),
 			}).WithError(err).Debug("failed block submission")
 		}
 		writeError(w, http.StatusBadRequest, err)
