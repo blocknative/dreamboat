@@ -1,4 +1,4 @@
-package relay
+package config
 
 import (
 	"encoding/json"
@@ -10,9 +10,6 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/types"
-	"github.com/lthibault/log"
 )
 
 const (
@@ -39,21 +36,11 @@ const (
 
 // Config provides all available options for the default BeaconClient and Relay
 type Config struct {
-	Log                      log.Logger
-	BuilderURLs              []string
-	Network                  string
-	RelayRequestTimeout      time.Duration
-	BuilderCheck             bool
-	BeaconEndpoints          []string
-	PubKey                   types.PublicKey
-	SecretKey                *bls.SecretKey
-	Datadir                  string
-	TTL                      time.Duration
-	RelayQueueProcessingSize uint64
-
-	RelayHeaderMemorySlotLag       uint64
-	RelayHeaderMemorySlotTimeLag   time.Duration
-	RelayHeaderMemoryPurgeInterval time.Duration
+	BuilderURLs []string
+	Network     string
+	//PubKey      types.PublicKey
+	//	SecretKey   *bls.SecretKey
+	TTL time.Duration
 
 	// private fields; populated during validation
 	builders map[structs.PubKey]*builder
@@ -65,8 +52,13 @@ type Config struct {
 	CapellaForkVersion   string
 }
 
+func NewConfig() *Config {
+	return &Config{
+		builders: make(map[structs.PubKey]*builder),
+	}
+}
+
 func (c *Config) Validate() error {
-	c.builders = make(map[structs.PubKey]*builder)
 	if err := c.validateNetwork(); err != nil {
 		return err
 	}
@@ -96,15 +88,6 @@ func (c *Config) validateNetwork() error {
 		c.GenesisValidatorsRoot = GenesisValidatorsRootGoerli
 		c.BellatrixForkVersion = BellatrixForkVersionGoerli
 		c.CapellaForkVersion = CapellaForkVersionGoerli
-	default:
-		network, err := c.readNetworkFromConfig(c.Network)
-		if err != nil {
-			return fmt.Errorf("unknown network: %s: %w", c.Network, err)
-		}
-		c.GenesisForkVersion = network.GenesisForkVersion
-		c.GenesisValidatorsRoot = network.GenesisValidatorsRoot
-		c.BellatrixForkVersion = network.BellatrixForkVersion
-		c.CapellaForkVersion = network.CapellaForkVersion
 	}
 	return nil
 }
@@ -116,20 +99,20 @@ type Network struct {
 	CapellaForkVersion    string `json:"CapellaForkVersion"`
 }
 
-func (c *Config) readNetworkFromConfig(network string) (Network, error) {
-	jsonFile, err := os.Open(c.Datadir + "/networks.json")
+func (c *Config) ReadNetworkConfig(datadir, network string) (n Network, err error) {
+	jsonFile, err := os.Open(datadir + "/networks.json")
 	if err != nil {
-		return Network{}, err
+		return n, fmt.Errorf("unknown network: %s: %w", network, err)
 	}
 
 	var networks map[string]Network
 	if err := json.NewDecoder(jsonFile).Decode(&networks); err != nil {
-		return Network{}, err
+		return n, err
 	}
 
 	config, ok := networks[network]
 	if !ok {
-		return config, fmt.Errorf("not found in config file: %s", c.Datadir+"/networks.json")
+		return config, fmt.Errorf("not found in config file: %s", datadir+"/networks.json")
 	}
 
 	return config, nil

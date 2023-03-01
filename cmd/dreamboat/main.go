@@ -15,7 +15,6 @@ import (
 
 	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/metrics"
-	pkg "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/beacon"
@@ -25,6 +24,7 @@ import (
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethrpc"
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethws"
 
+	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -48,7 +48,6 @@ import (
 
 const (
 	shutdownTimeout = 5 * time.Second
-	version         = pkg.Version
 )
 
 var flags = []cli.Flag{
@@ -252,16 +251,12 @@ const (
 	gethSimNamespace = "flashbots"
 )
 
-var (
-	config pkg.Config
-)
-
 // Main starts the relay
 func main() {
 	app := &cli.App{
 		Name:    "dreamboat",
 		Usage:   "ethereum 2.0 relay, commissioned and put to sea by Blocknative",
-		Version: version,
+		Version: "0.3.6",
 		Flags:   flags,
 		Before:  setup(),
 		Action:  run(),
@@ -291,44 +286,45 @@ func setup() cli.BeforeFunc {
 		if err != nil {
 			return err
 		}
-
-		config = pkg.Config{
-			Log:                      logger(c),
-			RelayQueueProcessingSize: c.Uint64("relay-validator-queue-size"),
-
-			RelayHeaderMemorySlotLag:       c.Uint64("relay-header-memory-slot-lag"),
-			RelayHeaderMemorySlotTimeLag:   c.Duration("relay-header-memory-slot-time-lag"),
-			RelayHeaderMemoryPurgeInterval: c.Duration("relay-header-memory-purge-interval"),
-
-			RelayRequestTimeout: c.Duration("timeout"),
-			Network:             c.String("network"),
-			BuilderCheck:        c.Bool("check-builder"),
-			BuilderURLs:         c.StringSlice("builder"),
-			BeaconEndpoints:     c.StringSlice("beacon"),
-			PubKey:              pk,
-			SecretKey:           sk,
-			Datadir:             c.String("datadir"),
-			TTL:                 c.Duration("ttl"),
-		}
-
+		/*
+			config = pkg.Config{
+				Network:             c.String("network"),
+				BuilderURLs:         c.StringSlice("builder"),
+				PubKey:              pk,
+				SecretKey:           sk,
+				TTL:                 c.Duration("ttl"),
+			}
+		*/
 		return
 	}
 }
 
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
-		if err := config.Validate(); err != nil {
+		cfg := config.NewConfig()
+
+		if err := cfg.Validate(); err != nil {
 			return err
 		}
+		/*
+			default:
+				network, err := c.readNetworkFromConfig(c.Network)
+				if err != nil {
+				}
+				c.GenesisForkVersion = network.GenesisForkVersion
+				c.GenesisValidatorsRoot = network.GenesisValidatorsRoot
+				c.BellatrixForkVersion = network.BellatrixForkVersion
+				c.CapellaForkVersion = network.CapellaForkVersion
+		*/
 
-		logger := config.Log.WithField("fast-boot", c.Bool("relay-fast-boot"))
+		logger := logger(c).WithField("fast-boot", c.Bool("relay-fast-boot"))
 
-		domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, config.GenesisForkVersion, types.Root{}.String())
+		domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, cfg.GenesisForkVersion, types.Root{}.String())
 		if err != nil {
 			return err
 		}
 
-		domainBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, config.BellatrixForkVersion, config.GenesisValidatorsRoot)
+		domainBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot)
 		if err != nil {
 			return err
 		}
@@ -336,7 +332,7 @@ func run() cli.ActionFunc {
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
 
-		storage, err := badger.NewDatastore(config.Datadir, &badger.DefaultOptions)
+		storage, err := badger.NewDatastore(c.String("datadir"), &badger.DefaultOptions)
 		if err != nil {
 			logger.WithError(err).Error("failed to initialize datastore")
 			return err
@@ -349,7 +345,7 @@ func run() cli.ActionFunc {
 		timeRelayStart := time.Now()
 		state := &beacon.AtomicState{}
 
-		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
+		hc := datastore.NewHeaderController(c.Uint64("relay-header-memory-slot-lag"), c.Duration("relay-header-memory-slot-time-lag"))
 		hc.AttachMetrics(m)
 
 		ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
@@ -360,9 +356,9 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
+		go ds.MemoryCleanup(c.Context, c.Duration("relay-header-memory-purge-interval"), config.TTL)
 
-		beaconCli, err := initBeaconClients(c.Context, config.Log, config.BeaconEndpoints, m)
+		beaconCli, err := initBeaconClients(c.Context, logger, c.StringSlice("beacon"))
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
@@ -393,7 +389,7 @@ func run() cli.ActionFunc {
 			simFallb.AddClient(simHTTPCli)
 		}
 
-		verificator := verify.NewVerificationManager(config.Log, c.Uint("relay-verify-queue-size"))
+		verificator := verify.NewVerificationManager(logger, c.Uint("relay-verify-queue-size"))
 		verificator.RunVerify(c.Uint("relay-workers-verify"))
 
 		dbURL := c.String("relay-validator-database-url")
@@ -418,13 +414,13 @@ func run() cli.ActionFunc {
 		// lazyload validators cache, it's optional and we don't care if it errors out
 		go preloadValidators(c.Context, logger, valDS, validatorCache)
 
-		validatorStoreManager := validators.NewStoreManager(config.Log, validatorCache, valDS, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
+		validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
 		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
 
-		validatorRelay := validators.NewRegister(config.Log, domainBuilder, state, verificator, validatorStoreManager)
+		validatorRelay := validators.NewRegister(logger, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
-		b := beacon.NewManager(config.Log)
+		b := beacon.NewManager(logger)
 
 		auctioneer := auction.NewAuctioneer()
 
@@ -435,14 +431,14 @@ func run() cli.ActionFunc {
 			for _, k := range strings.Split(albString, ",") {
 				var pk types.PublicKey
 				if err := pk.UnmarshalText([]byte(k)); err != nil {
-					config.Log.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
+					logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
 					continue
 				}
 				allowed[pk] = struct{}{}
 			}
 		}
 
-		r := relay.NewRelay(config.Log, relay.RelayConfig{
+		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
 			ProposerSigningDomain: domainBeaconProposer,
 			PubKey:                config.PubKey,
@@ -454,7 +450,7 @@ func run() cli.ActionFunc {
 		}, beaconCli, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
-		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
+		a := api.NewApi(logger, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",
@@ -467,7 +463,7 @@ func run() cli.ActionFunc {
 
 		go b.Run(c.Context, state, beaconCli, validatorStoreManager, validatorCache)
 
-		config.Log.Info("beacon manager ready")
+		logger.Info("beacon manager ready")
 
 		// run internal http server
 		go func(m *metrics.Metrics) (err error) {
@@ -507,7 +503,7 @@ func run() cli.ActionFunc {
 				l.Info("fixed orphan headers")
 				return
 			}
-		}(c.Context, errCh, config.Log, state)
+		}(c.Context, errCh, logger, state)
 
 		if !c.Bool("relay-fast-boot") {
 			if err := <-errCh; err != nil {
@@ -592,7 +588,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 }
 
 func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
-	clients := make([]bcli.BeaconNode, 0, len(config.BeaconEndpoints))
+	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
 		client, err := bcli.NewBeaconClient(l, endpoint)
@@ -602,7 +598,7 @@ func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m 
 		client.AttachMetrics(m) // attach metrics
 		clients = append(clients, client)
 	}
-	return bcli.NewMultiBeaconClient(config.Log, clients), nil
+	return bcli.NewMultiBeaconClient(l, clients), nil
 }
 
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager) {
