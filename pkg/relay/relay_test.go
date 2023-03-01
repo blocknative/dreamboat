@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/google/uuid"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -36,6 +35,10 @@ import (
 
 var (
 	l = log.New(log.WithWriter(io.Discard))
+)
+
+const (
+	GenesisValidatorsRootRopsten = "0x44f1e56283ca88b35c789f7f449e52339bc1fefe3a45913a43a6d16edcd33cf1"
 )
 
 func TestGetHeader(t *testing.T) {
@@ -58,7 +61,6 @@ func TestGetHeader(t *testing.T) {
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
@@ -147,8 +149,7 @@ func TestGetPayload(t *testing.T) {
 
 	proposerSigningDomain, err := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
@@ -265,8 +266,7 @@ func BenchmarkGetHeader(b *testing.B) {
 
 	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
 		TTL:                   5 * time.Minute,
@@ -350,8 +350,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 
 	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
 		TTL:                   5 * time.Minute,
@@ -443,8 +442,7 @@ func BenchmarkGetPayload(b *testing.B) {
 
 	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
 		TTL:                   5 * time.Minute,
@@ -562,8 +560,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 
 	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 
 	l := log.New()
 	ver := verify.NewVerificationManager(l, 20000)

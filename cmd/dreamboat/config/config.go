@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
@@ -36,13 +35,6 @@ const (
 
 // Config provides all available options for the default BeaconClient and Relay
 type Config struct {
-	BuilderURLs []string
-	Network     string
-	//PubKey      types.PublicKey
-	//	SecretKey   *bls.SecretKey
-	TTL time.Duration
-
-	// private fields; populated during validation
 	builders map[structs.PubKey]*builder
 
 	GenesisForkVersion    string
@@ -58,16 +50,20 @@ func NewConfig() *Config {
 	}
 }
 
-func (c *Config) Validate() error {
-	if err := c.validateNetwork(); err != nil {
-		return err
-	}
+func (c *Config) LoadBuilders(builderURLs []string) (err error) {
+	var entry *builder
+	for _, b := range builderURLs {
+		if entry, err = newBuilderEntry(b); err != nil {
+			break
+		}
 
-	return c.validateBuilders()
+		c.builders[entry.PubKey] = entry
+	}
+	return err
 }
 
-func (c *Config) validateNetwork() error {
-	switch c.Network {
+func (c *Config) LoadNetwork(network string) {
+	switch network {
 	case "main", "mainnet":
 		c.GenesisForkVersion = GenesisForkVersionMainnet
 		c.GenesisValidatorsRoot = GenesisValidatorsRootMainnet
@@ -89,7 +85,6 @@ func (c *Config) validateNetwork() error {
 		c.BellatrixForkVersion = BellatrixForkVersionGoerli
 		c.CapellaForkVersion = CapellaForkVersionGoerli
 	}
-	return nil
 }
 
 type Network struct {
@@ -99,36 +94,28 @@ type Network struct {
 	CapellaForkVersion    string `json:"CapellaForkVersion"`
 }
 
-func (c *Config) ReadNetworkConfig(datadir, network string) (n Network, err error) {
+func (c *Config) ReadNetworkConfig(datadir, network string) (err error) {
 	jsonFile, err := os.Open(datadir + "/networks.json")
 	if err != nil {
-		return n, fmt.Errorf("unknown network: %s: %w", network, err)
+		return fmt.Errorf("unknown network: %s: %w", network, err)
 	}
 
 	var networks map[string]Network
 	if err := json.NewDecoder(jsonFile).Decode(&networks); err != nil {
-		return n, err
+		return err
 	}
 
 	config, ok := networks[network]
 	if !ok {
-		return config, fmt.Errorf("not found in config file: %s", datadir+"/networks.json")
+		return fmt.Errorf("not found in config file: %s", datadir+"/networks.json")
 	}
 
-	return config, nil
-}
+	c.GenesisForkVersion = config.GenesisForkVersion
+	c.GenesisValidatorsRoot = config.GenesisValidatorsRoot
+	c.BellatrixForkVersion = config.BellatrixForkVersion
+	c.CapellaForkVersion = config.CapellaForkVersion
 
-func (c *Config) validateBuilders() (err error) {
-	var entry *builder
-	for _, b := range c.BuilderURLs {
-		if entry, err = newBuilderEntry(b); err != nil {
-			break
-		}
-
-		c.builders[entry.PubKey] = entry
-	}
-
-	return
+	return nil
 }
 
 // builder represents a builder that the relay service connects to.

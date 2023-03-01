@@ -258,7 +258,6 @@ func main() {
 		Usage:   "ethereum 2.0 relay, commissioned and put to sea by Blocknative",
 		Version: "0.3.6",
 		Flags:   flags,
-		Before:  setup(),
 		Action:  run(),
 	}
 
@@ -276,47 +275,21 @@ func main() {
 
 }
 
-func setup() cli.BeforeFunc {
-	return func(c *cli.Context) (err error) {
-		skBytes, err := hexutil.Decode(c.String("secretKey"))
-		if err != nil {
-			return err
-		}
-		sk, pk, err := blstools.SecretKeyFromBytes(skBytes)
-		if err != nil {
-			return err
-		}
-		/*
-			config = pkg.Config{
-				Network:             c.String("network"),
-				BuilderURLs:         c.StringSlice("builder"),
-				PubKey:              pk,
-				SecretKey:           sk,
-				TTL:                 c.Duration("ttl"),
-			}
-		*/
-		return
-	}
-}
-
 func run() cli.ActionFunc {
 	return func(c *cli.Context) error {
 		cfg := config.NewConfig()
+		cfg.LoadNetwork(c.String("network"))
+		if cfg.GenesisForkVersion == "" {
+			if err := cfg.ReadNetworkConfig(c.String("datadir"), c.String("network")); err != nil {
+				return err
+			}
+		}
 
-		if err := cfg.Validate(); err != nil {
+		if err := cfg.LoadBuilders(c.StringSlice("builder")); err != nil {
 			return err
 		}
-		/*
-			default:
-				network, err := c.readNetworkFromConfig(c.Network)
-				if err != nil {
-				}
-				c.GenesisForkVersion = network.GenesisForkVersion
-				c.GenesisValidatorsRoot = network.GenesisValidatorsRoot
-				c.BellatrixForkVersion = network.BellatrixForkVersion
-				c.CapellaForkVersion = network.CapellaForkVersion
-		*/
 
+		TTL := c.Duration("ttl")
 		logger := logger(c).WithField("fast-boot", c.Bool("relay-fast-boot"))
 
 		domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, cfg.GenesisForkVersion, types.Root{}.String())
@@ -356,9 +329,9 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		go ds.MemoryCleanup(c.Context, c.Duration("relay-header-memory-purge-interval"), config.TTL)
+		go ds.MemoryCleanup(c.Context, c.Duration("relay-header-memory-purge-interval"), TTL)
 
-		beaconCli, err := initBeaconClients(c.Context, logger, c.StringSlice("beacon"))
+		beaconCli, err := initBeaconClients(c.Context, logger, c.StringSlice("beacon"), m)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
@@ -403,7 +376,7 @@ func run() cli.ActionFunc {
 			m.RegisterDB(valPG, "registrations")
 			valDS = valPostgres.NewDatastore(valPG)
 		} else { // by default use existsing storage
-			valDS = valBadger.NewDatastore(storage, config.TTL)
+			valDS = valBadger.NewDatastore(storage, TTL)
 		}
 
 		validatorCache, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](c.Int("relay-registrations-cache-size"))
@@ -414,7 +387,7 @@ func run() cli.ActionFunc {
 		// lazyload validators cache, it's optional and we don't care if it errors out
 		go preloadValidators(c.Context, logger, valDS, validatorCache)
 
-		validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(config.TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
+		validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
 		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
 
@@ -438,13 +411,22 @@ func run() cli.ActionFunc {
 			}
 		}
 
+		skBytes, err := hexutil.Decode(c.String("secretKey"))
+		if err != nil {
+			return err
+		}
+		sk, pk, err := blstools.SecretKeyFromBytes(skBytes)
+		if err != nil {
+			return err
+		}
+
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
 			ProposerSigningDomain: domainBeaconProposer,
-			PubKey:                config.PubKey,
-			SecretKey:             config.SecretKey,
+			PubKey:                pk,
+			SecretKey:             sk,
 			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
-			TTL:                   config.TTL,
+			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
 		}, beaconCli, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
@@ -493,7 +475,7 @@ func run() cli.ActionFunc {
 					continue
 				}
 
-				if err := ds.FixOrphanHeaders(ctx, cs, config.TTL); err != nil {
+				if err := ds.FixOrphanHeaders(ctx, cs, TTL); err != nil {
 					l.WithError(err).Error("failed to fix orphan headers")
 					errCh <- err
 					return
