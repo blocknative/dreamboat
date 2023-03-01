@@ -427,7 +427,7 @@ func run() cli.ActionFunc {
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
-			ProposerSigningDomain: map[string]types.Domain{"bellatix": bellatrixBeaconProposer, "capella": capellaBeaconProposer},
+			ProposerSigningDomain: map[string]types.Domain{"bellatrix": bellatrixBeaconProposer, "capella": capellaBeaconProposer},
 			PubKey:                pk,
 			SecretKey:             sk,
 			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
