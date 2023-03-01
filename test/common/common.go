@@ -8,10 +8,14 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
+const (
+	BellatrixForkVersionRopsten = "0x80000069"
+)
+
 // ComputeDomain computes the signing domain
-func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisValidatorsRootHex string) (domain types.Domain, err error) {
+func ComputeDomain(domainType types.DomainType, genesisValidatorsRootHex string) (domain types.Domain, err error) {
 	genesisValidatorsRoot := types.Root(common.HexToHash(genesisValidatorsRootHex))
-	forkVersionBytes, err := hexutil.Decode(forkVersionHex)
+	forkVersionBytes, err := hexutil.Decode(BellatrixForkVersionRopsten)
 	if err != nil || len(forkVersionBytes) > 4 {
 		err = errors.New("invalid fork version passed")
 		return domain, err

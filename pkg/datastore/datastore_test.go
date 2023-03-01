@@ -162,11 +162,9 @@ func randomBlockBidAndTrace() *structs.BlockBidAndTrace {
 	pk := types.PublicKey(random48Bytes())
 
 	payload := randomPayload()
-	GenesisForkVersionMainnet := "0x00000000"
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		GenesisForkVersionMainnet,
 		types.Root{}.String())
 
 	msg := &types.BidTrace{

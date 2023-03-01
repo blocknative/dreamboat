@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/blocknative/dreamboat/blstools"
-	relay "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/blocknative/dreamboat/test/common"
 
@@ -32,7 +31,6 @@ func main() {
 func registerValidator() error {
 	builderDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	if err != nil {
 		return err

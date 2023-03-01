@@ -9,14 +9,12 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/stretchr/testify/require"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/test/common"
 )
 
 func BenchmarkSignatureValidation(b *testing.B) {
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	registration, _ := validValidatorRegistration(b, relaySigningDomain)
 

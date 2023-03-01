@@ -16,7 +16,6 @@ import (
 	"github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/google/uuid"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -51,7 +50,6 @@ func TestSubmitBlock(t *testing.T) {
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -128,7 +126,6 @@ func BenchmarkSubmitBlock(b *testing.B) {
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
@@ -190,7 +187,6 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	pk, _, _ := bls.GenerateNewKeypair()
@@ -261,7 +257,6 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -308,7 +303,6 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
@@ -446,7 +440,6 @@ func TestSubmitBlocksCancel(t *testing.T) {
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
@@ -587,7 +580,6 @@ func TestRegistartionCache(t *testing.T) {
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/blstools"
-	pkg "github.com/blocknative/dreamboat/pkg"
 	dbadger "github.com/blocknative/dreamboat/pkg/datastore/validator/badger"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/validators"
@@ -35,7 +34,6 @@ func TestGetValidators(t *testing.T) {
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -70,7 +68,6 @@ func TestRegisterValidator(t *testing.T) {
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -124,7 +121,6 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -191,7 +187,6 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -239,7 +234,6 @@ func BenchmarkRegisterValidator(b *testing.B) {
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	l := log.New()
@@ -287,7 +281,6 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	l := log.New()
