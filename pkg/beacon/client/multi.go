@@ -159,7 +159,7 @@ func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err erro
 
 func (b *MultiBeaconClient) Endpoint() string {
 	if clients := b.clientsByLastResponse(); len(clients) > 0 {
-		return b.clientsByLastResponse()[0].Endpoint()
+		return clients[0].Endpoint()
 	}
 	return ""
 }
