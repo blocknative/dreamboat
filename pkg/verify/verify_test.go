@@ -10,10 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	pkg "github.com/blocknative/dreamboat/pkg"
+	"github.com/blocknative/dreamboat/test/common"
 )
 
 func BenchmarkSignatureValidation(b *testing.B) {
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
