@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
 	datastore "github.com/blocknative/dreamboat/pkg/datastore"
 	realRelay "github.com/blocknative/dreamboat/pkg/relay"
+	"github.com/blocknative/dreamboat/test/common"
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -164,7 +164,7 @@ func randomBlockBidAndTrace() *structs.BlockBidAndTrace {
 	payload := randomPayload()
 	GenesisForkVersionMainnet := "0x00000000"
 
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		GenesisForkVersionMainnet,
 		types.Root{}.String())
@@ -212,30 +212,12 @@ func randomTransactions(size int) []hexutil.Bytes {
 	return txs
 }
 
-func randomRegistration() types.SignedValidatorRegistration {
-	msg := &types.RegisterValidatorRequestMessage{
-		FeeRecipient: types.Address(random20Bytes()),
-		GasLimit:     rand.Uint64(),
-		Timestamp:    rand.Uint64(),
-		Pubkey:       types.PublicKey(random48Bytes()),
-	}
-	return types.SignedValidatorRegistration{
-		Message:   msg,
-		Signature: types.Signature(random96Bytes()),
-	}
-}
-
 func random32Bytes() (b [32]byte) {
 	rand.Read(b[:])
 	return b
 }
 
 func random48Bytes() (b [48]byte) {
-	rand.Read(b[:])
-	return b
-}
-
-func random96Bytes() (b [96]byte) {
 	rand.Read(b[:])
 	return b
 }

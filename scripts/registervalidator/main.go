@@ -10,6 +10,7 @@ import (
 	"github.com/blocknative/dreamboat/blstools"
 	relay "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
+	"github.com/blocknative/dreamboat/test/common"
 
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -29,7 +30,7 @@ func main() {
 }
 
 func registerValidator() error {
-	builderDomain, err := relay.ComputeDomain(
+	builderDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())

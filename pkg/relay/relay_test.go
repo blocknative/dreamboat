@@ -14,6 +14,7 @@ import (
 	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/verify"
+	"github.com/blocknative/dreamboat/test/common"
 
 	"github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -55,7 +56,7 @@ func TestGetHeader(t *testing.T) {
 
 	bs := mocks.NewMockState(ctrl)
 
-	relaySigningDomain, err := pkg.ComputeDomain(
+	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
@@ -144,7 +145,7 @@ func TestGetPayload(t *testing.T) {
 
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, err := pkg.ComputeDomain(
+	proposerSigningDomain, err := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
 		pkg.BellatrixForkVersionRopsten,
 		pkg.GenesisValidatorsRootRopsten)
@@ -262,7 +263,7 @@ func BenchmarkGetHeader(b *testing.B) {
 
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, _ := pkg.ComputeDomain(
+	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
 		pkg.BellatrixForkVersionRopsten,
 		pkg.GenesisValidatorsRootRopsten)
@@ -347,7 +348,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, _ := pkg.ComputeDomain(
+	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
 		pkg.BellatrixForkVersionRopsten,
 		pkg.GenesisValidatorsRootRopsten)
@@ -440,7 +441,7 @@ func BenchmarkGetPayload(b *testing.B) {
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, _ := pkg.ComputeDomain(
+	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
 		pkg.BellatrixForkVersionRopsten,
 		pkg.GenesisValidatorsRootRopsten)
@@ -559,7 +560,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, _ := pkg.ComputeDomain(
+	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
 		pkg.BellatrixForkVersionRopsten,
 		pkg.GenesisValidatorsRootRopsten)
