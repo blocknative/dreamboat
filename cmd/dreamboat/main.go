@@ -516,7 +516,6 @@ func run() cli.ActionFunc {
 		mux := http.NewServeMux()
 		a.AttachToHandler(mux)
 
-		var srv http.Server
 		// run the http server
 		go func(srv http.Server) (err error) {
 			svr := http.Server{
@@ -540,7 +539,7 @@ func run() cli.ActionFunc {
 		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		logger.Info("Shutdown initialized")
-		err = srv.Shutdown(ctx)
+		err = svr.Shutdown(ctx)
 		logger.Info("Shutdown returned ", err)
 
 		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
