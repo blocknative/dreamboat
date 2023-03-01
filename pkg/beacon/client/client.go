@@ -1,4 +1,4 @@
-package relay
+package client
 
 import (
 	"bytes"
@@ -9,8 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sync"
-	"time"
 
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -18,218 +16,29 @@ import (
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/r3labs/sse/v2"
-	uberatomic "go.uber.org/atomic"
 )
 
 var (
-	DurationPerSlot                   = time.Second * 12
-	DurationPerEpoch                  = DurationPerSlot * time.Duration(structs.SlotsPerEpoch)
-	_                    BeaconClient = (*beaconClient)(nil) // type constraint
-	ErrHTTPErrorResponse              = errors.New("got an HTTP error response")
-	ErrNodesUnavailable               = errors.New("beacon nodes are unavailable")
+	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
+	ErrNodesUnavailable  = errors.New("beacon nodes are unavailable")
 )
-
-type BeaconClient interface {
-	SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent)
-	GetProposerDuties(structs.Epoch) (*RegisteredProposersResponse, error)
-	SyncStatus() (*SyncStatusPayloadData, error)
-	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
-	Genesis() (structs.GenesisInfo, error)
-	PublishBlock(block *types.SignedBeaconBlock) error
-	Endpoint() string
-
-	AttachMetrics(m *metrics.Metrics)
-}
-
-type MultiBeaconClient struct {
-	Log     log.Logger
-	Clients []BeaconClient
-
-	bestBeaconIndex uberatomic.Int64
-}
-
-func NewMultiBeaconClient(l log.Logger, clients []BeaconClient) BeaconClient {
-	if l == nil {
-		l = log.New()
-	}
-	return &MultiBeaconClient{Log: l.WithField("service", "multi-beacon client"), Clients: clients}
-}
-
-func (b *MultiBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
-	for _, client := range b.Clients {
-		go client.SubscribeToHeadEvents(ctx, slotC)
-	}
-}
-
-func (b *MultiBeaconClient) GetProposerDuties(epoch structs.Epoch) (*RegisteredProposersResponse, error) {
-	// return the first successful beacon node response
-	clients := b.clientsByLastResponse()
-
-	for i, client := range clients {
-		log := b.Log.WithField("endpoint", client.Endpoint())
-
-		duties, err := client.GetProposerDuties(epoch)
-		if err != nil {
-			log.WithError(err).Error("failed to get proposer duties")
-			continue
-		}
-
-		b.bestBeaconIndex.Store(int64(i))
-
-		// Received successful response. Set this index as last successful beacon node
-		return duties, nil
-	}
-
-	return nil, ErrNodesUnavailable
-}
-
-func (b *MultiBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
-	var bestSyncStatus *SyncStatusPayloadData
-	var foundSyncedNode bool
-
-	// Check each beacon-node sync status
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for _, instance := range b.Clients {
-		wg.Add(1)
-		go func(client BeaconClient) {
-			defer wg.Done()
-			log := b.Log.WithField("endpoint", client.Endpoint())
-
-			syncStatus, err := client.SyncStatus()
-			if err != nil {
-				log.WithError(err).Error("failed to get sync status")
-				return
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-
-			if foundSyncedNode {
-				return
-			}
-
-			if bestSyncStatus == nil {
-				bestSyncStatus = syncStatus
-			}
-
-			if !syncStatus.IsSyncing {
-				bestSyncStatus = syncStatus
-				foundSyncedNode = true
-			}
-		}(instance)
-	}
-
-	// Wait for all requests to complete...
-	wg.Wait()
-
-	if !foundSyncedNode {
-		return nil, ErrBeaconNodeSyncing
-	}
-
-	if bestSyncStatus == nil {
-		return nil, ErrNodesUnavailable
-	}
-
-	return bestSyncStatus, nil
-}
-
-func (b *MultiBeaconClient) KnownValidators(headSlot structs.Slot) (AllValidatorsResponse, error) {
-	// return the first successful beacon node response
-	clients := b.clientsByLastResponse()
-
-	for i, client := range clients {
-		log := b.Log.WithField("endpoint", client.Endpoint())
-
-		validators, err := client.KnownValidators(headSlot)
-		if err != nil {
-			log.WithError(err).Error("failed to fetch validators")
-			continue
-		}
-
-		b.bestBeaconIndex.Store(int64(i))
-
-		// Received successful response. Set this index as last successful beacon node
-		return validators, nil
-	}
-
-	return AllValidatorsResponse{}, ErrNodesUnavailable
-}
-
-func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err error) {
-	clients := b.clientsByLastResponse()
-	for _, client := range clients {
-		if genesisInfo, err = client.Genesis(); err != nil {
-			b.Log.WithError(err).
-				WithField("endpoint", client.Endpoint()).
-				Warn("failed to get genesis info")
-			continue
-		}
-
-		return genesisInfo, nil
-	}
-
-	return genesisInfo, err
-}
-
-func (b *MultiBeaconClient) Endpoint() string {
-	return b.clientsByLastResponse()[0].Endpoint()
-}
-
-// beaconInstancesByLastResponse returns a list of beacon clients that has the client
-// with the last successful response as the first element of the slice
-func (b *MultiBeaconClient) clientsByLastResponse() []BeaconClient {
-	index := b.bestBeaconIndex.Load()
-	if index == 0 {
-		return b.Clients
-	}
-
-	instances := make([]BeaconClient, len(b.Clients))
-	copy(instances, b.Clients)
-	instances[0], instances[index] = instances[index], instances[0]
-
-	return instances
-}
-
-func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err error) {
-	for _, client := range b.clientsByLastResponse() {
-		if err = client.PublishBlock(block); err != nil {
-			b.Log.WithError(err).
-				WithField("endpoint", client.Endpoint()).
-				Warn("failed to publish block to beacon")
-			continue
-		}
-
-		return nil
-	}
-
-	return err
-}
-
-func (b *MultiBeaconClient) AttachMetrics(m *metrics.Metrics) {
-	for _, c := range b.Clients {
-		c.AttachMetrics(m)
-	}
-}
 
 type beaconClient struct {
 	beaconEndpoint *url.URL
 	log            log.Logger
-	Config
-	m BeaconMetrics
+	m              BeaconMetrics
 }
 
 type BeaconMetrics struct {
 	Timing *prometheus.HistogramVec
 }
 
-func NewBeaconClient(endpoint string, config Config) (*beaconClient, error) {
+func NewBeaconClient(l log.Logger, endpoint string) (*beaconClient, error) {
 	u, err := url.Parse(endpoint)
 
 	bc := &beaconClient{
 		beaconEndpoint: u,
-		log:            config.Log.WithField("beaconEndpoint", endpoint),
-		Config:         config,
+		log:            l.WithField("beaconEndpoint", endpoint),
 	}
 
 	bc.initMetrics()

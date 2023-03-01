@@ -17,6 +17,8 @@ import (
 	pkg "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
 	"github.com/blocknative/dreamboat/pkg/auction"
+	"github.com/blocknative/dreamboat/pkg/beacon"
+	bcli "github.com/blocknative/dreamboat/pkg/beacon/client"
 	"github.com/blocknative/dreamboat/pkg/client/sim/fallback"
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethhttp"
 	"github.com/blocknative/dreamboat/pkg/client/sim/transport/gethrpc"
@@ -343,7 +345,7 @@ func run() cli.ActionFunc {
 		}).Info("data store initialized")
 
 		timeRelayStart := time.Now()
-		state := &pkg.AtomicState{}
+		state := &beacon.AtomicState{}
 
 		hc := datastore.NewHeaderController(config.RelayHeaderMemorySlotLag, config.RelayHeaderMemorySlotTimeLag)
 		hc.AttachMetrics(m)
@@ -358,11 +360,10 @@ func run() cli.ActionFunc {
 
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 
-		beacon, err := initBeacon(c.Context, config)
+		beaconCli, err := initBeaconClients(c.Context, config.Log, config.BeaconEndpoints, m)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
-		beacon.AttachMetrics(m)
 
 		// SIM Client
 		simFallb := fallback.NewFallback()
@@ -421,7 +422,7 @@ func run() cli.ActionFunc {
 
 		validatorRelay := validators.NewRegister(config.Log, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
-		service := pkg.NewService(config.Log, config, state)
+		b := beacon.NewManager(config.Log)
 
 		auctioneer := auction.NewAuctioneer()
 
@@ -448,7 +449,7 @@ func run() cli.ActionFunc {
 			TTL:                   config.TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beacon, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
+		}, beaconCli, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
 		a := api.NewApi(config.Log, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
@@ -458,15 +459,13 @@ func run() cli.ActionFunc {
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
-		cContext, cancel := context.WithCancel(c.Context)
-		go func(s *pkg.Service) error {
-			config.Log.Info("initialized beacon")
-			err := s.RunBeacon(cContext, beacon, validatorStoreManager, validatorCache)
-			if err != nil {
-				cancel()
-			}
-			return err
-		}(service)
+		if err := b.Init(c.Context, state, beaconCli, validatorStoreManager, validatorCache); err != nil {
+			return fmt.Errorf("failed to init beacon manager: %w", err)
+		}
+
+		go b.Run(c.Context, state, beaconCli, validatorStoreManager, validatorCache)
+
+		config.Log.Info("beacon manager ready")
 
 		// run internal http server
 		go func(m *metrics.Metrics) (err error) {
@@ -485,19 +484,11 @@ func run() cli.ActionFunc {
 			}
 			return err
 		}(m)
-		// wait for the relay service to be ready
-		select {
-		case <-cContext.Done():
-			return err
-		case <-service.Ready():
-		}
-
-		logger.Info("relay service ready")
 
 		errCh := make(chan error, 1)
-		go func(ctx context.Context, errCh chan error, l log.Logger, st *pkg.AtomicState) {
+		go func(ctx context.Context, errCh chan error, l log.Logger, st *beacon.AtomicState) {
 			for {
-				cs := uint64(st.Beacon().CurrentSlot)
+				cs := uint64(st.Duties().CurrentSlot)
 				if cs == 0 {
 					time.Sleep(time.Second)
 					l.Warn("retrying on getting current slot")
@@ -544,7 +535,7 @@ func run() cli.ActionFunc {
 			return err
 		}(srv)
 
-		<-cContext.Done()
+		<-c.Context.Done()
 
 		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
@@ -598,17 +589,18 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeacon(ctx context.Context, config pkg.Config) (pkg.BeaconClient, error) {
-	clients := make([]pkg.BeaconClient, 0, len(config.BeaconEndpoints))
+func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
+	clients := make([]bcli.BeaconNode, 0, len(config.BeaconEndpoints))
 
-	for _, endpoint := range config.BeaconEndpoints {
-		client, err := pkg.NewBeaconClient(endpoint, config)
+	for _, endpoint := range endpoints {
+		client, err := bcli.NewBeaconClient(l, endpoint)
 		if err != nil {
 			return nil, err
 		}
+		client.AttachMetrics(m) // attach metrics
 		clients = append(clients, client)
 	}
-	return pkg.NewMultiBeaconClient(config.Log, clients), nil
+	return bcli.NewMultiBeaconClient(config.Log, clients), nil
 }
 
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager) {

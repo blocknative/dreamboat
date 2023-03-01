@@ -32,7 +32,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submit
 		"bid":       submitBlockRequest.Message.Value.String(),
 	})
 
-	_, err := verifyBlock(submitBlockRequest, rs.beaconState.Beacon())
+	_, err := verifyBlock(submitBlockRequest, rs.beaconState)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
@@ -240,18 +240,18 @@ func prepareContents(submitBlockRequest *types.BuilderSubmitBlockRequest, conf R
 	return s, nil
 }
 
-func verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconState *structs.BeaconState) (bool, error) { // TODO(l): remove FB type
+func verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconState State) (bool, error) { // TODO(l): remove FB type
 	if submitBlockRequest == nil || submitBlockRequest.Message == nil {
 		return false, ErrEmptyBlock
 	}
 
-	expectedTimestamp := beaconState.GenesisTime + (submitBlockRequest.Message.Slot * 12)
+	expectedTimestamp := beaconState.Genesis().GenesisTime + (submitBlockRequest.Message.Slot * 12)
 	if submitBlockRequest.ExecutionPayload.Timestamp != expectedTimestamp {
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
-	if structs.Slot(submitBlockRequest.Message.Slot) < beaconState.CurrentSlot {
-		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.CurrentSlot)
+	if structs.Slot(submitBlockRequest.Message.Slot) < beaconState.HeadSlot() {
+		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.HeadSlot())
 	}
 
 	return true, nil

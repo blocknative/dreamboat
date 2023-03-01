@@ -1,4 +1,4 @@
-package relay_test
+package client_test
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	relay "github.com/blocknative/dreamboat/pkg"
-	mock_relay "github.com/blocknative/dreamboat/pkg/mocks"
+	"github.com/blocknative/dreamboat/pkg/beacon/client"
+	"github.com/blocknative/dreamboat/pkg/beacon/client/mocks"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/golang/mock/gomock"
 	"github.com/lthibault/log"
@@ -27,12 +27,12 @@ func TestMultiSubscribeToHeadEvents(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	connected := mock_relay.NewMockBeaconClient(ctrl)
-	disconnected := mock_relay.NewMockBeaconClient(ctrl)
+	connected := mocks.NewMockBeaconNode(ctrl)
+	disconnected := mocks.NewMockBeaconNode(ctrl)
 
-	bc := &relay.MultiBeaconClient{Log: nullLog, Clients: []relay.BeaconClient{connected, disconnected}}
+	bc := &client.MultiBeaconClient{Log: nullLog, Clients: []client.BeaconNode{connected, disconnected}}
 
-	events := make(chan relay.HeadEvent)
+	events := make(chan client.HeadEvent)
 
 	connected.EXPECT().SubscribeToHeadEvents(ctx, events).Times(1)
 	disconnected.EXPECT().SubscribeToHeadEvents(ctx, events).Times(1)
@@ -50,14 +50,14 @@ func TestMultiGetProposerDuties(t *testing.T) {
 	t.Run("connected beacon first", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mock_relay.NewMockBeaconClient(ctrl)
-		disconnected := mock_relay.NewMockBeaconClient(ctrl)
+		connected := mocks.NewMockBeaconNode(ctrl)
+		disconnected := mocks.NewMockBeaconNode(ctrl)
 
-		clients := []relay.BeaconClient{connected, disconnected}
+		clients := []client.BeaconNode{connected, disconnected}
 
-		bc := &relay.MultiBeaconClient{Log: nullLog, Clients: clients}
+		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
-		duties := relay.RegisteredProposersResponse{}
+		duties := client.RegisteredProposersResponse{}
 
 		epoch := structs.Epoch(rand.Uint64())
 
@@ -76,21 +76,21 @@ func TestMultiGetProposerDuties(t *testing.T) {
 	t.Run("disconnected beacon first", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mock_relay.NewMockBeaconClient(ctrl)
-		disconnected := mock_relay.NewMockBeaconClient(ctrl)
+		connected := mocks.NewMockBeaconNode(ctrl)
+		disconnected := mocks.NewMockBeaconNode(ctrl)
 
-		clients := []relay.BeaconClient{disconnected, connected}
+		clients := []client.BeaconNode{disconnected, connected}
 
-		bc := &relay.MultiBeaconClient{Log: nullLog, Clients: clients}
+		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
-		duties := relay.RegisteredProposersResponse{}
+		duties := client.RegisteredProposersResponse{}
 
 		epoch := structs.Epoch(rand.Uint64())
 
 		disconnected.EXPECT().Endpoint().Times(1)
 		disconnected.EXPECT().
 			GetProposerDuties(epoch).
-			Return(nil, relay.ErrHTTPErrorResponse).
+			Return(nil, client.ErrHTTPErrorResponse).
 			Times(1)
 
 		connected.EXPECT().Endpoint().Times(1)
@@ -114,14 +114,14 @@ func TestMultiSyncStatus(t *testing.T) {
 	t.Run("all beacons connected", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mock_relay.NewMockBeaconClient(ctrl)
-		connected2 := mock_relay.NewMockBeaconClient(ctrl)
+		connected := mocks.NewMockBeaconNode(ctrl)
+		connected2 := mocks.NewMockBeaconNode(ctrl)
 
-		clients := []relay.BeaconClient{connected, connected2}
+		clients := []client.BeaconNode{connected, connected2}
 
-		bc := &relay.MultiBeaconClient{Log: nullLog, Clients: clients}
+		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
-		status := relay.SyncStatusPayloadData{}
+		status := client.SyncStatusPayloadData{}
 
 		connected.EXPECT().Endpoint().Times(1)
 		connected.EXPECT().
@@ -144,19 +144,19 @@ func TestMultiSyncStatus(t *testing.T) {
 	t.Run("with disconnected beacon", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mock_relay.NewMockBeaconClient(ctrl)
-		disconnected := mock_relay.NewMockBeaconClient(ctrl)
+		connected := mocks.NewMockBeaconNode(ctrl)
+		disconnected := mocks.NewMockBeaconNode(ctrl)
 
-		clients := []relay.BeaconClient{disconnected, connected}
+		clients := []client.BeaconNode{disconnected, connected}
 
-		bc := &relay.MultiBeaconClient{Log: nullLog, Clients: clients}
+		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
-		status := relay.SyncStatusPayloadData{}
+		status := client.SyncStatusPayloadData{}
 
 		disconnected.EXPECT().Endpoint().Times(1)
 		disconnected.EXPECT().
 			SyncStatus().
-			Return(nil, relay.ErrHTTPErrorResponse).
+			Return(nil, client.ErrHTTPErrorResponse).
 			Times(1)
 
 		connected.EXPECT().Endpoint().Times(1)
@@ -180,14 +180,14 @@ func TestMultiKnownValidators(t *testing.T) {
 	t.Run("connected beacon first", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mock_relay.NewMockBeaconClient(ctrl)
-		disconnected := mock_relay.NewMockBeaconClient(ctrl)
+		connected := mocks.NewMockBeaconNode(ctrl)
+		disconnected := mocks.NewMockBeaconNode(ctrl)
 
-		clients := []relay.BeaconClient{connected, disconnected}
+		clients := []client.BeaconNode{connected, disconnected}
 
-		bc := &relay.MultiBeaconClient{Log: nullLog, Clients: clients}
+		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
-		validators := relay.AllValidatorsResponse{}
+		validators := client.AllValidatorsResponse{}
 
 		slot := structs.Slot(rand.Uint64())
 
@@ -206,22 +206,22 @@ func TestMultiKnownValidators(t *testing.T) {
 	t.Run("disconnected beacon first", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mock_relay.NewMockBeaconClient(ctrl)
-		disconnected := mock_relay.NewMockBeaconClient(ctrl)
+		connected := mocks.NewMockBeaconNode(ctrl)
+		disconnected := mocks.NewMockBeaconNode(ctrl)
 
-		clients := []relay.BeaconClient{disconnected, connected}
+		clients := []client.BeaconNode{disconnected, connected}
 
-		bc := &relay.MultiBeaconClient{Log: nullLog, Clients: clients}
+		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
-		validators := relay.AllValidatorsResponse{Data: []relay.ValidatorResponseEntry{}}
-		disconnectedValidators := relay.AllValidatorsResponse{Data: nil}
+		validators := client.AllValidatorsResponse{Data: []client.ValidatorResponseEntry{}}
+		disconnectedValidators := client.AllValidatorsResponse{Data: nil}
 
 		slot := structs.Slot(rand.Uint64())
 
 		disconnected.EXPECT().Endpoint().Times(1)
 		disconnected.EXPECT().
 			KnownValidators(slot).
-			Return(disconnectedValidators, relay.ErrHTTPErrorResponse).
+			Return(disconnectedValidators, client.ErrHTTPErrorResponse).
 			Times(1)
 
 		connected.EXPECT().Endpoint().Times(1)

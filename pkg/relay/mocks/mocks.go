@@ -253,18 +253,46 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
-// Beacon mocks base method.
-func (m *MockState) Beacon() *structs.BeaconState {
+// Genesis mocks base method.
+func (m *MockState) Genesis() structs.GenesisInfo {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Beacon")
-	ret0, _ := ret[0].(*structs.BeaconState)
+	ret := m.ctrl.Call(m, "Genesis")
+	ret0, _ := ret[0].(structs.GenesisInfo)
 	return ret0
 }
 
-// Beacon indicates an expected call of Beacon.
-func (mr *MockStateMockRecorder) Beacon() *gomock.Call {
+// Genesis indicates an expected call of Genesis.
+func (mr *MockStateMockRecorder) Genesis() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Beacon", reflect.TypeOf((*MockState)(nil).Beacon))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockState)(nil).Genesis))
+}
+
+// HeadSlot mocks base method.
+func (m *MockState) HeadSlot() structs.Slot {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HeadSlot")
+	ret0, _ := ret[0].(structs.Slot)
+	return ret0
+}
+
+// HeadSlot indicates an expected call of HeadSlot.
+func (mr *MockStateMockRecorder) HeadSlot() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadSlot", reflect.TypeOf((*MockState)(nil).HeadSlot))
+}
+
+// KnownValidators mocks base method.
+func (m *MockState) KnownValidators() structs.ValidatorsState {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "KnownValidators")
+	ret0, _ := ret[0].(structs.ValidatorsState)
+	return ret0
+}
+
+// KnownValidators indicates an expected call of KnownValidators.
+func (mr *MockStateMockRecorder) KnownValidators() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockState)(nil).KnownValidators))
 }
 
 // MockValidatorStore is a mock of ValidatorStore interface.
