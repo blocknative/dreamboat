@@ -68,7 +68,7 @@ func TestSubmitBlock(t *testing.T) {
 		&config.PubKey,
 		relaySigningDomain)
 	require.NoError(t, err)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
@@ -398,7 +398,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		&config.PubKey,
 		relaySigningDomain)
 	require.NoError(t, err)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequestOne)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequestOne)
 
 	key := relay.SubmissionToKey(submitRequestOne)
 	gotPayload, _, err := ds.GetPayload(ctx, key)
