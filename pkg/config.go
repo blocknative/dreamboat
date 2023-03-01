@@ -33,6 +33,11 @@ const (
 	BellatrixForkVersionRopsten = "0x80000071"
 	BellatrixForkVersionSepolia = "0x90000071"
 	BellatrixForkVersionGoerli  = "0x02001020"
+
+	CapellaForkVersionRopsten = "0x03001020"
+	CapellaForkVersionSepolia = "0x90000072"
+	CapellaForkVersionGoerli  = "0x03001020"
+	CapellaForkVersionMainnet = "0x03000000"
 )
 
 // Config provides all available options for the default BeaconClient and Relay
@@ -58,6 +63,7 @@ type Config struct {
 	GenesisForkVersion    string
 	GenesisValidatorsRoot string
 	BellatrixForkVersion  string
+	CapellaForkVersion    string
 }
 
 func (c *Config) Validate() error {
@@ -75,22 +81,27 @@ func (c *Config) validateNetwork() error {
 		c.GenesisForkVersion = GenesisForkVersionMainnet
 		c.GenesisValidatorsRoot = GenesisValidatorsRootMainnet
 		c.BellatrixForkVersion = BellatrixForkVersionMainnet
+		c.CapellaForkVersion = CapellaForkVersionMainnet
 	case "kiln":
 		c.GenesisForkVersion = GenesisForkVersionKiln
 		c.GenesisValidatorsRoot = GenesisValidatorsRootKiln
 		c.BellatrixForkVersion = BellatrixForkVersionKiln
+		// TODO: Capella Kiln?
 	case "ropsten":
 		c.GenesisForkVersion = GenesisForkVersionRopsten
 		c.GenesisValidatorsRoot = GenesisValidatorsRootRopsten
 		c.BellatrixForkVersion = BellatrixForkVersionRopsten
+		c.CapellaForkVersion = CapellaForkVersionRopsten
 	case "sepolia":
 		c.GenesisForkVersion = GenesisForkVersionSepolia
 		c.GenesisValidatorsRoot = GenesisValidatorsRootSepolia
 		c.BellatrixForkVersion = BellatrixForkVersionSepolia
+		c.CapellaForkVersion = CapellaForkVersionSepolia
 	case "goerli":
 		c.GenesisForkVersion = GenesisForkVersionGoerli
 		c.GenesisValidatorsRoot = GenesisValidatorsRootGoerli
 		c.BellatrixForkVersion = BellatrixForkVersionGoerli
+		c.CapellaForkVersion = CapellaForkVersionGoerli
 	default:
 		network, err := c.readNetworkFromConfig(c.Network)
 		if err != nil {
