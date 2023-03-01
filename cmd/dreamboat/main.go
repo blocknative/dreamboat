@@ -516,25 +516,31 @@ func run() cli.ActionFunc {
 		mux := http.NewServeMux()
 		a.AttachToHandler(mux)
 
+		var srv http.Server
 		// run the http server
-		svr := http.Server{
-			Addr:           c.String("addr"),
-			ReadTimeout:    c.Duration("timeout"),
-			WriteTimeout:   c.Duration("timeout"),
-			IdleTimeout:    time.Second * 2,
-			Handler:        mux,
-			MaxHeaderBytes: 4096,
-		}
-		logger.Info("http server listening")
-		if err = svr.ListenAndServe(); err == http.ErrServerClosed {
-			err = nil
-		}
-		logger.Info("http server finished")
+		go func(srv http.Server) (err error) {
+			svr := http.Server{
+				Addr:           c.String("addr"),
+				ReadTimeout:    c.Duration("timeout"),
+				WriteTimeout:   c.Duration("timeout"),
+				IdleTimeout:    time.Second * 2,
+				Handler:        mux,
+				MaxHeaderBytes: 4096,
+			}
+			logger.Info("http server listening")
+			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
+				err = nil
+			}
+			logger.Info("http server finished")
+			return err
+		}(srv)
+
+		<-c.Context.Done()
 
 		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		logger.Info("Shutdown initialized")
-		err = svr.Shutdown(ctx)
+		err = srv.Shutdown(ctx)
 		logger.Info("Shutdown returned ", err)
 
 		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
