@@ -38,10 +38,9 @@ type Config struct {
 	builders map[structs.PubKey]*builder
 
 	GenesisForkVersion    string
+	BellatrixForkVersion  string
+	CapellaForkVersion    string
 	GenesisValidatorsRoot string
-
-	BellatrixForkVersion string
-	CapellaForkVersion   string
 }
 
 func NewConfig() *Config {

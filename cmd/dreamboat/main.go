@@ -292,16 +292,6 @@ func run() cli.ActionFunc {
 		TTL := c.Duration("ttl")
 		logger := logger(c).WithField("fast-boot", c.Bool("relay-fast-boot"))
 
-		domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, cfg.GenesisForkVersion, types.Root{}.String())
-		if err != nil {
-			return err
-		}
-
-		domainBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot)
-		if err != nil {
-			return err
-		}
-
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
 
@@ -391,6 +381,11 @@ func run() cli.ActionFunc {
 		validatorStoreManager.AttachMetrics(m)
 		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
 
+		domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, cfg.GenesisForkVersion, types.Root{}.String())
+		if err != nil {
+			return err
+		}
+
 		validatorRelay := validators.NewRegister(logger, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
 		b := beacon.NewManager(logger)
@@ -420,9 +415,19 @@ func run() cli.ActionFunc {
 			return err
 		}
 
+		bellatrixBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot)
+		if err != nil {
+			return err
+		}
+
+		capellaBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot)
+		if err != nil {
+			return err
+		}
+
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:  domainBuilder,
-			ProposerSigningDomain: domainBeaconProposer,
+			ProposerSigningDomain: map[string]types.Domain{"bellatix": bellatrixBeaconProposer, "capella": capellaBeaconProposer},
 			PubKey:                pk,
 			SecretKey:             sk,
 			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),

@@ -93,7 +93,7 @@ type Beacon interface {
 
 type RelayConfig struct {
 	BuilderSigningDomain  types.Domain
-	ProposerSigningDomain types.Domain
+	ProposerSigningDomain map[string]types.Domain
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
 
@@ -150,6 +150,9 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
 func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
+
+	vType := "bellatrix" // To be changed
+
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getHeader", "all")
 
@@ -237,13 +240,16 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	}).Info("bid sent")
 
 	return &types.GetHeaderResponse{
-		Version: "bellatrix",
+		Version: types.VersionString(vType),
 		Data:    &types.SignedBuilderBid{Message: &bid, Signature: signature},
 	}, nil
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
 func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
+
+	vType := "bellatrix" // To be changed
+
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
@@ -270,7 +276,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	})
 	logger.Info("payload requested")
 
-	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain)
+	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain[vType])
 	if err != nil {
 		return nil, ErrInvalidSignature // err
 	}
@@ -344,7 +350,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}).Info("payload sent")
 
 	return &types.GetPayloadResponse{
-		Version: "bellatrix",
+		Version: types.VersionString(vType),
 		Data:    payload.Payload.Data,
 	}, nil
 }
