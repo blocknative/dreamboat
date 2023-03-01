@@ -6,7 +6,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
@@ -14,8 +13,7 @@ import (
 )
 
 var (
-	_                    BeaconNode = (*beaconClient)(nil) // type constraint
-	ErrBeaconNodeSyncing            = errors.New("beacon node is syncing")
+	ErrBeaconNodeSyncing = errors.New("beacon node is syncing")
 )
 
 type BeaconNode interface {
@@ -26,8 +24,6 @@ type BeaconNode interface {
 	Genesis() (structs.GenesisInfo, error)
 	PublishBlock(block *types.SignedBeaconBlock) error
 	Endpoint() string
-
-	AttachMetrics(m *metrics.Metrics)
 }
 
 type MultiBeaconClient struct {
@@ -162,7 +158,10 @@ func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err erro
 }
 
 func (b *MultiBeaconClient) Endpoint() string {
-	return b.clientsByLastResponse()[0].Endpoint()
+	if clients := b.clientsByLastResponse(); len(clients) > 0 {
+		return b.clientsByLastResponse()[0].Endpoint()
+	}
+	return ""
 }
 
 // beaconInstancesByLastResponse returns a list of beacon clients that has the client
@@ -193,10 +192,4 @@ func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err er
 	}
 
 	return err
-}
-
-func (b *MultiBeaconClient) AttachMetrics(m *metrics.Metrics) {
-	for _, c := range b.Clients {
-		c.AttachMetrics(m)
-	}
 }

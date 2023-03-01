@@ -360,11 +360,10 @@ func run() cli.ActionFunc {
 
 		go ds.MemoryCleanup(c.Context, config.RelayHeaderMemoryPurgeInterval, config.TTL)
 
-		beaconCli, err := initBeaconClients(c.Context, config.Log, config.BeaconEndpoints)
+		beaconCli, err := initBeaconClients(c.Context, config.Log, config.BeaconEndpoints, m)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
-		beaconCli.AttachMetrics(m)
 
 		// SIM Client
 		simFallb := fallback.NewFallback()
@@ -423,7 +422,7 @@ func run() cli.ActionFunc {
 
 		validatorRelay := validators.NewRegister(config.Log, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
-		service := beacon.NewManager(config.Log, state)
+		b := beacon.NewManager(config.Log)
 
 		auctioneer := auction.NewAuctioneer()
 
@@ -460,15 +459,13 @@ func run() cli.ActionFunc {
 			"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 		}).Info("initialized")
 
-		cContext, cancel := context.WithCancel(c.Context)
-		go func(s *beacon.Manager) error {
-			config.Log.Info("initialized beacon")
-			err := s.Run(cContext, state, beaconCli, validatorStoreManager, validatorCache)
-			if err != nil {
-				cancel()
-			}
-			return err
-		}(service)
+		if err := b.Init(c.Context, state, beaconCli, validatorStoreManager, validatorCache); err != nil {
+			return fmt.Errorf("failed to init beacon manager: %w", err)
+		}
+
+		go b.Run(c.Context, state, beaconCli, validatorStoreManager, validatorCache)
+
+		config.Log.Info("beacon manager ready")
 
 		// run internal http server
 		go func(m *metrics.Metrics) (err error) {
@@ -487,15 +484,6 @@ func run() cli.ActionFunc {
 			}
 			return err
 		}(m)
-
-		// wait for the relay beacon state to be ready
-		select {
-		case <-cContext.Done():
-			return err
-		case <-state.Ready():
-		}
-
-		logger.Info("relay service ready")
 
 		errCh := make(chan error, 1)
 		go func(ctx context.Context, errCh chan error, l log.Logger, st *beacon.AtomicState) {
@@ -528,31 +516,25 @@ func run() cli.ActionFunc {
 		mux := http.NewServeMux()
 		a.AttachToHandler(mux)
 
-		var srv http.Server
 		// run the http server
-		go func(srv http.Server) (err error) {
-			svr := http.Server{
-				Addr:           c.String("addr"),
-				ReadTimeout:    c.Duration("timeout"),
-				WriteTimeout:   c.Duration("timeout"),
-				IdleTimeout:    time.Second * 2,
-				Handler:        mux,
-				MaxHeaderBytes: 4096,
-			}
-			logger.Info("http server listening")
-			if err = svr.ListenAndServe(); err == http.ErrServerClosed {
-				err = nil
-			}
-			logger.Info("http server finished")
-			return err
-		}(srv)
-
-		<-cContext.Done()
+		svr := http.Server{
+			Addr:           c.String("addr"),
+			ReadTimeout:    c.Duration("timeout"),
+			WriteTimeout:   c.Duration("timeout"),
+			IdleTimeout:    time.Second * 2,
+			Handler:        mux,
+			MaxHeaderBytes: 4096,
+		}
+		logger.Info("http server listening")
+		if err = svr.ListenAndServe(); err == http.ErrServerClosed {
+			err = nil
+		}
+		logger.Info("http server finished")
 
 		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		logger.Info("Shutdown initialized")
-		err = srv.Shutdown(ctx)
+		err = svr.Shutdown(ctx)
 		logger.Info("Shutdown returned ", err)
 
 		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
@@ -601,7 +583,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(config.BeaconEndpoints))
 
 	for _, endpoint := range endpoints {
@@ -609,6 +591,7 @@ func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string) (*
 		if err != nil {
 			return nil, err
 		}
+		client.AttachMetrics(m) // attach metrics
 		clients = append(clients, client)
 	}
 	return bcli.NewMultiBeaconClient(config.Log, clients), nil
