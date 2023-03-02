@@ -388,7 +388,10 @@ func run() cli.ActionFunc {
 
 		validatorRelay := validators.NewRegister(logger, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
-		b := beacon.NewManager(logger)
+		b := beacon.NewManager(logger, beacon.Config{
+			BellatrixForkVersion: cfg.BellatrixForkVersion,
+			CapellaForkVersion:   cfg.CapellaForkVersion,
+		})
 
 		auctioneer := auction.NewAuctioneer()
 
