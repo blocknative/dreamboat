@@ -3,6 +3,7 @@ module github.com/blocknative/dreamboat
 go 1.19
 
 require (
+	github.com/attestantio/go-eth2-client v0.0.0-00010101000000-000000000000
 	github.com/dgraph-io/badger/v2 v2.2007.3
 	github.com/ethereum/go-ethereum v1.10.25
 	github.com/golang-migrate/migrate/v4 v4.15.2
@@ -28,7 +29,6 @@ require (
 	github.com/DataDog/zstd v1.4.1 // indirect
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0 // indirect
-	github.com/attestantio/go-eth2-client v0.0.0-00010101000000-000000000000 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect
