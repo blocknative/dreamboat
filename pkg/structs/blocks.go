@@ -2,6 +2,7 @@ package structs
 
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 )
 
@@ -17,6 +18,8 @@ type BuilderSubmitBlockRequest interface {
 
 	ExecutionPayload() ExecutionPayload
 	Message() *types.BidTrace
+
+	ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error)
 }
 
 type ExecutionPayload interface {
@@ -59,5 +62,5 @@ type SignedBlindedBeaconBlock interface {
 	Signature() types.Signature
 
 	ToBeaconBlock(executionPayload ExecutionPayload) *types.SignedBeaconBlock
-	//Message() types.HashTreeRoot
+	Message() types.HashTreeRoot
 }
