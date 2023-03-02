@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
@@ -263,39 +262,6 @@ func verifyBlock(sbr structs.BuilderSubmitBlockRequest, beaconState State) (bool
 	}
 
 	return true, nil
-}
-
-// ***** Relay Domain *****
-// SubmitBlockRequestToSignedBuilderBid converts a builders block submission to a bid compatible with mev-boost
-func SubmitBlockRequestToSignedBuilderBid(sbr structs.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) { // TODO(l): remove FB type
-	if sbr == nil {
-		return nil, ErrMissingRequest
-	}
-
-	if sk == nil {
-		return nil, ErrMissingSecretKey
-	}
-
-	header, err := PayloadToPayloadHeader(sbr.ExecutionPayload())
-	if err != nil {
-		return nil, err
-	}
-
-	builderBid := types.BuilderBid{
-		Value:  sbr.Value(),
-		Header: header,
-		Pubkey: *pubkey,
-	}
-
-	sig, err := types.SignMessage(&builderBid, domain, sk)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.SignedBuilderBid{
-		Message:   &builderBid,
-		Signature: sig,
-	}, nil
 }
 
 func SubmissionToKey(submission structs.BuilderSubmitBlockRequest) structs.PayloadKey {

@@ -3,54 +3,87 @@ package bellatrix
 import (
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 )
 
 // BuilderSubmitBlockRequest spec: https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6
-type BellatrixBuilderSubmitBlockRequest struct {
+type SubmitBlockRequest struct {
 	BellatrixSignature        types.Signature   `json:"signature" ssz-size:"96"`
 	BellatrixMessage          *types.BidTrace   `json:"message"`
 	BellatrixExecutionPayload *ExecutionPayload `json:"execution_payload"`
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) Slot() uint64 {
+func (b *SubmitBlockRequest) Slot() uint64 {
 	return b.BellatrixMessage.Slot
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) BlockHash() types.Hash {
+func (b *SubmitBlockRequest) BlockHash() types.Hash {
 	return b.BellatrixExecutionPayload.EpBlockHash
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) BuilderPubkey() types.PublicKey {
+func (b *SubmitBlockRequest) BuilderPubkey() types.PublicKey {
 	return b.BellatrixMessage.BuilderPubkey
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) ProposerPubkey() types.PublicKey {
+func (b *SubmitBlockRequest) ProposerPubkey() types.PublicKey {
 	return b.BellatrixMessage.ProposerPubkey
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) ProposerFeeRecipient() types.Address {
+func (b *SubmitBlockRequest) ProposerFeeRecipient() types.Address {
 	return b.BellatrixMessage.ProposerFeeRecipient
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) Value() types.U256Str {
+func (b *SubmitBlockRequest) Value() types.U256Str {
 	return b.BellatrixMessage.Value
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) Signature() types.Signature {
+func (b *SubmitBlockRequest) Signature() types.Signature {
 	return b.BellatrixSignature
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) Timestamp() uint64 {
+func (b *SubmitBlockRequest) Timestamp() uint64 {
 	return b.BellatrixExecutionPayload.EpTimestamp
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
+func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
 	return b.BellatrixExecutionPayload
 }
 
-func (b *BellatrixBuilderSubmitBlockRequest) Message() *types.BidTrace {
+func (b *SubmitBlockRequest) Message() *types.BidTrace {
 	return b.BellatrixMessage
+}
+
+func (s *SubmitBlockRequest) ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) {
+
+	/*	if sbr == nil {
+		return nil, ErrMissingRequest
+	} */
+
+	if sk == nil {
+		return nil, ErrMissingSecretKey
+	}
+
+	header, err := types.PayloadToPayloadHeader(s.BellatrixExecutionPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	builderBid := types.BuilderBid{
+		Value:  s.Value(),
+		Header: header,
+		Pubkey: *pubkey,
+	}
+
+	sig, err := types.SignMessage(&builderBid, domain, sk)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.SignedBuilderBid{
+		Message:   &builderBid,
+		Signature: sig,
+	}, nil
 }
 
 /*
@@ -282,17 +315,6 @@ type BlindedBeaconBlock struct {
 	ParentRoot    Root                    `json:"parent_root" ssz-size:"32"`
 	StateRoot     Root                    `json:"state_root" ssz-size:"32"`
 	Body          *BlindedBeaconBlockBody `json:"body"`
-}
-*/
-
-/*
-type SignedBlindedBeaconBlock interface {
-	Slot() uint64
-	BlockHash() string
-	BlockNumber() uint64
-	ProposerIndex() uint64
-	Signature() []byte
-	//Message() types.HashTreeRoot
 }
 */
 

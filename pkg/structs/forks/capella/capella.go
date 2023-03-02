@@ -122,7 +122,6 @@ type BLSToExecutionChange struct {
 }
 
 /*
-
 // BlindedBeaconBlockBody represents the body of a blinded beacon block.
 type BlindedBeaconBlockBody struct {
 	RANDAOReveal           phase0.BLSSignature `ssz-size:"96"`
