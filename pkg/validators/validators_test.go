@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/blstools"
-	pkg "github.com/blocknative/dreamboat/pkg"
 	dbadger "github.com/blocknative/dreamboat/pkg/datastore/validator/badger"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/validators"
 	mock_val "github.com/blocknative/dreamboat/pkg/validators/mocks"
 	"github.com/blocknative/dreamboat/pkg/verify"
+	"github.com/blocknative/dreamboat/test/common"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/golang/mock/gomock"
@@ -32,9 +32,8 @@ func TestGetValidators(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20)
 	ver.RunVerify(300)
 
-	relaySigningDomain, err := pkg.ComputeDomain(
+	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -67,9 +66,8 @@ func TestRegisterValidator(t *testing.T) {
 	ds := dbadger.NewDatastore(store, time.Minute)
 	bs := mock_val.NewMockState(ctrl)
 
-	relaySigningDomain, err := pkg.ComputeDomain(
+	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -121,9 +119,8 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	ds := dbadger.NewDatastore(store, time.Minute)
 	bs := mock_val.NewMockState(ctrl)
 
-	relaySigningDomain, err := pkg.ComputeDomain(
+	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -188,9 +185,8 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	ds := dbadger.NewDatastore(store, time.Minute)
 	bs := mock_val.NewMockState(ctrl)
 
-	relaySigningDomain, err := pkg.ComputeDomain(
+	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -236,9 +232,8 @@ func BenchmarkRegisterValidator(b *testing.B) {
 	ds := dbadger.NewDatastore(store, 5*time.Minute)
 	bs := mock_val.NewMockState(ctrl)
 
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	l := log.New()
@@ -284,9 +279,8 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	ds := dbadger.NewDatastore(store, 5*time.Minute)
 	bs := mock_val.NewMockState(ctrl)
 
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	l := log.New()

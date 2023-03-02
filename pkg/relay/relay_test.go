@@ -14,12 +14,12 @@ import (
 	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/verify"
+	"github.com/blocknative/dreamboat/test/common"
 
 	"github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/google/uuid"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -35,6 +35,10 @@ import (
 
 var (
 	l = log.New(log.WithWriter(io.Discard))
+)
+
+const (
+	GenesisValidatorsRootRopsten = "0x44f1e56283ca88b35c789f7f449e52339bc1fefe3a45913a43a6d16edcd33cf1"
 )
 
 func TestGetHeader(t *testing.T) {
@@ -55,9 +59,8 @@ func TestGetHeader(t *testing.T) {
 
 	bs := mocks.NewMockState(ctrl)
 
-	relaySigningDomain, err := pkg.ComputeDomain(
+	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
@@ -90,7 +93,7 @@ func TestGetHeader(t *testing.T) {
 		relaySigningDomain,
 	)
 
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := relay.SubmissionToKey(submitRequest)
@@ -144,17 +147,16 @@ func TestGetPayload(t *testing.T) {
 
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, err := pkg.ComputeDomain(
+	proposerSigningDomain, err := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 	require.NoError(t, err)
 
 	config := relay.RelayConfig{
 		SecretKey:             pk, //pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
 		TTL:                   time.Minute,
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 		BuilderSigningDomain:  types.DomainBuilder,
 	}
 
@@ -204,7 +206,7 @@ func TestGetPayload(t *testing.T) {
 		proposerSigningDomain,
 	)
 
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := structs.PayloadKey{
@@ -262,16 +264,15 @@ func BenchmarkGetHeader(b *testing.B) {
 
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, _ := pkg.ComputeDomain(
+	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 	}
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -295,7 +296,7 @@ func BenchmarkGetHeader(b *testing.B) {
 		&config.PubKey,
 		proposerSigningDomain,
 	)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := relay.SubmissionToKey(submitRequest)
@@ -347,16 +348,15 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, _ := pkg.ComputeDomain(
+	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 	}
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -380,7 +380,7 @@ func BenchmarkGetHeaderParallel(b *testing.B) {
 		&config.PubKey,
 		proposerSigningDomain,
 	)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := relay.SubmissionToKey(submitRequest)
@@ -440,16 +440,15 @@ func BenchmarkGetPayload(b *testing.B) {
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, _ := pkg.ComputeDomain(
+	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 
 	config := relay.RelayConfig{
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 	}
 
 	l := log.New()
@@ -496,7 +495,7 @@ func BenchmarkGetPayload(b *testing.B) {
 		&config.PubKey,
 		proposerSigningDomain,
 	)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := structs.PayloadKey{
@@ -559,10 +558,9 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 	require.NoError(b, err)
 	bs := mocks.NewMockState(ctrl)
 
-	proposerSigningDomain, _ := pkg.ComputeDomain(
+	proposerSigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeBeaconProposer,
-		pkg.BellatrixForkVersionRopsten,
-		pkg.GenesisValidatorsRootRopsten)
+		GenesisValidatorsRootRopsten)
 
 	l := log.New()
 	ver := verify.NewVerificationManager(l, 20000)
@@ -572,7 +570,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		TTL:                   5 * time.Minute,
 		SecretKey:             pk, // pragma: allowlist secret
 		PubKey:                types.PublicKey(random48Bytes()),
-		ProposerSigningDomain: proposerSigningDomain,
+		ProposerSigningDomain: map[string]types.Domain{"bellatrix": proposerSigningDomain},
 	}
 	r := relay.NewRelay(l, config, nil, nil, nil, ver, bs, ds, auction.NewAuctioneer(), nil)
 
@@ -613,7 +611,7 @@ func BenchmarkGetPayloadParallel(b *testing.B) {
 		&config.PubKey,
 		proposerSigningDomain,
 	)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// fill the datastore
 	key := structs.PayloadKey{

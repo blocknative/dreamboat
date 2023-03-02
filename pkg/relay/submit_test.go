@@ -11,11 +11,11 @@ import (
 	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
 	"github.com/blocknative/dreamboat/pkg/verify"
+	"github.com/blocknative/dreamboat/test/common"
 
 	"github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/google/uuid"
 
-	pkg "github.com/blocknative/dreamboat/pkg"
 	relay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -48,9 +48,8 @@ func TestSubmitBlock(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	relaySigningDomain, err := pkg.ComputeDomain(
+	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -69,7 +68,7 @@ func TestSubmitBlock(t *testing.T) {
 		&config.PubKey,
 		relaySigningDomain)
 	require.NoError(t, err)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequest)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	bs.EXPECT().Genesis().AnyTimes().Return(structs.GenesisInfo{GenesisTime: genesisTime})
 
@@ -125,9 +124,8 @@ func BenchmarkSubmitBlock(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
@@ -187,9 +185,8 @@ func BenchmarkSubmitBlockParallel(b *testing.B) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	pk, _, _ := bls.GenerateNewKeypair()
@@ -258,9 +255,8 @@ func TestSubmitBlockInvalidTimestamp(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	relaySigningDomain, err := pkg.ComputeDomain(
+	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	require.NoError(t, err)
 
@@ -305,9 +301,8 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
@@ -403,7 +398,7 @@ func TestSubmitBlocksTwoBuilders(t *testing.T) {
 		&config.PubKey,
 		relaySigningDomain)
 	require.NoError(t, err)
-	payload := relay.SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitRequestOne)
+	payload := relay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequestOne)
 
 	key := relay.SubmissionToKey(submitRequestOne)
 	gotPayload, _, err := ds.GetPayload(ctx, key)
@@ -443,9 +438,8 @@ func TestSubmitBlocksCancel(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
@@ -584,9 +578,8 @@ func TestRegistartionCache(t *testing.T) {
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	relaySigningDomain, _ := pkg.ComputeDomain(
+	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		pkg.GenesisForkVersionRopsten,
 		types.Root{}.String())
 
 	config := relay.RelayConfig{
