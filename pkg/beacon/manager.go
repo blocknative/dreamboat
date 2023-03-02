@@ -161,6 +161,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				"numDuties":                 len(duties.ProposerDutiesResponse),
 				"numKnownValidators":        len(validators.KnownValidators),
 				"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
+				"randao":                    state.Randao(),
 				"processingTimeMs":          time.Since(t).Milliseconds(),
 			}).Debug("processed new slot")
 		}
