@@ -56,6 +56,7 @@ type State interface {
 	KnownValidators() structs.ValidatorsState
 	HeadSlot() structs.Slot
 	Genesis() structs.GenesisInfo
+	Randao() string
 }
 
 type Verifier interface {

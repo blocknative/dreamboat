@@ -24,6 +24,7 @@ type BeaconNode interface {
 	Genesis() (structs.GenesisInfo, error)
 	GetForkSchedule() (*GetForkScheduleResponse, error)
 	PublishBlock(block *types.SignedBeaconBlock) error
+	Randao(structs.Slot) (string, error)
 	Endpoint() string
 }
 
@@ -156,6 +157,19 @@ func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err erro
 	}
 
 	return genesisInfo, err
+}
+
+func (b *MultiBeaconClient) Randao(slot structs.Slot) (randao string, err error) {
+	for _, client := range b.clientsByLastResponse() {
+		if randao, err = client.Randao(slot); err != nil {
+			b.Log.WithError(err).WithField("slot", slot).WithField("endpoint", client.Endpoint()).Warn("failed to get randao")
+			continue
+		}
+
+		return
+	}
+
+	return
 }
 
 func (b *MultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {

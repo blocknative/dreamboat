@@ -39,6 +39,7 @@ type BeaconClient interface {
 	KnownValidators(structs.Slot) (bcli.AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
 	PublishBlock(block *types.SignedBeaconBlock) error
+	Randao(structs.Slot) (string, error)
 	GetForkSchedule() (*bcli.GetForkScheduleResponse, error)
 }
 
@@ -55,6 +56,9 @@ type State interface {
 	HeadSlot() structs.Slot
 	SetHeadSlot(structs.Slot)
 
+	SetRandao(string)
+	Randao() string
+	
 	Fork() structs.ForkState
 	SetFork(structs.ForkState)
 }
@@ -129,6 +133,13 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 				return err
 			}
 			s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
+
+			randao, err := client.Randao(headSlot)
+			if err != nil {
+				return fmt.Errorf("fail to update randao: %w", err)
+			}
+			state.SetRandao(randao)
+
 			return nil
 		}
 	}
@@ -190,6 +201,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				"numDuties":                 len(duties.ProposerDutiesResponse),
 				"numKnownValidators":        len(validators.KnownValidators),
 				"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
+				"randao":                    state.Randao(),
 				"processingTimeMs":          time.Since(t).Milliseconds(),
 			}).Debug("processed new slot")
 		}
@@ -247,6 +259,14 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		return err
 	}
 	s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
+
+	// update randao
+	randao, err := client.Randao(headSlot)
+	if err != nil {
+		return fmt.Errorf("fail to update randao: %w", err)
+	}
+
+	state.SetRandao(randao)
 
 	return nil
 }

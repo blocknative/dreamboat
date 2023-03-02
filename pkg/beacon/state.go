@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,11 +13,8 @@ type AtomicState struct {
 	validatorsUpdateTime atomic.Value
 	genesis              atomic.Value
 	headSlot             atomic.Value
+	randao               atomic.Value
 	fork                 atomic.Value
-
-	// is the state initialized?
-	once  sync.Once
-	ready chan struct{}
 }
 
 func (as *AtomicState) Genesis() structs.GenesisInfo {
@@ -76,6 +72,18 @@ func (as *AtomicState) HeadSlot() structs.Slot {
 
 func (as *AtomicState) SetHeadSlot(headSlot structs.Slot) {
 	as.headSlot.Store(headSlot)
+}
+
+func (as *AtomicState) Randao() string {
+	if val := as.randao.Load(); val != nil {
+		return val.(string)
+	}
+
+	return ""
+}
+
+func (as *AtomicState) SetRandao(randao string) {
+	as.randao.Store(randao)
 }
 
 func (as *AtomicState) Fork() structs.ForkState {
