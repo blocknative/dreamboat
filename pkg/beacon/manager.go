@@ -21,6 +21,7 @@ const (
 var (
 	DurationPerSlot  = time.Second * 12
 	DurationPerEpoch = DurationPerSlot * time.Duration(structs.SlotsPerEpoch)
+	ErrUnkownFork    = errors.New("beacon node fork is unknown")
 )
 
 type Datastore interface {
@@ -38,11 +39,10 @@ type BeaconClient interface {
 	KnownValidators(structs.Slot) (bcli.AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
 	PublishBlock(block *types.SignedBeaconBlock) error
+	GetForkSchedule() (*bcli.GetForkScheduleResponse, error)
 }
 
 type State interface {
-	SetReady()
-
 	SetGenesis(structs.GenesisInfo)
 
 	Duties() structs.DutiesState
@@ -54,22 +54,32 @@ type State interface {
 
 	HeadSlot() structs.Slot
 	SetHeadSlot(structs.Slot)
+
+	Fork() structs.ForkState
+	SetFork(structs.ForkState)
+}
+
+type Config struct {
+	BellatrixForkVersion string
+	CapellaForkVersion   string
 }
 
 type Manager struct {
-	Log log.Logger
+	Log    log.Logger
+	Config Config
 }
 
-func NewManager(l log.Logger) *Manager {
+func NewManager(l log.Logger, cgf Config) *Manager {
 	return &Manager{
-		Log: l.WithField("relay-service", "Service"),
+		Log:    l.WithField("relay-service", "Service"),
+		Config: cgf,
 	}
 }
 
 func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "Init")
 
-	_, err := s.waitSynced(ctx, client)
+	syncStatus, err := s.waitSynced(ctx, client)
 	if err != nil {
 		return err
 	}
@@ -83,10 +93,19 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	
+	if err := s.initForkEpoch(ctx, state, client); err != nil {
+		return fmt.Errorf("failed to set fork state: %w", err)
+	}
+
+	fork := state.Fork()
+	headSlot := structs.Slot(syncStatus.HeadSlot)
+	if !fork.IsBellatrix(headSlot) && !fork.IsCapella(headSlot) {
+		return ErrUnkownFork
+	}
+
 	events := make(chan bcli.HeadEvent, 1)
 
-	ctx, cancel := context.WithCancel(ctx)  // for stopping subscription after init is done
+	ctx, cancel := context.WithCancel(ctx) // for stopping subscription after init is done
 	defer cancel()
 
 	client.SubscribeToHeadEvents(ctx, events)
@@ -113,6 +132,26 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 			return nil
 		}
 	}
+}
+
+func (m *Manager) initForkEpoch(ctx context.Context, state State, client BeaconClient) error {
+	forkSchedule, err := client.GetForkSchedule()
+	if err != nil {
+		return fmt.Errorf("failed to get fork: %w", err)
+	}
+
+	forkState := structs.ForkState{}
+	for _, fork := range forkSchedule.Data {
+		switch fork.CurrentVersion {
+		case m.Config.BellatrixForkVersion:
+			forkState.BellatrixEpoch = structs.Epoch(fork.Epoch)
+		case m.Config.BellatrixForkVersion:
+			forkState.CapellaEpoch = structs.Epoch(fork.Epoch)
+		}
+	}
+
+	state.SetFork(forkState)
+	return nil
 }
 
 func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d Datastore, vCache ValidatorCache) error {
@@ -200,7 +239,6 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 				logger.WithError(err).Warn("failed to update known validators")
 				return
 			}
-			state.SetReady()
 		}(received)
 	}
 

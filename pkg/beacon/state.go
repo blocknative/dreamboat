@@ -10,10 +10,11 @@ import (
 
 type AtomicState struct {
 	duties               atomic.Value
-	knownValidators           atomic.Value
+	knownValidators      atomic.Value
 	validatorsUpdateTime atomic.Value
 	genesis              atomic.Value
 	headSlot             atomic.Value
+	fork                 atomic.Value
 
 	// is the state initialized?
 	once  sync.Once
@@ -77,17 +78,14 @@ func (as *AtomicState) SetHeadSlot(headSlot structs.Slot) {
 	as.headSlot.Store(headSlot)
 }
 
-func (as *AtomicState) Ready() <-chan struct{} {
-	as.once.Do(func() {
-		as.ready = make(chan struct{})
-	})
-	return as.ready
+func (as *AtomicState) Fork() structs.ForkState {
+	if val := as.fork.Load(); val != nil {
+		return val.(structs.ForkState)
+	}
+
+	return structs.ForkState{}
 }
 
-func (as *AtomicState) SetReady() {
-	select {
-	case <-as.Ready():
-	default:
-		close(as.ready)
-	}
+func (as *AtomicState) SetFork(fork structs.ForkState) {
+	as.fork.Store(fork)
 }

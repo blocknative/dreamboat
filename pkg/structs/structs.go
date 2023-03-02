@@ -306,3 +306,16 @@ type ValidatorCacheEntry struct {
 	Time  time.Time
 	Entry types.SignedValidatorRegistration
 }
+
+type ForkState struct {
+	BellatrixEpoch Epoch
+	CapellaEpoch   Epoch
+}
+
+func (fs ForkState) IsCapella(slot Slot) bool {
+	return slot.Epoch() >= fs.CapellaEpoch
+}
+
+func (fs ForkState) IsBellatrix(slot Slot) bool {
+	return slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
+}
