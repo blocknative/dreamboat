@@ -57,5 +57,7 @@ type SignedBlindedBeaconBlock interface {
 	BlockNumber() uint64
 	ProposerIndex() uint64
 	Signature() types.Signature
+
+	ToBeaconBlock(executionPayload ExecutionPayload) *types.SignedBeaconBlock
 	//Message() types.HashTreeRoot
 }

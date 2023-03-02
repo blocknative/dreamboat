@@ -17,6 +17,7 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/pkg/validators"
 )
 
@@ -49,7 +50,7 @@ var (
 type Relay interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
 	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-	GetPayload(context.Context, *structs.MetricGroup, *structs.SignedBlindedBeaconBlock) (*structs.GetPayloadResponse, error)
+	GetPayload(context.Context, *structs.MetricGroup, structs.SignedBlindedBeaconBlock) (*structs.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 	SubmitBlock(context.Context, *structs.MetricGroup, structs.BuilderSubmitBlockRequest) error
@@ -198,7 +199,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
 	defer timer.ObserveDuration()
 
-	var req types.SignedBlindedBeaconBlock
+	var req bellatrix.SignedBlindedBeaconBlock
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
@@ -214,8 +215,8 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			"code":      400,
 			"endpoint":  "getPayload",
 			"payload":   req,
-			"slot":      req.Message.Slot,
-			"blockHash": req.Message.Body.Eth1Data.BlockHash,
+			"slot":      req.SMessage.Slot,
+			"blockHash": req.SMessage.Body.Eth1Data.BlockHash,
 		}).WithError(err).Debug("failed getPayload")
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -247,7 +248,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Message == nil {
+	if req.Message() == nil {
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 		return
 	}

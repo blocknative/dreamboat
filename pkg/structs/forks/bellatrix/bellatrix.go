@@ -187,18 +187,94 @@ func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
 	return s.SSignature
 }
 
-/*
-type BlindedBeaconBlock struct {
-	Slot          phase0.Slot
-	ProposerIndex phase0.ValidatorIndex
-	ParentRoot    phase0.Root `ssz-size:"32"`
-	StateRoot     phase0.Root `ssz-size:"32"`
-	Body          *BlindedBeaconBlockBody
+func (s *SignedBlindedBeaconBlock) Slot() uint64 {
+	return s.SMessage.Slot
 }
-*/
+
+func (s *SignedBlindedBeaconBlock) BlockHash() types.Hash {
+	return s.SMessage.Body.ExecutionPayloadHeader.BlockHash
+}
+
+func (s *SignedBlindedBeaconBlock) BlockNumber() uint64 {
+	return s.SMessage.Body.ExecutionPayloadHeader.BlockNumber
+}
+
+func (s *SignedBlindedBeaconBlock) ProposerIndex() uint64 {
+	return s.SMessage.ProposerIndex
+}
+
+func (s *SignedBlindedBeaconBlock) ParentRoot() types.Root {
+	return s.SMessage.ParentRoot
+}
+
+func (s *SignedBlindedBeaconBlock) StateRoot() types.Root {
+	return s.SMessage.StateRoot
+}
+
+func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) *types.SignedBeaconBlock {
+	block := &types.SignedBeaconBlock{
+		Signature: s.SSignature,
+		Message: &types.BeaconBlock{
+			Slot:          s.SMessage.Slot,
+			ProposerIndex: s.SMessage.ProposerIndex,
+			ParentRoot:    s.SMessage.ParentRoot,
+			StateRoot:     s.SMessage.StateRoot,
+			Body: &types.BeaconBlockBody{
+				RandaoReveal:      s.SMessage.Body.RandaoReveal,
+				Eth1Data:          s.SMessage.Body.Eth1Data,
+				Graffiti:          s.SMessage.Body.Graffiti,
+				ProposerSlashings: s.SMessage.Body.ProposerSlashings,
+				AttesterSlashings: s.SMessage.Body.AttesterSlashings,
+				Attestations:      s.SMessage.Body.Attestations,
+				Deposits:          s.SMessage.Body.Deposits,
+				VoluntaryExits:    s.SMessage.Body.VoluntaryExits,
+				SyncAggregate:     s.SMessage.Body.SyncAggregate,
+				ExecutionPayload:  executionPayload,
+			},
+		},
+	}
+
+	if block.Message.Body.ProposerSlashings == nil {
+		block.Message.Body.ProposerSlashings = []*types.ProposerSlashing{}
+	}
+	if block.Message.Body.AttesterSlashings == nil {
+		block.Message.Body.AttesterSlashings = []*types.AttesterSlashing{}
+	}
+	if block.Message.Body.Attestations == nil {
+		block.Message.Body.Attestations = []*types.Attestation{}
+	}
+	if block.Message.Body.Deposits == nil {
+		block.Message.Body.Deposits = []*types.Deposit{}
+	}
+
+	if block.Message.Body.VoluntaryExits == nil {
+		block.Message.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
+	}
+
+	if block.Message.Body.Eth1Data == nil {
+		block.Message.Body.Eth1Data = &types.Eth1Data{}
+	}
+
+	if block.Message.Body.SyncAggregate == nil {
+		block.Message.Body.SyncAggregate = &types.SyncAggregate{}
+	}
+
+	if block.Message.Body.ExecutionPayload == nil {
+		block.Message.Body.ExecutionPayload = &types.ExecutionPayload{}
+	}
+
+	if block.Message.Body.ExecutionPayload.ExtraData == nil {
+		block.Message.Body.ExecutionPayload.ExtraData = types.ExtraData{}
+	}
+
+	if block.Message.Body.ExecutionPayload.Transactions == nil {
+		block.Message.Body.ExecutionPayload.Transactions = []hexutil.Bytes{}
+	}
+
+	return block
+}
 
 /*
-
 // BlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L74
 type BlindedBeaconBlock struct {
 	Slot          uint64                  `json:"slot,string"`

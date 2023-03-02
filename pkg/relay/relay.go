@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
@@ -263,16 +262,18 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	logger := rs.l.With(log.F{
 		"method":    "GetPayload",
 		"slot":      payloadRequest.Slot(),
-		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
+		"blockHash": payloadRequest.BlockHash(),
 		"pubkey":    pk,
 	})
 	logger.Info("payload requested")
 
-	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain[vType])
+	msg, err := types.ComputeSigningRoot(payloadRequest.Message(), rs.config.ProposerSigningDomain[vType])
 	if err != nil {
 		return nil, ErrInvalidSignature // err
 	}
-	ok, err = verify.VerifySignatureBytes(msg, payloadRequest.Signature[:], pk[:])
+
+	sig := payloadRequest.Signature()
+	ok, err = verify.VerifySignatureBytes(msg, sig[:], pk[:])
 	if err != nil || !ok {
 		return nil, ErrInvalidSignature
 	}
@@ -316,7 +317,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	// defer put delivered datastore write
 	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
 		if rs.config.PublishBlock {
-			beaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payloadRequest, payload.Payload.Data)
+
+			beaconBlock := payloadRequest.ToBeaconBlock(payload.Payload.Data)
 			if err := rs.beacon.PublishBlock(beaconBlock); err != nil {
 				logger.WithError(err).Warn("fail to publish block to beacon node")
 			} else {
@@ -345,67 +347,4 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		Version: types.VersionString(vType),
 		Data:    payload.Payload.Data,
 	}, nil
-}
-
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock structs.SignedBlindedBeaconBlock, executionPayload structs.ExecutionPayload) *types.SignedBeaconBlock {
-	block := &types.SignedBeaconBlock{
-		Signature: signedBlindedBeaconBlock.Signature(),
-		Message: &types.BeaconBlock{
-			Slot:          signedBlindedBeaconBlock.Slot(),
-			ProposerIndex: signedBlindedBeaconBlock.ProposerIndex(),
-			ParentRoot:    signedBlindedBeaconBlock.ParentRoot(),
-			StateRoot:     signedBlindedBeaconBlock.StateRoot(),
-			Body: &types.BeaconBlockBody{
-				RandaoReveal:      signedBlindedBeaconBlock.Message.Body.RandaoReveal,
-				Eth1Data:          signedBlindedBeaconBlock.Message.Body.Eth1Data,
-				Graffiti:          signedBlindedBeaconBlock.Message.Body.Graffiti,
-				ProposerSlashings: signedBlindedBeaconBlock.Message.Body.ProposerSlashings,
-				AttesterSlashings: signedBlindedBeaconBlock.Message.Body.AttesterSlashings,
-				Attestations:      signedBlindedBeaconBlock.Message.Body.Attestations,
-				Deposits:          signedBlindedBeaconBlock.Message.Body.Deposits,
-				VoluntaryExits:    signedBlindedBeaconBlock.Message.Body.VoluntaryExits,
-				SyncAggregate:     signedBlindedBeaconBlock.Message.Body.SyncAggregate,
-				ExecutionPayload:  executionPayload,
-			},
-		},
-	}
-
-	if block.Message.Body.ProposerSlashings == nil {
-		block.Message.Body.ProposerSlashings = []*types.ProposerSlashing{}
-	}
-	if block.Message.Body.AttesterSlashings == nil {
-		block.Message.Body.AttesterSlashings = []*types.AttesterSlashing{}
-	}
-	if block.Message.Body.Attestations == nil {
-		block.Message.Body.Attestations = []*types.Attestation{}
-	}
-	if block.Message.Body.Deposits == nil {
-		block.Message.Body.Deposits = []*types.Deposit{}
-	}
-
-	if block.Message.Body.VoluntaryExits == nil {
-		block.Message.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
-	}
-
-	if block.Message.Body.Eth1Data == nil {
-		block.Message.Body.Eth1Data = &types.Eth1Data{}
-	}
-
-	if block.Message.Body.SyncAggregate == nil {
-		block.Message.Body.SyncAggregate = &types.SyncAggregate{}
-	}
-
-	if block.Message.Body.ExecutionPayload == nil {
-		block.Message.Body.ExecutionPayload = &types.ExecutionPayload{}
-	}
-
-	if block.Message.Body.ExecutionPayload.ExtraData == nil {
-		block.Message.Body.ExecutionPayload.ExtraData = types.ExtraData{}
-	}
-
-	if block.Message.Body.ExecutionPayload.Transactions == nil {
-		block.Message.Body.ExecutionPayload.Transactions = []hexutil.Bytes{}
-	}
-
-	return block
 }
