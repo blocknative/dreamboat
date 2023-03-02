@@ -195,7 +195,7 @@ func randomBlockBidAndTrace() *structs.BlockBidAndTrace {
 	blockBidAndTrace := realRelay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// BLOCK PARAMS HAS TO BE THE SAME!!!!
-	blockBidAndTrace.Trace.Message.BlockHash = blockBidAndTrace.Payload.Data.BlockHash
+	blockBidAndTrace.Trace.Message.BlockHash = blockBidAndTrace.Payload.Data.BlockHash()
 
 	return &blockBidAndTrace
 }

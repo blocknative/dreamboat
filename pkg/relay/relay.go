@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
@@ -237,20 +238,20 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
+func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (*structs.GetPayloadResponse, error) { // TODO(l): remove FB type
 
 	vType := "bellatrix" // To be changed
 
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
-	if len(payloadRequest.Signature) != 96 {
+	if len(payloadRequest.Signature()) != 96 {
 		return nil, ErrInvalidSignature
 	}
 
-	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.Message.ProposerIndex]
+	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
 	if !ok {
-		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.Message.ProposerIndex)
+		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.ProposerIndex())
 	}
 
 	tVerify := time.Now()
@@ -261,7 +262,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	logger := rs.l.With(log.F{
 		"method":    "GetPayload",
-		"slot":      payloadRequest.Message.Slot,
+		"slot":      payloadRequest.Slot(),
 		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
 		"pubkey":    pk,
 	})
@@ -279,9 +280,9 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	tGet := time.Now()
 	key := structs.PayloadKey{
-		BlockHash: payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
+		BlockHash: payloadRequest.BlockHash(), //.Message.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  pk,
-		Slot:      structs.Slot(payloadRequest.Message.Slot),
+		Slot:      structs.Slot(payloadRequest.Slot()),
 	}
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, key)
@@ -294,28 +295,28 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
-					Slot:                 payloadRequest.Message.Slot,
-					ParentHash:           payload.Payload.Data.ParentHash,
-					BlockHash:            payload.Payload.Data.BlockHash,
+					Slot:                 payloadRequest.Slot(),
+					ParentHash:           payload.Payload.Data.ParentHash(),
+					BlockHash:            payload.Payload.Data.BlockHash(),
 					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
 					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
 					ProposerFeeRecipient: payload.Trace.Message.ProposerFeeRecipient,
-					GasLimit:             payload.Payload.Data.GasLimit,
-					GasUsed:              payload.Payload.Data.GasUsed,
+					GasLimit:             payload.Payload.Data.GasLimit(),
+					GasUsed:              payload.Payload.Data.GasUsed(),
 					Value:                payload.Trace.Message.Value,
 				},
-				BlockNumber: payload.Payload.Data.BlockNumber,
-				NumTx:       uint64(len(payload.Payload.Data.Transactions)),
+				BlockNumber: payload.Payload.Data.BlockNumber(),
+				NumTx:       uint64(len(payload.Payload.Data.Transactions())),
 			},
-			Timestamp: payload.Payload.Data.Timestamp,
+			Timestamp: payload.Payload.Data.Timestamp(),
 		},
-		BlockNumber: payload.Payload.Data.BlockNumber,
+		BlockNumber: payload.Payload.Data.BlockNumber(),
 	}
 
 	// defer put delivered datastore write
 	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
 		if rs.config.PublishBlock {
-			beaconBlock := structs.SignedBlindedBeaconBlockToBeaconBlock(payloadRequest, payload.Payload.Data)
+			beaconBlock := SignedBlindedBeaconBlockToBeaconBlock(payloadRequest, payload.Payload.Data)
 			if err := rs.beacon.PublishBlock(beaconBlock); err != nil {
 				logger.WithError(err).Warn("fail to publish block to beacon node")
 			} else {
@@ -326,22 +327,85 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
-	}(rs, structs.Slot(payloadRequest.Message.Slot), trace)
+	}(rs, structs.Slot(payloadRequest.Slot()), trace)
 
 	logger.With(log.F{
-		"slot":             payloadRequest.Message.Slot,
-		"blockHash":        payload.Payload.Data.BlockHash,
-		"blockNumber":      payload.Payload.Data.BlockNumber,
-		"stateRoot":        payload.Payload.Data.StateRoot,
-		"feeRecipient":     payload.Payload.Data.FeeRecipient,
+		"slot":             payloadRequest.Slot(),
+		"blockHash":        payload.Payload.Data.BlockHash(),
+		"blockNumber":      payload.Payload.Data.BlockNumber(),
+		"stateRoot":        payload.Payload.Data.StateRoot(),
+		"feeRecipient":     payload.Payload.Data.FeeRecipient(),
 		"bid":              payload.Bid.Data.Message.Value,
 		"from_cache":       fromCache,
-		"numTx":            len(payload.Payload.Data.Transactions),
+		"numTx":            len(payload.Payload.Data.Transactions()),
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	}).Info("payload sent")
 
-	return &types.GetPayloadResponse{
+	return &structs.GetPayloadResponse{
 		Version: types.VersionString(vType),
 		Data:    payload.Payload.Data,
 	}, nil
+}
+
+func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock structs.SignedBlindedBeaconBlock, executionPayload structs.ExecutionPayload) *types.SignedBeaconBlock {
+	block := &types.SignedBeaconBlock{
+		Signature: signedBlindedBeaconBlock.Signature(),
+		Message: &types.BeaconBlock{
+			Slot:          signedBlindedBeaconBlock.Slot(),
+			ProposerIndex: signedBlindedBeaconBlock.ProposerIndex(),
+			ParentRoot:    signedBlindedBeaconBlock.ParentRoot(),
+			StateRoot:     signedBlindedBeaconBlock.StateRoot(),
+			Body: &types.BeaconBlockBody{
+				RandaoReveal:      signedBlindedBeaconBlock.Message.Body.RandaoReveal,
+				Eth1Data:          signedBlindedBeaconBlock.Message.Body.Eth1Data,
+				Graffiti:          signedBlindedBeaconBlock.Message.Body.Graffiti,
+				ProposerSlashings: signedBlindedBeaconBlock.Message.Body.ProposerSlashings,
+				AttesterSlashings: signedBlindedBeaconBlock.Message.Body.AttesterSlashings,
+				Attestations:      signedBlindedBeaconBlock.Message.Body.Attestations,
+				Deposits:          signedBlindedBeaconBlock.Message.Body.Deposits,
+				VoluntaryExits:    signedBlindedBeaconBlock.Message.Body.VoluntaryExits,
+				SyncAggregate:     signedBlindedBeaconBlock.Message.Body.SyncAggregate,
+				ExecutionPayload:  executionPayload,
+			},
+		},
+	}
+
+	if block.Message.Body.ProposerSlashings == nil {
+		block.Message.Body.ProposerSlashings = []*types.ProposerSlashing{}
+	}
+	if block.Message.Body.AttesterSlashings == nil {
+		block.Message.Body.AttesterSlashings = []*types.AttesterSlashing{}
+	}
+	if block.Message.Body.Attestations == nil {
+		block.Message.Body.Attestations = []*types.Attestation{}
+	}
+	if block.Message.Body.Deposits == nil {
+		block.Message.Body.Deposits = []*types.Deposit{}
+	}
+
+	if block.Message.Body.VoluntaryExits == nil {
+		block.Message.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
+	}
+
+	if block.Message.Body.Eth1Data == nil {
+		block.Message.Body.Eth1Data = &types.Eth1Data{}
+	}
+
+	if block.Message.Body.SyncAggregate == nil {
+		block.Message.Body.SyncAggregate = &types.SyncAggregate{}
+	}
+
+	if block.Message.Body.ExecutionPayload == nil {
+		block.Message.Body.ExecutionPayload = &types.ExecutionPayload{}
+	}
+
+	if block.Message.Body.ExecutionPayload.ExtraData == nil {
+		block.Message.Body.ExecutionPayload.ExtraData = types.ExtraData{}
+	}
+
+	if block.Message.Body.ExecutionPayload.Transactions == nil {
+		block.Message.Body.ExecutionPayload.Transactions = []hexutil.Bytes{}
+	}
+
+	return block
 }

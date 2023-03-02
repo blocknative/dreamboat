@@ -51,7 +51,7 @@ func NewDatastore(t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize
 }
 
 func (s *Datastore) CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error {
-	key := structs.PayloadKey{BlockHash: block.Payload.Payload.Data.BlockHash, Slot: structs.Slot(block.Payload.Trace.Message.Slot), Proposer: block.Payload.Trace.Message.ProposerPubkey}
+	key := structs.PayloadKey{BlockHash: block.Payload.Payload.Data.BlockHash(), Slot: structs.Slot(block.Payload.Trace.Message.Slot), Proposer: block.Payload.Trace.Message.ProposerPubkey}
 	s.PayloadCache.Add(key, &block.Payload)
 	return nil
 }

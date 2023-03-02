@@ -113,7 +113,8 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.BuilderSubmitBlo
 	}
 
 	err = rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
-		BuilderSubmitBlockRequest: sbr,
+		//Todo  Pass correct structure
+		// BuilderSubmitBlockRequest: sbr,
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
@@ -122,7 +123,7 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.BuilderSubmitBlo
 }
 
 func (rs *Relay) verifySignature(ctx context.Context, sbr structs.BuilderSubmitBlockRequest) (err error) {
-	msg, err := types.ComputeSigningRoot(sbr.Message, rs.config.BuilderSigningDomain)
+	msg, err := types.ComputeSigningRoot(sbr.Message(), rs.config.BuilderSigningDomain)
 	if err != nil {
 		return ErrInvalidSignature
 	}
@@ -168,7 +169,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	}
 
 	tPutPayload := time.Now()
-	if err := rs.d.PutPayload(ctx, SubmissionToKey(submitBlockRequest), &complete.Payload, rs.config.TTL); err != nil {
+	if err := rs.d.PutPayload(ctx, SubmissionToKey(sbr), &complete.Payload, rs.config.TTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
@@ -208,7 +209,7 @@ func prepareContents(sbr structs.BuilderSubmitBlockRequest, conf RelayConfig) (s
 		return s, err
 	}
 
-	header, err := types.PayloadToPayloadHeader(submitBlockRequest.ExecutionPayload)
+	header, err := PayloadToPayloadHeader(sbr.ExecutionPayload())
 	if err != nil {
 		return s, err
 	}
@@ -220,8 +221,8 @@ func prepareContents(sbr structs.BuilderSubmitBlockRequest, conf RelayConfig) (s
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 sbr.Slot(),
-					ParentHash:           s.Payload.Payload.Data.ParentHash,
-					BlockHash:            s.Payload.Payload.Data.BlockHash,
+					ParentHash:           s.Payload.Payload.Data.ParentHash(),
+					BlockHash:            s.Payload.Payload.Data.BlockHash(),
 					BuilderPubkey:        s.Payload.Trace.Message.BuilderPubkey,
 					ProposerPubkey:       s.Payload.Trace.Message.ProposerPubkey,
 					ProposerFeeRecipient: s.Payload.Trace.Message.ProposerFeeRecipient,
@@ -229,8 +230,8 @@ func prepareContents(sbr structs.BuilderSubmitBlockRequest, conf RelayConfig) (s
 					GasLimit:             s.Payload.Trace.Message.GasLimit,
 					GasUsed:              s.Payload.Trace.Message.GasUsed,
 				},
-				BlockNumber: s.Payload.Payload.Data.BlockNumber,
-				NumTx:       uint64(len(s.Payload.Payload.Data.Transactions)),
+				BlockNumber: s.Payload.Payload.Data.BlockNumber(),
+				NumTx:       uint64(len(s.Payload.Payload.Data.Transactions())),
 			},
 			Timestamp:   uint64(time.Now().UnixMilli() / 1_000),
 			TimestampMs: uint64(time.Now().UnixMilli()),
@@ -239,18 +240,18 @@ func prepareContents(sbr structs.BuilderSubmitBlockRequest, conf RelayConfig) (s
 	return s, nil
 }
 
-func verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconState State) (bool, error) { // TODO(l): remove FB type
-	if submitBlockRequest == nil || submitBlockRequest.Message == nil {
+func verifyBlock(sbr structs.BuilderSubmitBlockRequest, beaconState State) (bool, error) { // TODO(l): remove FB type
+	if sbr == nil || sbr.Message() == nil {
 		return false, ErrEmptyBlock
 	}
 
-	expectedTimestamp := beaconState.Genesis().GenesisTime + (submitBlockRequest.Message.Slot * 12)
-	if submitBlockRequest.ExecutionPayload.Timestamp != expectedTimestamp {
-		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
+	expectedTimestamp := beaconState.Genesis().GenesisTime + (sbr.Slot() * 12)
+	if sbr.Timestamp() != expectedTimestamp {
+		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, sbr.Timestamp(), expectedTimestamp)
 	}
 
-	if structs.Slot(submitBlockRequest.Message.Slot) < beaconState.HeadSlot() {
-		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.HeadSlot())
+	if structs.Slot(sbr.Slot()) < beaconState.HeadSlot() {
+		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
 	}
 
 	if randao := beaconState.Randao(); randao != submitBlockRequest.ExecutionPayload.Random.String() {
@@ -271,7 +272,7 @@ func SubmitBlockRequestToSignedBuilderBid(sbr structs.BuilderSubmitBlockRequest,
 		return nil, ErrMissingSecretKey
 	}
 
-	header, err := types.PayloadToPayloadHeader(sbr.ExecutionPayload())
+	header, err := PayloadToPayloadHeader(sbr.ExecutionPayload())
 	if err != nil {
 		return nil, err
 	}
@@ -301,25 +302,65 @@ func SubmissionToKey(submission structs.BuilderSubmitBlockRequest) structs.Paylo
 	}
 }
 
-func SubmitBlockRequestToBlockBidAndTrace(versionType string, signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
-	getHeaderResponse := types.GetHeaderResponse{
-		Version: types.VersionString(versionType),
-		Data:    signedBuilderBid,
-	}
-
-	getPayloadResponse := types.GetPayloadResponse{
-		Version: types.VersionString(versionType),
-		Data:    submitBlockRequest.ExecutionPayload,
-	}
-
-	signedBidTrace := types.SignedBidTrace{
-		Message:   submitBlockRequest.Message,
-		Signature: submitBlockRequest.Signature,
-	}
-
+func SubmitBlockRequestToBlockBidAndTrace(versionType string, signedBuilderBid *types.SignedBuilderBid, sbr structs.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
 	return structs.BlockBidAndTrace{
-		Trace:   &signedBidTrace,
-		Bid:     &getHeaderResponse,
-		Payload: &getPayloadResponse,
+		Trace: &types.SignedBidTrace{
+			Message:   sbr.Message(),
+			Signature: sbr.Signature(),
+		},
+		Bid: &types.GetHeaderResponse{
+			Version: types.VersionString(versionType),
+			Data:    signedBuilderBid,
+		},
+		Payload: &structs.GetPayloadResponse{
+			Version: types.VersionString(versionType),
+			Data:    sbr.ExecutionPayload(),
+		},
 	}
+}
+
+func PayloadToPayloadHeader(p structs.ExecutionPayload) (*structs.ExecutionPayloadHeader, error) {
+	if p == nil {
+		return nil, types.ErrNilPayload
+	}
+
+	txs := [][]byte{}
+	for _, tx := range p.Transactions() {
+		txs = append(txs, tx)
+	}
+
+	transactions := types.Transactions{Transactions: txs}
+	txroot, err := transactions.HashTreeRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	var withdrawalsRoot [32]byte
+	w := p.Withdrawals()
+	if w != nil {
+		withdrawalsRoot, err = w.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &structs.ExecutionPayloadHeader{
+		ExecutionPayloadHeader: types.ExecutionPayloadHeader{
+			ParentHash:       p.ParentHash(),
+			FeeRecipient:     p.FeeRecipient(),
+			StateRoot:        p.StateRoot(),
+			ReceiptsRoot:     p.ReceiptsRoot(),
+			LogsBloom:        p.LogsBloom(),
+			Random:           p.Random(),
+			BlockNumber:      p.BlockNumber(),
+			GasLimit:         p.GasLimit(),
+			GasUsed:          p.GasUsed(),
+			Timestamp:        p.Timestamp(),
+			ExtraData:        p.ExtraData(),
+			BaseFeePerGas:    p.BaseFeePerGas(),
+			BlockHash:        p.BlockHash(),
+			TransactionsRoot: txroot,
+		},
+		WithdrawalsRoot: withdrawalsRoot,
+	}, nil
 }

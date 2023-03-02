@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
@@ -159,14 +158,14 @@ type DeliveredTrace struct {
 }
 
 type HeaderAndTrace struct {
-	Header *types.ExecutionPayloadHeader
+	Header *ExecutionPayloadHeader
 	Trace  *BidTraceWithTimestamp
 }
 
 type BlockBidAndTrace struct {
 	Trace   *types.SignedBidTrace
 	Bid     *types.GetHeaderResponse
-	Payload *types.GetPayloadResponse
+	Payload *GetPayloadResponse
 }
 
 type BeaconState struct {
@@ -237,69 +236,6 @@ func (hd *HeaderData) UnmarshalJSON(b []byte) error {
 type CompleteBlockstruct struct {
 	Header  HeaderAndTrace
 	Payload BlockBidAndTrace
-}
-
-func SignedBlindedBeaconBlockToBeaconBlock(signedBlindedBeaconBlock *types.SignedBlindedBeaconBlock, executionPayload *types.ExecutionPayload) *types.SignedBeaconBlock {
-	block := &types.SignedBeaconBlock{
-		Signature: signedBlindedBeaconBlock.Signature,
-		Message: &types.BeaconBlock{
-			Slot:          signedBlindedBeaconBlock.Message.Slot,
-			ProposerIndex: signedBlindedBeaconBlock.Message.ProposerIndex,
-			ParentRoot:    signedBlindedBeaconBlock.Message.ParentRoot,
-			StateRoot:     signedBlindedBeaconBlock.Message.StateRoot,
-			Body: &types.BeaconBlockBody{
-				RandaoReveal:      signedBlindedBeaconBlock.Message.Body.RandaoReveal,
-				Eth1Data:          signedBlindedBeaconBlock.Message.Body.Eth1Data,
-				Graffiti:          signedBlindedBeaconBlock.Message.Body.Graffiti,
-				ProposerSlashings: signedBlindedBeaconBlock.Message.Body.ProposerSlashings,
-				AttesterSlashings: signedBlindedBeaconBlock.Message.Body.AttesterSlashings,
-				Attestations:      signedBlindedBeaconBlock.Message.Body.Attestations,
-				Deposits:          signedBlindedBeaconBlock.Message.Body.Deposits,
-				VoluntaryExits:    signedBlindedBeaconBlock.Message.Body.VoluntaryExits,
-				SyncAggregate:     signedBlindedBeaconBlock.Message.Body.SyncAggregate,
-				ExecutionPayload:  executionPayload,
-			},
-		},
-	}
-
-	if block.Message.Body.ProposerSlashings == nil {
-		block.Message.Body.ProposerSlashings = []*types.ProposerSlashing{}
-	}
-	if block.Message.Body.AttesterSlashings == nil {
-		block.Message.Body.AttesterSlashings = []*types.AttesterSlashing{}
-	}
-	if block.Message.Body.Attestations == nil {
-		block.Message.Body.Attestations = []*types.Attestation{}
-	}
-	if block.Message.Body.Deposits == nil {
-		block.Message.Body.Deposits = []*types.Deposit{}
-	}
-
-	if block.Message.Body.VoluntaryExits == nil {
-		block.Message.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
-	}
-
-	if block.Message.Body.Eth1Data == nil {
-		block.Message.Body.Eth1Data = &types.Eth1Data{}
-	}
-
-	if block.Message.Body.SyncAggregate == nil {
-		block.Message.Body.SyncAggregate = &types.SyncAggregate{}
-	}
-
-	if block.Message.Body.ExecutionPayload == nil {
-		block.Message.Body.ExecutionPayload = &types.ExecutionPayload{}
-	}
-
-	if block.Message.Body.ExecutionPayload.ExtraData == nil {
-		block.Message.Body.ExecutionPayload.ExtraData = types.ExtraData{}
-	}
-
-	if block.Message.Body.ExecutionPayload.Transactions == nil {
-		block.Message.Body.ExecutionPayload.Transactions = []hexutil.Bytes{}
-	}
-
-	return block
 }
 
 type ValidatorCacheEntry struct {
