@@ -18,7 +18,7 @@ import (
 
 var (
 	ErrWrongFeeRecipient = errors.New("wrong fee recipient")
-	ErrInvalidRandao = errors.New("randao is invalid")
+	ErrInvalidRandao     = errors.New("randao is invalid")
 )
 
 // SubmitBlock Accepts block from trusted builder and stores
@@ -249,12 +249,11 @@ func verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconStat
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
-	slot := structs.Slot(submitBlockRequest.Message.Slot)
-	if slot < beaconState.HeadSlot() {
+	if structs.Slot(submitBlockRequest.Message.Slot) < beaconState.HeadSlot() {
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.HeadSlot())
 	}
 
-	if randao:= beaconState.Randao(); randao != submitBlockRequest.ExecutionPayload.Random.String() {
+	if randao := beaconState.Randao(); randao != submitBlockRequest.ExecutionPayload.Random.String() {
 		return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, submitBlockRequest.ExecutionPayload.Random.String(), randao)
 	}
 
