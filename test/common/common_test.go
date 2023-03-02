@@ -1,4 +1,4 @@
-package relay
+package common
 
 import (
 	"reflect"
@@ -41,7 +41,7 @@ func TestComputeDomain(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotDomain, err := ComputeDomain(tt.args.domainType, tt.args.forkVersionHex, tt.args.genesisValidatorsRootHex)
+			gotDomain, err := ComputeDomain(tt.args.domainType, tt.args.genesisValidatorsRootHex)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ComputeDomain() error = %v, wantErr %v", err, tt.wantErr)
 				return

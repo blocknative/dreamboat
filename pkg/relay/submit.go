@@ -213,7 +213,7 @@ func prepareContents(submitBlockRequest *types.BuilderSubmitBlockRequest, conf R
 		return s, err
 	}
 
-	s.Payload = SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid, submitBlockRequest)
+	s.Payload = SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitBlockRequest)
 	s.Header = structs.HeaderAndTrace{
 		Header: header,
 		Trace: &structs.BidTraceWithTimestamp{
@@ -301,14 +301,14 @@ func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.Payloa
 	}
 }
 
-func SubmitBlockRequestToBlockBidAndTrace(signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
+func SubmitBlockRequestToBlockBidAndTrace(versionType string, signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
 	getHeaderResponse := types.GetHeaderResponse{
-		Version: "bellatrix",
+		Version: types.VersionString(versionType),
 		Data:    signedBuilderBid,
 	}
 
 	getPayloadResponse := types.GetPayloadResponse{
-		Version: "bellatrix",
+		Version: types.VersionString(versionType),
 		Data:    submitBlockRequest.ExecutionPayload,
 	}
 
