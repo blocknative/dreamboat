@@ -38,6 +38,7 @@ type BeaconClient interface {
 	KnownValidators(structs.Slot) (bcli.AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
 	PublishBlock(block *types.SignedBeaconBlock) error
+	Randao(structs.Slot) (string, error)
 }
 
 type State interface {
@@ -54,6 +55,9 @@ type State interface {
 
 	HeadSlot() structs.Slot
 	SetHeadSlot(structs.Slot)
+
+	SetRandao(string)
+	Randao() string
 }
 
 type Manager struct {
@@ -83,10 +87,9 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	
 	events := make(chan bcli.HeadEvent, 1)
 
-	ctx, cancel := context.WithCancel(ctx)  // for stopping subscription after init is done
+	ctx, cancel := context.WithCancel(ctx) // for stopping subscription after init is done
 	defer cancel()
 
 	client.SubscribeToHeadEvents(ctx, events)
@@ -110,6 +113,13 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 				return err
 			}
 			s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
+
+			randao, err := client.Randao(headSlot)
+			if err != nil {
+				return fmt.Errorf("fail to update randao: %w", err)
+			}
+			state.SetRandao(randao)
+
 			return nil
 		}
 	}
@@ -209,6 +219,14 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		return err
 	}
 	s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
+
+	// update randao
+	randao, err := client.Randao(headSlot)
+	if err != nil {
+		return fmt.Errorf("fail to update randao: %w", err)
+	}
+
+	state.SetRandao(randao)
 
 	return nil
 }

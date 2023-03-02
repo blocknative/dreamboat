@@ -8,7 +8,6 @@ import (
 	context "context"
 	reflect "reflect"
 
-	metrics "github.com/blocknative/dreamboat/metrics"
 	client "github.com/blocknative/dreamboat/pkg/beacon/client"
 	structs "github.com/blocknative/dreamboat/pkg/structs"
 	types "github.com/flashbots/go-boost-utils/types"
@@ -36,18 +35,6 @@ func NewMockBeaconNode(ctrl *gomock.Controller) *MockBeaconNode {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockBeaconNode) EXPECT() *MockBeaconNodeMockRecorder {
 	return m.recorder
-}
-
-// AttachMetrics mocks base method.
-func (m *MockBeaconNode) AttachMetrics(arg0 *metrics.Metrics) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AttachMetrics", arg0)
-}
-
-// AttachMetrics indicates an expected call of AttachMetrics.
-func (mr *MockBeaconNodeMockRecorder) AttachMetrics(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachMetrics", reflect.TypeOf((*MockBeaconNode)(nil).AttachMetrics), arg0)
 }
 
 // Endpoint mocks base method.
@@ -121,6 +108,21 @@ func (m *MockBeaconNode) PublishBlock(arg0 *types.SignedBeaconBlock) error {
 func (mr *MockBeaconNodeMockRecorder) PublishBlock(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishBlock", reflect.TypeOf((*MockBeaconNode)(nil).PublishBlock), arg0)
+}
+
+// Randao mocks base method.
+func (m *MockBeaconNode) Randao(arg0 structs.Slot) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockBeaconNodeMockRecorder) Randao(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockBeaconNode)(nil).Randao), arg0)
 }
 
 // SubscribeToHeadEvents mocks base method.

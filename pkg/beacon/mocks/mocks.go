@@ -173,6 +173,21 @@ func (mr *MockBeaconClientMockRecorder) PublishBlock(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishBlock", reflect.TypeOf((*MockBeaconClient)(nil).PublishBlock), arg0)
 }
 
+// Randao mocks base method.
+func (m *MockBeaconClient) Randao(arg0 structs.Slot) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockBeaconClientMockRecorder) Randao(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockBeaconClient)(nil).Randao), arg0)
+}
+
 // SubscribeToHeadEvents mocks base method.
 func (m *MockBeaconClient) SubscribeToHeadEvents(arg0 context.Context, arg1 chan client.HeadEvent) {
 	m.ctrl.T.Helper()
@@ -279,6 +294,20 @@ func (mr *MockStateMockRecorder) KnownValidatorsUpdateTime() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorsUpdateTime", reflect.TypeOf((*MockState)(nil).KnownValidatorsUpdateTime))
 }
 
+// Randao mocks base method.
+func (m *MockState) Randao() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockStateMockRecorder) Randao() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao))
+}
+
 // SetDuties mocks base method.
 func (m *MockState) SetDuties(arg0 structs.DutiesState) {
 	m.ctrl.T.Helper()
@@ -325,6 +354,18 @@ func (m *MockState) SetKnownValidators(arg0 structs.ValidatorsState) {
 func (mr *MockStateMockRecorder) SetKnownValidators(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetKnownValidators", reflect.TypeOf((*MockState)(nil).SetKnownValidators), arg0)
+}
+
+// SetRandao mocks base method.
+func (m *MockState) SetRandao(arg0 string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetRandao", arg0)
+}
+
+// SetRandao indicates an expected call of SetRandao.
+func (mr *MockStateMockRecorder) SetRandao(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRandao", reflect.TypeOf((*MockState)(nil).SetRandao), arg0)
 }
 
 // SetReady mocks base method.
