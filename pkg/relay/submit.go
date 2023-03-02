@@ -16,7 +16,10 @@ import (
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
-var ErrWrongFeeRecipient = errors.New("wrong fee recipient")
+var (
+	ErrWrongFeeRecipient = errors.New("wrong fee recipient")
+	ErrInvalidRandao = errors.New("randao is invalid")
+)
 
 // SubmitBlock Accepts block from trusted builder and stores
 func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
@@ -246,8 +249,13 @@ func verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconStat
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, submitBlockRequest.ExecutionPayload.Timestamp, expectedTimestamp)
 	}
 
-	if structs.Slot(submitBlockRequest.Message.Slot) < beaconState.HeadSlot() {
+	slot := structs.Slot(submitBlockRequest.Message.Slot)
+	if slot < beaconState.HeadSlot() {
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, submitBlockRequest.Message.Slot, beaconState.HeadSlot())
+	}
+
+	if randao:= beaconState.Randao(); randao != submitBlockRequest.ExecutionPayload.Random.String() {
+		return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, submitBlockRequest.ExecutionPayload.Random.String(), randao)
 	}
 
 	return true, nil

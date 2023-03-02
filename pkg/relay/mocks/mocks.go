@@ -295,6 +295,20 @@ func (mr *MockStateMockRecorder) KnownValidators() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockState)(nil).KnownValidators))
 }
 
+// Randao mocks base method.
+func (m *MockState) Randao() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockStateMockRecorder) Randao() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao))
+}
+
 // MockValidatorStore is a mock of ValidatorStore interface.
 type MockValidatorStore struct {
 	ctrl     *gomock.Controller
