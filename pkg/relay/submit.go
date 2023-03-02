@@ -264,7 +264,7 @@ func verifyBlock(submitBlockRequest *types.BuilderSubmitBlockRequest, beaconStat
 
 func verifyWithdrawals(state State, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
 	var withdrawals []*capella.Withdrawal
-	//withdrawals := payload.Withdrawals()
+	// TODO: withdrawals := payload.Withdrawals()
 
 	if withdrawals != nil {
 		// get latest withdrawals and verify the roots match
