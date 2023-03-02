@@ -9,8 +9,8 @@ import (
 	"net/http"
 
 	"github.com/blocknative/dreamboat/blstools"
-	relay "github.com/blocknative/dreamboat/pkg"
 	"github.com/blocknative/dreamboat/pkg/api"
+	"github.com/blocknative/dreamboat/test/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/pkg/errors"
@@ -33,9 +33,8 @@ func main() {
 }
 
 func submitRequest() error {
-	builderDomain, err := relay.ComputeDomain(
+	builderDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
-		relay.GenesisForkVersionRopsten,
 		types.Root{}.String())
 	if err != nil {
 		return err
