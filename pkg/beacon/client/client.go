@@ -141,12 +141,25 @@ func (b *beaconClient) Randao(slot structs.Slot) (string, error) {
 	resp := new(GetRandaoResponse)
 	u := *b.beaconEndpoint
 	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/randao", slot)
-	
+
 	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/randao", "GET"))
 	defer t.ObserveDuration()
-	
+
 	err := b.queryBeacon(&u, "GET", &resp)
 	return resp.Data.Randao, err
+}
+
+// GetForkSchedule - https://ethereum.github.io/beacon-APIs/#/Config/getForkSchedule
+func (b *beaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
+	resp := new(GetForkScheduleResponse)
+	u := *b.beaconEndpoint
+
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/config/fork_schedule", "GET"))
+	defer t.ObserveDuration()
+
+	u.Path = "/eth/v1/config/fork_schedule"
+	err = b.queryBeacon(&u, "GET", &resp)
+	return resp, err
 }
 
 func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
@@ -297,5 +310,13 @@ type GenesisResponse struct {
 type GetRandaoResponse struct {
 	Data struct {
 		Randao string `json:"randao"`
+	}
+}
+
+type GetForkScheduleResponse struct {
+	Data []struct {
+		PreviousVersion string `json:"previous_version"`
+		CurrentVersion  string `json:"current_version"`
+		Epoch           uint64 `json:"epoch,string"`
 	}
 }

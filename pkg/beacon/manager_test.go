@@ -27,7 +27,7 @@ func TestBeaconClientState(t *testing.T) {
 	beaconMock := mocks.NewMockBeaconClient(ctrl)
 	stateMock := mocks.NewMockState(ctrl)
 
-	bm := beacon.NewManager(log.New())
+	bm := beacon.NewManager(log.New(), beacon.Config{})
 
 	beaconMock.EXPECT().GetProposerDuties(gomock.Any()).Return(&client.RegisteredProposersResponse{Data: []client.RegisteredProposersResponseData{}}, nil).Times(4)
 	beaconMock.EXPECT().SyncStatus().Return(&client.SyncStatusPayloadData{}, nil).Times(1)
