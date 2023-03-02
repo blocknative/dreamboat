@@ -600,6 +600,8 @@ func unwrapError(err error, defaultMsg string) error {
 		return relay.ErrInvalidSlot
 	} else if errors.Is(err, relay.ErrEmptyBlock) {
 		return relay.ErrEmptyBlock
+	} else if errors.Is(err, relay.ErrInvalidRandao) {
+		return relay.ErrInvalidRandao
 	} else if errors.Is(err, validators.ErrInvalidSignature) {
 		return validators.ErrInvalidSignature
 	} else if errors.Is(err, validators.ErrUnknownValidator) {

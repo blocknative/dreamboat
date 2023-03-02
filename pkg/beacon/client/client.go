@@ -137,6 +137,18 @@ func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 	return resp.Data, err
 }
 
+func (b *beaconClient) Randao(slot structs.Slot) (string, error) {
+	resp := new(GetRandaoResponse)
+	u := *b.beaconEndpoint
+	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/randao", slot)
+
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/randao", "GET"))
+	defer t.ObserveDuration()
+
+	err := b.queryBeacon(&u, "GET", &resp)
+	return resp.Data.Randao, err
+}
+
 // GetForkSchedule - https://ethereum.github.io/beacon-APIs/#/Config/getForkSchedule
 func (b *beaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
 	resp := new(GetForkScheduleResponse)
@@ -292,6 +304,13 @@ type ValidatorResponseValidatorData struct {
 
 type GenesisResponse struct {
 	Data structs.GenesisInfo
+}
+
+// GetRandaoResponse is the response for querying randao from beacon
+type GetRandaoResponse struct {
+	Data struct {
+		Randao string `json:"randao"`
+	}
 }
 
 type GetForkScheduleResponse struct {
