@@ -258,11 +258,11 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
-
-	if req.ExecutionPayload() != nil && req.ExecutionPayload().Transactions() != nil {
-		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload().Transactions())))
-	}
-
+	/*
+		if req.ExecutionPayload() != nil && req.ExecutionPayload().Transactions() != nil {
+			a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload().Transactions())))
+		}
+	*/
 	m := structs.NewMetricGroup(4)
 	if err := a.r.SubmitBlock(r.Context(), m, req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))

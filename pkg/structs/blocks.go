@@ -16,9 +16,6 @@ type SubmitBlockRequest interface {
 	Signature() types.Signature
 	Timestamp() uint64
 
-	ExecutionPayload() ExecutionPayload
-	//Message() BidTrace
-
 	//ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error)
 	// do we need that ?
 	//ToBlockBidAndTrace(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (bbt BlockBidAndTrace, err error)
@@ -45,7 +42,7 @@ type ExecutionPayload interface {
 	BaseFeePerGas() types.U256Str
 	BlockHash() types.Hash
 	Transactions() []hexutil.Bytes
-	Withdrawals() Withdrawal
+	// Withdrawals() Withdrawal
 }
 
 type Withdrawal interface {
