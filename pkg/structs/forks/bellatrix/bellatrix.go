@@ -49,9 +49,9 @@ func (b *SubmitBlockRequest) Timestamp() uint64 {
 	return b.BellatrixExecutionPayload.EpTimestamp
 }
 
-func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
-	return &b.BellatrixExecutionPayload
-}
+// func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
+// 	return &b.BellatrixExecutionPayload
+// }
 
 func (b *SubmitBlockRequest) Message() *types.BidTrace {
 	return &b.BellatrixMessage
@@ -101,7 +101,7 @@ func (s *SubmitBlockRequest) toBlockBidAndTrace(sk *bls.SecretKey, pubkey *types
 		},
 		Payload: &structs.GetPayloadResponse{
 			Version: types.VersionString("bellatrix"),
-			Data:    s.ExecutionPayload(),
+			Data:    &s.BellatrixExecutionPayload,
 		},
 	}, nil
 }
@@ -121,7 +121,7 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 		return cbs, err
 	}
 	cbs.Header = structs.HeaderAndTrace{
-		//	Header: cbs.Payload.Bid.Data.Message.Header,
+		Header: cbs.Payload.Bid.Data().Message().Header(),
 		Trace: &structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
@@ -161,15 +161,6 @@ func PayloadToPayloadHeader(p structs.ExecutionPayload) (*structs.ExecutionPaylo
 		return nil, err
 	}
 
-	var withdrawalsRoot [32]byte
-	w := p.Withdrawals()
-	if w != nil {
-		withdrawalsRoot, err = w.HashTreeRoot()
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return &structs.ExecutionPayloadHeader{
 		ExecutionPayloadHeader: types.ExecutionPayloadHeader{
 			ParentHash:       p.ParentHash(),
@@ -187,7 +178,6 @@ func PayloadToPayloadHeader(p structs.ExecutionPayload) (*structs.ExecutionPaylo
 			BlockHash:        p.BlockHash(),
 			TransactionsRoot: txroot,
 		},
-		WithdrawalsRoot: withdrawalsRoot,
 	}, nil
 }
 
@@ -372,9 +362,6 @@ func (ep *ExecutionPayload) BlockHash() types.Hash {
 }
 func (ep *ExecutionPayload) Transactions() []hexutil.Bytes {
 	return ep.EpTransactions
-}
-func (ep *ExecutionPayload) Withdrawals() structs.Withdrawal {
-	return nil
 }
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
