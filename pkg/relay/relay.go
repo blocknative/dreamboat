@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient,Auctioneer,Verifier,Beacon
 package relay
 
 import (
@@ -210,7 +210,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	}
 
 	bid := types.BuilderBid{
-		Header: header.Header,
+		// 	Header: header.Header,    TODO ERROR !!!!!!!!!!!
 		Value:  header.Trace.Value,
 		Pubkey: rs.config.PubKey,
 	}

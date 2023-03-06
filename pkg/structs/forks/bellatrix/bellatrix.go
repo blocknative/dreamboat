@@ -3,15 +3,16 @@ package bellatrix
 import (
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ssz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 )
 
 // BuilderSubmitBlockRequest spec: https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6
 type SubmitBlockRequest struct {
-	BellatrixSignature        types.Signature   `json:"signature" ssz-size:"96"`
-	BellatrixMessage          *types.BidTrace   `json:"message"`
-	BellatrixExecutionPayload *ExecutionPayload `json:"execution_payload"`
+	BellatrixSignature        types.Signature  `json:"signature" ssz-size:"96"`
+	BellatrixMessage          types.BidTrace   `json:"message"`
+	BellatrixExecutionPayload ExecutionPayload `json:"execution_payload"`
 }
 
 func (b *SubmitBlockRequest) Slot() uint64 {
@@ -47,29 +48,20 @@ func (b *SubmitBlockRequest) Timestamp() uint64 {
 }
 
 func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
-	return b.BellatrixExecutionPayload
+	return &b.BellatrixExecutionPayload
 }
 
 func (b *SubmitBlockRequest) Message() *types.BidTrace {
-	return b.BellatrixMessage
+	return &b.BellatrixMessage
 }
 
-func (s *SubmitBlockRequest) ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) {
-
-	/*	if sbr == nil {
-		return nil, ErrMissingRequest
-	} */
-
-	if sk == nil {
-		return nil, ErrMissingSecretKey
-	}
-
-	header, err := types.PayloadToPayloadHeader(s.BellatrixExecutionPayload)
+func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) {
+	header, err := PayloadToPayloadHeader(&s.BellatrixExecutionPayload)
 	if err != nil {
 		return nil, err
 	}
 
-	builderBid := types.BuilderBid{
+	builderBid := BuilderBid{
 		Value:  s.Value(),
 		Header: header,
 		Pubkey: *pubkey,
@@ -81,9 +73,113 @@ func (s *SubmitBlockRequest) ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 	}
 
 	return &types.SignedBuilderBid{
-		Message:   &builderBid,
+		//	Message:   &builderBid,
 		Signature: sig,
 	}, nil
+}
+
+func (s *SubmitBlockRequest) ToBlockBidAndTrace(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (bbt structs.BlockBidAndTrace, err error) { // TODO(l): remove FB type
+	signedBuilderBid, err := s.toSignedBuilderBid(sk, pubkey, domain)
+	if err != nil {
+		return bbt, err
+	}
+
+	return structs.BlockBidAndTrace{
+		Trace: &types.SignedBidTrace{
+			Message:   &s.BellatrixMessage,
+			Signature: s.BellatrixSignature,
+		},
+		Bid: &types.GetHeaderResponse{
+			Version: types.VersionString("bellatrix"),
+			Data:    signedBuilderBid,
+		},
+		Payload: &structs.GetPayloadResponse{
+			Version: types.VersionString("bellatrix"),
+			Data:    s.ExecutionPayload(),
+		},
+	}, nil
+}
+
+func PayloadToPayloadHeader(p structs.ExecutionPayload) (*structs.ExecutionPayloadHeader, error) {
+	if p == nil {
+		return nil, types.ErrNilPayload
+	}
+
+	txs := [][]byte{}
+	for _, tx := range p.Transactions() {
+		txs = append(txs, tx)
+	}
+
+	transactions := types.Transactions{Transactions: txs}
+	txroot, err := transactions.HashTreeRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	var withdrawalsRoot [32]byte
+	w := p.Withdrawals()
+	if w != nil {
+		withdrawalsRoot, err = w.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &structs.ExecutionPayloadHeader{
+		ExecutionPayloadHeader: types.ExecutionPayloadHeader{
+			ParentHash:       p.ParentHash(),
+			FeeRecipient:     p.FeeRecipient(),
+			StateRoot:        p.StateRoot(),
+			ReceiptsRoot:     p.ReceiptsRoot(),
+			LogsBloom:        p.LogsBloom(),
+			Random:           p.Random(),
+			BlockNumber:      p.BlockNumber(),
+			GasLimit:         p.GasLimit(),
+			GasUsed:          p.GasUsed(),
+			Timestamp:        p.Timestamp(),
+			ExtraData:        p.ExtraData(),
+			BaseFeePerGas:    p.BaseFeePerGas(),
+			BlockHash:        p.BlockHash(),
+			TransactionsRoot: txroot,
+		},
+		WithdrawalsRoot: withdrawalsRoot,
+	}, nil
+}
+
+// BuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
+type BuilderBid struct {
+	Header *structs.ExecutionPayloadHeader `json:"header"`
+	Value  types.U256Str                   `json:"value" ssz-size:"32"`
+	Pubkey types.PublicKey                 `json:"pubkey" ssz-size:"48"`
+}
+
+// HashTreeRoot ssz hashes the BuilderBid object
+func (b *BuilderBid) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BuilderBid object with a hasher
+func (b *BuilderBid) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Header'
+	if err = b.Header.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Value'
+	hh.PutBytes(b.Value[:])
+
+	// Field (2) 'Pubkey'
+	hh.PutBytes(b.Pubkey[:])
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the BuilderBid object
+func (b *BuilderBid) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(b)
 }
 
 /*
@@ -262,7 +358,7 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 				Deposits:          s.SMessage.Body.Deposits,
 				VoluntaryExits:    s.SMessage.Body.VoluntaryExits,
 				SyncAggregate:     s.SMessage.Body.SyncAggregate,
-				ExecutionPayload:  executionPayload,
+				//	ExecutionPayload:  executionPayload,
 			},
 		},
 	}
