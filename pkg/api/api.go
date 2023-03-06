@@ -53,7 +53,7 @@ type Relay interface {
 	GetPayload(context.Context, *structs.MetricGroup, structs.SignedBlindedBeaconBlock) (*structs.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	SubmitBlock(context.Context, *structs.MetricGroup, structs.BuilderSubmitBlockRequest) error
+	SubmitBlock(context.Context, *structs.MetricGroup, structs.SubmitBlockRequest) error
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
@@ -241,7 +241,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 
-	var req structs.BuilderSubmitBlockRequest
+	var req structs.SubmitBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))

@@ -17,10 +17,17 @@ type SubmitBlockRequest interface {
 	Timestamp() uint64
 
 	ExecutionPayload() ExecutionPayload
-	Message() *types.BidTrace
+	//Message() BidTrace
 
 	//ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error)
-	ToBlockBidAndTrace(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (bbt BlockBidAndTrace, err error)
+	// do we need that ?
+	//ToBlockBidAndTrace(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (bbt BlockBidAndTrace, err error)
+
+	ComputeSigningRoot(d types.Domain) ([32]byte, error)
+
+	ToPayloadKey() PayloadKey
+
+	PreparePayloadContents(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (cbs CompleteBlockstruct, err error)
 }
 
 type ExecutionPayload interface {
@@ -58,7 +65,7 @@ type SignedBlindedBeaconBlock interface {
 	Signature() types.Signature
 
 	ToBeaconBlock(executionPayload ExecutionPayload) *types.SignedBeaconBlock
-	Message() types.HashTreeRoot
+	//Message() types.HashTreeRoot
 }
 
 // BuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
@@ -71,4 +78,10 @@ type BuilderBid interface {
 type ExecutionPayloadHeader struct {
 	types.ExecutionPayloadHeader
 	WithdrawalsRoot types.Root `json:"withdrawals_root,omitempty" ssz-size:"32"`
+}
+
+// SignedBuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
+type SignedBuilderBid interface {
+	Message() BuilderBid
+	Signature() types.Signature
 }
