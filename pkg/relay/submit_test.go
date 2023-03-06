@@ -59,6 +59,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				conf := RelayConfig{
 					BuilderSigningDomain: relaySigningDomain,
 					SecretKey:            sk,
+					PubKey:               pubKey,
 				}
 
 				ds := mocks.NewMockDatastore(ctrl)
@@ -67,6 +68,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				vstore := mocks.NewMockValidatorStore(ctrl)
 				verify := mocks.NewMockVerifier(ctrl)
 				bvc := mocks.NewMockBlockValidationClient(ctrl)
+				a := mocks.NewMockAuctioneer(ctrl)
 
 				state.EXPECT().Genesis().MaxTimes(1).Return(
 					structs.GenesisInfo{GenesisTime: genesisTime},
@@ -96,17 +98,18 @@ func TestRelay_SubmitBlock(t *testing.T) {
 
 				bvc.EXPECT().ValidateBlock(context.Background(), &rpctypes.BuilderBlockValidationRequest{}).Return(nil)
 
-				ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey() , , conf.TTL)
-
+				contents, err := submitRequest.PreparePayloadContents(sk, &pubKey, relaySigningDomain)
+				require.NoError(t, err)
+				ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), &contents.Payload, conf.TTL).Return(nil)
+				a.EXPECT().AddBlock(&contents).Return(true)
 				//	sbr, ok := submitRequest.(*bellatrix.SubmitBlockRequest)
 				//if ok {
 
-			
 				//}
 				return fields{
 					config:      conf,
 					d:           ds,
-					a:           mocks.NewMockAuctioneer(ctrl),
+					a:           a,
 					ver:         verify,
 					cache:       cache,
 					vstore:      vstore,

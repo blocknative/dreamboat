@@ -248,7 +248,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Message() == nil {
+	if req.Slot() > 0 {
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 		return
 	}

@@ -163,8 +163,9 @@ type HeaderAndTrace struct {
 }
 
 type BlockBidAndTrace struct {
-	Trace   *types.SignedBidTrace
-	Bid     *types.GetHeaderResponse
+	Trace *types.SignedBidTrace
+	//Bid     *types.GetHeaderResponse
+	Bid     GetHeaderResponse
 	Payload *GetPayloadResponse
 }
 
