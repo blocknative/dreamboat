@@ -277,7 +277,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	})
 	logger.Info("payload requested")
 
-	msg, err := types.ComputeSigningRoot(payloadRequest.Message(), rs.config.ProposerSigningDomain[vType])
+	msg, err := payloadRequest.ComputeSigningRoot(rs.config.ProposerSigningDomain[vType])
 	if err != nil {
 		return nil, ErrInvalidSignature // err
 	}
@@ -290,11 +290,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	m.AppendSince(tVerify, "getPayload", "verify")
 
 	tGet := time.Now()
-	key := structs.PayloadKey{
+
+	key := payloadRequest.ToPayloadKey(pk)
+	/*key := structs.PayloadKey{
 		BlockHash: payloadRequest.BlockHash(), //.Message.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  pk,
 		Slot:      structs.Slot(payloadRequest.Slot()),
-	}
+	}*/
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, key)
 	if err != nil || payload == nil {
@@ -347,7 +349,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"blockNumber":      payload.Payload.Data.BlockNumber(),
 		"stateRoot":        payload.Payload.Data.StateRoot(),
 		"feeRecipient":     payload.Payload.Data.FeeRecipient(),
-		"bid":              payload.Bid.Data.Message.Value,
+		"bid":              payload.Bid.Data().Message().Value(),
 		"from_cache":       fromCache,
 		"numTx":            len(payload.Payload.Data.Transactions()),
 		"processingTimeMs": time.Since(tStart).Milliseconds(),

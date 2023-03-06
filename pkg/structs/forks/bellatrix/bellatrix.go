@@ -95,9 +95,9 @@ func (s *SubmitBlockRequest) toBlockBidAndTrace(sk *bls.SecretKey, pubkey *types
 			Message:   &s.BellatrixMessage,
 			Signature: s.BellatrixSignature,
 		},
-		Bid: &types.GetHeaderResponse{
-			Version: types.VersionString("bellatrix"),
-			Data:    signedBuilderBid,
+		Bid: &GetHeaderResponse{
+			BellatrixVersion: types.VersionString("bellatrix"),
+			BellatrixData:    signedBuilderBid,
 		},
 		Payload: &structs.GetPayloadResponse{
 			Version: types.VersionString("bellatrix"),
@@ -237,6 +237,20 @@ func (b *BuilderBid) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 // GetTree ssz hashes the BuilderBid object
 func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(b)
+}
+
+// GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
+type GetHeaderResponse struct {
+	BellatrixVersion types.VersionString `json:"version"`
+	BellatrixData    *SignedBuilderBid   `json:"data"`
+}
+
+func (g *GetHeaderResponse) Version() types.VersionString {
+	return g.BellatrixVersion
+
+}
+func (g *GetHeaderResponse) Data() structs.SignedBuilderBid {
+	return g.BellatrixData
 }
 
 /*
@@ -395,6 +409,18 @@ func (s *SignedBlindedBeaconBlock) ParentRoot() types.Root {
 
 func (s *SignedBlindedBeaconBlock) StateRoot() types.Root {
 	return s.SMessage.StateRoot
+}
+
+func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
+	return types.ComputeSigningRoot(b.SMessage, d)
+}
+
+func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) structs.PayloadKey {
+	return structs.PayloadKey{
+		BlockHash: s.SMessage.Body.ExecutionPayloadHeader.BlockHash,
+		Proposer:  pk,
+		Slot:      structs.Slot(s.SMessage.Slot),
+	}
 }
 
 func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) *types.SignedBeaconBlock {
