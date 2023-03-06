@@ -13,6 +13,7 @@ import (
 	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/pkg/auction"
 	"github.com/blocknative/dreamboat/pkg/datastore"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/pkg/verify"
 	"github.com/blocknative/dreamboat/test/common"
 
@@ -687,7 +688,7 @@ func validValidatorRegistration(t require.TestingT, domain types.Domain) (*types
 	}, sk
 }
 
-func validSubmitBlockRequest(t require.TestingT, domain types.Domain, genesisTime uint64) *types.BuilderSubmitBlockRequest {
+func validSubmitBlockRequest(t require.TestingT, domain types.Domain, genesisTime uint64) *structs.SubmitBlockRequest {
 	sk, pubKey, err := blstools.GenerateNewKeypair()
 	require.NoError(t, err)
 
@@ -709,10 +710,10 @@ func validSubmitBlockRequest(t require.TestingT, domain types.Domain, genesisTim
 	signature, err := types.SignMessage(msg, domain, sk)
 	require.NoError(t, err)
 
-	return &types.BuilderSubmitBlockRequest{
-		Signature:        signature,
-		Message:          msg,
-		ExecutionPayload: payload,
+	return &bellatrix.SubmitBlockRequest{
+		BellatrixSignature: signature,
+		BellatrixMessage:   msg,
+		ExecutionPayload:   payload,
 	}
 }
 
