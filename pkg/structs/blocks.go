@@ -63,7 +63,7 @@ type SignedBlindedBeaconBlock interface {
 
 	ComputeSigningRoot(d types.Domain) ([32]byte, error)
 
-	ToBeaconBlock(executionPayload ExecutionPayload) *types.SignedBeaconBlock
+	ToBeaconBlock(executionPayload ExecutionPayload) SignedBeaconBlock
 	ToPayloadKey(pk types.PublicKey) PayloadKey
 }
 
@@ -88,4 +88,9 @@ type SignedBuilderBid interface {
 type GetHeaderResponse interface {
 	Version() types.VersionString
 	Data() SignedBuilderBid
+}
+
+type SignedBeaconBlock interface {
+	Message() types.BeaconBlock
+	Signature() types.Signature
 }
