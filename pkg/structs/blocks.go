@@ -6,7 +6,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-type BuilderSubmitBlockRequest interface {
+type SubmitBlockRequest interface {
 	Slot() uint64
 	BlockHash() types.Hash
 	BuilderPubkey() types.PublicKey
@@ -19,7 +19,8 @@ type BuilderSubmitBlockRequest interface {
 	ExecutionPayload() ExecutionPayload
 	Message() *types.BidTrace
 
-	ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error)
+	//ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error)
+	ToBlockBidAndTrace(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (bbt BlockBidAndTrace, err error)
 }
 
 type ExecutionPayload interface {
@@ -44,11 +45,6 @@ type Withdrawal interface {
 	HashTreeRoot() ([32]byte, error)
 }
 
-type ExecutionPayloadHeader struct {
-	types.ExecutionPayloadHeader
-	WithdrawalsRoot types.Root `json:"withdrawals_root,omitempty" ssz-size:"32"`
-}
-
 type GetPayloadResponse struct {
 	Version types.VersionString `json:"version"`
 	Data    ExecutionPayload    `json:"data"`
@@ -63,4 +59,16 @@ type SignedBlindedBeaconBlock interface {
 
 	ToBeaconBlock(executionPayload ExecutionPayload) *types.SignedBeaconBlock
 	Message() types.HashTreeRoot
+}
+
+// BuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
+type BuilderBid interface {
+	Header() *ExecutionPayloadHeader
+	Value() types.U256Str
+	Pubkey() types.PublicKey
+}
+
+type ExecutionPayloadHeader struct {
+	types.ExecutionPayloadHeader
+	WithdrawalsRoot types.Root `json:"withdrawals_root,omitempty" ssz-size:"32"`
 }

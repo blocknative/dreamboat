@@ -8,7 +8,6 @@ import (
 	"time"
 
 	datastore "github.com/blocknative/dreamboat/pkg/datastore"
-	realRelay "github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/test/common"
 	lru "github.com/hashicorp/golang-lru/v2"
 
@@ -185,14 +184,14 @@ func randomBlockBidAndTrace() *structs.BlockBidAndTrace {
 		ExecutionPayload: payload,
 	}
 
-	signedBuilderBid, _ := realRelay.SubmitBlockRequestToSignedBuilderBid(
+	signedBuilderBid, _ := submitRequest.ToSignedBuilderBid(
 		submitRequest,
 		sk,
 		&pk,
 		relaySigningDomain,
 	)
 
-	blockBidAndTrace := realRelay.SubmitBlockRequestToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
+	blockBidAndTrace := submitRequest.ToBlockBidAndTrace("bellatrix", signedBuilderBid, submitRequest)
 
 	// BLOCK PARAMS HAS TO BE THE SAME!!!!
 	blockBidAndTrace.Trace.Message.BlockHash = blockBidAndTrace.Payload.Data.BlockHash()
