@@ -53,9 +53,9 @@ func (b *SubmitBlockRequest) Timestamp() uint64 {
 // 	return &b.BellatrixExecutionPayload
 // }
 
-func (b *SubmitBlockRequest) Message() *types.BidTrace {
-	return &b.BellatrixMessage
-}
+// func (b *SubmitBlockRequest) Message() *types.BidTrace {
+// 	return &b.BellatrixMessage
+// }
 
 func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
 	return types.ComputeSigningRoot(&b.BellatrixMessage, d)
@@ -410,15 +410,16 @@ func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) structs.Payl
 	}
 }
 
-func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) *types.SignedBeaconBlock {
-	block := &types.SignedBeaconBlock{
+func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) *SignedBeaconBlock {
+
+	block := &SignedBeaconBlock{
 		Signature: s.SSignature,
-		Message: &types.BeaconBlock{
+		Message: &BeaconBlock{
 			Slot:          s.SMessage.Slot,
 			ProposerIndex: s.SMessage.ProposerIndex,
 			ParentRoot:    s.SMessage.ParentRoot,
 			StateRoot:     s.SMessage.StateRoot,
-			Body: &types.BeaconBlockBody{
+			Body: &BeaconBlockBody{
 				RandaoReveal:      s.SMessage.Body.RandaoReveal,
 				Eth1Data:          s.SMessage.Body.Eth1Data,
 				Graffiti:          s.SMessage.Body.Graffiti,
@@ -428,7 +429,7 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 				Deposits:          s.SMessage.Body.Deposits,
 				VoluntaryExits:    s.SMessage.Body.VoluntaryExits,
 				SyncAggregate:     s.SMessage.Body.SyncAggregate,
-				//	ExecutionPayload:  executionPayload,
+				ExecutionPayload:  executionPayload,
 			},
 		},
 	}
@@ -473,6 +474,48 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 	return block
 }
 
+type SignedBuilderBid struct {
+	BellatrixMessage   *BuilderBid     `json:"message"`
+	BellatrixSignature types.Signature `json:"signature" ssz-size:"96"`
+}
+
+func (s *SignedBuilderBid) Message() structs.BuilderBid {
+	return s.BellatrixMessage
+}
+
+func (s *SignedBuilderBid) Signature() types.Signature {
+	return s.BellatrixSignature
+}
+
+// SignedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L55
+type SignedBeaconBlock struct {
+	Message   *BeaconBlock    `json:"message"`
+	Signature types.Signature `json:"signature" ssz-size:"96"`
+}
+
+// BeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L46
+type BeaconBlock struct {
+	Slot          uint64           `json:"slot,string"`
+	ProposerIndex uint64           `json:"proposer_index,string"`
+	ParentRoot    types.Root       `json:"parent_root" ssz-size:"32"`
+	StateRoot     types.Root       `json:"state_root" ssz-size:"32"`
+	Body          *BeaconBlockBody `json:"body"`
+}
+
+// BeaconBlockBody https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L38
+type BeaconBlockBody struct {
+	RandaoReveal      types.Signature              `json:"randao_reveal" ssz-size:"96"`
+	Eth1Data          *types.Eth1Data              `json:"eth1_data"`
+	Graffiti          types.Hash                   `json:"graffiti" ssz-size:"32"`
+	ProposerSlashings []*types.ProposerSlashing    `json:"proposer_slashings" ssz-max:"16"`
+	AttesterSlashings []*types.AttesterSlashing    `json:"attester_slashings" ssz-max:"2"`
+	Attestations      []*types.Attestation         `json:"attestations" ssz-max:"128"`
+	Deposits          []*types.Deposit             `json:"deposits" ssz-max:"16"`
+	VoluntaryExits    []*types.SignedVoluntaryExit `json:"voluntary_exits" ssz-max:"16"`
+	SyncAggregate     *types.SyncAggregate         `json:"sync_aggregate"`
+	ExecutionPayload  *ExecutionPayload            `json:"execution_payload"`
+}
+
 /*
 // BlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L74
 type BlindedBeaconBlock struct {
@@ -498,16 +541,3 @@ type BlindedBeaconBlockBody struct {
 	SyncAggregate          *SyncAggregate          `json:"sync_aggregate"`
 	ExecutionPayloadHeader *ExecutionPayloadHeader `json:"execution_payload_header"`
 }*/
-
-type SignedBuilderBid struct {
-	BellatrixMessage   *BuilderBid     `json:"message"`
-	BellatrixSignature types.Signature `json:"signature" ssz-size:"96"`
-}
-
-func (s *SignedBuilderBid) Message() structs.BuilderBid {
-	return s.BellatrixMessage
-}
-
-func (s *SignedBuilderBid) Signature() types.Signature {
-	return s.BellatrixSignature
-}

@@ -88,7 +88,7 @@ type Auctioneer interface {
 }
 
 type Beacon interface {
-	PublishBlock(block *types.SignedBeaconBlock) error
+	PublishBlock(block structs.SignedBeaconBlock) error
 }
 
 type RelayConfig struct {
