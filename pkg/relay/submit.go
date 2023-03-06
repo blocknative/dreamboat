@@ -109,7 +109,7 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 		return nil
 	}
 
-	if rs.config.AllowedListedBuilders != nil && sbr.Message() != nil {
+	if rs.config.AllowedListedBuilders != nil && sbr.Slot() > 0 {
 		if _, ok := rs.config.AllowedListedBuilders[sbr.BuilderPubkey()]; ok {
 			return nil
 		}
@@ -126,7 +126,7 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 }
 
 func (rs *Relay) verifySignature(ctx context.Context, sbr structs.SubmitBlockRequest) (err error) {
-	msg, err := types.ComputeSigningRoot(sbr.Message(), rs.config.BuilderSigningDomain)
+	msg, err := sbr.ComputeSigningRoot(rs.config.BuilderSigningDomain)
 	if err != nil {
 		return ErrInvalidSignature
 	}
@@ -166,13 +166,18 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 }
 
 func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sbr structs.SubmitBlockRequest) (newMax bool, err error) {
-	complete, err := prepareContents(sbr, rs.config)
+
+	if rs.config.SecretKey == nil {
+		return false, ErrMissingSecretKey
+	}
+
+	complete, err := sbr.PreparePayloadContents(rs.config.SecretKey, &rs.config.PubKey, rs.config.BuilderSigningDomain)
 	if err != nil {
 		return false, fmt.Errorf("fail to generate contents from block submission: %w", err)
 	}
 
 	tPutPayload := time.Now()
-	if err := rs.d.PutPayload(ctx, SubmissionToKey(sbr), &complete.Payload, rs.config.TTL); err != nil {
+	if err := rs.d.PutPayload(ctx, sbr.ToPayloadKey(), &complete.Payload, rs.config.TTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
@@ -200,40 +205,8 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	return newMax, nil
 }
 
-func prepareContents(sbr structs.SubmitBlockRequest, conf RelayConfig) (s structs.CompleteBlockstruct, err error) {
-
-	if conf.SecretKey == nil {
-		return s, ErrMissingSecretKey
-	}
-
-	s.Payload, err = sbr.ToBlockBidAndTrace(conf.SecretKey, &conf.PubKey, conf.BuilderSigningDomain)
-	s.Header = structs.HeaderAndTrace{
-		// 	Header: s.Payload.Bid.Data.Message.Header,
-		Trace: &structs.BidTraceWithTimestamp{
-			BidTraceExtended: structs.BidTraceExtended{
-				BidTrace: types.BidTrace{
-					Slot:                 sbr.Slot(),
-					ParentHash:           s.Payload.Payload.Data.ParentHash(),
-					BlockHash:            s.Payload.Payload.Data.BlockHash(),
-					BuilderPubkey:        s.Payload.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       s.Payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: s.Payload.Trace.Message.ProposerFeeRecipient,
-					Value:                sbr.Value(),
-					GasLimit:             s.Payload.Trace.Message.GasLimit,
-					GasUsed:              s.Payload.Trace.Message.GasUsed,
-				},
-				BlockNumber: s.Payload.Payload.Data.BlockNumber(),
-				NumTx:       uint64(len(s.Payload.Payload.Data.Transactions())),
-			},
-			Timestamp:   uint64(time.Now().UnixMilli() / 1_000),
-			TimestampMs: uint64(time.Now().UnixMilli()),
-		},
-	}
-	return s, nil
-}
-
 func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error) { // TODO(l): remove FB type
-	if sbr == nil || sbr.Message() == nil {
+	if sbr == nil || sbr.Slot() == 0 {
 		return false, ErrEmptyBlock
 	}
 
@@ -251,12 +224,4 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 	}
 
 	return true, nil
-}
-
-func SubmissionToKey(submission structs.SubmitBlockRequest) structs.PayloadKey {
-	return structs.PayloadKey{
-		BlockHash: submission.BlockHash(),
-		Proposer:  submission.ProposerPubkey(),
-		Slot:      structs.Slot(submission.Slot()),
-	}
 }

@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/blstools"
+	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/test/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/golang/mock/gomock"
 	"github.com/lthibault/log"
@@ -41,6 +43,8 @@ func TestRelay_SubmitBlock(t *testing.T) {
 		types.Root{}.String())
 	require.NoError(t, err)
 	genesisTime := uint64(time.Now().Unix())
+	sk, pubKey, err := blstools.GenerateNewKeypair()
+	require.NoError(t, err)
 
 	tests := []struct {
 		name          string
@@ -51,10 +55,18 @@ func TestRelay_SubmitBlock(t *testing.T) {
 		{
 			name: "bellatrix simple",
 			GenerateMocks: func(ctrl *gomock.Controller, submitRequest structs.SubmitBlockRequest) fields {
+
+				conf := RelayConfig{
+					BuilderSigningDomain: relaySigningDomain,
+					SecretKey:            sk,
+				}
+
 				ds := mocks.NewMockDatastore(ctrl)
 				state := mocks.NewMockState(ctrl)
 				cache := mocks.NewMockValidatorCache(ctrl)
 				vstore := mocks.NewMockValidatorStore(ctrl)
+				verify := mocks.NewMockVerifier(ctrl)
+				bvc := mocks.NewMockBlockValidationClient(ctrl)
 
 				state.EXPECT().Genesis().MaxTimes(1).Return(
 					structs.GenesisInfo{GenesisTime: genesisTime},
@@ -70,17 +82,35 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				)
 
 				vstore.EXPECT().GetRegistration(context.Background(), submitRequest.ProposerPubkey()).MaxTimes(1).Return(
-					types.SignedValidatorRegistration{}, nil,
+					types.SignedValidatorRegistration{
+						Message: &types.RegisterValidatorRequestMessage{
+							FeeRecipient: submitRequest.ProposerFeeRecipient(),
+						},
+					}, nil,
 				)
 
+				cache.EXPECT().Add(submitRequest.ProposerPubkey(), gomock.Any()).Return(false) // todo check ValidatorCacheEntry disregarding time.Now()
+				msg, err := submitRequest.ComputeSigningRoot(relaySigningDomain)
+				require.NoError(t, err)
+				verify.EXPECT().Enqueue(context.Background(), submitRequest.Signature(), submitRequest.BuilderPubkey(), msg)
+
+				bvc.EXPECT().ValidateBlock(context.Background(), &rpctypes.BuilderBlockValidationRequest{}).Return(nil)
+
+				ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey() , , conf.TTL)
+
+				//	sbr, ok := submitRequest.(*bellatrix.SubmitBlockRequest)
+				//if ok {
+
+			
+				//}
 				return fields{
-					config:      RelayConfig{},
+					config:      conf,
 					d:           ds,
 					a:           mocks.NewMockAuctioneer(ctrl),
-					ver:         mocks.NewMockVerifier(ctrl),
+					ver:         verify,
 					cache:       cache,
 					vstore:      vstore,
-					bvc:         mocks.NewMockBlockValidationClient(ctrl),
+					bvc:         bvc,
 					beacon:      mocks.NewMockBeacon(ctrl),
 					beaconState: state,
 				}
@@ -89,7 +119,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				ctx: context.Background(),
 				m:   &structs.MetricGroup{},
 				sbr: func() structs.SubmitBlockRequest {
-					return validSubmitBlockRequest(t, relaySigningDomain, genesisTime)
+					return validSubmitBlockRequest(t, sk, pubKey, relaySigningDomain, genesisTime)
 				}(),
 			},
 		},
@@ -117,9 +147,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 	}
 }
 
-func validSubmitBlockRequest(t require.TestingT, domain types.Domain, genesisTime uint64) *bellatrix.SubmitBlockRequest {
-	sk, pubKey, err := blstools.GenerateNewKeypair()
-	require.NoError(t, err)
+func validSubmitBlockRequest(t require.TestingT, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) *bellatrix.SubmitBlockRequest {
 
 	slot := rand.Uint64()
 
