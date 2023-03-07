@@ -200,13 +200,18 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
 	defer timer.ObserveDuration()
 
-	var req bellatrix.SignedBlindedBeaconBlock
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
-		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
-		return
-	}
+	var req structs.SignedBlindedBeaconBlock
+	if true {
+		var breq bellatrix.SignedBlindedBeaconBlock
+		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
+		req = &breq
+	} else {
 
+	}
 	// TODO(l): validate  structures
 	m := structs.NewMetricGroup(4)
 	payload, err := a.r.GetPayload(r.Context(), m, &req)
