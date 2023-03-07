@@ -63,12 +63,7 @@ func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 	}
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (bbt structs.BlockBidAndTrace, err error) { // TODO(l): remove FB type
-	signedBuilderBid, err := s.toSignedBuilderBid(sk, pubkey, domain)
-	if err != nil {
-		return bbt, err
-	}
-
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) { // TODO(l): remove FB type
 	return structs.BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.CapellaMessage,
@@ -82,17 +77,19 @@ func (s *SubmitBlockRequest) toBlockBidAndTrace(sk *bls.SecretKey, pubkey *types
 			Version: types.VersionString("capella"),
 			Data:    &s.CapellaExecutionPayload,
 		},
-	}, nil
+	}
 }
 
 func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (cbs structs.CompleteBlockstruct, err error) {
-
-	cbs.Payload, err = s.toBlockBidAndTrace(sk, pubkey, domain)
+	signedBuilderBid, err := s.toSignedBuilderBid(sk, pubkey, domain)
 	if err != nil {
 		return cbs, err
 	}
+
+	cbs.Payload = s.toBlockBidAndTrace(signedBuilderBid)
+
 	cbs.Header = structs.HeaderAndTrace{
-		Header: cbs.Payload.Bid.Data().Message().Header(),
+		Header: signedBuilderBid.CapellaMessage.CapellaHeader,
 		Trace: &structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
@@ -192,9 +189,9 @@ type BuilderBid struct {
 	CapellaPubkey types.PublicKey                 `json:"pubkey" ssz-size:"48"`
 }
 
-func (b *BuilderBid) Header() *structs.ExecutionPayloadHeader {
-	return b.CapellaHeader
-}
+// func (b *BuilderBid) Header() *structs.ExecutionPayloadHeader {
+// 	return b.CapellaHeader
+// }
 
 func (b *BuilderBid) Value() types.U256Str {
 	return b.CapellaValue
@@ -377,12 +374,16 @@ type SignedBuilderBid struct {
 	CapellaSignature types.Signature `json:"signature" ssz-size:"96"`
 }
 
-func (s *SignedBuilderBid) Message() structs.BuilderBid {
-	return s.CapellaMessage
-}
+// func (s *SignedBuilderBid) Message() structs.BuilderBid {
+// 	return s.CapellaMessage
+// }
 
 func (s *SignedBuilderBid) Signature() types.Signature {
 	return s.CapellaSignature
+}
+
+func (s *SignedBuilderBid) Value() types.U256Str {
+	return s.CapellaMessage.CapellaValue
 }
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83

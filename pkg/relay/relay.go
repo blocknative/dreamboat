@@ -14,6 +14,8 @@ import (
 
 	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/capella"
 	"github.com/blocknative/dreamboat/pkg/verify"
 )
 
@@ -149,7 +151,7 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
-func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
+func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 
 	vType := "bellatrix" // To be changed
 
@@ -209,31 +211,61 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, ErrNoBuilderBid
 	}
 
-	bid := types.BuilderBid{
-		// 	Header: header.Header,    TODO ERROR !!!!!!!!!!!
-		Value:  header.Trace.Value,
-		Pubkey: rs.config.PubKey,
+	if true {
+		bid := &bellatrix.BuilderBid{
+			BellatrixHeader: header.Header,
+			BellatrixValue:  header.Trace.Value,
+			BellatrixPubkey: rs.config.PubKey,
+		}
+		tSignature := time.Now()
+		signature, err := types.SignMessage(bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
+		m.AppendSince(tSignature, "getHeader", "signature")
+		if err != nil {
+			return nil, ErrInternal
+		}
+
+		logger.With(log.F{
+			"processingTimeMs": time.Since(tStart).Milliseconds(),
+			"bidValue":         bid.Value(),
+			"blockHash":        bid.BellatrixHeader.BlockHash.String(),
+			"feeRecipient":     bid.BellatrixHeader.FeeRecipient.String(),
+			"slot":             slot,
+		}).Info("bid sent")
+
+		return &bellatrix.GetHeaderResponse{
+			BellatrixVersion: types.VersionString(vType),
+			BellatrixData: &bellatrix.SignedBuilderBid{
+				BellatrixMessage:   bid,
+				BellatrixSignature: signature},
+		}, nil
+	} else {
+		bid := &capella.BuilderBid{
+			CapellaHeader: header.Header,
+			CapellaValue:  header.Trace.Value,
+			CapellaPubkey: rs.config.PubKey,
+		}
+		tSignature := time.Now()
+		signature, err := types.SignMessage(bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
+		m.AppendSince(tSignature, "getHeader", "signature")
+		if err != nil {
+			return nil, ErrInternal
+		}
+
+		logger.With(log.F{
+			"processingTimeMs": time.Since(tStart).Milliseconds(),
+			"bidValue":         bid.Value(),
+			"blockHash":        bid.CapellaHeader.BlockHash.String(),
+			"feeRecipient":     bid.CapellaHeader.FeeRecipient.String(),
+			"slot":             slot,
+		}).Info("bid sent")
+		return &capella.GetHeaderResponse{
+			CapellaVersion: types.VersionString(vType),
+			CapellaData: &capella.SignedBuilderBid{
+				CapellaMessage:   bid,
+				CapellaSignature: signature},
+		}, nil
 	}
 
-	tSignature := time.Now()
-	signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
-	m.AppendSince(tSignature, "getHeader", "signature")
-	if err != nil {
-		return nil, ErrInternal
-	}
-
-	logger.With(log.F{
-		"processingTimeMs": time.Since(tStart).Milliseconds(),
-		"bidValue":         bid.Value.String(),
-		"blockHash":        bid.Header.BlockHash.String(),
-		"feeRecipient":     bid.Header.FeeRecipient.String(),
-		"slot":             slot,
-	}).Info("bid sent")
-
-	return &types.GetHeaderResponse{
-		Version: types.VersionString(vType),
-		Data:    &types.SignedBuilderBid{Message: &bid, Signature: signature},
-	}, nil
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
@@ -342,7 +374,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"blockNumber":      payload.Payload.Data.BlockNumber(),
 		"stateRoot":        payload.Payload.Data.StateRoot(),
 		"feeRecipient":     payload.Payload.Data.FeeRecipient(),
-		"bid":              payload.Bid.Data().Message().Value(),
+		"bid":              payload.Bid.Data().Value(),
 		"from_cache":       fromCache,
 		"numTx":            len(payload.Payload.Data.Transactions()),
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
