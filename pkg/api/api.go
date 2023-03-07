@@ -18,6 +18,7 @@ import (
 	"github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/capella"
 	"github.com/blocknative/dreamboat/pkg/validators"
 )
 
@@ -206,6 +207,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO(l): validate  structures
 	m := structs.NewMetricGroup(4)
 	payload, err := a.r.GetPayload(r.Context(), m, &req)
 	if err != nil {
@@ -242,11 +244,24 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	defer timer.ObserveDuration()
 
 	var req structs.SubmitBlockRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
-		return
+	if true {
+		var breq bellatrix.SubmitBlockRequest
+		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
+		req = &breq
+	} else {
+		var creq capella.SubmitBlockRequest
+		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
+		req = &creq
 	}
+	// TODO(l): VALIDATE!!!
 
 	if req.Slot() > 0 {
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))

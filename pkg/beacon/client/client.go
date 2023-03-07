@@ -12,7 +12,6 @@ import (
 
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/r3labs/sse/v2"
@@ -162,7 +161,7 @@ func (b *beaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err err
 	return resp, err
 }
 
-func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
+func (b *beaconClient) PublishBlock(block structs.SignedBeaconBlock) error {
 	bb, err := json.Marshal(block)
 	if err != nil {
 		return fmt.Errorf("fail to marshal block: %w", err)

@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 	uberatomic "go.uber.org/atomic"
 )
@@ -23,7 +22,7 @@ type BeaconNode interface {
 	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
 	GetForkSchedule() (*GetForkScheduleResponse, error)
-	PublishBlock(block *types.SignedBeaconBlock) error
+	PublishBlock(block structs.SignedBeaconBlock) error
 	Randao(structs.Slot) (string, error)
 	Endpoint() string
 }
@@ -208,7 +207,7 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconNode {
 	return instances
 }
 
-func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err error) {
+func (b *MultiBeaconClient) PublishBlock(block structs.SignedBeaconBlock) (err error) {
 	for _, client := range b.clientsByLastResponse() {
 		if err = client.PublishBlock(block); err != nil {
 			b.Log.WithError(err).

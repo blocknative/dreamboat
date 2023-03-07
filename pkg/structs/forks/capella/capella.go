@@ -49,14 +49,6 @@ func (b *SubmitBlockRequest) Timestamp() uint64 {
 	return b.CapellaExecutionPayload.EpTimestamp
 }
 
-// func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
-// 	return &b.CapellaExecutionPayload
-// }
-
-// func (b *SubmitBlockRequest) Message() *types.BidTrace {
-// 	return &b.CapellaMessage
-// }
-
 func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
 	return types.ComputeSigningRoot(&b.CapellaMessage, d)
 }
@@ -81,11 +73,11 @@ func (s *SubmitBlockRequest) toBlockBidAndTrace(sk *bls.SecretKey, pubkey *types
 			Signature: s.CapellaSignature,
 		},
 		Bid: &GetHeaderResponse{
-			CapellaVersion: types.VersionString("bellatrix"),
+			CapellaVersion: types.VersionString("capella"),
 			CapellaData:    signedBuilderBid,
 		},
 		Payload: &structs.GetPayloadResponse{
-			Version: types.VersionString("bellatrix"),
+			Version: types.VersionString("capella"),
 			Data:    &s.CapellaExecutionPayload,
 		},
 	}, nil
