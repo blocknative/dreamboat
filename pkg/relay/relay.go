@@ -38,6 +38,7 @@ var (
 )
 
 type BlockValidationClient interface {
+	IsSet() bool
 	ValidateBlock(ctx context.Context, block *rpctypes.BuilderBlockValidationRequest) (err error)
 }
 

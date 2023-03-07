@@ -24,6 +24,10 @@ func NewFallback() *Fallback {
 	return f
 }
 
+func (f *Fallback) IsSet() bool {
+	return len(f.clients) > 0
+}
+
 func (f *Fallback) AddClient(cli Client) {
 	f.clients = append(f.clients, cli)
 }

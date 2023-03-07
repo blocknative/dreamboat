@@ -20,6 +20,10 @@ func NewClient(namespace string, rawurl string) *Client {
 	}
 }
 
+func (f *Client) IsSet() bool {
+	return f.namespace != "" && f.rawurl != ""
+}
+
 func (c *Client) Kind() string {
 	return "rpc"
 }

@@ -394,6 +394,20 @@ func (m *MockBlockValidationClient) EXPECT() *MockBlockValidationClientMockRecor
 	return m.recorder
 }
 
+// IsSet mocks base method.
+func (m *MockBlockValidationClient) IsSet() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSet")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSet indicates an expected call of IsSet.
+func (mr *MockBlockValidationClientMockRecorder) IsSet() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSet", reflect.TypeOf((*MockBlockValidationClient)(nil).IsSet))
+}
+
 // ValidateBlock mocks base method.
 func (m *MockBlockValidationClient) ValidateBlock(arg0 context.Context, arg1 *types.BuilderBlockValidationRequest) error {
 	m.ctrl.T.Helper()
