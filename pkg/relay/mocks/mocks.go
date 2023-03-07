@@ -549,7 +549,7 @@ func (m *MockBeacon) EXPECT() *MockBeaconMockRecorder {
 }
 
 // PublishBlock mocks base method.
-func (m *MockBeacon) PublishBlock(arg0 *types0.SignedBeaconBlock) error {
+func (m *MockBeacon) PublishBlock(arg0 structs.SignedBeaconBlock) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PublishBlock", arg0)
 	ret0, _ := ret[0].(error)

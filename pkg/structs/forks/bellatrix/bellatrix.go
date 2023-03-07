@@ -1,6 +1,7 @@
 package bellatrix
 
 import (
+	"errors"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
@@ -48,14 +49,6 @@ func (b *SubmitBlockRequest) Signature() types.Signature {
 func (b *SubmitBlockRequest) Timestamp() uint64 {
 	return b.BellatrixExecutionPayload.EpTimestamp
 }
-
-// func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
-// 	return &b.BellatrixExecutionPayload
-// }
-
-// func (b *SubmitBlockRequest) Message() *types.BidTrace {
-// 	return &b.BellatrixMessage
-// }
 
 func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
 	return types.ComputeSigningRoot(&b.BellatrixMessage, d)
@@ -410,11 +403,15 @@ func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) structs.Payl
 	}
 }
 
-func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) *SignedBeaconBlock {
+func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) (structs.SignedBeaconBlock, error) {
+	ep, ok := executionPayload.(*ExecutionPayload)
+	if !ok {
+		return nil, errors.New("ExecutionPayload is not bellatrix")
+	}
 
 	block := &SignedBeaconBlock{
-		Signature: s.SSignature,
-		Message: &BeaconBlock{
+		BellatrixSignature: s.SSignature,
+		BellatrixMessage: &BeaconBlock{
 			Slot:          s.SMessage.Slot,
 			ProposerIndex: s.SMessage.ProposerIndex,
 			ParentRoot:    s.SMessage.ParentRoot,
@@ -429,49 +426,49 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 				Deposits:          s.SMessage.Body.Deposits,
 				VoluntaryExits:    s.SMessage.Body.VoluntaryExits,
 				SyncAggregate:     s.SMessage.Body.SyncAggregate,
-				ExecutionPayload:  executionPayload,
+				ExecutionPayload:  ep,
 			},
 		},
 	}
 
-	if block.Message.Body.ProposerSlashings == nil {
-		block.Message.Body.ProposerSlashings = []*types.ProposerSlashing{}
+	if block.BellatrixMessage.Body.ProposerSlashings == nil {
+		block.BellatrixMessage.Body.ProposerSlashings = []*types.ProposerSlashing{}
 	}
-	if block.Message.Body.AttesterSlashings == nil {
-		block.Message.Body.AttesterSlashings = []*types.AttesterSlashing{}
+	if block.BellatrixMessage.Body.AttesterSlashings == nil {
+		block.BellatrixMessage.Body.AttesterSlashings = []*types.AttesterSlashing{}
 	}
-	if block.Message.Body.Attestations == nil {
-		block.Message.Body.Attestations = []*types.Attestation{}
+	if block.BellatrixMessage.Body.Attestations == nil {
+		block.BellatrixMessage.Body.Attestations = []*types.Attestation{}
 	}
-	if block.Message.Body.Deposits == nil {
-		block.Message.Body.Deposits = []*types.Deposit{}
-	}
-
-	if block.Message.Body.VoluntaryExits == nil {
-		block.Message.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
+	if block.BellatrixMessage.Body.Deposits == nil {
+		block.BellatrixMessage.Body.Deposits = []*types.Deposit{}
 	}
 
-	if block.Message.Body.Eth1Data == nil {
-		block.Message.Body.Eth1Data = &types.Eth1Data{}
+	if block.BellatrixMessage.Body.VoluntaryExits == nil {
+		block.BellatrixMessage.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
 	}
 
-	if block.Message.Body.SyncAggregate == nil {
-		block.Message.Body.SyncAggregate = &types.SyncAggregate{}
+	if block.BellatrixMessage.Body.Eth1Data == nil {
+		block.BellatrixMessage.Body.Eth1Data = &types.Eth1Data{}
 	}
 
-	if block.Message.Body.ExecutionPayload == nil {
-		block.Message.Body.ExecutionPayload = &types.ExecutionPayload{}
+	if block.BellatrixMessage.Body.SyncAggregate == nil {
+		block.BellatrixMessage.Body.SyncAggregate = &types.SyncAggregate{}
 	}
 
-	if block.Message.Body.ExecutionPayload.ExtraData == nil {
-		block.Message.Body.ExecutionPayload.ExtraData = types.ExtraData{}
+	if block.BellatrixMessage.Body.ExecutionPayload == nil {
+		block.BellatrixMessage.Body.ExecutionPayload = &ExecutionPayload{}
 	}
 
-	if block.Message.Body.ExecutionPayload.Transactions == nil {
-		block.Message.Body.ExecutionPayload.Transactions = []hexutil.Bytes{}
+	if block.BellatrixMessage.Body.ExecutionPayload.EpExtraData == nil {
+		block.BellatrixMessage.Body.ExecutionPayload.EpExtraData = types.ExtraData{}
 	}
 
-	return block
+	if block.BellatrixMessage.Body.ExecutionPayload.EpTransactions == nil {
+		block.BellatrixMessage.Body.ExecutionPayload.EpTransactions = []hexutil.Bytes{}
+	}
+
+	return block, nil
 }
 
 type SignedBuilderBid struct {
@@ -489,8 +486,16 @@ func (s *SignedBuilderBid) Signature() types.Signature {
 
 // SignedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L55
 type SignedBeaconBlock struct {
-	Message   *BeaconBlock    `json:"message"`
-	Signature types.Signature `json:"signature" ssz-size:"96"`
+	BellatrixMessage   *BeaconBlock    `json:"message"`
+	BellatrixSignature types.Signature `json:"signature" ssz-size:"96"`
+}
+
+func (s *SignedBeaconBlock) Message() structs.BeaconBlock {
+	return s.BellatrixMessage
+}
+
+func (s *SignedBeaconBlock) Signature() types.Signature {
+	return s.BellatrixSignature
 }
 
 // BeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L46
