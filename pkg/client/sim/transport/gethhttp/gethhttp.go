@@ -32,6 +32,10 @@ func (c *Client) Kind() string {
 	return "http"
 }
 
+func (f *Client) IsSet() bool {
+	return f.namespace != "" && f.address != ""
+}
+
 func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
 	buff := new(bytes.Buffer)
 	enc := json.NewEncoder(buff)

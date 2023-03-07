@@ -103,6 +103,10 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error
 }
 
 func (rs *Relay) validateBlock(ctx context.Context, submitBlockRequest types.BuilderSubmitBlockRequest) (err error) {
+	if !rs.bvc.IsSet() {
+		return nil
+	}
+
 	if rs.config.AllowedListedBuilders != nil && submitBlockRequest.Message != nil {
 		if _, ok := rs.config.AllowedListedBuilders[submitBlockRequest.Message.BuilderPubkey]; ok {
 			return nil
