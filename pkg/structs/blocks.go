@@ -63,7 +63,7 @@ type SignedBlindedBeaconBlock interface {
 
 	ComputeSigningRoot(d types.Domain) ([32]byte, error)
 
-	ToBeaconBlock(executionPayload ExecutionPayload) SignedBeaconBlock
+	ToBeaconBlock(executionPayload ExecutionPayload) (SignedBeaconBlock, error)
 	ToPayloadKey(pk types.PublicKey) PayloadKey
 }
 
