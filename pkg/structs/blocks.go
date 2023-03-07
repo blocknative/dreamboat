@@ -91,6 +91,10 @@ type GetHeaderResponse interface {
 }
 
 type SignedBeaconBlock interface {
-	Message() types.BeaconBlock
+	Message() BeaconBlock
 	Signature() types.Signature
+}
+
+type BeaconBlock interface {
+	//TODO(l)  do we need to fill it?
 }

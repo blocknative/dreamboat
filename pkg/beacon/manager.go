@@ -38,7 +38,6 @@ type BeaconClient interface {
 	SyncStatus() (*bcli.SyncStatusPayloadData, error)
 	KnownValidators(structs.Slot) (bcli.AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
-	PublishBlock(block *types.SignedBeaconBlock) error
 	Randao(structs.Slot) (string, error)
 	GetForkSchedule() (*bcli.GetForkScheduleResponse, error)
 }
@@ -58,7 +57,7 @@ type State interface {
 
 	SetRandao(string)
 	Randao() string
-	
+
 	Fork() structs.ForkState
 	SetFork(structs.ForkState)
 }

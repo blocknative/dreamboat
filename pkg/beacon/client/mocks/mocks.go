@@ -10,7 +10,6 @@ import (
 
 	client "github.com/blocknative/dreamboat/pkg/beacon/client"
 	structs "github.com/blocknative/dreamboat/pkg/structs"
-	types "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -97,7 +96,7 @@ func (mr *MockBeaconNodeMockRecorder) KnownValidators(arg0 interface{}) *gomock.
 }
 
 // PublishBlock mocks base method.
-func (m *MockBeaconNode) PublishBlock(arg0 *types.SignedBeaconBlock) error {
+func (m *MockBeaconNode) PublishBlock(arg0 structs.SignedBeaconBlock) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PublishBlock", arg0)
 	ret0, _ := ret[0].(error)
