@@ -50,7 +50,7 @@ var (
 
 type Relay interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
+	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (structs.GetHeaderResponse, error)
 	GetPayload(context.Context, *structs.MetricGroup, structs.SignedBlindedBeaconBlock) (*structs.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
@@ -81,11 +81,11 @@ type API struct {
 
 	lim RateLimitter
 
-	m APIMetrics
+	m *APIMetrics
 }
 
 func NewApi(l log.Logger, r Relay, reg Registrations, lim RateLimitter) (a *API) {
-	a = &API{l: l, r: r, reg: reg, lim: lim}
+	a = &API{l: l, r: r, reg: reg, lim: lim, m: &APIMetrics{}}
 	a.initMetrics()
 	return a
 }
@@ -274,7 +274,8 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	}
 	// TODO(l): VALIDATE!!!
 
-	if req.Slot() > 0 {
+	if req.Slot() == 0 {
+		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 		return
 	}
