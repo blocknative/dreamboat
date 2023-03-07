@@ -77,12 +77,7 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 	}, nil
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (bbt structs.BlockBidAndTrace, err error) { // TODO(l): remove FB type
-	signedBuilderBid, err := s.toSignedBuilderBid(sk, pubkey, domain)
-	if err != nil {
-		return bbt, err
-	}
-
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) { // TODO(l): remove FB type
 	return structs.BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.BellatrixMessage,
@@ -96,7 +91,7 @@ func (s *SubmitBlockRequest) toBlockBidAndTrace(sk *bls.SecretKey, pubkey *types
 			Version: types.VersionString("bellatrix"),
 			Data:    &s.BellatrixExecutionPayload,
 		},
-	}, nil
+	}
 }
 
 func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
@@ -108,13 +103,15 @@ func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 }
 
 func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (cbs structs.CompleteBlockstruct, err error) {
-
-	cbs.Payload, err = s.toBlockBidAndTrace(sk, pubkey, domain)
+	signedBuilderBid, err := s.toSignedBuilderBid(sk, pubkey, domain)
 	if err != nil {
 		return cbs, err
 	}
+
+	cbs.Payload = s.toBlockBidAndTrace(signedBuilderBid)
+
 	cbs.Header = structs.HeaderAndTrace{
-		Header: cbs.Payload.Bid.Data().Message().Header(),
+		Header: signedBuilderBid.BellatrixMessage.BellatrixHeader,
 		Trace: &structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
@@ -181,9 +178,11 @@ type BuilderBid struct {
 	BellatrixPubkey types.PublicKey                 `json:"pubkey" ssz-size:"48"`
 }
 
+/*
 func (b *BuilderBid) Header() *structs.ExecutionPayloadHeader {
 	return b.BellatrixHeader
 }
+*/
 
 func (b *BuilderBid) Value() types.U256Str {
 	return b.BellatrixValue
@@ -476,8 +475,14 @@ type SignedBuilderBid struct {
 	BellatrixSignature types.Signature `json:"signature" ssz-size:"96"`
 }
 
+/*
 func (s *SignedBuilderBid) Message() structs.BuilderBid {
 	return s.BellatrixMessage
+}
+*/
+
+func (s *SignedBuilderBid) Value() types.U256Str {
+	return s.BellatrixMessage.BellatrixValue
 }
 
 func (s *SignedBuilderBid) Signature() types.Signature {
@@ -490,9 +495,10 @@ type SignedBeaconBlock struct {
 	BellatrixSignature types.Signature `json:"signature" ssz-size:"96"`
 }
 
+/*
 func (s *SignedBeaconBlock) Message() structs.BeaconBlock {
 	return s.BellatrixMessage
-}
+}*/
 
 func (s *SignedBeaconBlock) Signature() types.Signature {
 	return s.BellatrixSignature
