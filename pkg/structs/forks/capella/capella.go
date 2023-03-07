@@ -1,11 +1,13 @@
 package capella
 
 import (
+	"errors"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/structs/forks"
 	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -381,4 +383,155 @@ func (s *SignedBuilderBid) Message() structs.BuilderBid {
 
 func (s *SignedBuilderBid) Signature() types.Signature {
 	return s.CapellaSignature
+}
+
+// SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
+type SignedBlindedBeaconBlock struct {
+	SMessage   *types.BlindedBeaconBlock `json:"message"`
+	SSignature types.Signature           `json:"signature" ssz-size:"96"`
+}
+
+func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
+	return s.SSignature
+}
+
+func (s *SignedBlindedBeaconBlock) Slot() uint64 {
+	return s.SMessage.Slot
+}
+
+func (s *SignedBlindedBeaconBlock) BlockHash() types.Hash {
+	return s.SMessage.Body.ExecutionPayloadHeader.BlockHash
+}
+
+func (s *SignedBlindedBeaconBlock) BlockNumber() uint64 {
+	return s.SMessage.Body.ExecutionPayloadHeader.BlockNumber
+}
+
+func (s *SignedBlindedBeaconBlock) ProposerIndex() uint64 {
+	return s.SMessage.ProposerIndex
+}
+
+func (s *SignedBlindedBeaconBlock) ParentRoot() types.Root {
+	return s.SMessage.ParentRoot
+}
+
+func (s *SignedBlindedBeaconBlock) StateRoot() types.Root {
+	return s.SMessage.StateRoot
+}
+
+func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
+	return types.ComputeSigningRoot(b.SMessage, d)
+}
+
+func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) structs.PayloadKey {
+	return structs.PayloadKey{
+		BlockHash: s.SMessage.Body.ExecutionPayloadHeader.BlockHash,
+		Proposer:  pk,
+		Slot:      structs.Slot(s.SMessage.Slot),
+	}
+}
+
+func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) (structs.SignedBeaconBlock, error) {
+	ep, ok := executionPayload.(*ExecutionPayload)
+	if !ok {
+		return nil, errors.New("ExecutionPayload is not Capella")
+	}
+
+	block := &SignedBeaconBlock{
+		CapellaSignature: s.SSignature,
+		CapellaMessage: &BeaconBlock{
+			Slot:          s.SMessage.Slot,
+			ProposerIndex: s.SMessage.ProposerIndex,
+			ParentRoot:    s.SMessage.ParentRoot,
+			StateRoot:     s.SMessage.StateRoot,
+			Body: &BeaconBlockBody{
+				RandaoReveal:      s.SMessage.Body.RandaoReveal,
+				Eth1Data:          s.SMessage.Body.Eth1Data,
+				Graffiti:          s.SMessage.Body.Graffiti,
+				ProposerSlashings: s.SMessage.Body.ProposerSlashings,
+				AttesterSlashings: s.SMessage.Body.AttesterSlashings,
+				Attestations:      s.SMessage.Body.Attestations,
+				Deposits:          s.SMessage.Body.Deposits,
+				VoluntaryExits:    s.SMessage.Body.VoluntaryExits,
+				SyncAggregate:     s.SMessage.Body.SyncAggregate,
+				ExecutionPayload:  ep,
+			},
+		},
+	}
+
+	if block.CapellaMessage.Body.ProposerSlashings == nil {
+		block.CapellaMessage.Body.ProposerSlashings = []*types.ProposerSlashing{}
+	}
+	if block.CapellaMessage.Body.AttesterSlashings == nil {
+		block.CapellaMessage.Body.AttesterSlashings = []*types.AttesterSlashing{}
+	}
+	if block.CapellaMessage.Body.Attestations == nil {
+		block.CapellaMessage.Body.Attestations = []*types.Attestation{}
+	}
+	if block.CapellaMessage.Body.Deposits == nil {
+		block.CapellaMessage.Body.Deposits = []*types.Deposit{}
+	}
+
+	if block.CapellaMessage.Body.VoluntaryExits == nil {
+		block.CapellaMessage.Body.VoluntaryExits = []*types.SignedVoluntaryExit{}
+	}
+
+	if block.CapellaMessage.Body.Eth1Data == nil {
+		block.CapellaMessage.Body.Eth1Data = &types.Eth1Data{}
+	}
+
+	if block.CapellaMessage.Body.SyncAggregate == nil {
+		block.CapellaMessage.Body.SyncAggregate = &types.SyncAggregate{}
+	}
+
+	if block.CapellaMessage.Body.ExecutionPayload == nil {
+		block.CapellaMessage.Body.ExecutionPayload = &ExecutionPayload{}
+	}
+
+	if block.CapellaMessage.Body.ExecutionPayload.EpExtraData == nil {
+		block.CapellaMessage.Body.ExecutionPayload.EpExtraData = types.ExtraData{}
+	}
+
+	if block.CapellaMessage.Body.ExecutionPayload.EpTransactions == nil {
+		block.CapellaMessage.Body.ExecutionPayload.EpTransactions = []hexutil.Bytes{}
+	}
+
+	return block, nil
+}
+
+// SignedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L55
+type SignedBeaconBlock struct {
+	CapellaMessage   *BeaconBlock    `json:"message"`
+	CapellaSignature types.Signature `json:"signature" ssz-size:"96"`
+}
+
+func (s *SignedBeaconBlock) Message() structs.BeaconBlock {
+	return s.CapellaMessage
+}
+
+func (s *SignedBeaconBlock) Signature() types.Signature {
+	return s.CapellaSignature
+}
+
+// BeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L46
+type BeaconBlock struct {
+	Slot          uint64           `json:"slot,string"`
+	ProposerIndex uint64           `json:"proposer_index,string"`
+	ParentRoot    types.Root       `json:"parent_root" ssz-size:"32"`
+	StateRoot     types.Root       `json:"state_root" ssz-size:"32"`
+	Body          *BeaconBlockBody `json:"body"`
+}
+
+// BeaconBlockBody https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L38
+type BeaconBlockBody struct {
+	RandaoReveal      types.Signature              `json:"randao_reveal" ssz-size:"96"`
+	Eth1Data          *types.Eth1Data              `json:"eth1_data"`
+	Graffiti          types.Hash                   `json:"graffiti" ssz-size:"32"`
+	ProposerSlashings []*types.ProposerSlashing    `json:"proposer_slashings" ssz-max:"16"`
+	AttesterSlashings []*types.AttesterSlashing    `json:"attester_slashings" ssz-max:"2"`
+	Attestations      []*types.Attestation         `json:"attestations" ssz-max:"128"`
+	Deposits          []*types.Deposit             `json:"deposits" ssz-max:"16"`
+	VoluntaryExits    []*types.SignedVoluntaryExit `json:"voluntary_exits" ssz-max:"16"`
+	SyncAggregate     *types.SyncAggregate         `json:"sync_aggregate"`
+	ExecutionPayload  *ExecutionPayload            `json:"execution_payload"`
 }
