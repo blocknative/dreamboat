@@ -210,11 +210,17 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		}
 		req = &breq
 	} else {
-
+		var creq capella.SignedBlindedBeaconBlock
+		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
+		req = &creq
 	}
 	// TODO(l): validate  structures
 	m := structs.NewMetricGroup(4)
-	payload, err := a.r.GetPayload(r.Context(), m, &req)
+	payload, err := a.r.GetPayload(r.Context(), m, req)
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "get payload unknown"))
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
@@ -222,8 +228,8 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			"code":      400,
 			"endpoint":  "getPayload",
 			"payload":   req,
-			"slot":      req.SMessage.Slot,
-			"blockHash": req.SMessage.Body.Eth1Data.BlockHash,
+			"slot":      req.Slot(),
+			"blockHash": req.BlockHash(),
 		}).WithError(err).Debug("failed getPayload")
 		writeError(w, http.StatusBadRequest, err)
 		return
