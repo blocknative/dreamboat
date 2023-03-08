@@ -138,7 +138,7 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 	return cbs, nil
 }
 
-func PayloadToPayloadHeader(p structs.ExecutionPayload) (*structs.ExecutionPayloadHeader, error) {
+func PayloadToPayloadHeader(p structs.ExecutionPayload) (*ExecutionPayloadHeader, error) {
 	if p == nil {
 		return nil, types.ErrNilPayload
 	}
@@ -154,7 +154,7 @@ func PayloadToPayloadHeader(p structs.ExecutionPayload) (*structs.ExecutionPaylo
 		return nil, err
 	}
 
-	return &structs.ExecutionPayloadHeader{
+	return &ExecutionPayloadHeader{
 		ExecutionPayloadHeader: types.ExecutionPayloadHeader{
 			ParentHash:       p.ParentHash(),
 			FeeRecipient:     p.FeeRecipient(),
@@ -176,9 +176,9 @@ func PayloadToPayloadHeader(p structs.ExecutionPayload) (*structs.ExecutionPaylo
 
 // BuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
 type BuilderBid struct {
-	BellatrixHeader *structs.ExecutionPayloadHeader `json:"header"`
-	BellatrixValue  types.U256Str                   `json:"value" ssz-size:"32"`
-	BellatrixPubkey types.PublicKey                 `json:"pubkey" ssz-size:"48"`
+	BellatrixHeader *ExecutionPayloadHeader `json:"header"`
+	BellatrixValue  types.U256Str           `json:"value" ssz-size:"32"`
+	BellatrixPubkey types.PublicKey         `json:"pubkey" ssz-size:"48"`
 }
 
 func (b *BuilderBid) Value() types.U256Str {
@@ -291,6 +291,22 @@ func (b *BidTrace) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	return
 }
 */
+
+type ExecutionPayloadHeader struct {
+	types.ExecutionPayloadHeader
+}
+
+func (eph *ExecutionPayloadHeader) GetParentHash() types.Hash {
+	return eph.ParentHash
+}
+
+func (eph *ExecutionPayloadHeader) GetBlockHash() types.Hash {
+	return eph.BlockHash
+}
+
+func (eph *ExecutionPayloadHeader) GetBlockNumber() uint64 {
+	return eph.BlockNumber
+}
 
 // ExecutionPayload https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/beacon-chain.md#executionpayload
 type ExecutionPayload struct {

@@ -158,8 +158,14 @@ type DeliveredTrace struct {
 }
 
 type HeaderAndTrace struct {
-	Header *ExecutionPayloadHeader
+	Header ExecutionPayloadHeader
 	Trace  *BidTraceWithTimestamp
+}
+
+type ExecutionPayloadHeader interface {
+	GetParentHash() types.Hash
+	GetBlockHash() types.Hash
+	GetBlockNumber() uint64
 }
 
 type BlockBidAndTrace struct {

@@ -151,18 +151,18 @@ func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
 	defer txn.Discard()
 
 	// we don't need to lock here, as the value would be always different from different block
-	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Header.BlockHash.String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Header.GetBlockHash().String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
 		return err
 	}
 	slot := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slot, uint64(h.Slot))
 
-	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.Header.BlockHash).Bytes(), slot).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.Header.GetBlockHash()).Bytes(), slot).WithTTL(ttl)); err != nil {
 		return err
 	}
 
 	// not needed every time
-	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.Header.BlockNumber).Bytes(), slot).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.Header.GetBlockNumber()).Bytes(), slot).WithTTL(ttl)); err != nil {
 		return err
 	}
 
@@ -221,7 +221,7 @@ func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 
 			newEl := []structs.HeaderAndTrace{}
 			for _, v := range el {
-				if v.Header.BlockHash == hash {
+				if v.Header.GetBlockHash() == hash {
 					elem := v
 					newEl = append(newEl, elem)
 				}

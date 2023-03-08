@@ -140,7 +140,7 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 	}, nil
 }
 
-func PayloadToPayloadHeader(p *ExecutionPayload) (*structs.ExecutionPayloadHeader, error) {
+func PayloadToPayloadHeader(p *ExecutionPayload) (*ExecutionPayloadHeader, error) {
 	if p == nil {
 		return nil, types.ErrNilPayload
 	}
@@ -165,7 +165,7 @@ func PayloadToPayloadHeader(p *ExecutionPayload) (*structs.ExecutionPayloadHeade
 		}
 	}
 
-	return &structs.ExecutionPayloadHeader{
+	return &ExecutionPayloadHeader{
 		ExecutionPayloadHeader: types.ExecutionPayloadHeader{
 			ParentHash:       p.ParentHash(),
 			FeeRecipient:     p.FeeRecipient(),
@@ -188,9 +188,9 @@ func PayloadToPayloadHeader(p *ExecutionPayload) (*structs.ExecutionPayloadHeade
 
 // BuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
 type BuilderBid struct {
-	CapellaHeader *structs.ExecutionPayloadHeader `json:"header"`
-	CapellaValue  types.U256Str                   `json:"value" ssz-size:"32"`
-	CapellaPubkey types.PublicKey                 `json:"pubkey" ssz-size:"48"`
+	CapellaHeader *ExecutionPayloadHeader `json:"header"`
+	CapellaValue  types.U256Str           `json:"value" ssz-size:"32"`
+	CapellaPubkey types.PublicKey         `json:"pubkey" ssz-size:"48"`
 }
 
 func (b *BuilderBid) Value() types.U256Str {
@@ -321,8 +321,8 @@ func (w *Withdrawal) GetTree() (*ssz.Node, error) {
 type BlindedBeaconBlockBody struct {
 	forks.BlindedBeaconBlockBody
 
-	ExecutionPayloadHeader *structs.ExecutionPayloadHeader `json:"execution_payload_header"`
-	BLSToExecutionChanges  []*SignedBLSToExecutionChange   `json:"bls_to_execution_changes" ssz-max:"16"`
+	ExecutionPayloadHeader *ExecutionPayloadHeader       `json:"execution_payload_header"`
+	BLSToExecutionChanges  []*SignedBLSToExecutionChange `json:"bls_to_execution_changes" ssz-max:"16"`
 }
 
 // SignedBLSToExecutionChange provides information about a signed BLS to execution change.
@@ -498,6 +498,23 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 	}
 
 	return block, nil
+}
+
+type ExecutionPayloadHeader struct {
+	types.ExecutionPayloadHeader
+	WithdrawalsRoot types.Root `json:"withdrawals_root,omitempty" ssz-size:"32"`
+}
+
+func (eph *ExecutionPayloadHeader) GetParentHash() types.Hash {
+	return eph.ParentHash
+}
+
+func (eph *ExecutionPayloadHeader) GetBlockHash() types.Hash {
+	return eph.BlockHash
+}
+
+func (eph *ExecutionPayloadHeader) GetBlockNumber() uint64 {
+	return eph.BlockNumber
 }
 
 // SignedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L55
