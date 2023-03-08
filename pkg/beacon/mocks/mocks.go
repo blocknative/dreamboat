@@ -129,6 +129,21 @@ func (mr *MockBeaconClientMockRecorder) Genesis() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockBeaconClient)(nil).Genesis))
 }
 
+// GetForkSchedule mocks base method.
+func (m *MockBeaconClient) GetForkSchedule() (*client.GetForkScheduleResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetForkSchedule")
+	ret0, _ := ret[0].(*client.GetForkScheduleResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetForkSchedule indicates an expected call of GetForkSchedule.
+func (mr *MockBeaconClientMockRecorder) GetForkSchedule() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetForkSchedule", reflect.TypeOf((*MockBeaconClient)(nil).GetForkSchedule))
+}
+
 // GetProposerDuties mocks base method.
 func (m *MockBeaconClient) GetProposerDuties(arg0 structs.Epoch) (*client.RegisteredProposersResponse, error) {
 	m.ctrl.T.Helper()
@@ -157,6 +172,21 @@ func (m *MockBeaconClient) KnownValidators(arg0 structs.Slot) (client.AllValidat
 func (mr *MockBeaconClientMockRecorder) KnownValidators(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockBeaconClient)(nil).KnownValidators), arg0)
+}
+
+// Randao mocks base method.
+func (m *MockBeaconClient) Randao(arg0 structs.Slot) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockBeaconClientMockRecorder) Randao(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockBeaconClient)(nil).Randao), arg0)
 }
 
 // SubscribeToHeadEvents mocks base method.
@@ -223,6 +253,20 @@ func (mr *MockStateMockRecorder) Duties() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockState)(nil).Duties))
 }
 
+// Fork mocks base method.
+func (m *MockState) Fork() structs.ForkState {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Fork")
+	ret0, _ := ret[0].(structs.ForkState)
+	return ret0
+}
+
+// Fork indicates an expected call of Fork.
+func (mr *MockStateMockRecorder) Fork() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fork", reflect.TypeOf((*MockState)(nil).Fork))
+}
+
 // HeadSlot mocks base method.
 func (m *MockState) HeadSlot() structs.Slot {
 	m.ctrl.T.Helper()
@@ -265,6 +309,20 @@ func (mr *MockStateMockRecorder) KnownValidatorsUpdateTime() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorsUpdateTime", reflect.TypeOf((*MockState)(nil).KnownValidatorsUpdateTime))
 }
 
+// Randao mocks base method.
+func (m *MockState) Randao() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockStateMockRecorder) Randao() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao))
+}
+
 // SetDuties mocks base method.
 func (m *MockState) SetDuties(arg0 structs.DutiesState) {
 	m.ctrl.T.Helper()
@@ -275,6 +333,18 @@ func (m *MockState) SetDuties(arg0 structs.DutiesState) {
 func (mr *MockStateMockRecorder) SetDuties(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDuties", reflect.TypeOf((*MockState)(nil).SetDuties), arg0)
+}
+
+// SetFork mocks base method.
+func (m *MockState) SetFork(arg0 structs.ForkState) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetFork", arg0)
+}
+
+// SetFork indicates an expected call of SetFork.
+func (mr *MockStateMockRecorder) SetFork(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetFork", reflect.TypeOf((*MockState)(nil).SetFork), arg0)
 }
 
 // SetGenesis mocks base method.
@@ -313,14 +383,14 @@ func (mr *MockStateMockRecorder) SetKnownValidators(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetKnownValidators", reflect.TypeOf((*MockState)(nil).SetKnownValidators), arg0)
 }
 
-// SetReady mocks base method.
-func (m *MockState) SetReady() {
+// SetRandao mocks base method.
+func (m *MockState) SetRandao(arg0 string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetReady")
+	m.ctrl.Call(m, "SetRandao", arg0)
 }
 
-// SetReady indicates an expected call of SetReady.
-func (mr *MockStateMockRecorder) SetReady() *gomock.Call {
+// SetRandao indicates an expected call of SetRandao.
+func (mr *MockStateMockRecorder) SetRandao(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetReady", reflect.TypeOf((*MockState)(nil).SetReady))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRandao", reflect.TypeOf((*MockState)(nil).SetRandao), arg0)
 }
