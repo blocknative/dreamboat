@@ -231,7 +231,10 @@ func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
 		return fmt.Errorf("could not read response body for %s: %w", u, err)
 	}
 
-	if resp.StatusCode >= 300 {
+	if resp.StatusCode >= 404 {
+		// BUG(l): do something with unsupported
+		return nil
+	} else if resp.StatusCode >= 300 {
 		ec := &struct {
 			Code    int    `json:"code"`
 			Message string `json:"message"`
