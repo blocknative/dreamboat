@@ -219,7 +219,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
 	}
 
-	if randao := beaconState.Randao(); randao != sbr.Random().String() {
+	if randao := beaconState.Randao(); randao != "" && randao != sbr.Random().String() { // DISABLE CHECK IF NOT OBTAINED BY BEACON
 		return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
 	}
 
