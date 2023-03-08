@@ -65,6 +65,21 @@ func (mr *MockBeaconNodeMockRecorder) Genesis() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockBeaconNode)(nil).Genesis))
 }
 
+// GetForkSchedule mocks base method.
+func (m *MockBeaconNode) GetForkSchedule() (*client.GetForkScheduleResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetForkSchedule")
+	ret0, _ := ret[0].(*client.GetForkScheduleResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetForkSchedule indicates an expected call of GetForkSchedule.
+func (mr *MockBeaconNodeMockRecorder) GetForkSchedule() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetForkSchedule", reflect.TypeOf((*MockBeaconNode)(nil).GetForkSchedule))
+}
+
 // GetProposerDuties mocks base method.
 func (m *MockBeaconNode) GetProposerDuties(arg0 structs.Epoch) (*client.RegisteredProposersResponse, error) {
 	m.ctrl.T.Helper()
@@ -107,6 +122,21 @@ func (m *MockBeaconNode) PublishBlock(arg0 structs.SignedBeaconBlock) error {
 func (mr *MockBeaconNodeMockRecorder) PublishBlock(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishBlock", reflect.TypeOf((*MockBeaconNode)(nil).PublishBlock), arg0)
+}
+
+// Randao mocks base method.
+func (m *MockBeaconNode) Randao(arg0 structs.Slot) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockBeaconNodeMockRecorder) Randao(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockBeaconNode)(nil).Randao), arg0)
 }
 
 // SubscribeToHeadEvents mocks base method.
