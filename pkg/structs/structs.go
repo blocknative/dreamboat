@@ -274,5 +274,5 @@ func (fs ForkState) GetFork(epoch uint64) ForkVersion {
 	case epoch < uint64(fs.BellatrixEpoch):
 		return ForkAltair
 	}
-	return ForkCapella
+	return ForkBellatrix
 }
