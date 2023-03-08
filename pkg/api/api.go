@@ -219,7 +219,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		var creq capella.SignedBlindedBeaconBlock
 		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
-			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request cappella decode"))
 			return
 		}
 		req = &creq
@@ -227,7 +227,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		var breq bellatrix.SignedBlindedBeaconBlock
 		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
-			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request bellatrix decode"))
 			return
 		}
 		req = &breq
@@ -278,7 +278,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		var creq capella.SubmitBlockRequest
 		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode"))
 			return
 		}
 		req = &creq
@@ -286,7 +286,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		var breq bellatrix.SubmitBlockRequest
 		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request bellatrix decode"))
 			return
 		}
 		req = &breq
@@ -299,7 +299,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 
 	if req.Slot() == 0 {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload (slot)"))
 		return
 	}
 
