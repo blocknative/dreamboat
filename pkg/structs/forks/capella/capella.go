@@ -55,6 +55,10 @@ func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error
 	return types.ComputeSigningRoot(&b.CapellaMessage, d)
 }
 
+func (b *SubmitBlockRequest) Random() types.Hash {
+	return b.CapellaExecutionPayload.EpRandom
+}
+
 func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 	return structs.PayloadKey{
 		BlockHash: s.CapellaMessage.BlockHash,
