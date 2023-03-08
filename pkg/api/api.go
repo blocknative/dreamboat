@@ -213,7 +213,6 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	defer timer.ObserveDuration()
 
 	var req structs.SignedBlindedBeaconBlock
-
 	fork := a.st.GetFork(uint64(a.st.HeadSlot().Epoch()))
 	switch fork {
 	case structs.ForkCapella:
@@ -232,6 +231,9 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &breq
+	default:
+		writeError(w, http.StatusInternalServerError, errors.New("not supported fork version"))
+		return
 	}
 	// TODO(l): validate  structures
 	m := structs.NewMetricGroup(4)
@@ -270,15 +272,9 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	defer timer.ObserveDuration()
 
 	var req structs.SubmitBlockRequest
-	if true {
-		var breq bellatrix.SubmitBlockRequest
-		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
-			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
-			return
-		}
-		req = &breq
-	} else {
+	fork := a.st.GetFork(uint64(a.st.HeadSlot().Epoch()))
+	switch fork {
+	case structs.ForkCapella:
 		var creq capella.SubmitBlockRequest
 		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
@@ -286,6 +282,18 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &creq
+	case structs.ForkBellatrix:
+		var breq bellatrix.SubmitBlockRequest
+		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
+		req = &breq
+	default:
+		writeError(w, http.StatusInternalServerError, errors.New("not supported fork version"))
+		return
+
 	}
 	// TODO(l): VALIDATE!!!
 

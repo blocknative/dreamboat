@@ -58,6 +58,7 @@ type State interface {
 	HeadSlot() structs.Slot
 	Genesis() structs.GenesisInfo
 	Randao() string
+	GetFork(epoch uint64) structs.ForkVersion
 }
 
 type Verifier interface {
@@ -211,7 +212,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, ErrNoBuilderBid
 	}
 
-	if true {
+	fork := rs.beaconState.GetFork(uint64(slot.Epoch()))
+
+	if fork == structs.ForkBellatrix {
 		bid := &bellatrix.BuilderBid{
 			BellatrixHeader: header.Header,
 			BellatrixValue:  header.Trace.Value,
@@ -238,7 +241,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 				BellatrixMessage:   bid,
 				BellatrixSignature: signature},
 		}, nil
-	} else {
+	} else if fork == structs.ForkCapella {
 		bid := &capella.BuilderBid{
 			CapellaHeader: header.Header,
 			CapellaValue:  header.Trace.Value,
@@ -264,6 +267,8 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 				CapellaMessage:   bid,
 				CapellaSignature: signature},
 		}, nil
+	} else {
+		return nil, errors.New("incompatible fork state")
 	}
 
 }
