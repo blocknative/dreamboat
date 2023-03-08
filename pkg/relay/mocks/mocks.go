@@ -267,6 +267,20 @@ func (mr *MockStateMockRecorder) Genesis() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockState)(nil).Genesis))
 }
 
+// GetFork mocks base method.
+func (m *MockState) GetFork(arg0 uint64) structs.ForkVersion {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFork", arg0)
+	ret0, _ := ret[0].(structs.ForkVersion)
+	return ret0
+}
+
+// GetFork indicates an expected call of GetFork.
+func (mr *MockStateMockRecorder) GetFork(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFork", reflect.TypeOf((*MockState)(nil).GetFork), arg0)
+}
+
 // HeadSlot mocks base method.
 func (m *MockState) HeadSlot() structs.Slot {
 	m.ctrl.T.Helper()
