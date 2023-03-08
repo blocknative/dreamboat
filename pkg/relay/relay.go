@@ -204,8 +204,8 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	header := maxProfitBlock.Header
 
-	if header.Header == nil || (header.Header.ParentHash != parentHash) {
-		if header.Header.ParentHash != parentHash {
+	if header.Header == nil || (header.Header.GetParentHash() != parentHash) {
+		if header.Header.GetParentHash() != parentHash {
 			logger.WithField("expected", parentHash).WithField("got", parentHash).Debug("invalid parentHash")
 		}
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
@@ -213,10 +213,13 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	}
 
 	fork := rs.beaconState.GetFork(uint64(slot.Epoch()))
-
 	if fork == structs.ForkBellatrix {
+		h, ok := header.Header.(*bellatrix.ExecutionPayloadHeader)
+		if !ok {
+			return nil, errors.New("incompatible fork state")
+		}
 		bid := &bellatrix.BuilderBid{
-			BellatrixHeader: header.Header,
+			BellatrixHeader: h, //header.Header,
 			BellatrixValue:  header.Trace.Value,
 			BellatrixPubkey: rs.config.PubKey,
 		}
@@ -242,8 +245,12 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 				BellatrixSignature: signature},
 		}, nil
 	} else if fork == structs.ForkCapella {
+		h, ok := header.Header.(*capella.ExecutionPayloadHeader)
+		if !ok {
+			return nil, errors.New("incompatible fork state")
+		}
 		bid := &capella.BuilderBid{
-			CapellaHeader: header.Header,
+			CapellaHeader: h, //header.Header,
 			CapellaValue:  header.Trace.Value,
 			CapellaPubkey: rs.config.PubKey,
 		}
@@ -319,11 +326,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	tGet := time.Now()
 
 	key := payloadRequest.ToPayloadKey(pk)
-	/*key := structs.PayloadKey{
-		BlockHash: payloadRequest.BlockHash(), //.Message.Body.ExecutionPayloadHeader.BlockHash,
-		Proposer:  pk,
-		Slot:      structs.Slot(payloadRequest.Slot()),
-	}*/
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, key)
 	if err != nil || payload == nil {
