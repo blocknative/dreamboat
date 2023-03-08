@@ -193,10 +193,6 @@ type BuilderBid struct {
 	CapellaPubkey types.PublicKey                 `json:"pubkey" ssz-size:"48"`
 }
 
-// func (b *BuilderBid) Header() *structs.ExecutionPayloadHeader {
-// 	return b.CapellaHeader
-// }
-
 func (b *BuilderBid) Value() types.U256Str {
 	return b.CapellaValue
 }

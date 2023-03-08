@@ -86,6 +86,10 @@ func (as *AtomicState) SetRandao(randao string) {
 	as.randao.Store(randao)
 }
 
+func (as *AtomicState) GetFork(epoch uint64) structs.ForkVersion {
+	return as.Fork().GetFork(epoch)
+}
+
 func (as *AtomicState) Fork() structs.ForkState {
 	if val := as.fork.Load(); val != nil {
 		return val.(structs.ForkState)

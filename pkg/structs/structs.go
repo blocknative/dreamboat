@@ -244,9 +244,18 @@ type ValidatorCacheEntry struct {
 }
 
 type ForkState struct {
+	AltairEpoch    Epoch
 	BellatrixEpoch Epoch
 	CapellaEpoch   Epoch
 }
+
+type ForkVersion uint8
+
+const (
+	ForkAltair ForkVersion = iota
+	ForkBellatrix
+	ForkCapella
+)
 
 func (fs ForkState) IsCapella(slot Slot) bool {
 	return slot.Epoch() >= fs.CapellaEpoch
@@ -254,4 +263,16 @@ func (fs ForkState) IsCapella(slot Slot) bool {
 
 func (fs ForkState) IsBellatrix(slot Slot) bool {
 	return slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
+}
+
+func (fs ForkState) GetFork(epoch uint64) ForkVersion {
+	switch {
+	case epoch >= uint64(fs.CapellaEpoch):
+		return ForkCapella
+	case epoch >= uint64(fs.BellatrixEpoch) && epoch < uint64(fs.CapellaEpoch):
+		return ForkBellatrix
+	case epoch < uint64(fs.BellatrixEpoch):
+		return ForkAltair
+	}
+	return ForkCapella
 }

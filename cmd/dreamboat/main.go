@@ -440,7 +440,7 @@ func run() cli.ActionFunc {
 		}, beaconCli, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
-		a := api.NewApi(logger, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
+		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",

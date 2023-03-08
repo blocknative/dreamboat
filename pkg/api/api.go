@@ -74,18 +74,30 @@ type RateLimitter interface {
 	Allow(ctx context.Context, pubkey [48]byte) error
 }
 
+type State interface {
+	GetFork(epoch uint64) structs.ForkVersion
+	HeadSlot() structs.Slot
+}
+
 type API struct {
 	l   log.Logger
 	r   Relay
 	reg Registrations
+	st  State
 
 	lim RateLimitter
 
 	m *APIMetrics
 }
 
-func NewApi(l log.Logger, r Relay, reg Registrations, lim RateLimitter) (a *API) {
-	a = &API{l: l, r: r, reg: reg, lim: lim, m: &APIMetrics{}}
+func NewApi(l log.Logger, r Relay, reg Registrations, st State, lim RateLimitter) (a *API) {
+	a = &API{
+		l:   l,
+		r:   r,
+		reg: reg,
+		st:  st,
+		lim: lim,
+		m:   &APIMetrics{}}
 	a.initMetrics()
 	return a
 }
@@ -201,15 +213,10 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	defer timer.ObserveDuration()
 
 	var req structs.SignedBlindedBeaconBlock
-	if true {
-		var breq bellatrix.SignedBlindedBeaconBlock
-		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
-			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
-			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
-			return
-		}
-		req = &breq
-	} else {
+
+	fork := a.st.GetFork(uint64(a.st.HeadSlot().Epoch()))
+	switch fork {
+	case structs.ForkCapella:
 		var creq capella.SignedBlindedBeaconBlock
 		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
@@ -217,6 +224,14 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &creq
+	case structs.ForkBellatrix:
+		var breq bellatrix.SignedBlindedBeaconBlock
+		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
+		req = &breq
 	}
 	// TODO(l): validate  structures
 	m := structs.NewMetricGroup(4)
