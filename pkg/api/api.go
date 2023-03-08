@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -272,11 +271,12 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 
-	b, _ := io.ReadAll(r.Body)
-	a.l.With(log.F{
-		"req": string(b),
-	}).Debug("struct")
-
+	//b, _ := io.ReadAll(r.Body)
+	/*
+		a.l.With(log.F{
+			"req": string(b),
+		}).Debug("struct")
+	*/
 	var req structs.SubmitBlockRequest
 	fork := a.st.GetFork(uint64(a.st.HeadSlot().Epoch()))
 	switch fork {
