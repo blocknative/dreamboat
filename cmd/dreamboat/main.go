@@ -423,7 +423,7 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		capellaBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot)
+		capellaBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, cfg.CapellaForkVersion, cfg.GenesisValidatorsRoot)
 		if err != nil {
 			return err
 		}
