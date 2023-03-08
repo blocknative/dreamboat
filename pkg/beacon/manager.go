@@ -63,6 +63,7 @@ type State interface {
 }
 
 type Config struct {
+	AltairForkVersion    string
 	BellatrixForkVersion string
 	CapellaForkVersion   string
 }
@@ -153,6 +154,8 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State, client BeaconC
 	forkState := structs.ForkState{}
 	for _, fork := range forkSchedule.Data {
 		switch fork.CurrentVersion {
+		case m.Config.AltairForkVersion:
+			forkState.AltairEpoch = structs.Epoch(fork.Epoch)
 		case m.Config.BellatrixForkVersion:
 			forkState.BellatrixEpoch = structs.Epoch(fork.Epoch)
 		case m.Config.BellatrixForkVersion:
