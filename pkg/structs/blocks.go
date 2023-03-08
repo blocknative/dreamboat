@@ -69,8 +69,6 @@ type SignedBlindedBeaconBlock interface {
 
 // BuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
 type BuilderBid interface {
-	//Header() *ExecutionPayloadHeader
-
 	Value() types.U256Str
 	Pubkey() types.PublicKey
 
@@ -84,7 +82,6 @@ type ExecutionPayloadHeader struct {
 
 // SignedBuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
 type SignedBuilderBid interface {
-	//Message() BuilderBid
 	Signature() types.Signature
 	Value() types.U256Str
 }
@@ -95,7 +92,6 @@ type GetHeaderResponse interface {
 }
 
 type SignedBeaconBlock interface {
-	//Message() BeaconBlock
 	Signature() types.Signature
 }
 
