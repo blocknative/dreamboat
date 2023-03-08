@@ -109,7 +109,6 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 	}
 
 	cbs.Payload = s.toBlockBidAndTrace(signedBuilderBid)
-
 	cbs.Header = structs.HeaderAndTrace{
 		Header: signedBuilderBid.BellatrixMessage.BellatrixHeader,
 		Trace: &structs.BidTraceWithTimestamp{
@@ -177,12 +176,6 @@ type BuilderBid struct {
 	BellatrixValue  types.U256Str                   `json:"value" ssz-size:"32"`
 	BellatrixPubkey types.PublicKey                 `json:"pubkey" ssz-size:"48"`
 }
-
-/*
-func (b *BuilderBid) Header() *structs.ExecutionPayloadHeader {
-	return b.BellatrixHeader
-}
-*/
 
 func (b *BuilderBid) Value() types.U256Str {
 	return b.BellatrixValue
