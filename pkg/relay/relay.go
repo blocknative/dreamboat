@@ -354,14 +354,17 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 
 	// defer put delivered datastore write
-	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
+	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock, trace structs.DeliveredTrace) {
 		if rs.config.PublishBlock {
 			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.Payload.Data)
 			if err != nil {
 				logger.WithError(err).Warn("fail to create block for publication")
 			} else {
 				if err = rs.beacon.PublishBlock(beaconBlock); err != nil {
-					logger.WithError(err).Warn("fail to publish block to beacon node")
+					logger.With(log.F{
+						"slot":         slot,
+						"block_number": trace.BlockNumber,
+					}).WithError(err).Warn("fail to publish block to beacon node")
 				} else {
 					logger.Info("published block to beacon node")
 				}
@@ -371,7 +374,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
-	}(rs, structs.Slot(payloadRequest.Slot()), trace)
+	}(rs, structs.Slot(payloadRequest.Slot()), payloadRequest, trace)
 
 	logger.With(log.F{
 		"slot":             payloadRequest.Slot(),
