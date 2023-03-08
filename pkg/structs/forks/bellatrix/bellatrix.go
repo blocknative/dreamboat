@@ -50,6 +50,10 @@ func (b *SubmitBlockRequest) Timestamp() uint64 {
 	return b.BellatrixExecutionPayload.EpTimestamp
 }
 
+func (b *SubmitBlockRequest) Random() types.Hash {
+	return b.BellatrixExecutionPayload.EpRandom
+}
+
 func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
 	return types.ComputeSigningRoot(&b.BellatrixMessage, d)
 }

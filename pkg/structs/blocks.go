@@ -15,6 +15,7 @@ type SubmitBlockRequest interface {
 	Value() types.U256Str
 	Signature() types.Signature
 	Timestamp() uint64
+	Random() types.Hash
 
 	//ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error)
 	// do we need that ?
