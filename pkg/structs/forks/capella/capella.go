@@ -14,9 +14,9 @@ import (
 )
 
 type SubmitBlockRequest struct {
-	CapellaMessage          types.BidTrace
-	CapellaExecutionPayload ExecutionPayload
-	CapellaSignature        types.Signature `ssz-size:"96"` //phase0.BLSSignature `ssz-size:"96"`
+	CapellaMessage          types.BidTrace   `json:"message"`
+	CapellaExecutionPayload ExecutionPayload `json:"execution_payload"`
+	CapellaSignature        types.Signature  `json:"signature" ssz-size:"96"` //phase0.BLSSignature `ssz-size:"96"`
 }
 
 func (b *SubmitBlockRequest) Slot() uint64 {
