@@ -276,7 +276,7 @@ func (fs ForkState) IsBellatrix(slot Slot) bool {
 	return slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
 }
 
-func (fs ForkState) GetFork(epoch uint64) ForkVersion {
+func (fs ForkState) Version(epoch uint64) ForkVersion {
 
 	return ForkBellatrix // temoporary override
 
