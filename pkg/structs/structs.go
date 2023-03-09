@@ -293,6 +293,9 @@ func (fs ForkState) IsCapella(slot Slot) bool {
 }
 
 func (fs ForkState) IsBellatrix(slot Slot) bool {
+	if fs.CapellaEpoch == 0 {
+		return fs.BellatrixEpoch > 0 && slot.Epoch() >= fs.BellatrixEpoch
+	}
 	return fs.BellatrixEpoch > 0 && slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
 }
 
