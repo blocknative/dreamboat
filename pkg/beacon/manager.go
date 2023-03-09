@@ -58,7 +58,7 @@ type State interface {
 
 	Withdrawals() structs.WithdrawalsState
 	SetWithdrawals(structs.WithdrawalsState)
-	
+
 	SetRandao(string)
 	Randao() string
 
@@ -284,7 +284,7 @@ func (m *Manager) updatedExpectedWithdrawals(slot structs.Slot, state State, cli
 	logger := m.Log.WithField("method", "UpdatedExpectedWithdrawals").WithField("slot", slot)
 	current := state.Withdrawals()
 	latestKnownSlot := current.Slot
-	if slot < latestKnownSlot {
+	if slot < latestKnownSlot || !state.Fork().IsCapella(slot) {
 		return
 	}
 
