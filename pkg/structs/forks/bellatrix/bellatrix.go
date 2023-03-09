@@ -82,12 +82,12 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 }
 
 func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) { // TODO(l): remove FB type
-	return structs.BlockBidAndTrace{
+	return BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.BellatrixMessage,
 			Signature: s.BellatrixSignature,
 		},
-		Bid: &GetHeaderResponse{
+		Bid: GetHeaderResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
 			BellatrixData:    signedBuilderBid,
 		},
@@ -119,17 +119,17 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 s.Slot(),
-					ParentHash:           cbs.Payload.Payload.Data.ParentHash(),
-					BlockHash:            cbs.Payload.Payload.Data.BlockHash(),
-					BuilderPubkey:        cbs.Payload.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       cbs.Payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: cbs.Payload.Trace.Message.ProposerFeeRecipient,
+					ParentHash:           s.BellatrixExecutionPayload.EpParentHash,
+					BlockHash:            s.BellatrixExecutionPayload.EpBlockHash,
+					BuilderPubkey:        s.BellatrixMessage.BuilderPubkey,
+					ProposerPubkey:       s.BellatrixMessage.ProposerPubkey,
+					ProposerFeeRecipient: s.BellatrixMessage.ProposerFeeRecipient,
 					Value:                s.Value(),
-					GasLimit:             cbs.Payload.Trace.Message.GasLimit,
-					GasUsed:              cbs.Payload.Trace.Message.GasUsed,
+					GasLimit:             s.BellatrixMessage.GasLimit,
+					GasUsed:              s.BellatrixMessage.GasUsed,
 				},
-				BlockNumber: cbs.Payload.Payload.Data.BlockNumber(),
-				NumTx:       uint64(len(cbs.Payload.Payload.Data.Transactions())),
+				BlockNumber: s.BellatrixExecutionPayload.EpBlockNumber,
+				NumTx:       uint64(len(s.BellatrixExecutionPayload.EpTransactions)),
 			},
 			Timestamp:   uint64(time.Now().UnixMilli() / 1_000),
 			TimestampMs: uint64(time.Now().UnixMilli()),
@@ -427,7 +427,7 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 			Slot:          s.SMessage.Slot,
 			ProposerIndex: s.SMessage.ProposerIndex,
 			ParentRoot:    s.SMessage.ParentRoot,
-			StateRoot:     s.SMessage.StateRoot,
+			StateRoot:     s.SMessage.StateRoot, // ep.EpStateRoot, //  s.SMessage.Body.ExecutionPayloadHeader.StateRoot,
 			Body: &BeaconBlockBody{
 				RandaoReveal:      s.SMessage.Body.RandaoReveal,
 				Eth1Data:          s.SMessage.Body.Eth1Data,
@@ -488,12 +488,6 @@ type SignedBuilderBid struct {
 	BellatrixSignature types.Signature `json:"signature" ssz-size:"96"`
 }
 
-/*
-func (s *SignedBuilderBid) Message() structs.BuilderBid {
-	return s.BellatrixMessage
-}
-*/
-
 func (s *SignedBuilderBid) Value() types.U256Str {
 	return s.BellatrixMessage.BellatrixValue
 }
@@ -507,11 +501,6 @@ type SignedBeaconBlock struct {
 	BellatrixMessage   *BeaconBlock    `json:"message"`
 	BellatrixSignature types.Signature `json:"signature" ssz-size:"96"`
 }
-
-/*
-func (s *SignedBeaconBlock) Message() structs.BeaconBlock {
-	return s.BellatrixMessage
-}*/
 
 func (s *SignedBeaconBlock) Signature() types.Signature {
 	return s.BellatrixSignature
@@ -538,6 +527,12 @@ type BeaconBlockBody struct {
 	VoluntaryExits    []*types.SignedVoluntaryExit `json:"voluntary_exits" ssz-max:"16"`
 	SyncAggregate     *types.SyncAggregate         `json:"sync_aggregate"`
 	ExecutionPayload  *ExecutionPayload            `json:"execution_payload"`
+}
+
+type BlockBidAndTrace struct {
+	Trace   *types.SignedBidTrace
+	Bid     GetHeaderResponse
+	Payload *structs.GetPayloadResponse
 }
 
 /*

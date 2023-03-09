@@ -33,7 +33,8 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) bool {
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
 
-	auction.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
+	//auction.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
+	auction.latestBlockByBuilder[block.Header.Trace.BuilderPubkey] = block
 
 	// always set new value and bigger slot
 	if auction.maxProfit == nil || auction.maxProfit.Header.Trace.Slot < block.Header.Trace.Slot {
