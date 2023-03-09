@@ -269,10 +269,10 @@ type ForkState struct {
 type ForkVersion uint8
 
 const (
-	ForkAltair ForkVersion = iota
+	ForkUnknown ForkVersion = iota
+	ForkAltair
 	ForkBellatrix
 	ForkCapella
-	ForkUnknown
 )
 
 func (v ForkVersion) String() string {
