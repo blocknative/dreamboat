@@ -283,10 +283,8 @@ func (v ForkVersion) String() string {
 		return "bellatrix"
 	case ForkCapella:
 		return "capella"
-	case ForkUnknown:
-		return "unknown"
 	default:
-		return ""
+		return "unknown"
 	}
 }
 
@@ -303,14 +301,12 @@ func (fs ForkState) IsAltair(slot Slot) bool {
 }
 
 func (fs ForkState) Version(slot Slot) ForkVersion {
-	if fs.IsAltair(slot) {
-		return ForkAltair
+	if fs.IsCapella(slot) {
+		return ForkCapella
 	} else if fs.IsBellatrix(slot) {
 		return ForkBellatrix
-	} else if fs.IsCapella(slot) {
-		return ForkCapella
-	} else {
-		return ForkUnknown
+	} else if fs.IsAltair(slot) {
+		return ForkAltair
 	}
-
+	return ForkUnknown
 }
