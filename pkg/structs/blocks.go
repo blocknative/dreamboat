@@ -16,6 +16,7 @@ type SubmitBlockRequest interface {
 	Signature() types.Signature
 	Timestamp() uint64
 	Random() types.Hash
+	Withdrawals() Withdrawals
 
 	NumTx() uint64
 
@@ -41,11 +42,7 @@ type ExecutionPayload interface {
 	BaseFeePerGas() types.U256Str
 	BlockHash() types.Hash
 	Transactions() []hexutil.Bytes
-	// Withdrawals() Withdrawal
-}
-
-type Withdrawal interface {
-	HashTreeRoot() ([32]byte, error)
+	Withdrawals() Withdrawals
 }
 
 /*

@@ -95,6 +95,21 @@ func (mr *MockBeaconNodeMockRecorder) GetProposerDuties(arg0 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDuties", reflect.TypeOf((*MockBeaconNode)(nil).GetProposerDuties), arg0)
 }
 
+// GetWithdrawals mocks base method.
+func (m *MockBeaconNode) GetWithdrawals(arg0 structs.Slot) (*client.GetWithdrawalsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWithdrawals", arg0)
+	ret0, _ := ret[0].(*client.GetWithdrawalsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWithdrawals indicates an expected call of GetWithdrawals.
+func (mr *MockBeaconNodeMockRecorder) GetWithdrawals(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWithdrawals", reflect.TypeOf((*MockBeaconNode)(nil).GetWithdrawals), arg0)
+}
+
 // KnownValidators mocks base method.
 func (m *MockBeaconNode) KnownValidators(arg0 structs.Slot) (client.AllValidatorsResponse, error) {
 	m.ctrl.T.Helper()

@@ -38,6 +38,7 @@ type BeaconClient interface {
 	SyncStatus() (*bcli.SyncStatusPayloadData, error)
 	KnownValidators(structs.Slot) (bcli.AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
+	GetWithdrawals(structs.Slot) (*bcli.GetWithdrawalsResponse, error)
 	Randao(structs.Slot) (string, error)
 	GetForkSchedule() (*bcli.GetForkScheduleResponse, error)
 }
@@ -54,6 +55,9 @@ type State interface {
 
 	HeadSlot() structs.Slot
 	SetHeadSlot(structs.Slot)
+
+	Withdrawals() structs.WithdrawalsState
+	SetWithdrawals(structs.WithdrawalsState)
 
 	SetRandao(string)
 	Randao() string
@@ -256,6 +260,9 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		}(received)
 	}
 
+	// query expected withdrawals root
+	go s.updatedExpectedWithdrawals(headSlot, state, client)
+
 	entries, err := s.getProposerDuties(ctx, client, headSlot)
 	if err != nil {
 		return err
@@ -271,6 +278,34 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	state.SetRandao(randao)
 
 	return nil
+}
+
+func (m *Manager) updatedExpectedWithdrawals(slot structs.Slot, state State, client BeaconClient) {
+	logger := m.Log.WithField("method", "UpdatedExpectedWithdrawals").WithField("slot", slot)
+	current := state.Withdrawals()
+	latestKnownSlot := current.Slot
+	if slot < latestKnownSlot || !state.Fork().IsCapella(slot) {
+		return
+	}
+
+	// get withdrawals from BN
+	withdrawals, err := client.GetWithdrawals(slot)
+	if err != nil {
+		if errors.Is(err, bcli.ErrWithdrawalsUnsupported) {
+			logger.WithError(err).Debug("attempted to fetch withdrawals before capella")
+		} else {
+			logger.WithError(err).Error("failed to get withdrawals from beacon node")
+		}
+		return
+	}
+
+	root, err := withdrawals.Data.Withdrawals.HashTreeRoot()
+	if err != nil {
+		logger.WithError(err).Warn("failed to compute withdrawals root")
+		return
+	}
+
+	state.SetWithdrawals(structs.WithdrawalsState{Slot: slot, Root: root})
 }
 
 func (s *Manager) getProposerDuties(ctx context.Context, client BeaconClient, headSlot structs.Slot) (entries []bcli.RegisteredProposersResponseData, err error) {

@@ -253,6 +253,20 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
+// ForkVersion mocks base method.
+func (m *MockState) ForkVersion(arg0 uint64) structs.ForkVersion {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ForkVersion", arg0)
+	ret0, _ := ret[0].(structs.ForkVersion)
+	return ret0
+}
+
+// ForkVersion indicates an expected call of ForkVersion.
+func (mr *MockStateMockRecorder) ForkVersion(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ForkVersion", reflect.TypeOf((*MockState)(nil).ForkVersion), arg0)
+}
+
 // Genesis mocks base method.
 func (m *MockState) Genesis() structs.GenesisInfo {
 	m.ctrl.T.Helper()
@@ -265,20 +279,6 @@ func (m *MockState) Genesis() structs.GenesisInfo {
 func (mr *MockStateMockRecorder) Genesis() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockState)(nil).Genesis))
-}
-
-// GetFork mocks base method.
-func (m *MockState) GetFork(arg0 uint64) structs.ForkVersion {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetFork", arg0)
-	ret0, _ := ret[0].(structs.ForkVersion)
-	return ret0
-}
-
-// GetFork indicates an expected call of GetFork.
-func (mr *MockStateMockRecorder) GetFork(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFork", reflect.TypeOf((*MockState)(nil).GetFork), arg0)
 }
 
 // HeadSlot mocks base method.
@@ -321,6 +321,20 @@ func (m *MockState) Randao() string {
 func (mr *MockStateMockRecorder) Randao() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao))
+}
+
+// Withdrawals mocks base method.
+func (m *MockState) Withdrawals() structs.WithdrawalsState {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Withdrawals")
+	ret0, _ := ret[0].(structs.WithdrawalsState)
+	return ret0
+}
+
+// Withdrawals indicates an expected call of Withdrawals.
+func (mr *MockStateMockRecorder) Withdrawals() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals))
 }
 
 // MockValidatorStore is a mock of ValidatorStore interface.

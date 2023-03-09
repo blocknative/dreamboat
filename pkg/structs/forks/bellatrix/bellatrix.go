@@ -58,6 +58,10 @@ func (b *SubmitBlockRequest) NumTx() uint64 {
 	return uint64(len(b.BellatrixExecutionPayload.EpTransactions))
 }
 
+func (b *SubmitBlockRequest) Withdrawals() structs.Withdrawals {
+	return b.BellatrixExecutionPayload.Withdrawals()
+}
+
 func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
 	return types.ComputeSigningRoot(&b.BellatrixMessage, d)
 }
@@ -380,6 +384,9 @@ func (ep *ExecutionPayload) BlockHash() types.Hash {
 }
 func (ep *ExecutionPayload) Transactions() []hexutil.Bytes {
 	return ep.EpTransactions
+}
+func (ep *ExecutionPayload) Withdrawals() structs.Withdrawals {
+	return nil
 }
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
