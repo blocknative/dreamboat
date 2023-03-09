@@ -209,6 +209,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
 				"randao":                    state.Randao(),
 				"processingTimeMs":          time.Since(t).Milliseconds(),
+				"withdrawalsRoot":           state.Withdrawals().Root,
 			}).Debug("processed new slot")
 		}
 	}
