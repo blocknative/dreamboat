@@ -15,5 +15,4 @@ type BlindedBeaconBlockBody struct {
 	Deposits          []*types.Deposit             `json:"deposits" ssz-max:"16"`
 	VoluntaryExits    []*types.SignedVoluntaryExit `json:"voluntary_exits" ssz-max:"16"`
 	SyncAggregate     *types.SyncAggregate         `json:"sync_aggregate"`
-	// ExecutionPayloadHeader to be implemented in forks
 }
