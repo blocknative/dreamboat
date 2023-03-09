@@ -269,30 +269,44 @@ type ForkState struct {
 type ForkVersion uint8
 
 const (
-	ForkAltair ForkVersion = iota
+	ForkUnknown ForkVersion = iota
+	ForkAltair
 	ForkBellatrix
 	ForkCapella
 )
 
+func (v ForkVersion) String() string {
+	switch v {
+	case ForkAltair:
+		return "altair"
+	case ForkBellatrix:
+		return "bellatrix"
+	case ForkCapella:
+		return "capella"
+	default:
+		return "unknown"
+	}
+}
+
 func (fs ForkState) IsCapella(slot Slot) bool {
-	return slot.Epoch() >= fs.CapellaEpoch
+	return fs.CapellaEpoch > 0 && slot.Epoch() >= fs.CapellaEpoch
 }
 
 func (fs ForkState) IsBellatrix(slot Slot) bool {
-	return slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
+	return fs.BellatrixEpoch > 0 && slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
 }
 
-func (fs ForkState) Version(epoch uint64) ForkVersion {
+func (fs ForkState) IsAltair(slot Slot) bool {
+	return slot.Epoch() >= fs.AltairEpoch && slot.Epoch() < fs.BellatrixEpoch
+}
 
-	return ForkBellatrix // temoporary override
-
-	switch {
-	case epoch >= uint64(fs.CapellaEpoch):
+func (fs ForkState) Version(slot Slot) ForkVersion {
+	if fs.IsCapella(slot) {
 		return ForkCapella
-	case epoch >= uint64(fs.BellatrixEpoch) && epoch < uint64(fs.CapellaEpoch):
+	} else if fs.IsBellatrix(slot) {
 		return ForkBellatrix
-	case epoch < uint64(fs.BellatrixEpoch):
+	} else if fs.IsAltair(slot) {
 		return ForkAltair
 	}
-	return ForkBellatrix
+	return ForkUnknown
 }

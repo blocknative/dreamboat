@@ -60,7 +60,7 @@ type State interface {
 	Genesis() structs.GenesisInfo
 	Withdrawals() structs.WithdrawalsState
 	Randao() string
-	ForkVersion(epoch uint64) structs.ForkVersion
+	ForkVersion(epoch structs.Slot) structs.ForkVersion
 }
 
 type Verifier interface {
@@ -224,7 +224,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, ErrNoBuilderBid
 	}
 
-	fork := rs.beaconState.ForkVersion(uint64(slot.Epoch()))
+	fork := rs.beaconState.ForkVersion(slot)
 	if fork == structs.ForkBellatrix {
 		h, ok := header.Header.(*bellatrix.ExecutionPayloadHeader)
 		if !ok {
@@ -322,7 +322,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	logger.Info("payload requested")
 
 	var vType string
-	forkv := rs.beaconState.ForkVersion(uint64(structs.Slot(payloadRequest.Slot()).Epoch()))
+	forkv := rs.beaconState.ForkVersion(structs.Slot(payloadRequest.Slot()))
 
 	switch forkv {
 	case structs.ForkBellatrix:

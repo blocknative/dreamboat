@@ -210,6 +210,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				"randao":                    state.Randao(),
 				"processingTimeMs":          time.Since(t).Milliseconds(),
 				"withdrawalsRoot":           state.Withdrawals().Root.String(),
+				"fork":                      state.Fork().Version(headSlot).String(),
 			}).Debug("processed new slot")
 		}
 	}
