@@ -291,11 +291,11 @@ func (v ForkVersion) String() string {
 }
 
 func (fs ForkState) IsCapella(slot Slot) bool {
-	return slot.Epoch() >= fs.CapellaEpoch
+	return fs.CapellaEpoch > 0 && slot.Epoch() >= fs.CapellaEpoch
 }
 
 func (fs ForkState) IsBellatrix(slot Slot) bool {
-	return slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
+	return fs.BellatrixEpoch > 0 && slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
 }
 
 func (fs ForkState) IsAltair(slot Slot) bool {
@@ -303,12 +303,12 @@ func (fs ForkState) IsAltair(slot Slot) bool {
 }
 
 func (fs ForkState) Version(slot Slot) ForkVersion {
-	if fs.IsBellatrix(slot) {
+	if fs.IsAltair(slot) {
+		return ForkAltair
+	} else if fs.IsBellatrix(slot) {
 		return ForkBellatrix
 	} else if fs.IsCapella(slot) {
 		return ForkCapella
-	} else if fs.IsAltair(slot) {
-		return ForkAltair
 	} else {
 		return ForkUnknown
 	}
