@@ -360,7 +360,7 @@ func (ep *ExecutionPayload) GasLimit() uint64 {
 	return ep.EpGasLimit
 }
 func (ep *ExecutionPayload) GasUsed() uint64 {
-	return ep.EpGasLimit
+	return ep.EpGasUsed
 }
 func (ep *ExecutionPayload) Timestamp() uint64 {
 	return ep.EpTimestamp
