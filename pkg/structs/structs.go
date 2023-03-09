@@ -6,12 +6,8 @@ import (
 	"fmt"
 	"time"
 
-<<<<<<< HEAD
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-=======
->>>>>>> feature/shapella
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )

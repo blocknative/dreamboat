@@ -20,7 +20,7 @@ var (
 	ErrWrongFeeRecipient     = errors.New("wrong fee recipient")
 	ErrInvalidWithdrawalSlot = errors.New("invalid withdrawal slot")
 	ErrInvalidWithdrawalRoot = errors.New("invalid withdrawal root")
-	ErrInvalidRandao     = errors.New("randao is invalid")
+	ErrInvalidRandao         = errors.New("randao is invalid")
 )
 
 // SubmitBlock Accepts block from trusted builder and stores
@@ -232,7 +232,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 		return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
 	}
 
-	if err := verifyWithdrawals(beaconState, submitBlockRequest); err != nil {
+	if err := verifyWithdrawals(beaconState, sbr); err != nil {
 		return false, fmt.Errorf("failed to verify withdrawals: %w", err)
 	}
 

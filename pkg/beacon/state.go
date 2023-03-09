@@ -87,11 +87,6 @@ func (as *AtomicState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 	as.withdrawals.Store(withdrawals)
 }
 
-func (as *AtomicState) Ready() <-chan struct{} {
-	as.once.Do(func() {
-		as.ready = make(chan struct{})
-	})
-	return as.ready
 func (as *AtomicState) Randao() string {
 	if val := as.randao.Load(); val != nil {
 		return val.(string)

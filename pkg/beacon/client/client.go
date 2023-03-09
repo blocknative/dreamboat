@@ -150,7 +150,6 @@ func (b *beaconClient) GetWithdrawals(slot structs.Slot) (*GetWithdrawalsRespons
 	return resp, err
 }
 
-func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
 func (b *beaconClient) Randao(slot structs.Slot) (string, error) {
 	resp := new(GetRandaoResponse)
 	u := *b.beaconEndpoint
