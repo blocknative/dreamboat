@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
@@ -239,7 +238,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 	return true, nil
 }
 
-func verifyWithdrawals(state State, submitBlockRequest *types.BuilderSubmitBlockRequest) error {
+func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) error {
 	var withdrawals []*capella.Withdrawal
 	// TODO: withdrawals := payload.Withdrawals()
 
@@ -250,8 +249,8 @@ func verifyWithdrawals(state State, submitBlockRequest *types.BuilderSubmitBlock
 		if err != nil {
 			return fmt.Errorf("failed to compute withdrawals root: %w", err)
 		}
-		if withdrawalState.Slot != structs.Slot(submitBlockRequest.Message.Slot) { // we still don't have the withdrawals yet
-			return fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Message.Slot, withdrawalState.Slot)
+		if withdrawalState.Slot != structs.Slot(submitBlockRequest.Slot()) { // we still don't have the withdrawals yet
+			return fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
 		} else if withdrawalState.Root != withdrawalsRoot {
 			return fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, withdrawalsRoot.String(), withdrawalState.Root.String())
 		}
@@ -260,66 +259,10 @@ func verifyWithdrawals(state State, submitBlockRequest *types.BuilderSubmitBlock
 	return nil
 }
 
-// ***** Relay Domain *****
-// SubmitBlockRequestToSignedBuilderBid converts a builders block submission to a bid compatible with mev-boost
-func SubmitBlockRequestToSignedBuilderBid(req *types.BuilderSubmitBlockRequest, sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error) { // TODO(l): remove FB type
-	if req == nil {
-		return nil, ErrMissingRequest
-	}
-
-	if sk == nil {
-		return nil, ErrMissingSecretKey
-	}
-
-	header, err := types.PayloadToPayloadHeader(req.ExecutionPayload)
-	if err != nil {
-		return nil, err
-	}
-
-	builderBid := types.BuilderBid{
-		Value:  req.Message.Value,
-		Header: header,
-		Pubkey: *pubkey,
-	}
-
-	sig, err := types.SignMessage(&builderBid, domain, sk)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.SignedBuilderBid{
-		Message:   &builderBid,
-		Signature: sig,
-	}, nil
-}
-
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
 	return structs.PayloadKey{
 		BlockHash: submission.ExecutionPayload.BlockHash,
 		Proposer:  submission.Message.ProposerPubkey,
 		Slot:      structs.Slot(submission.Message.Slot),
-	}
-}
-
-func SubmitBlockRequestToBlockBidAndTrace(versionType string, signedBuilderBid *types.SignedBuilderBid, submitBlockRequest *types.BuilderSubmitBlockRequest) structs.BlockBidAndTrace { // TODO(l): remove FB type
-	getHeaderResponse := types.GetHeaderResponse{
-		Version: types.VersionString(versionType),
-		Data:    signedBuilderBid,
-	}
-
-	getPayloadResponse := types.GetPayloadResponse{
-		Version: types.VersionString(versionType),
-		Data:    submitBlockRequest.ExecutionPayload,
-	}
-
-	signedBidTrace := types.SignedBidTrace{
-		Message:   submitBlockRequest.Message,
-		Signature: submitBlockRequest.Signature,
-	}
-
-	return structs.BlockBidAndTrace{
-		Trace:   &signedBidTrace,
-		Bid:     &getHeaderResponse,
-		Payload: &getPayloadResponse,
 	}
 }
