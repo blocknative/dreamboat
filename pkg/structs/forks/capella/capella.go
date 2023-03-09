@@ -248,43 +248,6 @@ func (ep *ExecutionPayload) Withdrawals() structs.Withdrawals {
 	return ep.EpWithdrawals
 }
 
-type BlindedBeaconBlockBody struct {
-	forks.BlindedBeaconBlockBody
-
-	ExecutionPayloadHeader *ExecutionPayloadHeader       `json:"execution_payload_header"`
-	BLSToExecutionChanges  []*SignedBLSToExecutionChange `json:"bls_to_execution_changes" ssz-max:"16"`
-}
-
-// SignedBLSToExecutionChange provides information about a signed BLS to execution change.
-type SignedBLSToExecutionChange struct {
-	Message   *BLSToExecutionChange `json:"message"`
-	Signature types.Signature       `json:"signature" ssz-size:"96"`
-}
-
-// BLSToExecutionChange provides information about a change of withdrawal credentials.
-type BLSToExecutionChange struct {
-	ValidatorIndex     uint64          `json:"validator_index,string"`
-	FromBLSPubkey      types.PublicKey `json:"from_bls_pubkey" ssz-size:"48"`
-	ToExecutionAddress types.Address   `json:"to_execution_address" ssz-size:"20"`
-}
-
-/*
-// BlindedBeaconBlockBody represents the body of a blinded beacon block.
-type BlindedBeaconBlockBody struct {
-	RANDAOReveal           phase0.BLSSignature `ssz-size:"96"`
-	ETH1Data               *phase0.ETH1Data
-	Graffiti               [32]byte                      `ssz-size:"32"`
-	ProposerSlashings      []*phase0.ProposerSlashing    `ssz-max:"16"`
-	AttesterSlashings      []*phase0.AttesterSlashing    `ssz-max:"2"`
-	Attestations           []*phase0.Attestation         `ssz-max:"128"`
-	Deposits               []*phase0.Deposit             `ssz-max:"16"`
-	VoluntaryExits         []*phase0.SignedVoluntaryExit `ssz-max:"16"`
-	SyncAggregate          *altair.SyncAggregate
-	ExecutionPayloadHeader *capella.ExecutionPayloadHeader
-	BLSToExecutionChanges  []*capella.SignedBLSToExecutionChange `ssz-max:"16"`
-}
-*/
-
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
 type GetHeaderResponse struct {
 	CapellaVersion types.VersionString `json:"version"`
@@ -318,8 +281,8 @@ func (s *SignedBuilderBid) Value() types.U256Str {
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
-	SMessage   *types.BlindedBeaconBlock `json:"message"`
-	SSignature types.Signature           `json:"signature" ssz-size:"96"`
+	SMessage   BlindedBeaconBlock `json:"message"`
+	SSignature types.Signature    `json:"signature" ssz-size:"96"`
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
@@ -351,7 +314,7 @@ func (s *SignedBlindedBeaconBlock) StateRoot() types.Root {
 }
 
 func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
-	return types.ComputeSigningRoot(b.SMessage, d)
+	return types.ComputeSigningRoot(&b.SMessage, d)
 }
 
 func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) structs.PayloadKey {
@@ -376,16 +339,17 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 			ParentRoot:    s.SMessage.ParentRoot,
 			StateRoot:     s.SMessage.StateRoot,
 			Body: &BeaconBlockBody{
-				RandaoReveal:      s.SMessage.Body.RandaoReveal,
-				Eth1Data:          s.SMessage.Body.Eth1Data,
-				Graffiti:          s.SMessage.Body.Graffiti,
-				ProposerSlashings: s.SMessage.Body.ProposerSlashings,
-				AttesterSlashings: s.SMessage.Body.AttesterSlashings,
-				Attestations:      s.SMessage.Body.Attestations,
-				Deposits:          s.SMessage.Body.Deposits,
-				VoluntaryExits:    s.SMessage.Body.VoluntaryExits,
-				SyncAggregate:     s.SMessage.Body.SyncAggregate,
-				ExecutionPayload:  ep,
+				BLSToExecutionChanges: s.SMessage.Body.BLSToExecutionChanges,
+				RandaoReveal:          s.SMessage.Body.RandaoReveal,
+				Eth1Data:              s.SMessage.Body.Eth1Data,
+				Graffiti:              s.SMessage.Body.Graffiti,
+				ProposerSlashings:     s.SMessage.Body.ProposerSlashings,
+				AttesterSlashings:     s.SMessage.Body.AttesterSlashings,
+				Attestations:          s.SMessage.Body.Attestations,
+				Deposits:              s.SMessage.Body.Deposits,
+				VoluntaryExits:        s.SMessage.Body.VoluntaryExits,
+				SyncAggregate:         s.SMessage.Body.SyncAggregate,
+				ExecutionPayload:      ep,
 			},
 		},
 	}
@@ -519,14 +483,198 @@ type BeaconBlock struct {
 
 // BeaconBlockBody https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L38
 type BeaconBlockBody struct {
-	RandaoReveal      types.Signature              `json:"randao_reveal" ssz-size:"96"`
-	Eth1Data          *types.Eth1Data              `json:"eth1_data"`
-	Graffiti          types.Hash                   `json:"graffiti" ssz-size:"32"`
-	ProposerSlashings []*types.ProposerSlashing    `json:"proposer_slashings" ssz-max:"16"`
-	AttesterSlashings []*types.AttesterSlashing    `json:"attester_slashings" ssz-max:"2"`
-	Attestations      []*types.Attestation         `json:"attestations" ssz-max:"128"`
-	Deposits          []*types.Deposit             `json:"deposits" ssz-max:"16"`
-	VoluntaryExits    []*types.SignedVoluntaryExit `json:"voluntary_exits" ssz-max:"16"`
-	SyncAggregate     *types.SyncAggregate         `json:"sync_aggregate"`
-	ExecutionPayload  *ExecutionPayload            `json:"execution_payload"`
+	BLSToExecutionChanges []*SignedBLSToExecutionChange `json:"bls_to_execution_changes" ssz-max:"16"`
+	RandaoReveal          types.Signature               `json:"randao_reveal" ssz-size:"96"`
+	Eth1Data              *types.Eth1Data               `json:"eth1_data"`
+	Graffiti              types.Hash                    `json:"graffiti" ssz-size:"32"`
+	ProposerSlashings     []*types.ProposerSlashing     `json:"proposer_slashings" ssz-max:"16"`
+	AttesterSlashings     []*types.AttesterSlashing     `json:"attester_slashings" ssz-max:"2"`
+	Attestations          []*types.Attestation          `json:"attestations" ssz-max:"128"`
+	Deposits              []*types.Deposit              `json:"deposits" ssz-max:"16"`
+	VoluntaryExits        []*types.SignedVoluntaryExit  `json:"voluntary_exits" ssz-max:"16"`
+	SyncAggregate         *types.SyncAggregate          `json:"sync_aggregate"`
+	ExecutionPayload      *ExecutionPayload             `json:"execution_payload"`
+}
+
+// BlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L74
+type BlindedBeaconBlock struct {
+	Slot          uint64                  `json:"slot,string"`
+	ProposerIndex uint64                  `json:"proposer_index,string"`
+	ParentRoot    types.Root              `json:"parent_root" ssz-size:"32"`
+	StateRoot     types.Root              `json:"state_root" ssz-size:"32"`
+	Body          *BlindedBeaconBlockBody `json:"body"`
+}
+
+// HashTreeRoot ssz hashes the BlindedBeaconBlock object
+func (b *BlindedBeaconBlock) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BlindedBeaconBlock object with a hasher
+func (b *BlindedBeaconBlock) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Slot'
+	hh.PutUint64(b.Slot)
+
+	// Field (1) 'ProposerIndex'
+	hh.PutUint64(b.ProposerIndex)
+
+	// Field (2) 'ParentRoot'
+	hh.PutBytes(b.ParentRoot[:])
+
+	// Field (3) 'StateRoot'
+	hh.PutBytes(b.StateRoot[:])
+
+	// Field (4) 'Body'
+	if err = b.Body.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the BlindedBeaconBlock object
+func (b *BlindedBeaconBlock) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(b)
+}
+
+type BlindedBeaconBlockBody struct {
+	forks.BlindedBeaconBlockBody
+
+	ExecutionPayloadHeader *ExecutionPayloadHeader       `json:"execution_payload_header"`
+	BLSToExecutionChanges  []*SignedBLSToExecutionChange `json:"bls_to_execution_changes" ssz-max:"16"`
+}
+
+// SignedBLSToExecutionChange provides information about a signed BLS to execution change.
+type SignedBLSToExecutionChange struct {
+	Message   *BLSToExecutionChange `json:"message"`
+	Signature types.Signature       `json:"signature" ssz-size:"96"`
+}
+
+// BLSToExecutionChange provides information about a change of withdrawal credentials.
+type BLSToExecutionChange struct {
+	ValidatorIndex     uint64          `json:"validator_index,string"`
+	FromBLSPubkey      types.PublicKey `json:"from_bls_pubkey" ssz-size:"48"`
+	ToExecutionAddress types.Address   `json:"to_execution_address" ssz-size:"20"`
+}
+
+// HashTreeRoot ssz hashes the BlindedBeaconBlockBody object
+func (b *BlindedBeaconBlockBody) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BlindedBeaconBlockBody object with a hasher
+func (b *BlindedBeaconBlockBody) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'RandaoReveal'
+	hh.PutBytes(b.RandaoReveal[:])
+
+	// Field (1) 'Eth1Data'
+	if err = b.Eth1Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'Graffiti'
+	hh.PutBytes(b.Graffiti[:])
+
+	// Field (3) 'ProposerSlashings'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.ProposerSlashings))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.ProposerSlashings {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (4) 'AttesterSlashings'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.AttesterSlashings))
+		if num > 2 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.AttesterSlashings {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 2)
+	}
+
+	// Field (5) 'Attestations'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Attestations))
+		if num > 128 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Attestations {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 128)
+	}
+
+	// Field (6) 'Deposits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Deposits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Deposits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (7) 'VoluntaryExits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.VoluntaryExits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.VoluntaryExits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (8) 'SyncAggregate'
+	if err = b.SyncAggregate.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (9) 'ExecutionPayloadHeader'
+	if err = b.ExecutionPayloadHeader.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the BlindedBeaconBlockBody object
+func (b *BlindedBeaconBlockBody) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(b)
 }
