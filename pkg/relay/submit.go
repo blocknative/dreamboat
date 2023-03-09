@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
@@ -239,20 +238,17 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 }
 
 func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) error {
-	var withdrawals []*capella.Withdrawal
-	// TODO: withdrawals := payload.Withdrawals()
-
-	if withdrawals != nil {
+	if withdrawals := submitBlockRequest.Withdrawals(); withdrawals != nil {
 		// get latest withdrawals and verify the roots match
 		withdrawalState := state.Withdrawals()
-		withdrawalsRoot, err := structs.ComputeWithdrawalsRoot(withdrawals)
+		withdrawalsRoot, err := withdrawals.HashTreeRoot()
 		if err != nil {
 			return fmt.Errorf("failed to compute withdrawals root: %w", err)
 		}
 		if withdrawalState.Slot != structs.Slot(submitBlockRequest.Slot()) { // we still don't have the withdrawals yet
 			return fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
 		} else if withdrawalState.Root != withdrawalsRoot {
-			return fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, withdrawalsRoot.String(), withdrawalState.Root.String())
+			return fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
 		}
 	}
 

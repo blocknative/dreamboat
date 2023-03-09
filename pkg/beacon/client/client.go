@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/lthibault/log"
@@ -324,7 +323,7 @@ type GenesisResponse struct {
 
 type GetWithdrawalsResponse struct {
 	Data struct {
-		Withdrawals []*capella.Withdrawal `json:"withdrawals"`
+		Withdrawals structs.Withdrawals `json:"withdrawals"`
 	}
 }
 

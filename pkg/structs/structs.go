@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
@@ -259,11 +258,6 @@ type ValidatorCacheEntry struct {
 type WithdrawalsState struct {
 	Slot Slot
 	Root phase0.Root
-}
-
-func ComputeWithdrawalsRoot(w []*capella.Withdrawal) (phase0.Root, error) {
-	withdrawals := capella.Withdrawals{Withdrawals: w}
-	return withdrawals.HashTreeRoot()
 }
 
 type ForkState struct {
