@@ -68,12 +68,12 @@ func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 }
 
 func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) { // TODO(l): remove FB type
-	return structs.BlockBidAndTrace{
+	return BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.CapellaMessage,
 			Signature: s.CapellaSignature,
 		},
-		Bid: &GetHeaderResponse{
+		Bid: GetHeaderResponse{
 			CapellaVersion: types.VersionString("capella"),
 			CapellaData:    signedBuilderBid,
 		},
@@ -98,17 +98,17 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 s.Slot(),
-					ParentHash:           cbs.Payload.Payload.Data.ParentHash(),
-					BlockHash:            cbs.Payload.Payload.Data.BlockHash(),
-					BuilderPubkey:        cbs.Payload.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       cbs.Payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: cbs.Payload.Trace.Message.ProposerFeeRecipient,
+					ParentHash:           s.CapellaExecutionPayload.EpParentHash,
+					BlockHash:            s.CapellaExecutionPayload.EpBlockHash,
+					BuilderPubkey:        s.CapellaMessage.BuilderPubkey,
+					ProposerPubkey:       s.CapellaMessage.ProposerPubkey,
+					ProposerFeeRecipient: s.CapellaMessage.ProposerFeeRecipient,
 					Value:                s.Value(),
-					GasLimit:             cbs.Payload.Trace.Message.GasLimit,
-					GasUsed:              cbs.Payload.Trace.Message.GasUsed,
+					GasLimit:             s.CapellaMessage.GasLimit,
+					GasUsed:              s.CapellaMessage.GasUsed,
 				},
-				BlockNumber: cbs.Payload.Payload.Data.BlockNumber(),
-				NumTx:       uint64(len(cbs.Payload.Payload.Data.Transactions())),
+				BlockNumber: s.CapellaExecutionPayload.EpBlockNumber,
+				NumTx:       uint64(len(s.CapellaExecutionPayload.EpTransactions)),
 			},
 			Timestamp:   uint64(time.Now().UnixMilli() / 1_000),
 			TimestampMs: uint64(time.Now().UnixMilli()),
@@ -529,6 +529,12 @@ func (s *SignedBeaconBlock) Message() structs.BeaconBlock {
 
 func (s *SignedBeaconBlock) Signature() types.Signature {
 	return s.CapellaSignature
+}
+
+type BlockBidAndTrace struct {
+	Trace   *types.SignedBidTrace
+	Bid     GetHeaderResponse
+	Payload *structs.GetPayloadResponse
 }
 
 // BeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L46
