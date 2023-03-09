@@ -70,11 +70,11 @@ type Datastore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
-	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
+	PutPayload(context.Context, structs.PayloadKey, structs.BlockBidAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockBidAndTrace, bool, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
-	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
+	CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error
 	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	// to be changed
@@ -197,7 +197,12 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	m.AppendSince(tGet, "getHeader", "get")
 
-	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+	key := structs.PayloadKey{
+		BlockHash: maxProfitBlock.Payload.Payload.Data.BlockHash(),
+		Slot:      structs.Slot(maxProfitBlock.Payload.Trace.Message.Slot),
+		Proposer:  maxProfitBlock.Payload.Trace.Message.ProposerPubkey}
+
+	if err := rs.d.CacheBlock(ctx, key, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
@@ -283,7 +288,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
 func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (*structs.GetPayloadResponse, error) { // TODO(l): remove FB type
 
-	vType := "bellatrix" // To be changed
+	//vType := "bellatrix" // To be changed
 
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
@@ -311,6 +316,16 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	})
 	logger.Info("payload requested")
 
+	var vType string
+	forkv := rs.beaconState.GetFork(uint64(structs.Slot(payloadRequest.Slot()).Epoch()))
+
+	switch forkv {
+	case structs.ForkBellatrix:
+		vType = "bellatrix"
+	case structs.ForkCapella:
+		vType = "capella"
+	}
+
 	msg, err := payloadRequest.ComputeSigningRoot(rs.config.ProposerSigningDomain[vType])
 	if err != nil {
 		return nil, ErrInvalidSignature // err
@@ -326,8 +341,9 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	tGet := time.Now()
 
 	key := payloadRequest.ToPayloadKey(pk)
+	rs.l.With(log.F{"submissionkey": fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot)}).Debug("getkey")
 
-	payload, fromCache, err := rs.d.GetPayload(ctx, key)
+	payload, fromCache, err := rs.d.GetPayload(ctx, forkv, key)
 	if err != nil || payload == nil {
 		return nil, ErrNoPayloadFound
 	}
