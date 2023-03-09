@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	//url = "http://localhost:18550" + api.PathSubmitBlock
-	url = "http://relay-block-devnet-ue1-stage-0:18550" + api.PathSubmitBlock
+	url = "http://localhost:18550" + api.PathSubmitBlock
 )
 
 var (

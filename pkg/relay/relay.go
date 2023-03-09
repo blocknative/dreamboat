@@ -3,7 +3,6 @@ package relay
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -232,20 +231,6 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, ErrInternal
 		}
 
-		a := &bellatrix.GetHeaderResponse{
-			BellatrixVersion: types.VersionString("bellatrix"),
-			BellatrixData: &bellatrix.SignedBuilderBid{
-				BellatrixMessage:   bid,
-				BellatrixSignature: signature},
-		}
-
-		logger.With(log.F{
-			"maxProfit": maxProfitBlock,
-			"content":   a,
-			"blockHash": bid.BellatrixHeader.BlockHash.String(),
-			"slot":      slot,
-		}).Debug("bid contents")
-
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
 			"bidValue":         bid.Value(),
@@ -254,7 +239,12 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			"slot":             slot,
 		}).Info("bid sent")
 
-		return a, nil
+		return &bellatrix.GetHeaderResponse{
+			BellatrixVersion: types.VersionString("bellatrix"),
+			BellatrixData: &bellatrix.SignedBuilderBid{
+				BellatrixMessage:   bid,
+				BellatrixSignature: signature},
+		}, nil
 	} else if fork == structs.ForkCapella {
 		h, ok := header.Header.(*capella.ExecutionPayloadHeader)
 		if !ok {
@@ -353,20 +343,10 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
-	rs.l.With(log.F{
-		"submissionkey":  fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot),
-		"payload":        payload,
-		"payloadRequest": payloadRequest,
-	},
-	).Debug("getkey")
-
 	// defer put delivered datastore write
 	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
 		if rs.config.PublishBlock {
 			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
-
-			a, _ := json.Marshal(beaconBlock)
-			logger.With(log.F{"block": beaconBlock, "marshaled": string(a)}).WithError(err).Warn("publish")
 			if err != nil {
 				logger.WithError(err).Warn("fail to create block for publication")
 			} else {
@@ -408,10 +388,10 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			BellatrixData:    *bep,
 		}, nil
 	case structs.ForkCapella:
-		bep := exp.(*bellatrix.ExecutionPayload)
-		return &bellatrix.GetPayloadResponse{
-			BellatrixVersion: types.VersionString("capella"),
-			BellatrixData:    *bep,
+		cep := exp.(*capella.ExecutionPayload)
+		return &capella.GetPayloadResponse{
+			CapellaVersion: types.VersionString("capella"),
+			CapellaData:    *cep,
 		}, nil
 	}
 	return nil, errors.New("unknown fork")

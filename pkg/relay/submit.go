@@ -11,7 +11,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
-	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
@@ -110,14 +109,15 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 			return nil
 		}
 	}
-
-	err = rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
-		//Todo  Pass correct structure
-		// BuilderSubmitBlockRequest: sbr,
-	})
-	if err != nil {
-		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
-	}
+	/*
+		err = rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
+			//Todo  Pass correct structure
+			// BuilderSubmitBlockRequest: sbr,
+		})
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
+		}
+	*/
 	return nil
 }
 
@@ -174,14 +174,13 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 
 	tPutPayload := time.Now()
 
-	key := sbr.ToPayloadKey()
-
-	ma, _ := json.Marshal(complete.Payload)
-	rs.l.With(log.F{
-		"submissionkey":    fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot),
-		"content":          complete.Payload,
-		"contentMarshaled": string(ma),
-	}).Debug("store key")
+	// key := sbr.ToPayloadKey()
+	// ma, _ := json.Marshal(complete.Payload)
+	// rs.l.With(log.F{
+	// 	"submissionkey":    fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot),
+	// 	"content":          complete.Payload,
+	// 	"contentMarshaled": string(ma),
+	// }).Debug("store key")
 
 	if err := rs.d.PutPayload(ctx, sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
