@@ -51,12 +51,16 @@ func (b *SubmitBlockRequest) Timestamp() uint64 {
 	return b.CapellaExecutionPayload.EpTimestamp
 }
 
-func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
-	return types.ComputeSigningRoot(&b.CapellaMessage, d)
-}
-
 func (b *SubmitBlockRequest) Random() types.Hash {
 	return b.CapellaExecutionPayload.EpRandom
+}
+
+func (b *SubmitBlockRequest) NumTx() uint64 {
+	return uint64(len(b.CapellaExecutionPayload.EpTransactions))
+}
+
+func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
+	return types.ComputeSigningRoot(&b.CapellaMessage, d)
 }
 
 func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {

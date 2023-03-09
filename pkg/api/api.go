@@ -270,13 +270,6 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
-
-	//b, _ := io.ReadAll(r.Body)
-	/*
-		a.l.With(log.F{
-			"req": string(b),
-		}).Debug("struct")
-	*/
 	var req structs.SubmitBlockRequest
 	fork := a.st.GetFork(uint64(a.st.HeadSlot().Epoch()))
 	switch fork {
@@ -301,23 +294,22 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-	// TODO(l): VALIDATE!!!
 	if req.Slot() == 0 {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload (slot)"))
 		return
 	}
 
+	// TODO(l): VALIDATE!!!
+
 	if err := a.lim.Allow(r.Context(), req.BuilderPubkey()); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "429", "rate limitted").Inc()
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
-	/*
-		if req.ExecutionPayload() != nil && req.ExecutionPayload().Transactions() != nil {
-			a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload().Transactions())))
-		}
-	*/
+
+	a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(req.NumTx()))
+
 	m := structs.NewMetricGroup(4)
 	if err := a.r.SubmitBlock(r.Context(), m, req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))

@@ -17,6 +17,8 @@ type SubmitBlockRequest interface {
 	Timestamp() uint64
 	Random() types.Hash
 
+	NumTx() uint64
+
 	ComputeSigningRoot(d types.Domain) ([32]byte, error)
 
 	ToPayloadKey() PayloadKey

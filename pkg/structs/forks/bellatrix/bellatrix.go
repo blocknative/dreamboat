@@ -54,6 +54,10 @@ func (b *SubmitBlockRequest) Random() types.Hash {
 	return b.BellatrixExecutionPayload.EpRandom
 }
 
+func (b *SubmitBlockRequest) NumTx() uint64 {
+	return uint64(len(b.BellatrixExecutionPayload.EpTransactions))
+}
+
 func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
 	return types.ComputeSigningRoot(&b.BellatrixMessage, d)
 }
