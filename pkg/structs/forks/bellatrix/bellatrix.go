@@ -82,7 +82,7 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 }
 
 func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) { // TODO(l): remove FB type
-	return BlockBidAndTrace{
+	return &BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.BellatrixMessage,
 			Signature: s.BellatrixSignature,
@@ -91,11 +91,20 @@ func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderB
 			BellatrixVersion: types.VersionString("bellatrix"),
 			BellatrixData:    signedBuilderBid,
 		},
-		Payload: &structs.GetPayloadResponse{
-			Version: types.VersionString("bellatrix"),
-			Data:    &s.BellatrixExecutionPayload,
+		Payload: GetPayloadResponse{
+			BellatrixVersion: types.VersionString("bellatrix"),
+			BellatrixData:    s.BellatrixExecutionPayload,
 		},
 	}
+}
+
+type GetPayloadResponse struct {
+	BellatrixVersion types.VersionString `json:"version"`
+	BellatrixData    ExecutionPayload    `json:"data"`
+}
+
+func (s *GetPayloadResponse) Data() structs.ExecutionPayload {
+	return &s.BellatrixData
 }
 
 func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
@@ -532,7 +541,39 @@ type BeaconBlockBody struct {
 type BlockBidAndTrace struct {
 	Trace   *types.SignedBidTrace
 	Bid     GetHeaderResponse
-	Payload *structs.GetPayloadResponse
+	Payload GetPayloadResponse
+}
+
+func (bbat *BlockBidAndTrace) BidValue() types.U256Str {
+	return bbat.Bid.BellatrixData.Value()
+}
+
+func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
+	return &bbat.Payload.BellatrixData
+}
+
+func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) structs.DeliveredTrace {
+	return structs.DeliveredTrace{
+		Trace: structs.BidTraceWithTimestamp{
+			BidTraceExtended: structs.BidTraceExtended{
+				BidTrace: types.BidTrace{
+					Slot:                 slot,
+					ParentHash:           bbat.Payload.BellatrixData.EpParentHash,
+					BlockHash:            bbat.Payload.BellatrixData.EpBlockHash,
+					BuilderPubkey:        bbat.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       bbat.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: bbat.Trace.Message.ProposerFeeRecipient,
+					GasLimit:             bbat.Payload.BellatrixData.EpGasLimit,
+					GasUsed:              bbat.Payload.BellatrixData.EpGasUsed,
+					Value:                bbat.Trace.Message.Value,
+				},
+				BlockNumber: bbat.Payload.BellatrixData.EpBlockNumber,
+				NumTx:       uint64(len(bbat.Payload.BellatrixData.EpTransactions)),
+			},
+			Timestamp: bbat.Payload.BellatrixData.EpTimestamp,
+		},
+		BlockNumber: bbat.Payload.BellatrixData.EpBlockNumber,
+	}
 }
 
 /*

@@ -51,7 +51,7 @@ var (
 type Relay interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
 	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (structs.GetHeaderResponse, error)
-	GetPayload(context.Context, *structs.MetricGroup, structs.SignedBlindedBeaconBlock) (*structs.GetPayloadResponse, error)
+	GetPayload(context.Context, *structs.MetricGroup, structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
 	SubmitBlock(context.Context, *structs.MetricGroup, structs.SubmitBlockRequest) error

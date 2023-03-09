@@ -172,15 +172,12 @@ type BlockBidAndTrace interface {
 	//Trace   *types.SignedBidTrace
 	//Bid     GetHeaderResponse
 	//Payload *GetPayloadResponse
+
+	BidValue() types.U256Str
+
+	ExecutionPayload() ExecutionPayload
+	ToDeliveredTrace(slot uint64) DeliveredTrace
 }
-
-/*
-
-type BlockBidAndTrace struct {
-	Trace   *types.SignedBidTrace
-	Bid     GetHeaderResponse
-	Payload *GetPayloadResponse
-}*/
 
 type BeaconState struct {
 	DutiesState

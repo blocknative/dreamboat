@@ -181,7 +181,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	key := sbr.ToPayloadKey()
 	rs.l.With(log.F{"submissionkey": fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot)}).Debug("storekey")
 
-	if err := rs.d.PutPayload(ctx, sbr.ToPayloadKey(), &complete.Payload, rs.config.TTL); err != nil {
+	if err := rs.d.PutPayload(ctx, sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")

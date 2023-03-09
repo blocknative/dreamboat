@@ -68,7 +68,7 @@ func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 }
 
 func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) { // TODO(l): remove FB type
-	return BlockBidAndTrace{
+	return &BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.CapellaMessage,
 			Signature: s.CapellaSignature,
@@ -77,9 +77,9 @@ func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderB
 			CapellaVersion: types.VersionString("capella"),
 			CapellaData:    signedBuilderBid,
 		},
-		Payload: &structs.GetPayloadResponse{
-			Version: types.VersionString("capella"),
-			Data:    &s.CapellaExecutionPayload,
+		Payload: GetPayloadResponse{
+			CapellaVersion: types.VersionString("capella"),
+			CapellaData:    s.CapellaExecutionPayload,
 		},
 	}
 }
@@ -534,7 +534,48 @@ func (s *SignedBeaconBlock) Signature() types.Signature {
 type BlockBidAndTrace struct {
 	Trace   *types.SignedBidTrace
 	Bid     GetHeaderResponse
-	Payload *structs.GetPayloadResponse
+	Payload GetPayloadResponse
+}
+
+func (bbat *BlockBidAndTrace) BidValue() types.U256Str {
+	return bbat.Bid.CapellaData.Value()
+}
+
+func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
+	return &bbat.Payload.CapellaData
+}
+
+func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) structs.DeliveredTrace {
+	return structs.DeliveredTrace{
+		Trace: structs.BidTraceWithTimestamp{
+			BidTraceExtended: structs.BidTraceExtended{
+				BidTrace: types.BidTrace{
+					Slot:                 slot,
+					ParentHash:           bbat.Payload.CapellaData.EpParentHash,
+					BlockHash:            bbat.Payload.CapellaData.EpBlockHash,
+					BuilderPubkey:        bbat.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       bbat.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: bbat.Trace.Message.ProposerFeeRecipient,
+					GasLimit:             bbat.Payload.CapellaData.EpGasLimit,
+					GasUsed:              bbat.Payload.CapellaData.EpGasUsed,
+					Value:                bbat.Trace.Message.Value,
+				},
+				BlockNumber: bbat.Payload.CapellaData.EpBlockNumber,
+				NumTx:       uint64(len(bbat.Payload.CapellaData.EpTransactions)),
+			},
+			Timestamp: bbat.Payload.CapellaData.EpTimestamp,
+		},
+		BlockNumber: bbat.Payload.CapellaData.EpBlockNumber,
+	}
+}
+
+type GetPayloadResponse struct {
+	CapellaVersion types.VersionString `json:"version"`
+	CapellaData    ExecutionPayload    `json:"data"`
+}
+
+func (s *GetPayloadResponse) Data() structs.ExecutionPayload {
+	return &s.CapellaData
 }
 
 // BeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L46
