@@ -55,6 +55,9 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, submitRequest struc
 	state.EXPECT().HeadSlot().MaxTimes(1).Return(
 		structs.Slot(submitRequest.Slot()),
 	)
+
+	state.EXPECT().Randao().MaxTimes(1).Return(submitRequest.Random().String())
+
 	ds.EXPECT().CheckSlotDelivered(context.Background(), submitRequest.Slot()).MaxTimes(1).Return(
 		false, nil,
 	)

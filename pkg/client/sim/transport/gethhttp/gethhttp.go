@@ -37,12 +37,19 @@ func (f *Client) IsSet() bool {
 }
 
 func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+	return c.validateBlock(ctx, "validateBuilderSubmissionV1", block)
+}
+func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+	return c.validateBlock(ctx, "validateBuilderSubmissionV2", block)
+}
+
+func (c *Client) validateBlock(ctx context.Context, method string, block *types.BuilderBlockValidationRequest) (err error) {
 	buff := new(bytes.Buffer)
 	enc := json.NewEncoder(buff)
 	if err := enc.Encode(
 		types.RpcRequest{
 			ID:     1,
-			Method: c.namespace + "_validateBuilderSubmissionV1",
+			Method: c.namespace + "_" + method,
 			Params: []interface{}{block},
 		}); err != nil {
 		return err

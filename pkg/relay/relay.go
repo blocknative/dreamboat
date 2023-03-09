@@ -42,6 +42,7 @@ var (
 type BlockValidationClient interface {
 	IsSet() bool
 	ValidateBlock(ctx context.Context, block *rpctypes.BuilderBlockValidationRequest) (err error)
+	ValidateBlockV2(ctx context.Context, block *rpctypes.BuilderBlockValidationRequest) (err error)
 }
 
 type ValidatorStore interface {
@@ -60,7 +61,7 @@ type State interface {
 	Genesis() structs.GenesisInfo
 	Withdrawals() structs.WithdrawalsState
 	Randao() string
-	ForkVersion(epoch structs.Slot) structs.ForkVersion
+	ForkVersion(slot structs.Slot) structs.ForkVersion
 }
 
 type Verifier interface {

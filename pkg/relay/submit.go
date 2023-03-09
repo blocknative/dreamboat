@@ -11,6 +11,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
@@ -115,15 +116,24 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 			return nil
 		}
 	}
-	/*
-		err = rs.bvc.ValidateBlock(ctx, &rpctypes.BuilderBlockValidationRequest{
-			//Todo  Pass correct structure
-			// BuilderSubmitBlockRequest: sbr,
-		})
-		if err != nil {
+
+	rpccall := &rpctypes.BuilderBlockValidationRequest{
+		SubmitBlockRequest: sbr,
+	}
+
+	switch rs.beaconState.ForkVersion(structs.Slot(sbr.Slot())) {
+	case structs.ForkBellatrix:
+		if err = rs.bvc.ValidateBlock(ctx, rpccall); err != nil {
 			return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 		}
-	*/
+		return
+	case structs.ForkCapella:
+		if err = rs.bvc.ValidateBlockV2(ctx, rpccall); err != nil {
+			return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
+		}
+		return
+	}
+
 	return nil
 }
 

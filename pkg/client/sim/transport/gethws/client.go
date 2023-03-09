@@ -37,6 +37,13 @@ func (c *Client) Kind() string {
 }
 
 func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+	return c.validateBlock(ctx, "validateBuilderSubmissionV1", block)
+}
+func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+	return c.validateBlock(ctx, "validateBuilderSubmissionV2", block)
+}
+
+func (c *Client) validateBlock(ctx context.Context, method string, block *types.BuilderBlockValidationRequest) (err error) {
 	conn, err := c.nodeConn.Get()
 	if err != nil {
 		return client.ErrNotFound
@@ -47,7 +54,7 @@ func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockVal
 		return err
 	}
 
-	resp, err := conn.RequestRPC(ctx, c.namespace+"_validateBuilderSubmissionV1", params)
+	resp, err := conn.RequestRPC(ctx, c.namespace+"_"+method, params)
 	if err != nil {
 		return client.ErrConnectionFailure //err
 	}

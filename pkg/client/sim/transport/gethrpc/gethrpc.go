@@ -34,8 +34,15 @@ func (c *Client) Dial(ctx context.Context) (err error) {
 }
 
 func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+	return c.validateBlock(ctx, "validateBuilderSubmissionV1", block)
+}
+func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+	return c.validateBlock(ctx, "validateBuilderSubmissionV2", block)
+}
+
+func (c *Client) validateBlock(ctx context.Context, method string, block *types.BuilderBlockValidationRequest) (err error) {
 	var intI error
-	if err := c.C.CallContext(ctx, &intI, c.namespace+"_validateBuilderSubmissionV1", block); err != nil {
+	if err := c.C.CallContext(ctx, &intI, c.namespace+"_"+method, block); err != nil {
 		return err
 	}
 	return intI
