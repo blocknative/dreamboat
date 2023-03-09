@@ -3,6 +3,7 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -348,13 +349,16 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
 		if rs.config.PublishBlock {
 			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
+
+			a, _ := json.Marshal(beaconBlock)
+			logger.With(log.F{"block": beaconBlock, "marshaled": string(a)}).WithError(err).Warn("publish")
 			if err != nil {
 				logger.WithError(err).Warn("fail to create block for publication")
 			} else {
 				if err = rs.beacon.PublishBlock(beaconBlock); err != nil {
 					logger.With(log.F{
 						"slot":         slot,
-						"block_number": payloadRequest.BlockNumber,
+						"block_number": payloadRequest.BlockNumber(),
 					}).WithError(err).Warn("fail to publish block to beacon node")
 				} else {
 					logger.Info("published block to beacon node")
