@@ -232,6 +232,20 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, ErrInternal
 		}
 
+		a := &bellatrix.GetHeaderResponse{
+			BellatrixVersion: types.VersionString("bellatrix"),
+			BellatrixData: &bellatrix.SignedBuilderBid{
+				BellatrixMessage:   bid,
+				BellatrixSignature: signature},
+		}
+
+		logger.With(log.F{
+			"maxProfit": maxProfitBlock,
+			"content":   a,
+			"blockHash": bid.BellatrixHeader.BlockHash.String(),
+			"slot":      slot,
+		}).Debug("bid contents")
+
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
 			"bidValue":         bid.Value(),
@@ -240,12 +254,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			"slot":             slot,
 		}).Info("bid sent")
 
-		return &bellatrix.GetHeaderResponse{
-			BellatrixVersion: types.VersionString("bellatrix"),
-			BellatrixData: &bellatrix.SignedBuilderBid{
-				BellatrixMessage:   bid,
-				BellatrixSignature: signature},
-		}, nil
+		return a, nil
 	} else if fork == structs.ForkCapella {
 		h, ok := header.Header.(*capella.ExecutionPayloadHeader)
 		if !ok {
