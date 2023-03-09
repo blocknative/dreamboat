@@ -254,7 +254,7 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // ForkVersion mocks base method.
-func (m *MockState) ForkVersion(arg0 uint64) structs.ForkVersion {
+func (m *MockState) ForkVersion(arg0 structs.Slot) structs.ForkVersion {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ForkVersion", arg0)
 	ret0, _ := ret[0].(structs.ForkVersion)

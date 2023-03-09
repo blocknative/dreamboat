@@ -180,14 +180,6 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 
 	tPutPayload := time.Now()
 
-	// key := sbr.ToPayloadKey()
-	// ma, _ := json.Marshal(complete.Payload)
-	// rs.l.With(log.F{
-	// 	"submissionkey":    fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot),
-	// 	"content":          complete.Payload,
-	// 	"contentMarshaled": string(ma),
-	// }).Debug("store key")
-
 	if err := rs.d.PutPayload(ctx, sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
@@ -216,7 +208,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	return newMax, nil
 }
 
-func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error) { // TODO(l): remove FB type
+func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error) {
 	if sbr == nil || sbr.Slot() == 0 {
 		return false, ErrEmptyBlock
 	}
