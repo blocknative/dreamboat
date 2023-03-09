@@ -17,10 +17,6 @@ type SubmitBlockRequest interface {
 	Timestamp() uint64
 	Random() types.Hash
 
-	//ToSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*types.SignedBuilderBid, error)
-	// do we need that ?
-	//ToBlockBidAndTrace(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (bbt BlockBidAndTrace, err error)
-
 	ComputeSigningRoot(d types.Domain) ([32]byte, error)
 
 	ToPayloadKey() PayloadKey
@@ -50,9 +46,14 @@ type Withdrawal interface {
 	HashTreeRoot() ([32]byte, error)
 }
 
+/*
 type GetPayloadResponse struct {
 	Version types.VersionString `json:"version"`
 	Data    ExecutionPayload    `json:"data"`
+}*/
+
+type GetPayloadResponse interface {
+	Data() ExecutionPayload
 }
 
 type SignedBlindedBeaconBlock interface {

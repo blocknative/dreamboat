@@ -197,12 +197,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	m.AppendSince(tGet, "getHeader", "get")
 
-	key := structs.PayloadKey{
-		BlockHash: maxProfitBlock.Payload.Payload.Data.BlockHash(),
-		Slot:      structs.Slot(maxProfitBlock.Payload.Trace.Message.Slot),
-		Proposer:  maxProfitBlock.Payload.Trace.Message.ProposerPubkey}
-
-	if err := rs.d.CacheBlock(ctx, key, maxProfitBlock); err != nil {
+	if err := rs.d.CacheBlock(ctx, structs.PayloadKey{
+		BlockHash: maxProfitBlock.Header.Trace.BlockHash,
+		Slot:      structs.Slot(maxProfitBlock.Header.Trace.Slot),
+		Proposer:  maxProfitBlock.Header.Trace.ProposerPubkey}, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
@@ -286,7 +284,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (*structs.GetPayloadResponse, error) { // TODO(l): remove FB type
+func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) { // TODO(l): remove FB type
 
 	//vType := "bellatrix" // To be changed
 
@@ -349,39 +347,17 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
-	trace := structs.DeliveredTrace{
-		Trace: structs.BidTraceWithTimestamp{
-			BidTraceExtended: structs.BidTraceExtended{
-				BidTrace: types.BidTrace{
-					Slot:                 payloadRequest.Slot(),
-					ParentHash:           payload.Payload.Data.ParentHash(),
-					BlockHash:            payload.Payload.Data.BlockHash(),
-					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: payload.Trace.Message.ProposerFeeRecipient,
-					GasLimit:             payload.Payload.Data.GasLimit(),
-					GasUsed:              payload.Payload.Data.GasUsed(),
-					Value:                payload.Trace.Message.Value,
-				},
-				BlockNumber: payload.Payload.Data.BlockNumber(),
-				NumTx:       uint64(len(payload.Payload.Data.Transactions())),
-			},
-			Timestamp: payload.Payload.Data.Timestamp(),
-		},
-		BlockNumber: payload.Payload.Data.BlockNumber(),
-	}
-
 	// defer put delivered datastore write
-	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock, trace structs.DeliveredTrace) {
+	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
 		if rs.config.PublishBlock {
-			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.Payload.Data)
+			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 			if err != nil {
 				logger.WithError(err).Warn("fail to create block for publication")
 			} else {
 				if err = rs.beacon.PublishBlock(beaconBlock); err != nil {
 					logger.With(log.F{
 						"slot":         slot,
-						"block_number": trace.BlockNumber,
+						"block_number": payloadRequest.BlockNumber,
 					}).WithError(err).Warn("fail to publish block to beacon node")
 				} else {
 					logger.Info("published block to beacon node")
@@ -389,25 +365,39 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			}
 		}
 
+		trace := payload.ToDeliveredTrace(payloadRequest.Slot())
 		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
-	}(rs, structs.Slot(payloadRequest.Slot()), payloadRequest, trace)
+	}(rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
 
+	exp := payload.ExecutionPayload()
 	logger.With(log.F{
 		"slot":             payloadRequest.Slot(),
-		"blockHash":        payload.Payload.Data.BlockHash(),
-		"blockNumber":      payload.Payload.Data.BlockNumber(),
-		"stateRoot":        payload.Payload.Data.StateRoot(),
-		"feeRecipient":     payload.Payload.Data.FeeRecipient(),
-		"bid":              payload.Bid.Data().Value(),
+		"blockHash":        exp.BlockHash(),
+		"blockNumber":      exp.BlockNumber(),
+		"stateRoot":        exp.StateRoot(),
+		"feeRecipient":     exp.FeeRecipient(),
+		"bid":              payload.BidValue(),
 		"from_cache":       fromCache,
-		"numTx":            len(payload.Payload.Data.Transactions()),
+		"numTx":            len(exp.Transactions()),
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	}).Info("payload sent")
 
-	return &structs.GetPayloadResponse{
-		Version: types.VersionString(vType),
-		Data:    payload.Payload.Data,
-	}, nil
+	switch forkv {
+	case structs.ForkBellatrix:
+		bep := exp.(*bellatrix.ExecutionPayload)
+		return &bellatrix.GetPayloadResponse{
+			BellatrixVersion: types.VersionString("bellatrix"),
+			BellatrixData:    *bep,
+		}, nil
+	case structs.ForkCapella:
+		bep := exp.(*bellatrix.ExecutionPayload)
+		return &bellatrix.GetPayloadResponse{
+			BellatrixVersion: types.VersionString("capella"),
+			BellatrixData:    *bep,
+		}, nil
+	}
+	return nil, errors.New("unknown fork")
+
 }

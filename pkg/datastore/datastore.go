@@ -33,14 +33,14 @@ type Badger interface {
 type Datastore struct {
 	TTLStorage
 	Badger
-	PayloadCache *lru.Cache[structs.PayloadKey, *structs.BlockBidAndTrace]
+	PayloadCache *lru.Cache[structs.PayloadKey, structs.BlockBidAndTrace]
 
 	hc *HeaderController
 	l  sync.Mutex
 }
 
 func NewDatastore(t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize int) (*Datastore, error) {
-	cache, err := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](payloadCacheSize)
+	cache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](payloadCacheSize)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func NewDatastore(t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize
 }
 
 func (s *Datastore) CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error {
-	s.PayloadCache.Add(key, &block.Payload)
+	s.PayloadCache.Add(key, block.Payload)
 	return nil
 }
 
@@ -159,16 +159,16 @@ func (s *Datastore) GetPayload(ctx context.Context, fork structs.ForkVersion, ke
 	}
 
 	if fork == structs.ForkBellatrix {
-		payload = bellatrix.BlockBidAndTrace{}
+		payload = &bellatrix.BlockBidAndTrace{}
 		err = json.Unmarshal(data, &payload)
 	} else if fork == structs.ForkCapella {
-		payload = capella.BlockBidAndTrace{}
+		payload = &capella.BlockBidAndTrace{}
 		err = json.Unmarshal(data, &payload)
 	} else {
 		return payload, false, errors.New("unknown fork")
 	}
 
-	return &payload, false, err
+	return payload, false, err
 }
 
 func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.PayloadQuery) (ds.Key, error) {
