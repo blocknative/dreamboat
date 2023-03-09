@@ -159,6 +159,21 @@ func (mr *MockBeaconClientMockRecorder) GetProposerDuties(arg0 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDuties", reflect.TypeOf((*MockBeaconClient)(nil).GetProposerDuties), arg0)
 }
 
+// GetWithdrawals mocks base method.
+func (m *MockBeaconClient) GetWithdrawals(arg0 structs.Slot) (*client.GetWithdrawalsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWithdrawals", arg0)
+	ret0, _ := ret[0].(*client.GetWithdrawalsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWithdrawals indicates an expected call of GetWithdrawals.
+func (mr *MockBeaconClientMockRecorder) GetWithdrawals(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWithdrawals", reflect.TypeOf((*MockBeaconClient)(nil).GetWithdrawals), arg0)
+}
+
 // KnownValidators mocks base method.
 func (m *MockBeaconClient) KnownValidators(arg0 structs.Slot) (client.AllValidatorsResponse, error) {
 	m.ctrl.T.Helper()
@@ -393,4 +408,30 @@ func (m *MockState) SetRandao(arg0 string) {
 func (mr *MockStateMockRecorder) SetRandao(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRandao", reflect.TypeOf((*MockState)(nil).SetRandao), arg0)
+}
+
+// SetWithdrawals mocks base method.
+func (m *MockState) SetWithdrawals(arg0 structs.WithdrawalsState) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetWithdrawals", arg0)
+}
+
+// SetWithdrawals indicates an expected call of SetWithdrawals.
+func (mr *MockStateMockRecorder) SetWithdrawals(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWithdrawals", reflect.TypeOf((*MockState)(nil).SetWithdrawals), arg0)
+}
+
+// Withdrawals mocks base method.
+func (m *MockState) Withdrawals() structs.WithdrawalsState {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Withdrawals")
+	ret0, _ := ret[0].(structs.WithdrawalsState)
+	return ret0
+}
+
+// Withdrawals indicates an expected call of Withdrawals.
+func (mr *MockStateMockRecorder) Withdrawals() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals))
 }

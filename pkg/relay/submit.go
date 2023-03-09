@@ -15,8 +15,10 @@ import (
 )
 
 var (
-	ErrWrongFeeRecipient = errors.New("wrong fee recipient")
-	ErrInvalidRandao     = errors.New("randao is invalid")
+	ErrWrongFeeRecipient     = errors.New("wrong fee recipient")
+	ErrInvalidWithdrawalSlot = errors.New("invalid withdrawal slot")
+	ErrInvalidWithdrawalRoot = errors.New("invalid withdrawal root")
+	ErrInvalidRandao         = errors.New("randao is invalid")
 )
 
 // SubmitBlock Accepts block from trusted builder and stores
@@ -228,5 +230,35 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 		return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
 	}
 
+	if err := verifyWithdrawals(beaconState, sbr); err != nil {
+		return false, fmt.Errorf("failed to verify withdrawals: %w", err)
+	}
+
 	return true, nil
+}
+
+func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) error {
+	if withdrawals := submitBlockRequest.Withdrawals(); withdrawals != nil {
+		// get latest withdrawals and verify the roots match
+		withdrawalState := state.Withdrawals()
+		withdrawalsRoot, err := withdrawals.HashTreeRoot()
+		if err != nil {
+			return fmt.Errorf("failed to compute withdrawals root: %w", err)
+		}
+		if withdrawalState.Slot != structs.Slot(submitBlockRequest.Slot()) { // we still don't have the withdrawals yet
+			return fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
+		} else if withdrawalState.Root != withdrawalsRoot {
+			return fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
+		}
+	}
+
+	return nil
+}
+
+func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
+	return structs.PayloadKey{
+		BlockHash: submission.ExecutionPayload.BlockHash,
+		Proposer:  submission.Message.ProposerPubkey,
+		Slot:      structs.Slot(submission.Message.Slot),
+	}
 }

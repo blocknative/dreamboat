@@ -136,6 +136,19 @@ func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
 	return resp.Data, err
 }
 
+// GetWithdrawals - /eth/v1/beacon/states/<slot>/withdrawals
+func (b *beaconClient) GetWithdrawals(slot structs.Slot) (*GetWithdrawalsResponse, error) {
+	resp := new(GetWithdrawalsResponse)
+	u := *b.beaconEndpoint
+	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/withdrawals", "GET"))
+	defer t.ObserveDuration()
+
+	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/withdrawals", slot)
+	err := b.queryBeacon(&u, "GET", &resp)
+	return resp, err
+}
+
 func (b *beaconClient) Randao(slot structs.Slot) (string, error) {
 	resp := new(GetRandaoResponse)
 	u := *b.beaconEndpoint
@@ -306,6 +319,12 @@ type ValidatorResponseValidatorData struct {
 
 type GenesisResponse struct {
 	Data structs.GenesisInfo
+}
+
+type GetWithdrawalsResponse struct {
+	Data struct {
+		Withdrawals structs.Withdrawals `json:"withdrawals"`
+	}
 }
 
 // GetRandaoResponse is the response for querying randao from beacon
