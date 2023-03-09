@@ -17,11 +17,12 @@ import (
 )
 
 const (
-	url = "http://localhost:18550" + api.PathSubmitBlock
+	//url = "http://localhost:18550" + api.PathSubmitBlock
+	url = "http://relay-block-devnet-ue1-stage-0:18550" + api.PathSubmitBlock
 )
 
 var (
-	slot uint64        = 0
+	slot uint64        = 10616
 	bid  types.U256Str = types.IntToU256(0)
 )
 
