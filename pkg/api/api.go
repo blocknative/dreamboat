@@ -75,7 +75,7 @@ type RateLimitter interface {
 }
 
 type State interface {
-	GetFork(epoch uint64) structs.ForkVersion
+	ForkVersion(epoch uint64) structs.ForkVersion
 	HeadSlot() structs.Slot
 }
 
@@ -213,7 +213,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	defer timer.ObserveDuration()
 
 	var req structs.SignedBlindedBeaconBlock
-	fork := a.st.GetFork(uint64(a.st.HeadSlot().Epoch()))
+	fork := a.st.ForkVersion(uint64(a.st.HeadSlot().Epoch()))
 	switch fork {
 	case structs.ForkCapella:
 		var creq capella.SignedBlindedBeaconBlock
@@ -271,7 +271,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 	var req structs.SubmitBlockRequest
-	fork := a.st.GetFork(uint64(a.st.HeadSlot().Epoch()))
+	fork := a.st.ForkVersion(uint64(a.st.HeadSlot().Epoch()))
 	switch fork {
 	case structs.ForkCapella:
 		var creq capella.SubmitBlockRequest

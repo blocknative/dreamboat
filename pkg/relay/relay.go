@@ -59,7 +59,7 @@ type State interface {
 	HeadSlot() structs.Slot
 	Genesis() structs.GenesisInfo
 	Randao() string
-	GetFork(epoch uint64) structs.ForkVersion
+	ForkVersion(epoch uint64) structs.ForkVersion
 }
 
 type Verifier interface {
@@ -223,7 +223,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, ErrNoBuilderBid
 	}
 
-	fork := rs.beaconState.GetFork(uint64(slot.Epoch()))
+	fork := rs.beaconState.ForkVersion(uint64(slot.Epoch()))
 	if fork == structs.ForkBellatrix {
 		h, ok := header.Header.(*bellatrix.ExecutionPayloadHeader)
 		if !ok {
@@ -321,7 +321,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	logger.Info("payload requested")
 
 	var vType string
-	forkv := rs.beaconState.GetFork(uint64(structs.Slot(payloadRequest.Slot()).Epoch()))
+	forkv := rs.beaconState.ForkVersion(uint64(structs.Slot(payloadRequest.Slot()).Epoch()))
 
 	switch forkv {
 	case structs.ForkBellatrix:

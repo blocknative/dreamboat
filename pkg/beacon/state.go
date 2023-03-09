@@ -86,8 +86,8 @@ func (as *AtomicState) SetRandao(randao string) {
 	as.randao.Store(randao)
 }
 
-func (as *AtomicState) GetFork(epoch uint64) structs.ForkVersion {
-	return as.Fork().GetFork(epoch)
+func (as *AtomicState) ForkVersion(epoch uint64) structs.ForkVersion {
+	return as.Fork().Version(epoch)
 }
 
 func (as *AtomicState) Fork() structs.ForkState {
