@@ -17,6 +17,8 @@ import (
 
 	"github.com/blocknative/dreamboat/pkg/relay"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/capella"
 	"github.com/blocknative/dreamboat/pkg/validators"
 )
 
@@ -48,11 +50,11 @@ var (
 
 type Relay interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (*types.GetHeaderResponse, error)
-	GetPayload(context.Context, *structs.MetricGroup, *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error)
+	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (structs.GetHeaderResponse, error)
+	GetPayload(context.Context, *structs.MetricGroup, structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	SubmitBlock(context.Context, *structs.MetricGroup, *types.BuilderSubmitBlockRequest) error
+	SubmitBlock(context.Context, *structs.MetricGroup, structs.SubmitBlockRequest) error
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
@@ -72,18 +74,30 @@ type RateLimitter interface {
 	Allow(ctx context.Context, pubkey [48]byte) error
 }
 
+type State interface {
+	ForkVersion(epoch uint64) structs.ForkVersion
+	HeadSlot() structs.Slot
+}
+
 type API struct {
 	l   log.Logger
 	r   Relay
 	reg Registrations
+	st  State
 
 	lim RateLimitter
 
-	m APIMetrics
+	m *APIMetrics
 }
 
-func NewApi(l log.Logger, r Relay, reg Registrations, lim RateLimitter) (a *API) {
-	a = &API{l: l, r: r, reg: reg, lim: lim}
+func NewApi(l log.Logger, r Relay, reg Registrations, st State, lim RateLimitter) (a *API) {
+	a = &API{
+		l:   l,
+		r:   r,
+		reg: reg,
+		st:  st,
+		lim: lim,
+		m:   &APIMetrics{}}
 	a.initMetrics()
 	return a
 }
@@ -198,15 +212,32 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
 	defer timer.ObserveDuration()
 
-	var req types.SignedBlindedBeaconBlock
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
-		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+	var req structs.SignedBlindedBeaconBlock
+	fork := a.st.ForkVersion(uint64(a.st.HeadSlot().Epoch()))
+	switch fork {
+	case structs.ForkCapella:
+		var creq capella.SignedBlindedBeaconBlock
+		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request cappella decode"))
+			return
+		}
+		req = &creq
+	case structs.ForkBellatrix:
+		var breq bellatrix.SignedBlindedBeaconBlock
+		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request bellatrix decode"))
+			return
+		}
+		req = &breq
+	default:
+		writeError(w, http.StatusInternalServerError, errors.New("not supported fork version"))
 		return
 	}
-
+	// TODO(l): validate  structures
 	m := structs.NewMetricGroup(4)
-	payload, err := a.r.GetPayload(r.Context(), m, &req)
+	payload, err := a.r.GetPayload(r.Context(), m, req)
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "get payload unknown"))
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
@@ -214,8 +245,8 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			"code":      400,
 			"endpoint":  "getPayload",
 			"payload":   req,
-			"slot":      req.Message.Slot,
-			"blockHash": req.Message.Body.Eth1Data.BlockHash,
+			"slot":      req.Slot(),
+			"blockHash": req.BlockHash(),
 		}).WithError(err).Debug("failed getPayload")
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -239,31 +270,48 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
+	var req structs.SubmitBlockRequest
+	fork := a.st.ForkVersion(uint64(a.st.HeadSlot().Epoch()))
+	switch fork {
+	case structs.ForkCapella:
+		var creq capella.SubmitBlockRequest
+		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode"))
+			return
+		}
+		req = &creq
+	case structs.ForkBellatrix:
+		var breq bellatrix.SubmitBlockRequest
+		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request bellatrix decode"))
+			return
+		}
+		req = &breq
+	default:
+		writeError(w, http.StatusInternalServerError, errors.New("not supported fork version"))
+		return
 
-	var req types.BuilderSubmitBlockRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	}
+	if req.Slot() == 0 {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+		writeError(w, http.StatusBadRequest, errors.New("invalid payload (slot)"))
 		return
 	}
 
-	if req.Message == nil {
-		writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
-		return
-	}
+	// TODO(l): VALIDATE!!!
 
-	if err := a.lim.Allow(r.Context(), req.Message.BuilderPubkey); err != nil {
+	if err := a.lim.Allow(r.Context(), req.BuilderPubkey()); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "429", "rate limitted").Inc()
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
 
-	if req.ExecutionPayload != nil && req.ExecutionPayload.Transactions != nil {
-		a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(len(req.ExecutionPayload.Transactions)))
-	}
+	a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(req.NumTx()))
 
 	m := structs.NewMetricGroup(4)
-	if err := a.r.SubmitBlock(r.Context(), m, &req); err != nil {
+	if err := a.r.SubmitBlock(r.Context(), m, req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))
 		if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
@@ -273,11 +321,11 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 				"code":      400,
 				"endpoint":  "submitBlock",
 				"payload":   req,
-				"slot":      req.Message.Slot,
-				"blockHash": req.ExecutionPayload.BlockHash,
-				"bidValue":  req.Message.Value,
-				"proposer":  req.Message.ProposerPubkey,
-				"builder":   req.Message.BuilderPubkey,
+				"slot":      req.Slot(),
+				"blockHash": req.BlockHash(),
+				"bidValue":  req.Value(),
+				"proposer":  req.ProposerPubkey(),
+				"builder":   req.BuilderPubkey(),
 			}).WithError(err).Debug("failed block submission")
 		}
 		writeError(w, http.StatusBadRequest, err)
@@ -600,6 +648,8 @@ func unwrapError(err error, defaultMsg string) error {
 		return relay.ErrInvalidSlot
 	} else if errors.Is(err, relay.ErrEmptyBlock) {
 		return relay.ErrEmptyBlock
+	} else if errors.Is(err, relay.ErrInvalidRandao) {
+		return relay.ErrInvalidRandao
 	} else if errors.Is(err, validators.ErrInvalidSignature) {
 		return validators.ErrInvalidSignature
 	} else if errors.Is(err, validators.ErrUnknownValidator) {

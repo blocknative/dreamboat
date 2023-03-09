@@ -388,7 +388,10 @@ func run() cli.ActionFunc {
 
 		validatorRelay := validators.NewRegister(logger, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
-		b := beacon.NewManager(logger)
+		b := beacon.NewManager(logger, beacon.Config{
+			BellatrixForkVersion: cfg.BellatrixForkVersion,
+			CapellaForkVersion:   cfg.CapellaForkVersion,
+		})
 
 		auctioneer := auction.NewAuctioneer()
 
@@ -420,7 +423,7 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		capellaBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot)
+		capellaBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, cfg.CapellaForkVersion, cfg.GenesisValidatorsRoot)
 		if err != nil {
 			return err
 		}
@@ -437,7 +440,7 @@ func run() cli.ActionFunc {
 		}, beaconCli, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
-		a := api.NewApi(logger, r, validatorRelay, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
+		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",

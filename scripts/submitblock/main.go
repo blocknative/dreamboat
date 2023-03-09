@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	slot uint64        = 0
+	slot uint64        = 10616
 	bid  types.U256Str = types.IntToU256(0)
 )
 

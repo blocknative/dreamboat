@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -15,10 +14,8 @@ type AtomicState struct {
 	genesis              atomic.Value
 	headSlot             atomic.Value
 	withdrawals          atomic.Value
-
-	// is the state initialized?
-	once  sync.Once
-	ready chan struct{}
+	randao               atomic.Value
+	fork                 atomic.Value
 }
 
 func (as *AtomicState) Genesis() structs.GenesisInfo {
@@ -95,12 +92,30 @@ func (as *AtomicState) Ready() <-chan struct{} {
 		as.ready = make(chan struct{})
 	})
 	return as.ready
+func (as *AtomicState) Randao() string {
+	if val := as.randao.Load(); val != nil {
+		return val.(string)
+	}
+
+	return ""
 }
 
-func (as *AtomicState) SetReady() {
-	select {
-	case <-as.Ready():
-	default:
-		close(as.ready)
+func (as *AtomicState) SetRandao(randao string) {
+	as.randao.Store(randao)
+}
+
+func (as *AtomicState) ForkVersion(epoch uint64) structs.ForkVersion {
+	return as.Fork().Version(epoch)
+}
+
+func (as *AtomicState) Fork() structs.ForkState {
+	if val := as.fork.Load(); val != nil {
+		return val.(structs.ForkState)
 	}
+
+	return structs.ForkState{}
+}
+
+func (as *AtomicState) SetFork(fork structs.ForkState) {
+	as.fork.Store(fork)
 }

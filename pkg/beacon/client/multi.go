@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 	uberatomic "go.uber.org/atomic"
 )
@@ -24,7 +23,9 @@ type BeaconNode interface {
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
-	PublishBlock(block *types.SignedBeaconBlock) error
+	GetForkSchedule() (*GetForkScheduleResponse, error)
+	PublishBlock(block structs.SignedBeaconBlock) error
+	Randao(structs.Slot) (string, error)
 	Endpoint() string
 	GetWithdrawals(structs.Slot) (*GetWithdrawalsResponse, error)
 }
@@ -134,7 +135,6 @@ func (b *MultiBeaconClient) KnownValidators(headSlot structs.Slot) (AllValidator
 			log.WithError(err).Error("failed to fetch validators")
 			continue
 		}
-
 		b.bestBeaconIndex.Store(int64(i))
 
 		// Received successful response. Set this index as last successful beacon node
@@ -181,6 +181,34 @@ func (b *MultiBeaconClient) GetWithdrawals(slot structs.Slot) (withdrawalsResp *
 	return nil, err
 }
 
+func (b *MultiBeaconClient) Randao(slot structs.Slot) (randao string, err error) {
+	for _, client := range b.clientsByLastResponse() {
+		if randao, err = client.Randao(slot); err != nil {
+			b.Log.WithError(err).WithField("slot", slot).WithField("endpoint", client.Endpoint()).Warn("failed to get randao")
+			continue
+		}
+
+		return
+	}
+
+	return
+}
+
+func (b *MultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
+	for _, client := range b.clientsByLastResponse() {
+		if spec, err = client.GetForkSchedule(); err != nil {
+			b.Log.WithError(err).
+				WithField("endpoint", client.Endpoint()).
+				Warn("failed to get fork")
+			continue
+		}
+
+		return spec, nil
+	}
+
+	return spec, err
+}
+
 func (b *MultiBeaconClient) Endpoint() string {
 	if clients := b.clientsByLastResponse(); len(clients) > 0 {
 		return clients[0].Endpoint()
@@ -203,7 +231,7 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconNode {
 	return instances
 }
 
-func (b *MultiBeaconClient) PublishBlock(block *types.SignedBeaconBlock) (err error) {
+func (b *MultiBeaconClient) PublishBlock(block structs.SignedBeaconBlock) (err error) {
 	for _, client := range b.clientsByLastResponse() {
 		if err = client.PublishBlock(block); err != nil {
 			b.Log.WithError(err).

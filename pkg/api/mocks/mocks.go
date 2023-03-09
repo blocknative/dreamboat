@@ -52,10 +52,10 @@ func (mr *MockRelayMockRecorder) GetBlockReceived(arg0, arg1 interface{}) *gomoc
 }
 
 // GetHeader mocks base method.
-func (m *MockRelay) GetHeader(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.HeaderRequest) (*types.GetHeaderResponse, error) {
+func (m *MockRelay) GetHeader(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*types.GetHeaderResponse)
+	ret0, _ := ret[0].(structs.GetHeaderResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -67,10 +67,10 @@ func (mr *MockRelayMockRecorder) GetHeader(arg0, arg1, arg2 interface{}) *gomock
 }
 
 // GetPayload mocks base method.
-func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *structs.MetricGroup, arg2 *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) {
+func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*types.GetPayloadResponse)
+	ret0, _ := ret[0].(structs.GetPayloadResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -97,7 +97,7 @@ func (mr *MockRelayMockRecorder) GetPayloadDelivered(arg0, arg1 interface{}) *go
 }
 
 // SubmitBlock mocks base method.
-func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *structs.MetricGroup, arg2 *types.BuilderSubmitBlockRequest) error {
+func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.SubmitBlockRequest) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)

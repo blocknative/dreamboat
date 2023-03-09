@@ -3,11 +3,14 @@ package datastore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/capella"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -30,14 +33,14 @@ type Badger interface {
 type Datastore struct {
 	TTLStorage
 	Badger
-	PayloadCache *lru.Cache[structs.PayloadKey, *structs.BlockBidAndTrace]
+	PayloadCache *lru.Cache[structs.PayloadKey, structs.BlockBidAndTrace]
 
 	hc *HeaderController
 	l  sync.Mutex
 }
 
 func NewDatastore(t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize int) (*Datastore, error) {
-	cache, err := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](payloadCacheSize)
+	cache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](payloadCacheSize)
 	if err != nil {
 		return nil, err
 	}
@@ -50,9 +53,8 @@ func NewDatastore(t TTLStorage, v Badger, hc *HeaderController, payloadCacheSize
 	}, nil
 }
 
-func (s *Datastore) CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error {
-	key := structs.PayloadKey{BlockHash: block.Payload.Payload.Data.BlockHash, Slot: structs.Slot(block.Payload.Trace.Message.Slot), Proposer: block.Payload.Trace.Message.ProposerPubkey}
-	s.PayloadCache.Add(key, &block.Payload)
+func (s *Datastore) CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error {
+	s.PayloadCache.Add(key, block.Payload)
 	return nil
 }
 
@@ -137,7 +139,7 @@ func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []structs.Pay
 	return traceBatch, err
 }
 
-func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload *structs.BlockBidAndTrace, ttl time.Duration) error {
+func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload structs.BlockBidAndTrace, ttl time.Duration) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -145,7 +147,7 @@ func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payl
 	return s.TTLStorage.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
 }
 
-func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error) {
+func (s *Datastore) GetPayload(ctx context.Context, fork structs.ForkVersion, key structs.PayloadKey) (payload structs.BlockBidAndTrace, cache bool, err error) {
 	memPayload, ok := s.PayloadCache.Get(key)
 	if ok {
 		return memPayload, true, nil
@@ -155,9 +157,18 @@ func (s *Datastore) GetPayload(ctx context.Context, key structs.PayloadKey) (*st
 	if err != nil {
 		return nil, false, err
 	}
-	var payload structs.BlockBidAndTrace
-	err = json.Unmarshal(data, &payload)
-	return &payload, false, err
+
+	if fork == structs.ForkBellatrix {
+		payload = &bellatrix.BlockBidAndTrace{}
+		err = json.Unmarshal(data, &payload)
+	} else if fork == structs.ForkCapella {
+		payload = &capella.BlockBidAndTrace{}
+		err = json.Unmarshal(data, &payload)
+	} else {
+		return payload, false, errors.New("unknown fork")
+	}
+
+	return payload, false, err
 }
 
 func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.PayloadQuery) (ds.Key, error) {

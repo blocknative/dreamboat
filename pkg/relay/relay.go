@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/pkg/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient,Auctioneer,Verifier,Beacon
 package relay
 
 import (
@@ -14,6 +14,8 @@ import (
 
 	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/capella"
 	"github.com/blocknative/dreamboat/pkg/verify"
 )
 
@@ -56,6 +58,8 @@ type State interface {
 	HeadSlot() structs.Slot
 	Genesis() structs.GenesisInfo
 	Withdrawals() structs.WithdrawalsState
+	Randao() string
+	ForkVersion(epoch uint64) structs.ForkVersion
 }
 
 type Verifier interface {
@@ -67,11 +71,11 @@ type Datastore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
 
-	PutPayload(context.Context, structs.PayloadKey, *structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.PayloadKey) (*structs.BlockBidAndTrace, bool, error)
+	PutPayload(context.Context, structs.PayloadKey, structs.BlockBidAndTrace, time.Duration) error
+	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockBidAndTrace, bool, error)
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
-	CacheBlock(ctx context.Context, block *structs.CompleteBlockstruct) error
+	CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error
 	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	// to be changed
@@ -88,7 +92,7 @@ type Auctioneer interface {
 }
 
 type Beacon interface {
-	PublishBlock(block *types.SignedBeaconBlock) error
+	PublishBlock(block structs.SignedBeaconBlock) error
 }
 
 type RelayConfig struct {
@@ -149,9 +153,7 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
-func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (*types.GetHeaderResponse, error) {
-
-	vType := "bellatrix" // To be changed
+func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getHeader", "all")
@@ -194,63 +196,105 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	m.AppendSince(tGet, "getHeader", "get")
 
-	if err := rs.d.CacheBlock(ctx, maxProfitBlock); err != nil {
+	if err := rs.d.CacheBlock(ctx, structs.PayloadKey{
+		BlockHash: maxProfitBlock.Header.Trace.BlockHash,
+		Slot:      structs.Slot(maxProfitBlock.Header.Trace.Slot),
+		Proposer:  maxProfitBlock.Header.Trace.ProposerPubkey}, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
 
 	header := maxProfitBlock.Header
 
-	if header.Header == nil || (header.Header.ParentHash != parentHash) {
-		if header.Header.ParentHash != parentHash {
+	if header.Header == nil || (header.Header.GetParentHash() != parentHash) {
+		if header.Header.GetParentHash() != parentHash {
 			logger.WithField("expected", parentHash).WithField("got", parentHash).Debug("invalid parentHash")
 		}
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
 
-	bid := types.BuilderBid{
-		Header: header.Header,
-		Value:  header.Trace.Value,
-		Pubkey: rs.config.PubKey,
+	fork := rs.beaconState.ForkVersion(uint64(slot.Epoch()))
+	if fork == structs.ForkBellatrix {
+		h, ok := header.Header.(*bellatrix.ExecutionPayloadHeader)
+		if !ok {
+			return nil, errors.New("incompatible fork state")
+		}
+		bid := &bellatrix.BuilderBid{
+			BellatrixHeader: h, //header.Header,
+			BellatrixValue:  header.Trace.Value,
+			BellatrixPubkey: rs.config.PubKey,
+		}
+		tSignature := time.Now()
+		signature, err := types.SignMessage(bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
+		m.AppendSince(tSignature, "getHeader", "signature")
+		if err != nil {
+			return nil, ErrInternal
+		}
+
+		logger.With(log.F{
+			"processingTimeMs": time.Since(tStart).Milliseconds(),
+			"bidValue":         bid.Value(),
+			"blockHash":        bid.BellatrixHeader.BlockHash.String(),
+			"feeRecipient":     bid.BellatrixHeader.FeeRecipient.String(),
+			"slot":             slot,
+		}).Info("bid sent")
+
+		return &bellatrix.GetHeaderResponse{
+			BellatrixVersion: types.VersionString("bellatrix"),
+			BellatrixData: &bellatrix.SignedBuilderBid{
+				BellatrixMessage:   bid,
+				BellatrixSignature: signature},
+		}, nil
+	} else if fork == structs.ForkCapella {
+		h, ok := header.Header.(*capella.ExecutionPayloadHeader)
+		if !ok {
+			return nil, errors.New("incompatible fork state")
+		}
+		bid := &capella.BuilderBid{
+			CapellaHeader: h, //header.Header,
+			CapellaValue:  header.Trace.Value,
+			CapellaPubkey: rs.config.PubKey,
+		}
+		tSignature := time.Now()
+		signature, err := types.SignMessage(bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
+		m.AppendSince(tSignature, "getHeader", "signature")
+		if err != nil {
+			return nil, ErrInternal
+		}
+
+		logger.With(log.F{
+			"processingTimeMs": time.Since(tStart).Milliseconds(),
+			"bidValue":         bid.Value(),
+			"blockHash":        bid.CapellaHeader.BlockHash.String(),
+			"feeRecipient":     bid.CapellaHeader.FeeRecipient.String(),
+			"slot":             slot,
+		}).Info("bid sent")
+		return &capella.GetHeaderResponse{
+			CapellaVersion: types.VersionString("capella"),
+			CapellaData: &capella.SignedBuilderBid{
+				CapellaMessage:   bid,
+				CapellaSignature: signature},
+		}, nil
+	} else {
+		return nil, errors.New("incompatible fork state")
 	}
 
-	tSignature := time.Now()
-	signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
-	m.AppendSince(tSignature, "getHeader", "signature")
-	if err != nil {
-		return nil, ErrInternal
-	}
-
-	logger.With(log.F{
-		"processingTimeMs": time.Since(tStart).Milliseconds(),
-		"bidValue":         bid.Value.String(),
-		"blockHash":        bid.Header.BlockHash.String(),
-		"feeRecipient":     bid.Header.FeeRecipient.String(),
-		"slot":             slot,
-	}).Info("bid sent")
-
-	return &types.GetHeaderResponse{
-		Version: types.VersionString(vType),
-		Data:    &types.SignedBuilderBid{Message: &bid, Signature: signature},
-	}, nil
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest *types.SignedBlindedBeaconBlock) (*types.GetPayloadResponse, error) { // TODO(l): remove FB type
-
-	vType := "bellatrix" // To be changed
+func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) { // TODO(l): remove FB type
 
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
-	if len(payloadRequest.Signature) != 96 {
+	if len(payloadRequest.Signature()) != 96 {
 		return nil, ErrInvalidSignature
 	}
 
-	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.Message.ProposerIndex]
+	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
 	if !ok {
-		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.Message.ProposerIndex)
+		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.ProposerIndex())
 	}
 
 	tVerify := time.Now()
@@ -261,87 +305,96 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	logger := rs.l.With(log.F{
 		"method":    "GetPayload",
-		"slot":      payloadRequest.Message.Slot,
-		"blockHash": payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
+		"slot":      payloadRequest.Slot(),
+		"blockHash": payloadRequest.BlockHash(),
 		"pubkey":    pk,
 	})
 	logger.Info("payload requested")
 
-	msg, err := types.ComputeSigningRoot(payloadRequest.Message, rs.config.ProposerSigningDomain[vType])
+	var vType string
+	forkv := rs.beaconState.ForkVersion(uint64(structs.Slot(payloadRequest.Slot()).Epoch()))
+
+	switch forkv {
+	case structs.ForkBellatrix:
+		vType = "bellatrix"
+	case structs.ForkCapella:
+		vType = "capella"
+	}
+
+	msg, err := payloadRequest.ComputeSigningRoot(rs.config.ProposerSigningDomain[vType])
 	if err != nil {
 		return nil, ErrInvalidSignature // err
 	}
-	ok, err = verify.VerifySignatureBytes(msg, payloadRequest.Signature[:], pk[:])
+
+	sig := payloadRequest.Signature()
+	ok, err = verify.VerifySignatureBytes(msg, sig[:], pk[:])
 	if err != nil || !ok {
 		return nil, ErrInvalidSignature
 	}
 	m.AppendSince(tVerify, "getPayload", "verify")
 
 	tGet := time.Now()
-	key := structs.PayloadKey{
-		BlockHash: payloadRequest.Message.Body.ExecutionPayloadHeader.BlockHash,
-		Proposer:  pk,
-		Slot:      structs.Slot(payloadRequest.Message.Slot),
-	}
 
-	payload, fromCache, err := rs.d.GetPayload(ctx, key)
+	key := payloadRequest.ToPayloadKey(pk)
+
+	payload, fromCache, err := rs.d.GetPayload(ctx, forkv, key)
 	if err != nil || payload == nil {
+		logger.WithError(err).Warn("error getting payload")
 		return nil, ErrNoPayloadFound
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
-	trace := structs.DeliveredTrace{
-		Trace: structs.BidTraceWithTimestamp{
-			BidTraceExtended: structs.BidTraceExtended{
-				BidTrace: types.BidTrace{
-					Slot:                 payloadRequest.Message.Slot,
-					ParentHash:           payload.Payload.Data.ParentHash,
-					BlockHash:            payload.Payload.Data.BlockHash,
-					BuilderPubkey:        payload.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       payload.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: payload.Trace.Message.ProposerFeeRecipient,
-					GasLimit:             payload.Payload.Data.GasLimit,
-					GasUsed:              payload.Payload.Data.GasUsed,
-					Value:                payload.Trace.Message.Value,
-				},
-				BlockNumber: payload.Payload.Data.BlockNumber,
-				NumTx:       uint64(len(payload.Payload.Data.Transactions)),
-			},
-			Timestamp: payload.Payload.Data.Timestamp,
-		},
-		BlockNumber: payload.Payload.Data.BlockNumber,
-	}
-
 	// defer put delivered datastore write
-	go func(rs *Relay, slot structs.Slot, trace structs.DeliveredTrace) {
+	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
 		if rs.config.PublishBlock {
-			beaconBlock := structs.SignedBlindedBeaconBlockToBeaconBlock(payloadRequest, payload.Payload.Data)
-			if err := rs.beacon.PublishBlock(beaconBlock); err != nil {
-				logger.WithError(err).Warn("fail to publish block to beacon node")
+			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
+			if err != nil {
+				logger.WithError(err).Warn("fail to create block for publication")
 			} else {
-				logger.Info("published block to beacon node")
+				if err = rs.beacon.PublishBlock(beaconBlock); err != nil {
+					logger.With(log.F{
+						"slot":         slot,
+						"block_number": payloadRequest.BlockNumber(),
+					}).WithError(err).Warn("fail to publish block to beacon node")
+				} else {
+					logger.Info("published block to beacon node")
+				}
 			}
 		}
 
+		trace := payload.ToDeliveredTrace(payloadRequest.Slot())
 		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
-	}(rs, structs.Slot(payloadRequest.Message.Slot), trace)
+	}(rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
 
+	exp := payload.ExecutionPayload()
 	logger.With(log.F{
-		"slot":             payloadRequest.Message.Slot,
-		"blockHash":        payload.Payload.Data.BlockHash,
-		"blockNumber":      payload.Payload.Data.BlockNumber,
-		"stateRoot":        payload.Payload.Data.StateRoot,
-		"feeRecipient":     payload.Payload.Data.FeeRecipient,
-		"bid":              payload.Bid.Data.Message.Value,
+		"slot":             payloadRequest.Slot(),
+		"blockHash":        exp.BlockHash(),
+		"blockNumber":      exp.BlockNumber(),
+		"stateRoot":        exp.StateRoot(),
+		"feeRecipient":     exp.FeeRecipient(),
+		"bid":              payload.BidValue(),
 		"from_cache":       fromCache,
-		"numTx":            len(payload.Payload.Data.Transactions),
+		"numTx":            len(exp.Transactions()),
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	}).Info("payload sent")
 
-	return &types.GetPayloadResponse{
-		Version: types.VersionString(vType),
-		Data:    payload.Payload.Data,
-	}, nil
+	switch forkv {
+	case structs.ForkBellatrix:
+		bep := exp.(*bellatrix.ExecutionPayload)
+		return &bellatrix.GetPayloadResponse{
+			BellatrixVersion: types.VersionString("bellatrix"),
+			BellatrixData:    *bep,
+		}, nil
+	case structs.ForkCapella:
+		cep := exp.(*capella.ExecutionPayload)
+		return &capella.GetPayloadResponse{
+			CapellaVersion: types.VersionString("capella"),
+			CapellaData:    *cep,
+		}, nil
+	}
+	return nil, errors.New("unknown fork")
+
 }

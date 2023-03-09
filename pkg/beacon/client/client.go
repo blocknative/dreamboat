@@ -13,7 +13,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/pkg/structs"
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/r3labs/sse/v2"
@@ -152,6 +151,32 @@ func (b *beaconClient) GetWithdrawals(slot structs.Slot) (*GetWithdrawalsRespons
 }
 
 func (b *beaconClient) PublishBlock(block *types.SignedBeaconBlock) error {
+func (b *beaconClient) Randao(slot structs.Slot) (string, error) {
+	resp := new(GetRandaoResponse)
+	u := *b.beaconEndpoint
+	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/randao", slot)
+
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/randao", "GET"))
+	defer t.ObserveDuration()
+
+	err := b.queryBeacon(&u, "GET", &resp)
+	return resp.Data.Randao, err
+}
+
+// GetForkSchedule - https://ethereum.github.io/beacon-APIs/#/Config/getForkSchedule
+func (b *beaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
+	resp := new(GetForkScheduleResponse)
+	u := *b.beaconEndpoint
+
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/config/fork_schedule", "GET"))
+	defer t.ObserveDuration()
+
+	u.Path = "/eth/v1/config/fork_schedule"
+	err = b.queryBeacon(&u, "GET", &resp)
+	return resp, err
+}
+
+func (b *beaconClient) PublishBlock(block structs.SignedBeaconBlock) error {
 	bb, err := json.Marshal(block)
 	if err != nil {
 		return fmt.Errorf("fail to marshal block: %w", err)
@@ -221,7 +246,10 @@ func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
 		return fmt.Errorf("could not read response body for %s: %w", u, err)
 	}
 
-	if resp.StatusCode >= 300 {
+	if resp.StatusCode >= 404 {
+		// BUG(l): do something with unsupported
+		return nil
+	} else if resp.StatusCode >= 300 {
 		ec := &struct {
 			Code    int    `json:"code"`
 			Message string `json:"message"`
@@ -298,5 +326,20 @@ type GenesisResponse struct {
 type GetWithdrawalsResponse struct {
 	Data struct {
 		Withdrawals []*capella.Withdrawal `json:"withdrawals"`
+	}
+}
+
+// GetRandaoResponse is the response for querying randao from beacon
+type GetRandaoResponse struct {
+	Data struct {
+		Randao string `json:"randao"`
+	}
+}
+
+type GetForkScheduleResponse struct {
+	Data []struct {
+		PreviousVersion string `json:"previous_version"`
+		CurrentVersion  string `json:"current_version"`
+		Epoch           uint64 `json:"epoch,string"`
 	}
 }
