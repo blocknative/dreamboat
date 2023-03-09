@@ -336,7 +336,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	tGet := time.Now()
 
 	key := payloadRequest.ToPayloadKey(pk)
-	//rs.l.With(log.F{"submissionkey": fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot)}).Debug("getkey")
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, forkv, key)
 	if err != nil || payload == nil {
@@ -344,6 +343,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, ErrNoPayloadFound
 	}
 	m.AppendSince(tGet, "getPayload", "get")
+
+	rs.l.With(log.F{
+		"submissionkey":  fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot),
+		"payload":        payload,
+		"payloadRequest": payloadRequest,
+	},
+	).Debug("getkey")
 
 	// defer put delivered datastore write
 	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
