@@ -162,7 +162,7 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State, client BeaconC
 			forkState.AltairEpoch = structs.Epoch(fork.Epoch)
 		case m.Config.BellatrixForkVersion:
 			forkState.BellatrixEpoch = structs.Epoch(fork.Epoch)
-		case m.Config.BellatrixForkVersion:
+		case m.Config.CapellaForkVersion:
 			forkState.CapellaEpoch = structs.Epoch(fork.Epoch)
 		}
 	}
