@@ -793,19 +793,6 @@ type BlindedBeaconBlockBody struct {
 	BLSToExecutionChanges  []*SignedBLSToExecutionChange `json:"bls_to_execution_changes" ssz-max:"16"`
 }
 
-// SignedBLSToExecutionChange provides information about a signed BLS to execution change.
-type SignedBLSToExecutionChange struct {
-	Message   *BLSToExecutionChange `json:"message"`
-	Signature types.Signature       `json:"signature" ssz-size:"96"`
-}
-
-// BLSToExecutionChange provides information about a change of withdrawal credentials.
-type BLSToExecutionChange struct {
-	ValidatorIndex     uint64          `json:"validator_index,string"`
-	FromBLSPubkey      types.PublicKey `json:"from_bls_pubkey" ssz-size:"48"`
-	ToExecutionAddress types.Address   `json:"to_execution_address" ssz-size:"20"`
-}
-
 // HashTreeRoot ssz hashes the BlindedBeaconBlockBody object
 func (b *BlindedBeaconBlockBody) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
@@ -916,11 +903,104 @@ func (b *BlindedBeaconBlockBody) HashTreeRootWith(hh ssz.HashWalker) (err error)
 		return
 	}
 
+	// Field (10) 'BLSToExecutionChanges'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.BLSToExecutionChanges))
+		if num > 172 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.BLSToExecutionChanges {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		//hh.MerkleizeWithMixin(subIndx, num, 16)
+		hh.MerkleizeWithMixin(subIndx, num, 172)
+
+	}
+
 	hh.Merkleize(indx)
 	return
 }
 
 // GetTree ssz hashes the BlindedBeaconBlockBody object
 func (b *BlindedBeaconBlockBody) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(b)
+}
+
+// SignedBLSToExecutionChange provides information about a signed BLS to execution change.
+type SignedBLSToExecutionChange struct {
+	Message   *BLSToExecutionChange `json:"message"`
+	Signature types.Signature       `json:"signature" ssz-size:"96"`
+}
+
+// HashTreeRoot ssz hashes the SignedBLSToExecutionChange object
+func (s *SignedBLSToExecutionChange) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(s)
+}
+
+// HashTreeRootWith ssz hashes the SignedBLSToExecutionChange object with a hasher
+func (s *SignedBLSToExecutionChange) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(BLSToExecutionChange)
+	}
+	if err = s.Message.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	hh.PutBytes(s.Signature[:])
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the SignedBLSToExecutionChange object
+func (s *SignedBLSToExecutionChange) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(s)
+}
+
+// BLSToExecutionChange provides information about a change of withdrawal credentials.
+type BLSToExecutionChange struct {
+	ValidatorIndex     uint64          `json:"validator_index,string"`
+	FromBLSPubkey      types.PublicKey `json:"from_bls_pubkey" ssz-size:"48"`
+	ToExecutionAddress types.Address   `json:"to_execution_address" ssz-size:"20"`
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BLSToExecutionChange object
+func (b *BLSToExecutionChange) SizeSSZ() (size int) {
+	size = 76
+	return
+}
+
+// HashTreeRoot ssz hashes the BLSToExecutionChange object
+func (b *BLSToExecutionChange) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BLSToExecutionChange object with a hasher
+func (b *BLSToExecutionChange) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ValidatorIndex'
+	hh.PutUint64(uint64(b.ValidatorIndex))
+
+	// Field (1) 'FromBLSPubkey'
+	hh.PutBytes(b.FromBLSPubkey[:])
+
+	// Field (2) 'ToExecutionAddress'
+	hh.PutBytes(b.ToExecutionAddress[:])
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the BLSToExecutionChange object
+func (b *BLSToExecutionChange) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(b)
 }
