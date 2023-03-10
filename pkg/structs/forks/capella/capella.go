@@ -798,6 +798,7 @@ func (b *BlindedBeaconBlockBody) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
 }
 
+/*
 // HashTreeRootWith ssz hashes the BlindedBeaconBlockBody object with a hasher
 func (b *BlindedBeaconBlockBody) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	indx := hh.Index()
@@ -924,6 +925,132 @@ func (b *BlindedBeaconBlockBody) HashTreeRootWith(hh ssz.HashWalker) (err error)
 	hh.Merkleize(indx)
 	return
 }
+*/
+
+// HashTreeRootWith ssz hashes the BlindedBeaconBlockBody object with a hasher
+func (b *BlindedBeaconBlockBody) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'RANDAOReveal'
+	hh.PutBytes(b.RandaoReveal[:])
+
+	// Field (1) 'Eth1Data'
+	if err = b.Eth1Data.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (2) 'Graffiti'
+	hh.PutBytes(b.Graffiti[:])
+
+	// Field (3) 'ProposerSlashings'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.ProposerSlashings))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.ProposerSlashings {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (4) 'AttesterSlashings'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.AttesterSlashings))
+		if num > 2 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.AttesterSlashings {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 2)
+	}
+
+	// Field (5) 'Attestations'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Attestations))
+		if num > 128 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Attestations {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 128)
+	}
+
+	// Field (6) 'Deposits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.Deposits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.Deposits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (7) 'VoluntaryExits'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.VoluntaryExits))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.VoluntaryExits {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	// Field (8) 'SyncAggregate'
+	if err = b.SyncAggregate.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (9) 'ExecutionPayloadHeader'
+	if err = b.ExecutionPayloadHeader.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (10) 'BLSToExecutionChanges'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(b.BLSToExecutionChanges))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range b.BLSToExecutionChanges {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
 
 // GetTree ssz hashes the BlindedBeaconBlockBody object
 func (b *BlindedBeaconBlockBody) GetTree() (*ssz.Node, error) {
@@ -934,6 +1061,12 @@ func (b *BlindedBeaconBlockBody) GetTree() (*ssz.Node, error) {
 type SignedBLSToExecutionChange struct {
 	Message   *BLSToExecutionChange `json:"message"`
 	Signature types.Signature       `json:"signature" ssz-size:"96"`
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedBLSToExecutionChange object
+func (s *SignedBLSToExecutionChange) SizeSSZ() (size int) {
+	size = 172
+	return
 }
 
 // HashTreeRoot ssz hashes the SignedBLSToExecutionChange object
