@@ -33,7 +33,7 @@ type fields struct {
 	beaconState State
 }
 
-func simpletest(t require.TestingT, ctrl *gomock.Controller, submitRequest structs.SubmitBlockRequest, sk *bls.SecretKey, pubKey types.PublicKey, relaySigningDomain types.Domain, genesisTime uint64) fields {
+func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVersion, submitRequest structs.SubmitBlockRequest, sk *bls.SecretKey, pubKey types.PublicKey, relaySigningDomain types.Domain, genesisTime uint64) fields {
 
 	conf := RelayConfig{
 		BuilderSigningDomain: relaySigningDomain,
@@ -65,6 +65,8 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, submitRequest struc
 		structs.ValidatorCacheEntry{}, false,
 	)
 
+	state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
+
 	vstore.EXPECT().GetRegistration(context.Background(), submitRequest.ProposerPubkey()).MaxTimes(1).Return(
 		types.SignedValidatorRegistration{
 			Message: &types.RegisterValidatorRequestMessage{
@@ -78,13 +80,24 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, submitRequest struc
 	require.NoError(t, err)
 	verify.EXPECT().Enqueue(context.Background(), submitRequest.Signature(), submitRequest.BuilderPubkey(), msg)
 
-	bvc.EXPECT().ValidateBlock(context.Background(), &rpctypes.BuilderBlockValidationRequest{}).Return(nil)
+	bvc.EXPECT().IsSet().Return(true)
+	switch fork {
+	case structs.ForkBellatrix:
+		bvc.EXPECT().ValidateBlock(context.Background(), &rpctypes.BuilderBlockValidationRequest{
+			SubmitBlockRequest: submitRequest,
+		}).Return(nil)
+	case structs.ForkCapella:
+		bvc.EXPECT().ValidateBlockV2(context.Background(), &rpctypes.BuilderBlockValidationRequest{
+			SubmitBlockRequest: submitRequest,
+		}).Return(nil)
+	}
 
 	contents, err := submitRequest.PreparePayloadContents(sk, &pubKey, relaySigningDomain)
 	require.NoError(t, err)
 	log.Debug(contents)
-	ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), &contents.Payload, conf.TTL).Return(nil)
-	a.EXPECT().AddBlock(gomock.Any()).DoAndReturn(func(block *structs.CompleteBlockstruct) bool {
+
+	ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), contents.Payload, conf.TTL).Return(nil)
+	a.EXPECT().AddBlock(gomock.Any()).Times(1).DoAndReturn(func(block *structs.CompleteBlockstruct) bool {
 		return true
 	})
 
@@ -132,12 +145,14 @@ func TestRelay_SubmitBlock(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		GenerateMocks func(t require.TestingT, ctr *gomock.Controller, sbr structs.SubmitBlockRequest, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) fields
+		fork          structs.ForkVersion
+		GenerateMocks func(t require.TestingT, ctr *gomock.Controller, fork structs.ForkVersion, sbr structs.SubmitBlockRequest, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) fields
 		args          args
 		wantErr       bool
 	}{
 		{
 			name:          "bellatrix simple",
+			fork:          structs.ForkBellatrix,
 			GenerateMocks: simpletest,
 			args: args{
 				ctx: context.Background(),
@@ -149,6 +164,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 		},
 		{
 			name:          "capella simple",
+			fork:          structs.ForkCapella,
 			GenerateMocks: simpletest,
 			args: args{
 				ctx: context.Background(),
@@ -164,7 +180,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 			l := log.New()
 			controller := gomock.NewController(t)
 
-			f := tt.GenerateMocks(t, controller, tt.args.sbr, sk, pubKey, relaySigningDomain, genesisTime)
+			f := tt.GenerateMocks(t, controller, tt.fork, tt.args.sbr, sk, pubKey, relaySigningDomain, genesisTime)
 			rs := NewRelay(l,
 				f.config,
 				f.beacon,
