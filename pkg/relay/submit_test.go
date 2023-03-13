@@ -110,7 +110,6 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	ds.EXPECT().PutHeader(gomock.Any(), gomock.Any(), conf.TTL)
 
 	////   GetHeader
-
 	a.EXPECT().MaxProfitBlock(structs.Slot(submitRequest.Slot())).Times(1).
 		DoAndReturn(func(slot structs.Slot) (block *structs.CompleteBlockstruct, a bool) {
 			return bl, true
@@ -126,24 +125,24 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		}
 		return nil
 	})
+
+	h, err := submitRequest.Withdrawals().HashTreeRoot()
+	require.NoError(t, err)
 	switch fork {
 	case structs.ForkCapella:
 		state.EXPECT().Withdrawals().Times(1).Return(structs.WithdrawalsState{
-			Slot: structs.Slot(submitRequest.Slot()),
-			Root: types.Root{},
+			Slot: structs.Slot(submitRequest.Slot() - 1),
+			Root: h,
 		})
 	}
 
-	//state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
-	/*structs.HeaderData{
-		Slot:           structs.Slot(submitRequest.Slot()),
-		Marshaled:      m,
-		HeaderAndTrace: contents.Header,
-	}*/
-	//	sbr, ok := submitRequest.(*bellatrix.SubmitBlockRequest)
-	//if ok {
+	// GetPayload
+	state.EXPECT().KnownValidators().Times(1).Return(structs.ValidatorsState{
+		KnownValidatorsByIndex: map[uint64]types.PubkeyHex{0: submitRequest.ProposerPubkey().PubkeyHex()},
+	})
 
-	//}
+	state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
+
 	return fields{
 		config:      conf,
 		d:           ds,
@@ -232,36 +231,51 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				pHash = s.CapellaExecutionPayload.EpParentHash
 			}
 
-			req := structs.HeaderRequest{
+			gh, err := rs.GetHeader(tt.args.ctx, tt.args.m, structs.HeaderRequest{
 				"slot":        strconv.FormatUint(tt.args.sbr.Slot(), 10),
 				"parent_hash": pHash.String(),
 				"pubkey":      tt.args.sbr.ProposerPubkey().String(),
-			}
-			if _, err := rs.GetHeader(tt.args.ctx, tt.args.m, req); (err != nil) != tt.wantErr {
+			})
+			if (err != nil) != tt.wantErr {
 				t.Errorf("Relay.GetHeader() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			//rs.GetPayload(tt.args.ctx, tt.args.m,)
+			var sbbb structs.SignedBlindedBeaconBlock
+			switch s := gh.(type) {
+			case *bellatrix.GetHeaderResponse:
+				sb := s.BellatrixData
+				sbbb = &bellatrix.SignedBlindedBeaconBlock{
+					SSignature: sb.Signature(),
+					SMessage: types.BlindedBeaconBlock{
+						Slot: tt.args.sbr.Slot(),
+						Body: &types.BlindedBeaconBlockBody{
+							ExecutionPayloadHeader: &sb.BellatrixMessage.BellatrixHeader.ExecutionPayloadHeader,
+						},
+					},
+				}
+
+			case *capella.GetHeaderResponse:
+
+				sb := s.CapellaData
+				sbbb = &capella.SignedBlindedBeaconBlock{
+					SSignature: sb.Signature(),
+					SMessage: capella.BlindedBeaconBlock{
+						Slot: tt.args.sbr.Slot(),
+						Body: &capella.BlindedBeaconBlockBody{
+							ExecutionPayloadHeader: sb.CapellaMessage.CapellaHeader,
+						},
+					},
+				}
+
+			}
+
+			_, err = rs.GetPayload(tt.args.ctx, tt.args.m, sbbb)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Relay.GetPayload() error = %v, wantErr %v", err, tt.wantErr)
+			}
 		})
 	}
 }
-
-/*
-func (hr HeaderRequest) Slot() (Slot, error) {
-	slot, err := strconv.Atoi(hr["slot"])
-	return Slot(slot), err
-}
-
-func (hr HeaderRequest) ParentHash() (types.Hash, error) {
-	var parentHash types.Hash
-	err := parentHash.UnmarshalText([]byte(strings.ToLower(hr["parent_hash"])))
-	return parentHash, err
-}
-
-func (hr HeaderRequest) Pubkey() (PubKey, error) {
-	var pk PubKey
-	if err := pk.UnmarshalText([]byte(strings.ToLower(hr["pubkey"]))
-}*/
 
 func validSubmitBlockRequestBellatrix(t require.TestingT, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) *bellatrix.SubmitBlockRequest {
 
