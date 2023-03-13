@@ -223,6 +223,11 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &creq
+		if creq.Validate() {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
 	case structs.ForkBellatrix:
 		var breq bellatrix.SignedBlindedBeaconBlock
 		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
@@ -231,11 +236,16 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &breq
+		if breq.Validate() {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
 	default:
 		writeError(w, http.StatusInternalServerError, errors.New("not supported fork version"))
 		return
 	}
-	// TODO(l): validate  structures
+
 	m := structs.NewMetricGroup(4)
 	payload, err := a.r.GetPayload(r.Context(), m, req)
 	if err != nil {
@@ -289,6 +299,12 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			"proposer":  creq.CapellaMessage.ProposerPubkey,
 			"builder":   creq.CapellaMessage.BuilderPubkey,
 		})
+		if !creq.Validate() {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()
+			l.Warn("invalid block submit payload")
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
 	case structs.ForkBellatrix:
 		var breq bellatrix.SubmitBlockRequest
 		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
@@ -305,7 +321,14 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			"proposer":  breq.BellatrixMessage.ProposerPubkey,
 			"builder":   breq.BellatrixMessage.BuilderPubkey,
 		})
+		if !breq.Validate() {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()
+			l.Warn("invalid block submit payload")
+			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
+			return
+		}
 	default:
+		a.m.ApiReqCounter.WithLabelValues("submitBlock", "500", "unsupported fork").Inc()
 		writeError(w, http.StatusInternalServerError, errors.New("not supported fork version"))
 		return
 
@@ -315,8 +338,6 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("invalid payload (slot)"))
 		return
 	}
-
-	// TODO(l): VALIDATE!!!
 
 	if err := a.lim.Allow(r.Context(), req.BuilderPubkey()); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("submitBlock", "429", "rate limitted").Inc()

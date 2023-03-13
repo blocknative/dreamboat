@@ -19,6 +19,13 @@ type SubmitBlockRequest struct {
 	CapellaSignature        types.Signature  `json:"signature" ssz-size:"96"`
 }
 
+func (b *SubmitBlockRequest) Validate() bool {
+	return b.CapellaMessage.Value.String() != "" &&
+		b.CapellaMessage.Slot != 0 &&
+		b.CapellaExecutionPayload.EpBlockNumber > 0 &&
+		b.CapellaExecutionPayload.EpTimestamp > 0
+}
+
 func (b *SubmitBlockRequest) Slot() uint64 {
 	return b.CapellaMessage.Slot
 }
@@ -269,6 +276,12 @@ type SignedBuilderBid struct {
 	CapellaSignature types.Signature `json:"signature" ssz-size:"96"`
 }
 
+func (b *SignedBuilderBid) Validate() bool {
+	return b.CapellaMessage.CapellaValue.String() != "" &&
+		b.CapellaMessage.CapellaHeader != nil &&
+		b.CapellaMessage.CapellaHeader.BlockNumber > 0
+}
+
 func (s *SignedBuilderBid) Signature() types.Signature {
 	return s.CapellaSignature
 }
@@ -307,6 +320,10 @@ func (s *SignedBuilderBid) GetTree() (*ssz.Node, error) {
 type SignedBlindedBeaconBlock struct {
 	SMessage   BlindedBeaconBlock `json:"message"`
 	SSignature types.Signature    `json:"signature" ssz-size:"96"`
+}
+
+func (b *SignedBlindedBeaconBlock) Validate() bool {
+	return b.SMessage.Body != nil && b.SMessage.Body.ExecutionPayloadHeader != nil
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {

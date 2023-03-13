@@ -18,6 +18,13 @@ type SubmitBlockRequest struct {
 	BellatrixExecutionPayload ExecutionPayload `json:"execution_payload"`
 }
 
+func (b *SubmitBlockRequest) Validate() bool {
+	return b.BellatrixMessage.Value.String() != "" &&
+		b.BellatrixMessage.Slot != 0 &&
+		b.BellatrixExecutionPayload.EpBlockNumber > 0 &&
+		b.BellatrixExecutionPayload.EpTimestamp > 0
+}
+
 func (b *SubmitBlockRequest) Slot() uint64 {
 	return b.BellatrixMessage.Slot
 }
@@ -369,6 +376,10 @@ func (s *SignedBlindedBeaconBlock) StateRoot() types.Root {
 	return s.SMessage.StateRoot
 }
 
+func (b *SignedBlindedBeaconBlock) Validate() bool {
+	return b.SMessage.Body != nil && b.SMessage.Body.ExecutionPayloadHeader != nil
+}
+
 func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
 	if b.SMessage.Body == nil ||
 		b.SMessage.Body.Eth1Data == nil ||
@@ -473,6 +484,12 @@ func (s *SignedBuilderBid) Value() types.U256Str {
 
 func (s *SignedBuilderBid) Signature() types.Signature {
 	return s.BellatrixSignature
+}
+
+func (b *SignedBuilderBid) Validate() bool {
+	return b.BellatrixMessage.BellatrixValue.String() != "" &&
+		b.BellatrixMessage.BellatrixHeader != nil &&
+		b.BellatrixMessage.BellatrixHeader.BlockNumber > 0
 }
 
 // SignedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L55
