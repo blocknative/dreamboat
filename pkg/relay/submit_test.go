@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/blocknative/dreamboat/pkg/structs"
 	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/pkg/structs/forks/capella"
-	"github.com/blocknative/dreamboat/test/common"
+	ccommon "github.com/blocknative/dreamboat/test/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -48,6 +49,8 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	verify := mocks.NewMockVerifier(ctrl)
 	bvc := mocks.NewMockBlockValidationClient(ctrl)
 	a := mocks.NewMockAuctioneer(ctrl)
+
+	// Submit Block
 
 	state.EXPECT().Genesis().MaxTimes(1).Return(
 		structs.GenesisInfo{GenesisTime: genesisTime},
@@ -97,14 +100,22 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	log.Debug(contents)
 
 	ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), contents.Payload, conf.TTL).Return(nil)
+
+	var bl *structs.CompleteBlockstruct
 	a.EXPECT().AddBlock(gomock.Any()).Times(1).DoAndReturn(func(block *structs.CompleteBlockstruct) bool {
+		bl = block
 		return true
 	})
 
-	//m, err := json.Marshal(contents.Header)
-	//require.NoError(t, err)
-
 	ds.EXPECT().PutHeader(gomock.Any(), gomock.Any(), conf.TTL)
+
+	////   GetHeader
+
+	//MaxProfitBlock
+	a.EXPECT().MaxProfitBlock(structs.Slot(submitRequest.Slot())).Times(1).
+		DoAndReturn(func(slot structs.Slot) (block *structs.CompleteBlockstruct, a bool) {
+			return bl, true
+		})
 	/*structs.HeaderData{
 		Slot:           structs.Slot(submitRequest.Slot()),
 		Marshaled:      m,
@@ -135,7 +146,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 		sbr structs.SubmitBlockRequest
 	}
 
-	relaySigningDomain, err := common.ComputeDomain(
+	relaySigningDomain, err := ccommon.ComputeDomain(
 		types.DomainTypeAppBuilder,
 		types.Root{}.String())
 	require.NoError(t, err)
@@ -191,12 +202,49 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				f.d,
 				f.a,
 				f.bvc)
+
 			if err := rs.SubmitBlock(tt.args.ctx, tt.args.m, tt.args.sbr); (err != nil) != tt.wantErr {
 				t.Errorf("Relay.SubmitBlock() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
+			var pHash types.Hash
+			switch s := tt.args.sbr.(type) {
+			case *bellatrix.SubmitBlockRequest:
+				pHash = s.BellatrixExecutionPayload.EpParentHash
+			case *capella.SubmitBlockRequest:
+				pHash = s.CapellaExecutionPayload.EpParentHash
+			}
+
+			req := structs.HeaderRequest{
+				"slot":        strconv.FormatUint(tt.args.sbr.Slot(), 10),
+				"parent_hash": pHash.String(),
+				"pubkey":      tt.args.sbr.ProposerPubkey().String(),
+			}
+			if _, err := rs.GetHeader(tt.args.ctx, tt.args.m, req); (err != nil) != tt.wantErr {
+				t.Errorf("Relay.GetHeader() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			//rs.GetPayload(tt.args.ctx, tt.args.m,)
 		})
 	}
 }
+
+/*
+func (hr HeaderRequest) Slot() (Slot, error) {
+	slot, err := strconv.Atoi(hr["slot"])
+	return Slot(slot), err
+}
+
+func (hr HeaderRequest) ParentHash() (types.Hash, error) {
+	var parentHash types.Hash
+	err := parentHash.UnmarshalText([]byte(strings.ToLower(hr["parent_hash"])))
+	return parentHash, err
+}
+
+func (hr HeaderRequest) Pubkey() (PubKey, error) {
+	var pk PubKey
+	if err := pk.UnmarshalText([]byte(strings.ToLower(hr["pubkey"]))
+}*/
 
 func validSubmitBlockRequestBellatrix(t require.TestingT, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) *bellatrix.SubmitBlockRequest {
 
@@ -232,6 +280,12 @@ func validSubmitBlockRequestCapella(t require.TestingT, sk *bls.SecretKey, pubKe
 
 	payload := capella.ExecutionPayload{
 		ExecutionPayload: *random,
+		EpWithdrawals: []*structs.Withdrawal{&structs.Withdrawal{
+			Index:          1,
+			ValidatorIndex: 1,
+			Address:        types.Address(random20Bytes()),
+			Amount:         1234,
+		}},
 	}
 
 	payload.EpTimestamp = genesisTime + (slot * 12)
