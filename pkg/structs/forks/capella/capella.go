@@ -78,7 +78,7 @@ func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 	}
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) {
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid SignedBuilderBid) (bbt structs.BlockBidAndTrace) {
 	return &BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.CapellaMessage,
@@ -128,10 +128,10 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 	return cbs, nil
 }
 
-func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*SignedBuilderBid, error) {
+func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (sbb SignedBuilderBid, err error) {
 	header, err := PayloadToPayloadHeader(&s.CapellaExecutionPayload)
 	if err != nil {
-		return nil, err
+		return sbb, err
 	}
 
 	builderBid := BuilderBid{
@@ -142,11 +142,11 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 
 	sig, err := types.SignMessage(&builderBid, domain, sk)
 	if err != nil {
-		return nil, err
+		return sbb, err
 	}
 
-	return &SignedBuilderBid{
-		CapellaMessage:   &builderBid,
+	return SignedBuilderBid{
+		CapellaMessage:   builderBid,
 		CapellaSignature: sig,
 	}, nil
 }
@@ -221,6 +221,9 @@ func (b *BuilderBid) HashTreeRoot() ([32]byte, error) {
 func (b *BuilderBid) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	indx := hh.Index()
 
+	if b.CapellaHeader == nil {
+		return errors.New("empty bid header")
+	}
 	// Field (0) 'Header'
 	if err = b.CapellaHeader.HashTreeRootWith(hh); err != nil {
 		return
@@ -250,7 +253,7 @@ type ExecutionPayload struct {
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
 type GetHeaderResponse struct {
 	CapellaVersion types.VersionString `json:"version"`
-	CapellaData    *SignedBuilderBid   `json:"data"`
+	CapellaData    SignedBuilderBid    `json:"data"`
 }
 
 func (g *GetHeaderResponse) Version() types.VersionString {
@@ -258,11 +261,11 @@ func (g *GetHeaderResponse) Version() types.VersionString {
 
 }
 func (g *GetHeaderResponse) Data() structs.SignedBuilderBid {
-	return g.CapellaData
+	return &g.CapellaData
 }
 
 type SignedBuilderBid struct {
-	CapellaMessage   *BuilderBid     `json:"message"`
+	CapellaMessage   BuilderBid      `json:"message"`
 	CapellaSignature types.Signature `json:"signature" ssz-size:"96"`
 }
 
@@ -350,12 +353,16 @@ func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte,
 	return types.ComputeSigningRoot(&b.SMessage, d)
 }
 
-func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) structs.PayloadKey {
+func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) (payK structs.PayloadKey, err error) {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return payK, errors.New("wrong payload key")
+	}
+
 	return structs.PayloadKey{
 		BlockHash: s.SMessage.Body.ExecutionPayloadHeader.BlockHash,
 		Proposer:  pk,
 		Slot:      structs.Slot(s.SMessage.Slot),
-	}
+	}, nil
 }
 
 func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) (structs.SignedBeaconBlock, error) {

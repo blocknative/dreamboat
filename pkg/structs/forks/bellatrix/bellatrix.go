@@ -69,10 +69,10 @@ func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error
 	return types.ComputeSigningRoot(&b.BellatrixMessage, d)
 }
 
-func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (*SignedBuilderBid, error) {
+func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (sbb SignedBuilderBid, err error) {
 	header, err := PayloadToPayloadHeader(&s.BellatrixExecutionPayload)
 	if err != nil {
-		return nil, err
+		return sbb, err
 	}
 
 	builderBid := BuilderBid{
@@ -83,16 +83,16 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 
 	sig, err := types.SignMessage(&builderBid, domain, sk)
 	if err != nil {
-		return nil, err
+		return sbb, err
 	}
 
-	return &SignedBuilderBid{
+	return SignedBuilderBid{
 		BellatrixMessage:   &builderBid,
 		BellatrixSignature: sig,
 	}, nil
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) {
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid SignedBuilderBid) (bbt structs.BlockBidAndTrace) {
 	return &BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.BellatrixMessage,
@@ -241,7 +241,7 @@ func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
 type GetHeaderResponse struct {
 	BellatrixVersion types.VersionString `json:"version"`
-	BellatrixData    *SignedBuilderBid   `json:"data"`
+	BellatrixData    SignedBuilderBid    `json:"data"`
 }
 
 func (g *GetHeaderResponse) Version() types.VersionString {
@@ -249,7 +249,7 @@ func (g *GetHeaderResponse) Version() types.VersionString {
 
 }
 func (g *GetHeaderResponse) Data() structs.SignedBuilderBid {
-	return g.BellatrixData
+	return &g.BellatrixData
 }
 
 type ExecutionPayloadHeader struct {
@@ -379,12 +379,15 @@ func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte,
 	return types.ComputeSigningRoot(&b.SMessage, d)
 }
 
-func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) structs.PayloadKey {
+func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) (payK structs.PayloadKey, err error) {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return payK, errors.New("wrong payload key")
+	}
 	return structs.PayloadKey{
 		BlockHash: s.BlockHash(),
 		Proposer:  pk,
 		Slot:      structs.Slot(s.SMessage.Slot),
-	}
+	}, nil
 }
 
 func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.ExecutionPayload) (structs.SignedBeaconBlock, error) {
