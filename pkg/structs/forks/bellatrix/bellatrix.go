@@ -370,6 +370,12 @@ func (s *SignedBlindedBeaconBlock) StateRoot() types.Root {
 }
 
 func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
+	if b.SMessage.Body == nil ||
+		b.SMessage.Body.Eth1Data == nil ||
+		b.SMessage.Body.SyncAggregate == nil ||
+		b.SMessage.Body.ExecutionPayloadHeader == nil {
+		return [32]byte{}, errors.New("empty block body")
+	}
 	return types.ComputeSigningRoot(&b.SMessage, d)
 }
 

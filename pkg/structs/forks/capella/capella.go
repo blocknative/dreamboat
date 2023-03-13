@@ -315,10 +315,16 @@ func (s *SignedBlindedBeaconBlock) Slot() uint64 {
 }
 
 func (s *SignedBlindedBeaconBlock) BlockHash() types.Hash {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return [32]byte{}
+	}
 	return s.SMessage.Body.ExecutionPayloadHeader.BlockHash
 }
 
 func (s *SignedBlindedBeaconBlock) BlockNumber() uint64 {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return 0
+	}
 	return s.SMessage.Body.ExecutionPayloadHeader.BlockNumber
 }
 
@@ -335,6 +341,12 @@ func (s *SignedBlindedBeaconBlock) StateRoot() types.Root {
 }
 
 func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
+	if b.SMessage.Body == nil ||
+		b.SMessage.Body.Eth1Data == nil ||
+		b.SMessage.Body.SyncAggregate == nil ||
+		b.SMessage.Body.ExecutionPayloadHeader == nil {
+		return [32]byte{}, errors.New("empty block body")
+	}
 	return types.ComputeSigningRoot(&b.SMessage, d)
 }
 
@@ -352,6 +364,11 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 		return nil, errors.New("ExecutionPayload is not Capella")
 	}
 
+	body := s.SMessage.Body
+	if body == nil {
+		body = &BlindedBeaconBlockBody{}
+	}
+
 	block := &SignedBeaconBlock{
 		CapellaSignature: s.SSignature,
 		CapellaMessage: &BeaconBlock{
@@ -360,16 +377,16 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 			ParentRoot:    s.SMessage.ParentRoot,
 			StateRoot:     s.SMessage.StateRoot,
 			Body: &BeaconBlockBody{
-				BLSToExecutionChanges: s.SMessage.Body.BLSToExecutionChanges,
-				RandaoReveal:          s.SMessage.Body.RandaoReveal,
-				Eth1Data:              s.SMessage.Body.Eth1Data,
-				Graffiti:              s.SMessage.Body.Graffiti,
-				ProposerSlashings:     s.SMessage.Body.ProposerSlashings,
-				AttesterSlashings:     s.SMessage.Body.AttesterSlashings,
-				Attestations:          s.SMessage.Body.Attestations,
-				Deposits:              s.SMessage.Body.Deposits,
-				VoluntaryExits:        s.SMessage.Body.VoluntaryExits,
-				SyncAggregate:         s.SMessage.Body.SyncAggregate,
+				BLSToExecutionChanges: body.BLSToExecutionChanges,
+				RandaoReveal:          body.RandaoReveal,
+				Eth1Data:              body.Eth1Data,
+				Graffiti:              body.Graffiti,
+				ProposerSlashings:     body.ProposerSlashings,
+				AttesterSlashings:     body.AttesterSlashings,
+				Attestations:          body.Attestations,
+				Deposits:              body.Deposits,
+				VoluntaryExits:        body.VoluntaryExits,
+				SyncAggregate:         body.SyncAggregate,
 				ExecutionPayload:      ep,
 			},
 		},
@@ -792,135 +809,6 @@ type BlindedBeaconBlockBody struct {
 func (b *BlindedBeaconBlockBody) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
 }
-
-/*
-// HashTreeRootWith ssz hashes the BlindedBeaconBlockBody object with a hasher
-func (b *BlindedBeaconBlockBody) HashTreeRootWith(hh ssz.HashWalker) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'RandaoReveal'
-	hh.PutBytes(b.RandaoReveal[:])
-
-	// Field (1) 'Eth1Data'
-	if err = b.Eth1Data.HashTreeRootWith(hh); err != nil {
-		return
-	}
-
-	// Field (2) 'Graffiti'
-	hh.PutBytes(b.Graffiti[:])
-
-	// Field (3) 'ProposerSlashings'
-	{
-		subIndx := hh.Index()
-		num := uint64(len(b.ProposerSlashings))
-		if num > 16 {
-			err = ssz.ErrIncorrectListSize
-			return
-		}
-		for _, elem := range b.ProposerSlashings {
-			if err = elem.HashTreeRootWith(hh); err != nil {
-				return
-			}
-		}
-		hh.MerkleizeWithMixin(subIndx, num, 16)
-	}
-
-	// Field (4) 'AttesterSlashings'
-	{
-		subIndx := hh.Index()
-		num := uint64(len(b.AttesterSlashings))
-		if num > 2 {
-			err = ssz.ErrIncorrectListSize
-			return
-		}
-		for _, elem := range b.AttesterSlashings {
-			if err = elem.HashTreeRootWith(hh); err != nil {
-				return
-			}
-		}
-		hh.MerkleizeWithMixin(subIndx, num, 2)
-	}
-
-	// Field (5) 'Attestations'
-	{
-		subIndx := hh.Index()
-		num := uint64(len(b.Attestations))
-		if num > 128 {
-			err = ssz.ErrIncorrectListSize
-			return
-		}
-		for _, elem := range b.Attestations {
-			if err = elem.HashTreeRootWith(hh); err != nil {
-				return
-			}
-		}
-		hh.MerkleizeWithMixin(subIndx, num, 128)
-	}
-
-	// Field (6) 'Deposits'
-	{
-		subIndx := hh.Index()
-		num := uint64(len(b.Deposits))
-		if num > 16 {
-			err = ssz.ErrIncorrectListSize
-			return
-		}
-		for _, elem := range b.Deposits {
-			if err = elem.HashTreeRootWith(hh); err != nil {
-				return
-			}
-		}
-		hh.MerkleizeWithMixin(subIndx, num, 16)
-	}
-
-	// Field (7) 'VoluntaryExits'
-	{
-		subIndx := hh.Index()
-		num := uint64(len(b.VoluntaryExits))
-		if num > 16 {
-			err = ssz.ErrIncorrectListSize
-			return
-		}
-		for _, elem := range b.VoluntaryExits {
-			if err = elem.HashTreeRootWith(hh); err != nil {
-				return
-			}
-		}
-		hh.MerkleizeWithMixin(subIndx, num, 16)
-	}
-
-	// Field (8) 'SyncAggregate'
-	if err = b.SyncAggregate.HashTreeRootWith(hh); err != nil {
-		return
-	}
-
-	// Field (9) 'ExecutionPayloadHeader'
-	if err = b.ExecutionPayloadHeader.HashTreeRootWith(hh); err != nil {
-		return
-	}
-
-	// Field (10) 'BLSToExecutionChanges'
-	{
-		subIndx := hh.Index()
-		num := uint64(len(b.BLSToExecutionChanges))
-		if num > 172 {
-			err = ssz.ErrIncorrectListSize
-			return
-		}
-		for _, elem := range b.BLSToExecutionChanges {
-			if err = elem.HashTreeRootWith(hh); err != nil {
-				return
-			}
-		}
-		//hh.MerkleizeWithMixin(subIndx, num, 16)
-		hh.MerkleizeWithMixin(subIndx, num, 172)
-
-	}
-
-	hh.Merkleize(indx)
-	return
-}
-*/
 
 // HashTreeRootWith ssz hashes the BlindedBeaconBlockBody object with a hasher
 func (b *BlindedBeaconBlockBody) HashTreeRootWith(hh ssz.HashWalker) (err error) {
