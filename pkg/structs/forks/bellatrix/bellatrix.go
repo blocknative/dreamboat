@@ -135,7 +135,7 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 	cbs.Payload = s.toBlockBidAndTrace(signedBuilderBid)
 	cbs.Header = structs.HeaderAndTrace{
 		Header: signedBuilderBid.BellatrixMessage.BellatrixHeader,
-		Trace: &structs.BidTraceWithTimestamp{
+		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 s.Slot(),
@@ -522,7 +522,10 @@ func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 	return &bbat.Payload.BellatrixData
 }
 
-func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) structs.DeliveredTrace {
+func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) (dt structs.DeliveredTrace, err error) {
+	if bbat.Trace.Message == nil {
+		return dt, errors.New("empty trace contents")
+	}
 	return structs.DeliveredTrace{
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
@@ -543,5 +546,5 @@ func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) structs.DeliveredTra
 			Timestamp: bbat.Payload.BellatrixData.EpTimestamp,
 		},
 		BlockNumber: bbat.Payload.BellatrixData.EpBlockNumber,
-	}
+	}, nil
 }

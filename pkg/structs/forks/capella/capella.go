@@ -105,7 +105,7 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 
 	cbs.Header = structs.HeaderAndTrace{
 		Header: signedBuilderBid.CapellaMessage.CapellaHeader,
-		Trace: &structs.BidTraceWithTimestamp{
+		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 s.Slot(),
@@ -704,7 +704,10 @@ func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 	return &bbat.Payload.CapellaData
 }
 
-func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) structs.DeliveredTrace {
+func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) (dt structs.DeliveredTrace, err error) {
+	if bbat.Trace.Message == nil {
+		return dt, errors.New("empty message")
+	}
 	return structs.DeliveredTrace{
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
@@ -725,7 +728,7 @@ func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) structs.DeliveredTra
 			Timestamp: bbat.Payload.CapellaData.EpTimestamp,
 		},
 		BlockNumber: bbat.Payload.CapellaData.EpBlockNumber,
-	}
+	}, nil
 }
 
 type GetPayloadResponse struct {
