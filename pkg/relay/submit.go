@@ -28,15 +28,22 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	defer m.AppendSince(tStart, "submitBlock", "all")
 	value := sbr.Value()
 	logger := rs.l.With(log.F{
-		"method":    "SubmitBlock",
-		"builder":   sbr.BuilderPubkey(),
-		"blockHash": sbr.BlockHash(),
-		"slot":      sbr.Slot(),
-		"proposer":  sbr.ProposerPubkey(),
-		"bid":       value.String(),
+		"method":         "SubmitBlock",
+		"builder":        sbr.BuilderPubkey(),
+		"blockHash":      sbr.BlockHash(),
+		"slot":           sbr.Slot(),
+		"proposer":       sbr.ProposerPubkey(),
+		"bid":            value.String(),
+		"withdrawalsNum": len(sbr.Withdrawals()),
 	})
 
-	_, err := verifyBlock(sbr, rs.beaconState)
+	root, err := verifyWithdrawals(rs.beaconState, sbr)
+	logger.WithField("withdrawalsRoot", root)
+	if err != nil {
+		return fmt.Errorf("failed to verify withdrawals: %w", err)
+	}
+
+	_, err = verifyBlock(sbr, rs.beaconState)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
@@ -236,30 +243,27 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 		return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
 	}
 
-	if err := verifyWithdrawals(beaconState, sbr); err != nil {
-		return false, fmt.Errorf("failed to verify withdrawals: %w", err)
-	}
-
 	return true, nil
 }
 
-func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) error {
+func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) (types.Root, error) {
 	if withdrawals := submitBlockRequest.Withdrawals(); withdrawals != nil {
 		// get latest withdrawals and verify the roots match
 		withdrawalState := state.Withdrawals()
 		withdrawalsRoot, err := withdrawals.HashTreeRoot()
+		root := types.Root(withdrawalsRoot)
 		if err != nil {
-			return fmt.Errorf("failed to compute withdrawals root: %w", err)
+			return root, fmt.Errorf("failed to compute withdrawals root: %w", err)
 		}
 		if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) { // +1 because it's from previous slot
 			// we still don't have the withdrawals yet
-			return fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
+			return root, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
 		} else if withdrawalState.Root != withdrawalsRoot {
-			return fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
+			return root, fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
 		}
 	}
 
-	return nil
+	return types.Root{}, nil
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
