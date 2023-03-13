@@ -42,14 +42,7 @@ type ExecutionPayload interface {
 	BaseFeePerGas() types.U256Str
 	BlockHash() types.Hash
 	Transactions() []hexutil.Bytes
-	Withdrawals() Withdrawals
 }
-
-/*
-type GetPayloadResponse struct {
-	Version types.VersionString `json:"version"`
-	Data    ExecutionPayload    `json:"data"`
-}*/
 
 type GetPayloadResponse interface {
 	Data() ExecutionPayload
@@ -89,8 +82,4 @@ type GetHeaderResponse interface {
 
 type SignedBeaconBlock interface {
 	Signature() types.Signature
-}
-
-type BeaconBlock interface {
-	//TODO(l)  do we need to fill it?
 }

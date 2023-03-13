@@ -62,7 +62,7 @@ func (b *SubmitBlockRequest) NumTx() uint64 {
 }
 
 func (b *SubmitBlockRequest) Withdrawals() structs.Withdrawals {
-	return b.BellatrixExecutionPayload.Withdrawals()
+	return nil
 }
 
 func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
@@ -328,9 +328,6 @@ func (ep *ExecutionPayload) BlockHash() types.Hash {
 func (ep *ExecutionPayload) Transactions() []hexutil.Bytes {
 	return ep.EpTransactions
 }
-func (ep *ExecutionPayload) Withdrawals() structs.Withdrawals {
-	return nil
-}
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
@@ -539,29 +536,3 @@ func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) structs.DeliveredTra
 		BlockNumber: bbat.Payload.BellatrixData.EpBlockNumber,
 	}
 }
-
-/*
-// BlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L74
-type BlindedBeaconBlock struct {
-	Slot          uint64                  `json:"slot,string"`
-	ProposerIndex uint64                  `json:"proposer_index,string"`
-	ParentRoot    Root                    `json:"parent_root" ssz-size:"32"`
-	StateRoot     Root                    `json:"state_root" ssz-size:"32"`
-	Body          *BlindedBeaconBlockBody `json:"body"`
-}
-*/
-
-/*
-// BlindedBeaconBlockBody https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L65
-type BlindedBeaconBlockBody struct {
-	RandaoReveal           Signature               `json:"randao_reveal" ssz-size:"96"`
-	Eth1Data               *Eth1Data               `json:"eth1_data"`
-	Graffiti               Hash                    `json:"graffiti" ssz-size:"32"`
-	ProposerSlashings      []*ProposerSlashing     `json:"proposer_slashings" ssz-max:"16"`
-	AttesterSlashings      []*AttesterSlashing     `json:"attester_slashings" ssz-max:"2"`
-	Attestations           []*Attestation          `json:"attestations" ssz-max:"128"`
-	Deposits               []*Deposit              `json:"deposits" ssz-max:"16"`
-	VoluntaryExits         []*SignedVoluntaryExit  `json:"voluntary_exits" ssz-max:"16"`
-	SyncAggregate          *SyncAggregate          `json:"sync_aggregate"`
-	ExecutionPayloadHeader *ExecutionPayloadHeader `json:"execution_payload_header"`
-}*/
