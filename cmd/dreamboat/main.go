@@ -429,8 +429,10 @@ func run() cli.ActionFunc {
 		}
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
-			BuilderSigningDomain:  domainBuilder,
-			ProposerSigningDomain: map[string]types.Domain{"bellatrix": bellatrixBeaconProposer, "capella": capellaBeaconProposer},
+			BuilderSigningDomain: domainBuilder,
+			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
+				structs.ForkBellatrix: bellatrixBeaconProposer,
+				structs.ForkCapella:   capellaBeaconProposer},
 			PubKey:                pk,
 			SecretKey:             sk,
 			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),

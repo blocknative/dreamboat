@@ -56,11 +56,14 @@ func (b *SubmitBlockRequest) Random() types.Hash {
 }
 
 func (b *SubmitBlockRequest) NumTx() uint64 {
+	if b.CapellaExecutionPayload.EpTransactions == nil {
+		return 0
+	}
 	return uint64(len(b.CapellaExecutionPayload.EpTransactions))
 }
 
 func (b *SubmitBlockRequest) Withdrawals() structs.Withdrawals {
-	return b.CapellaExecutionPayload.Withdrawals()
+	return b.CapellaExecutionPayload.EpWithdrawals
 }
 
 func (b *SubmitBlockRequest) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
@@ -242,10 +245,6 @@ func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 type ExecutionPayload struct {
 	bellatrix.ExecutionPayload
 	EpWithdrawals structs.Withdrawals `json:"withdrawals" ssz-max:"16"`
-}
-
-func (ep *ExecutionPayload) Withdrawals() structs.Withdrawals {
-	return ep.EpWithdrawals
 }
 
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
@@ -661,10 +660,6 @@ func (e *ExecutionPayloadHeader) GetTree() (*ssz.Node, error) {
 type SignedBeaconBlock struct {
 	CapellaMessage   *BeaconBlock    `json:"message"`
 	CapellaSignature types.Signature `json:"signature" ssz-size:"96"`
-}
-
-func (s *SignedBeaconBlock) Message() structs.BeaconBlock {
-	return s.CapellaMessage
 }
 
 func (s *SignedBeaconBlock) Signature() types.Signature {
