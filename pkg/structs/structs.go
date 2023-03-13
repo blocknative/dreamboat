@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
 )
@@ -253,7 +252,7 @@ type ValidatorCacheEntry struct {
 
 type WithdrawalsState struct {
 	Slot Slot
-	Root phase0.Root
+	Root types.Root
 }
 
 type ForkState struct {

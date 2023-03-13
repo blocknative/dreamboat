@@ -111,7 +111,6 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 
 	////   GetHeader
 
-	//MaxProfitBlock
 	a.EXPECT().MaxProfitBlock(structs.Slot(submitRequest.Slot())).Times(1).
 		DoAndReturn(func(slot structs.Slot) (block *structs.CompleteBlockstruct, a bool) {
 			return bl, true
@@ -127,6 +126,13 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		}
 		return nil
 	})
+	switch fork {
+	case structs.ForkCapella:
+		state.EXPECT().Withdrawals().Times(1).Return(structs.WithdrawalsState{
+			Slot: structs.Slot(submitRequest.Slot()),
+			Root: types.Root{},
+		})
+	}
 
 	//state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
 	/*structs.HeaderData{
@@ -168,16 +174,15 @@ func TestRelay_SubmitBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name          string
-		fork          structs.ForkVersion
-		GenerateMocks func(t require.TestingT, ctr *gomock.Controller, fork structs.ForkVersion, sbr structs.SubmitBlockRequest, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) fields
-		args          args
-		wantErr       bool
+		name string
+		fork structs.ForkVersion
+
+		args    args
+		wantErr bool
 	}{
 		{
-			name:          "bellatrix simple",
-			fork:          structs.ForkBellatrix,
-			GenerateMocks: simpletest,
+			name: "bellatrix simple",
+			fork: structs.ForkBellatrix,
 			args: args{
 				ctx: context.Background(),
 				m:   &structs.MetricGroup{},
@@ -187,9 +192,8 @@ func TestRelay_SubmitBlock(t *testing.T) {
 			},
 		},
 		{
-			name:          "capella simple",
-			fork:          structs.ForkCapella,
-			GenerateMocks: simpletest,
+			name: "capella simple",
+			fork: structs.ForkCapella,
 			args: args{
 				ctx: context.Background(),
 				m:   &structs.MetricGroup{},
@@ -204,7 +208,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 			l := log.New()
 			controller := gomock.NewController(t)
 
-			f := tt.GenerateMocks(t, controller, tt.fork, tt.args.sbr, sk, pubKey, relaySigningDomain, genesisTime)
+			f := simpletest(t, controller, tt.fork, tt.args.sbr, sk, pubKey, relaySigningDomain, genesisTime)
 			rs := NewRelay(l,
 				f.config,
 				f.beacon,
