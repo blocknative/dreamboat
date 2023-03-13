@@ -208,7 +208,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	header := maxProfitBlock.Header
 
-	if header.Header == nil || header.Trace == nil {
+	if header.Header == nil {
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
@@ -369,7 +369,10 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			}
 		}
 
-		trace := payload.ToDeliveredTrace(payloadRequest.Slot())
+		trace, err := payload.ToDeliveredTrace(payloadRequest.Slot())
+		if err != nil {
+			logger.WithError(err).Warn("failed to generate delivered payload")
+		}
 		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}

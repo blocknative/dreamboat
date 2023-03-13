@@ -159,7 +159,7 @@ type DeliveredTrace struct {
 
 type HeaderAndTrace struct {
 	Header ExecutionPayloadHeader
-	Trace  *BidTraceWithTimestamp
+	Trace  BidTraceWithTimestamp
 }
 
 type ExecutionPayloadHeader interface {
@@ -172,7 +172,7 @@ type BlockBidAndTrace interface {
 	BidValue() types.U256Str
 
 	ExecutionPayload() ExecutionPayload
-	ToDeliveredTrace(slot uint64) DeliveredTrace
+	ToDeliveredTrace(slot uint64) (DeliveredTrace, error)
 }
 
 type BeaconState struct {
