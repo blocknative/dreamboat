@@ -132,7 +132,7 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 	}
 
 	builderBid := BuilderBid{
-		CapellaValue:  s.Value(),
+		CapellaValue:  s.CapellaMessage.Value,
 		CapellaHeader: header,
 		CapellaPubkey: *pubkey,
 	}
@@ -678,7 +678,7 @@ type BlockBidAndTrace struct {
 }
 
 func (bbat *BlockBidAndTrace) BidValue() types.U256Str {
-	return bbat.Bid.CapellaData.Value()
+	return bbat.Bid.CapellaData.CapellaMessage.CapellaValue
 }
 
 func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {

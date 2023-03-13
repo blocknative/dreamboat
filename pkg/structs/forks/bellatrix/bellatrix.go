@@ -76,7 +76,7 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 	}
 
 	builderBid := BuilderBid{
-		BellatrixValue:  s.Value(),
+		BellatrixValue:  s.BellatrixMessage.Value,
 		BellatrixHeader: header,
 		BellatrixPubkey: *pubkey,
 	}

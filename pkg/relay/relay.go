@@ -99,7 +99,7 @@ type Beacon interface {
 
 type RelayConfig struct {
 	BuilderSigningDomain  types.Domain
-	ProposerSigningDomain map[string]types.Domain
+	ProposerSigningDomain map[structs.ForkVersion]types.Domain
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
 
@@ -322,17 +322,9 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	})
 	logger.Info("payload requested")
 
-	var vType string
 	forkv := rs.beaconState.ForkVersion(structs.Slot(payloadRequest.Slot()))
 
-	switch forkv {
-	case structs.ForkBellatrix:
-		vType = "bellatrix"
-	case structs.ForkCapella:
-		vType = "capella"
-	}
-
-	msg, err := payloadRequest.ComputeSigningRoot(rs.config.ProposerSigningDomain[vType])
+	msg, err := payloadRequest.ComputeSigningRoot(rs.config.ProposerSigningDomain[forkv])
 	if err != nil {
 		return nil, ErrInvalidSignature // err
 	}
@@ -380,27 +372,39 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}(rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
 
 	exp := payload.ExecutionPayload()
-	logger.With(log.F{
-		"slot":             payloadRequest.Slot(),
-		"blockHash":        exp.BlockHash(),
-		"blockNumber":      exp.BlockNumber(),
-		"stateRoot":        exp.StateRoot(),
-		"feeRecipient":     exp.FeeRecipient(),
-		"bid":              payload.BidValue(),
-		"from_cache":       fromCache,
-		"numTx":            len(exp.Transactions()),
-		"processingTimeMs": time.Since(tStart).Milliseconds(),
-	}).Info("payload sent")
 
+	logger = logger.With(log.F{
+		"slot":             payloadRequest.Slot(),
+		"from_cache":       fromCache,
+		"processingTimeMs": time.Since(tStart).Milliseconds(),
+	})
 	switch forkv {
 	case structs.ForkBellatrix:
 		bep := exp.(*bellatrix.ExecutionPayload)
+		logger.With(log.F{
+			"fork":         "bellatrix",
+			"blockHash":    bep.EpBlockHash,
+			"blockNumber":  bep.EpBlockNumber,
+			"stateRoot":    bep.EpStateRoot,
+			"feeRecipient": bep.EpFeeRecipient,
+			"numTx":        len(bep.EpTransactions),
+			"bid":          payload.BidValue(),
+		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
 			BellatrixData:    *bep,
 		}, nil
 	case structs.ForkCapella:
 		cep := exp.(*capella.ExecutionPayload)
+		logger.With(log.F{
+			"fork":         "capella",
+			"blockHash":    cep.EpBlockHash,
+			"blockNumber":  cep.EpBlockNumber,
+			"stateRoot":    cep.EpStateRoot,
+			"feeRecipient": cep.EpFeeRecipient,
+			"numTx":        len(cep.EpTransactions),
+			"bid":          payload.BidValue(),
+		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),
 			CapellaData:    *cep,
