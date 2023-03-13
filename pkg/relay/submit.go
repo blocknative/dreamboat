@@ -257,7 +257,7 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		}
 		if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) { // +1 because it's from previous slot
 			// we still don't have the withdrawals yet
-			return root, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
+			return root, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot+1)
 		} else if withdrawalState.Root != withdrawalsRoot {
 			return root, fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
 		}
