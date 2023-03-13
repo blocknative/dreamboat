@@ -15,6 +15,10 @@ import (
 	"github.com/blocknative/dreamboat/pkg/structs"
 )
 
+const (
+	StateRecheckDelay = time.Second
+)
+
 var (
 	ErrWrongFeeRecipient     = errors.New("wrong fee recipient")
 	ErrInvalidWithdrawalSlot = errors.New("invalid withdrawal slot")
@@ -239,31 +243,44 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
 	}
 
-	if randao := beaconState.Randao(); randao != "" && randao != sbr.Random().String() { // DISABLE CHECK IF NOT OBTAINED BY BEACON
-		return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
+	if randao := beaconState.Randao(); randao != sbr.Random().String() {
+		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
+		if randao := beaconState.Randao(); randao != sbr.Random().String() {
+			return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
+		}
 	}
 
 	return true, nil
 }
 
-func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) (types.Root, error) {
-	if withdrawals := submitBlockRequest.Withdrawals(); withdrawals != nil {
-		// get latest withdrawals and verify the roots match
-		withdrawalState := state.Withdrawals()
-		withdrawalsRoot, err := withdrawals.HashTreeRoot()
-		root := types.Root(withdrawalsRoot)
-		if err != nil {
-			return root, fmt.Errorf("failed to compute withdrawals root: %w", err)
-		}
-		if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) { // +1 because it's from previous slot
-			// we still don't have the withdrawals yet
+func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) (root types.Root, err error) {
+	withdrawals := submitBlockRequest.Withdrawals()
+	if withdrawals == nil {
+		return types.Root{}, nil
+	}
+
+	withdrawalState := state.Withdrawals()
+	if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) { // +1 because it's from previous slot
+		// recheck beacon sync state for early blocks
+		time.Sleep(StateRecheckDelay)
+		withdrawalState = state.Withdrawals()
+		if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) {
 			return root, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
-		} else if withdrawalState.Root != withdrawalsRoot {
-			return root, fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
 		}
 	}
 
-	return types.Root{}, nil
+	// get latest withdrawals and verify the roots match
+	withdrawalsRoot, err := withdrawals.HashTreeRoot()
+	if err != nil {
+		return root, fmt.Errorf("failed to compute withdrawals root: %w", err)
+	}
+
+	root = types.Root(withdrawalsRoot)
+	if withdrawalState.Root != withdrawalsRoot {
+		err = fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
+	}
+
+	return root, err
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
