@@ -223,8 +223,14 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &creq
-		if creq.Validate() {
+		if !creq.Validate() {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()
+			a.l.With(log.F{
+				"code":      400,
+				"endpoint":  "getPayload",
+				"slot":      creq.Slot(),
+				"blockHash": creq.BlockHash(),
+			}).Debug("invalid payload")
 			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 			return
 		}
@@ -236,8 +242,14 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &breq
-		if breq.Validate() {
+		if !breq.Validate() {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()
+			a.l.With(log.F{
+				"code":      400,
+				"endpoint":  "getPayload",
+				"slot":      breq.Slot(),
+				"blockHash": breq.BlockHash(),
+			}).Debug("invalid payload")
 			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 			return
 		}
@@ -254,7 +266,6 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		a.l.With(log.F{
 			"code":      400,
 			"endpoint":  "getPayload",
-			"payload":   req,
 			"slot":      req.Slot(),
 			"blockHash": req.BlockHash(),
 		}).WithError(err).Debug("failed getPayload")
