@@ -68,7 +68,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		structs.ValidatorCacheEntry{}, false,
 	)
 
-	state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
+	state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(2).Return(fork)
 
 	vstore.EXPECT().GetRegistration(context.Background(), submitRequest.ProposerPubkey()).MaxTimes(1).Return(
 		types.SignedValidatorRegistration{
@@ -81,9 +81,9 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	cache.EXPECT().Add(submitRequest.ProposerPubkey(), gomock.Any()).Return(false) // todo check ValidatorCacheEntry disregarding time.Now()
 	msg, err := submitRequest.ComputeSigningRoot(relaySigningDomain)
 	require.NoError(t, err)
-	verify.EXPECT().Enqueue(context.Background(), submitRequest.Signature(), submitRequest.BuilderPubkey(), msg)
+	verify.EXPECT().Enqueue(context.Background(), submitRequest.Signature(), submitRequest.BuilderPubkey(), msg).Times(1)
 
-	bvc.EXPECT().IsSet().Return(true)
+	bvc.EXPECT().IsSet().Times(1).Return(true)
 	switch fork {
 	case structs.ForkBellatrix:
 		bvc.EXPECT().ValidateBlock(context.Background(), &rpctypes.BuilderBlockValidationRequest{
@@ -116,6 +116,19 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		DoAndReturn(func(slot structs.Slot) (block *structs.CompleteBlockstruct, a bool) {
 			return bl, true
 		})
+
+	ds.EXPECT().CacheBlock(gomock.Any(), structs.PayloadKey{
+		BlockHash: submitRequest.BlockHash(),
+		Slot:      structs.Slot(submitRequest.Slot()),
+		Proposer:  submitRequest.ProposerPubkey()},
+		gomock.Any()).Times(1).DoAndReturn(func(c context.Context, s structs.PayloadKey, block *structs.CompleteBlockstruct) error {
+		if bl != block {
+			t.Errorf("cache block is different structure")
+		}
+		return nil
+	})
+
+	//state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
 	/*structs.HeaderData{
 		Slot:           structs.Slot(submitRequest.Slot()),
 		Marshaled:      m,
@@ -280,7 +293,7 @@ func validSubmitBlockRequestCapella(t require.TestingT, sk *bls.SecretKey, pubKe
 
 	payload := capella.ExecutionPayload{
 		ExecutionPayload: *random,
-		EpWithdrawals: []*structs.Withdrawal{&structs.Withdrawal{
+		EpWithdrawals: []*structs.Withdrawal{{
 			Index:          1,
 			ValidatorIndex: 1,
 			Address:        types.Address(random20Bytes()),

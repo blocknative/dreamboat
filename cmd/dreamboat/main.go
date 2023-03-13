@@ -359,7 +359,7 @@ func run() cli.ActionFunc {
 		// VALIDATOR MANAGEMENT
 		var valDS ValidatorStore
 		if dbURL != "" {
-			valPG, err := trPostgres.Open(dbURL, 10, 10, 10) // TODO(l): make configurable
+			valPG, err := trPostgres.Open(dbURL, 10, 10, 10)
 			if err != nil {
 				return fmt.Errorf("failed to connect to the database: %w", err)
 			}

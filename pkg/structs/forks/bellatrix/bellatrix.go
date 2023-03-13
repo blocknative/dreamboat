@@ -55,6 +55,9 @@ func (b *SubmitBlockRequest) Random() types.Hash {
 }
 
 func (b *SubmitBlockRequest) NumTx() uint64 {
+	if b.BellatrixExecutionPayload.EpTransactions == nil {
+		return 0
+	}
 	return uint64(len(b.BellatrixExecutionPayload.EpTransactions))
 }
 
@@ -89,7 +92,7 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 	}, nil
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) { // TODO(l): remove FB type
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) {
 	return &BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.BellatrixMessage,
@@ -141,7 +144,7 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 					BuilderPubkey:        s.BellatrixMessage.BuilderPubkey,
 					ProposerPubkey:       s.BellatrixMessage.ProposerPubkey,
 					ProposerFeeRecipient: s.BellatrixMessage.ProposerFeeRecipient,
-					Value:                s.Value(),
+					Value:                s.BellatrixMessage.Value,
 					GasLimit:             s.BellatrixMessage.GasLimit,
 					GasUsed:              s.BellatrixMessage.GasUsed,
 				},
@@ -249,66 +252,6 @@ func (g *GetHeaderResponse) Data() structs.SignedBuilderBid {
 	return g.BellatrixData
 }
 
-/*
-// BidTrace is public information about a bid: https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#286c858c4ba24e58ada6348d8d4b71ec
-type BidTrace struct {
-	Slot                 uint64          `json:"slot,string"`
-	ParentHash           types.Hash      `json:"parent_hash" ssz-size:"32"`
-	BlockHash            types.Hash      `json:"block_hash" ssz-size:"32"`
-	BuilderPubkey        types.PublicKey `json:"builder_pubkey" ssz-size:"48"`
-	ProposerPubkey       types.PublicKey `json:"proposer_pubkey" ssz-size:"48"`
-	ProposerFeeRecipient types.Address   `json:"proposer_fee_recipient" ssz-size:"20"`
-	GasLimit             uint64          `json:"gas_limit,string"`
-	GasUsed              uint64          `json:"gas_used,string"`
-	Value                types.U256Str   `json:"value" ssz-size:"32"`
-}
-
-// HashTreeRoot ssz hashes the BidTrace object
-func (b *BidTrace) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(b)
-}
-
-// GetTree ssz hashes the BidTrace object
-func (b *BidTrace) GetTree() (*ssz.Node, error) {
-	return ssz.ProofTree(b)
-}
-
-// HashTreeRootWith ssz hashes the BidTrace object with a hasher
-func (b *BidTrace) HashTreeRootWith(hh ssz.HashWalker) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'Slot'
-	hh.PutUint64(b.Slot)
-
-	// Field (1) 'ParentHash'
-	hh.PutBytes(b.ParentHash[:])
-
-	// Field (2) 'BlockHash'
-	hh.PutBytes(b.BlockHash[:])
-
-	// Field (3) 'BuilderPubkey'
-	hh.PutBytes(b.BuilderPubkey[:])
-
-	// Field (4) 'ProposerPubkey'
-	hh.PutBytes(b.ProposerPubkey[:])
-
-	// Field (5) 'ProposerFeeRecipient'
-	hh.PutBytes(b.ProposerFeeRecipient[:])
-
-	// Field (6) 'GasLimit'
-	hh.PutUint64(b.GasLimit)
-
-	// Field (7) 'GasUsed'
-	hh.PutUint64(b.GasUsed)
-
-	// Field (8) 'Value'
-	hh.PutBytes(b.Value[:])
-
-	hh.Merkleize(indx)
-	return
-}
-*/
-
 type ExecutionPayloadHeader struct {
 	types.ExecutionPayloadHeader
 }
@@ -391,8 +334,8 @@ func (ep *ExecutionPayload) Withdrawals() structs.Withdrawals {
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
-	SMessage   *types.BlindedBeaconBlock `json:"message"`
-	SSignature types.Signature           `json:"signature" ssz-size:"96"`
+	SMessage   types.BlindedBeaconBlock `json:"message"`
+	SSignature types.Signature          `json:"signature" ssz-size:"96"`
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
@@ -404,10 +347,16 @@ func (s *SignedBlindedBeaconBlock) Slot() uint64 {
 }
 
 func (s *SignedBlindedBeaconBlock) BlockHash() types.Hash {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return [32]byte{}
+	}
 	return s.SMessage.Body.ExecutionPayloadHeader.BlockHash
 }
 
 func (s *SignedBlindedBeaconBlock) BlockNumber() uint64 {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return 0
+	}
 	return s.SMessage.Body.ExecutionPayloadHeader.BlockNumber
 }
 
@@ -424,12 +373,12 @@ func (s *SignedBlindedBeaconBlock) StateRoot() types.Root {
 }
 
 func (b *SignedBlindedBeaconBlock) ComputeSigningRoot(d types.Domain) ([32]byte, error) {
-	return types.ComputeSigningRoot(b.SMessage, d)
+	return types.ComputeSigningRoot(&b.SMessage, d)
 }
 
 func (s *SignedBlindedBeaconBlock) ToPayloadKey(pk types.PublicKey) structs.PayloadKey {
 	return structs.PayloadKey{
-		BlockHash: s.SMessage.Body.ExecutionPayloadHeader.BlockHash,
+		BlockHash: s.BlockHash(),
 		Proposer:  pk,
 		Slot:      structs.Slot(s.SMessage.Slot),
 	}
@@ -440,6 +389,10 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 	if !ok {
 		return nil, errors.New("ExecutionPayload is not bellatrix")
 	}
+	body := s.SMessage.Body
+	if body == nil {
+		body = &types.BlindedBeaconBlockBody{}
+	}
 
 	block := &SignedBeaconBlock{
 		BellatrixSignature: s.SSignature,
@@ -447,17 +400,17 @@ func (s *SignedBlindedBeaconBlock) ToBeaconBlock(executionPayload structs.Execut
 			Slot:          s.SMessage.Slot,
 			ProposerIndex: s.SMessage.ProposerIndex,
 			ParentRoot:    s.SMessage.ParentRoot,
-			StateRoot:     s.SMessage.StateRoot, // ep.EpStateRoot, //  s.SMessage.Body.ExecutionPayloadHeader.StateRoot,
+			StateRoot:     s.SMessage.StateRoot,
 			Body: &BeaconBlockBody{
-				RandaoReveal:      s.SMessage.Body.RandaoReveal,
-				Eth1Data:          s.SMessage.Body.Eth1Data,
-				Graffiti:          s.SMessage.Body.Graffiti,
-				ProposerSlashings: s.SMessage.Body.ProposerSlashings,
-				AttesterSlashings: s.SMessage.Body.AttesterSlashings,
-				Attestations:      s.SMessage.Body.Attestations,
-				Deposits:          s.SMessage.Body.Deposits,
-				VoluntaryExits:    s.SMessage.Body.VoluntaryExits,
-				SyncAggregate:     s.SMessage.Body.SyncAggregate,
+				RandaoReveal:      body.RandaoReveal,
+				Eth1Data:          body.Eth1Data,
+				Graffiti:          body.Graffiti,
+				ProposerSlashings: body.ProposerSlashings,
+				AttesterSlashings: body.AttesterSlashings,
+				Attestations:      body.Attestations,
+				Deposits:          body.Deposits,
+				VoluntaryExits:    body.VoluntaryExits,
+				SyncAggregate:     body.SyncAggregate,
 				ExecutionPayload:  ep,
 			},
 		},

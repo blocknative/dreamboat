@@ -208,7 +208,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	header := maxProfitBlock.Header
 
-	if header.Header == nil {
+	if header.Header == nil || header.Trace == nil {
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
@@ -232,7 +232,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, errors.New("incompatible fork state")
 		}
 		bid := &bellatrix.BuilderBid{
-			BellatrixHeader: h, //header.Header,
+			BellatrixHeader: h,
 			BellatrixValue:  header.Trace.Value,
 			BellatrixPubkey: rs.config.PubKey,
 		}
@@ -245,7 +245,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
-			"bidValue":         bid.Value(),
+			"bidValue":         header.Trace.Value,
 			"blockHash":        bid.BellatrixHeader.BlockHash.String(),
 			"feeRecipient":     bid.BellatrixHeader.FeeRecipient.String(),
 			"slot":             slot,
@@ -263,7 +263,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, errors.New("incompatible fork state")
 		}
 		bid := &capella.BuilderBid{
-			CapellaHeader: h, //header.Header,
+			CapellaHeader: h,
 			CapellaValue:  header.Trace.Value,
 			CapellaPubkey: rs.config.PubKey,
 		}
@@ -276,7 +276,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
-			"bidValue":         bid.Value(),
+			"bidValue":         header.Trace.Value,
 			"blockHash":        bid.CapellaHeader.BlockHash.String(),
 			"feeRecipient":     bid.CapellaHeader.FeeRecipient.String(),
 			"slot":             slot,
@@ -294,7 +294,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) { // TODO(l): remove FB type
+func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
 
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")

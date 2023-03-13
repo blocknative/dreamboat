@@ -75,7 +75,7 @@ func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 	}
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) { // TODO(l): remove FB type
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid *SignedBuilderBid) (bbt structs.BlockBidAndTrace) {
 	return &BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.CapellaMessage,
@@ -111,7 +111,7 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 					BuilderPubkey:        s.CapellaMessage.BuilderPubkey,
 					ProposerPubkey:       s.CapellaMessage.ProposerPubkey,
 					ProposerFeeRecipient: s.CapellaMessage.ProposerFeeRecipient,
-					Value:                s.Value(),
+					Value:                s.CapellaMessage.Value,
 					GasLimit:             s.CapellaMessage.GasLimit,
 					GasUsed:              s.CapellaMessage.GasUsed,
 				},

@@ -11,7 +11,7 @@ import (
 type HeaderRequest map[string]string
 
 func (hr HeaderRequest) Slot() (Slot, error) {
-	slot, err := strconv.Atoi(hr["slot"])
+	slot, err := strconv.ParseUint(hr["slot"], 10, 64)
 	return Slot(slot), err
 }
 
