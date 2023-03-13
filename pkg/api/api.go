@@ -267,12 +267,12 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 // builder related handlers
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
+	var l = a.l
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 	var req structs.SubmitBlockRequest
-	fork := a.st.ForkVersion(a.st.HeadSlot())
-	switch fork {
+
+	switch a.st.ForkVersion(a.st.HeadSlot()) {
 	case structs.ForkCapella:
 		var creq capella.SubmitBlockRequest
 		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
@@ -281,6 +281,14 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &creq
+		l = a.l.With(log.F{
+			"fork":      "capella",
+			"slot":      creq.CapellaMessage.Slot,
+			"blockHash": creq.CapellaMessage.BlockHash,
+			"bidValue":  creq.CapellaMessage.Value,
+			"proposer":  creq.CapellaMessage.ProposerPubkey,
+			"builder":   creq.CapellaMessage.BuilderPubkey,
+		})
 	case structs.ForkBellatrix:
 		var breq bellatrix.SubmitBlockRequest
 		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
@@ -289,6 +297,14 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req = &breq
+		l = a.l.With(log.F{
+			"fork":      "bellatrix",
+			"slot":      breq.BellatrixMessage.Slot,
+			"blockHash": breq.BellatrixMessage.BlockHash,
+			"bidValue":  breq.BellatrixMessage.Value,
+			"proposer":  breq.BellatrixMessage.ProposerPubkey,
+			"builder":   breq.BellatrixMessage.BuilderPubkey,
+		})
 	default:
 		writeError(w, http.StatusInternalServerError, errors.New("not supported fork version"))
 		return
@@ -317,15 +333,9 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
-			a.l.With(log.F{
-				"code":      400,
-				"endpoint":  "submitBlock",
-				"payload":   req,
-				"slot":      req.Slot(),
-				"blockHash": req.BlockHash(),
-				"bidValue":  req.Value(),
-				"proposer":  req.ProposerPubkey(),
-				"builder":   req.BuilderPubkey(),
+			l.With(log.F{
+				"code":     400,
+				"endpoint": "submitBlock",
 			}).WithError(err).Debug("failed block submission")
 		}
 		writeError(w, http.StatusBadRequest, err)
