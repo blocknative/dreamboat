@@ -37,7 +37,14 @@ type fields struct {
 
 func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVersion, submitRequest structs.SubmitBlockRequest, sk *bls.SecretKey, pubKey types.PublicKey, relaySigningDomain types.Domain, genesisTime uint64) fields {
 
+	proposerSigningDomain, err := ccommon.ComputeDomain(
+		types.DomainTypeBeaconProposer,
+		types.Root{}.String())
+
 	conf := RelayConfig{
+		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
+			0: proposerSigningDomain,
+		},
 		BuilderSigningDomain: relaySigningDomain,
 		SecretKey:            sk,
 		PubKey:               pubKey,
@@ -241,6 +248,10 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				t.Errorf("Relay.GetHeader() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
+			proposerSigningDomain, err := ccommon.ComputeDomain(
+				types.DomainTypeBeaconProposer,
+				types.Root{}.String())
+
 			var sbbb structs.SignedBlindedBeaconBlock
 			switch s := gh.(type) {
 			case *bellatrix.GetHeaderResponse:
@@ -267,7 +278,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 						ExecutionPayloadHeader: &s.BellatrixData.BellatrixMessage.BellatrixHeader.ExecutionPayloadHeader,
 					},
 				}
-				signature, err := types.SignMessage(&msg, relaySigningDomain, sk)
+				signature, err := types.SignMessage(&msg, proposerSigningDomain, sk)
 				require.NoError(t, err)
 				sbbb = &bellatrix.SignedBlindedBeaconBlock{
 					SMessage:   msg,
@@ -300,7 +311,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 						ExecutionPayloadHeader: s.CapellaData.CapellaMessage.CapellaHeader,
 					},
 				}
-				signature, err := types.SignMessage(&msg, relaySigningDomain, sk)
+				signature, err := types.SignMessage(&msg, proposerSigningDomain, sk)
 				require.NoError(t, err)
 				sbbb = &capella.SignedBlindedBeaconBlock{
 					SMessage:   msg,
@@ -352,7 +363,7 @@ func validSubmitBlockRequestCapella(t require.TestingT, sk *bls.SecretKey, pubKe
 	payload := capella.ExecutionPayload{
 		ExecutionPayload: *random,
 		EpWithdrawals: []*structs.Withdrawal{{
-			Index:          1,
+			Index:          0,
 			ValidatorIndex: 1,
 			Address:        types.Address(random20Bytes()),
 			Amount:         1234,

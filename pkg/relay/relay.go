@@ -245,7 +245,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
-			"bidValue":         header.Trace.Value,
+			"bidValue":         header.Trace.Value.String(),
 			"blockHash":        bid.BellatrixHeader.BlockHash.String(),
 			"feeRecipient":     bid.BellatrixHeader.FeeRecipient.String(),
 			"slot":             slot,
@@ -253,7 +253,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 		return &bellatrix.GetHeaderResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
-			BellatrixData: &bellatrix.SignedBuilderBid{
+			BellatrixData: bellatrix.SignedBuilderBid{
 				BellatrixMessage:   bid,
 				BellatrixSignature: signature},
 		}, nil
@@ -262,13 +262,13 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		if !ok {
 			return nil, errors.New("incompatible fork state")
 		}
-		bid := &capella.BuilderBid{
+		bid := capella.BuilderBid{
 			CapellaHeader: h,
 			CapellaValue:  header.Trace.Value,
 			CapellaPubkey: rs.config.PubKey,
 		}
 		tSignature := time.Now()
-		signature, err := types.SignMessage(bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
+		signature, err := types.SignMessage(&bid, rs.config.BuilderSigningDomain, rs.config.SecretKey)
 		m.AppendSince(tSignature, "getHeader", "signature")
 		if err != nil {
 			return nil, ErrInternal
@@ -276,14 +276,14 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
-			"bidValue":         header.Trace.Value,
+			"bidValue":         header.Trace.Value.String(),
 			"blockHash":        bid.CapellaHeader.BlockHash.String(),
 			"feeRecipient":     bid.CapellaHeader.FeeRecipient.String(),
 			"slot":             slot,
 		}).Info("bid sent")
 		return &capella.GetHeaderResponse{
 			CapellaVersion: types.VersionString("capella"),
-			CapellaData: &capella.SignedBuilderBid{
+			CapellaData: capella.SignedBuilderBid{
 				CapellaMessage:   bid,
 				CapellaSignature: signature},
 		}, nil
@@ -338,7 +338,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	tGet := time.Now()
 
-	key := payloadRequest.ToPayloadKey(pk)
+	key, err := payloadRequest.ToPayloadKey(pk)
+	if err != nil {
+		logger.WithError(err).Warn("error getting payload")
+		return nil, ErrNoPayloadFound
+	}
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, forkv, key)
 	if err != nil || payload == nil {

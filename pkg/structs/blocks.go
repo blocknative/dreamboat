@@ -58,7 +58,7 @@ type SignedBlindedBeaconBlock interface {
 	ComputeSigningRoot(d types.Domain) ([32]byte, error)
 
 	ToBeaconBlock(executionPayload ExecutionPayload) (SignedBeaconBlock, error)
-	ToPayloadKey(pk types.PublicKey) PayloadKey
+	ToPayloadKey(pk types.PublicKey) (PayloadKey, error)
 }
 
 // BuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993
