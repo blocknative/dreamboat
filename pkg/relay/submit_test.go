@@ -11,6 +11,7 @@ import (
 	rpctypes "github.com/blocknative/dreamboat/pkg/client/sim/types"
 	"github.com/blocknative/dreamboat/pkg/relay/mocks"
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/structs/forks"
 	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/pkg/structs/forks/capella"
 	ccommon "github.com/blocknative/dreamboat/test/common"
@@ -243,28 +244,67 @@ func TestRelay_SubmitBlock(t *testing.T) {
 			var sbbb structs.SignedBlindedBeaconBlock
 			switch s := gh.(type) {
 			case *bellatrix.GetHeaderResponse:
-				sb := s.BellatrixData
-				sbbb = &bellatrix.SignedBlindedBeaconBlock{
-					SSignature: sb.Signature(),
-					SMessage: types.BlindedBeaconBlock{
-						Slot: tt.args.sbr.Slot(),
-						Body: &types.BlindedBeaconBlockBody{
-							ExecutionPayloadHeader: &sb.BellatrixMessage.BellatrixHeader.ExecutionPayloadHeader,
+				msg := types.BlindedBeaconBlock{
+					Slot:          tt.args.sbr.Slot(),
+					ProposerIndex: 0,
+					ParentRoot:    types.Root{0x03},
+					StateRoot:     types.Root{0x04},
+					Body: &types.BlindedBeaconBlockBody{
+						Eth1Data: &types.Eth1Data{
+							DepositRoot:  types.Root{0x05},
+							DepositCount: 5,
+							BlockHash:    types.Hash{0x06},
 						},
+						ProposerSlashings: []*types.ProposerSlashing{},
+						AttesterSlashings: []*types.AttesterSlashing{},
+						Attestations:      []*types.Attestation{},
+						Deposits:          []*types.Deposit{},
+						VoluntaryExits:    []*types.SignedVoluntaryExit{},
+						SyncAggregate: &types.SyncAggregate{
+							CommitteeBits:      types.CommitteeBits{0x07},
+							CommitteeSignature: types.Signature{0x08},
+						},
+						ExecutionPayloadHeader: &s.BellatrixData.BellatrixMessage.BellatrixHeader.ExecutionPayloadHeader,
 					},
+				}
+				signature, err := types.SignMessage(&msg, relaySigningDomain, sk)
+				require.NoError(t, err)
+				sbbb = &bellatrix.SignedBlindedBeaconBlock{
+					SMessage:   msg,
+					SSignature: signature,
 				}
 
 			case *capella.GetHeaderResponse:
-
-				sb := s.CapellaData
-				sbbb = &capella.SignedBlindedBeaconBlock{
-					SSignature: sb.Signature(),
-					SMessage: capella.BlindedBeaconBlock{
-						Slot: tt.args.sbr.Slot(),
-						Body: &capella.BlindedBeaconBlockBody{
-							ExecutionPayloadHeader: sb.CapellaMessage.CapellaHeader,
+				msg := capella.BlindedBeaconBlock{
+					Slot:          tt.args.sbr.Slot(),
+					ProposerIndex: 0,
+					ParentRoot:    types.Root{0x03},
+					StateRoot:     types.Root{0x04},
+					Body: &capella.BlindedBeaconBlockBody{
+						BlindedBeaconBlockBody: forks.BlindedBeaconBlockBody{
+							Eth1Data: &types.Eth1Data{
+								DepositRoot:  types.Root{0x05},
+								DepositCount: 5,
+								BlockHash:    types.Hash{0x06},
+							},
+							ProposerSlashings: []*types.ProposerSlashing{},
+							AttesterSlashings: []*types.AttesterSlashing{},
+							Attestations:      []*types.Attestation{},
+							Deposits:          []*types.Deposit{},
+							VoluntaryExits:    []*types.SignedVoluntaryExit{},
+							SyncAggregate: &types.SyncAggregate{
+								CommitteeBits:      types.CommitteeBits{0x07},
+								CommitteeSignature: types.Signature{0x08},
+							},
 						},
+						ExecutionPayloadHeader: s.CapellaData.CapellaMessage.CapellaHeader,
 					},
+				}
+				signature, err := types.SignMessage(&msg, relaySigningDomain, sk)
+				require.NoError(t, err)
+				sbbb = &capella.SignedBlindedBeaconBlock{
+					SMessage:   msg,
+					SSignature: signature,
 				}
 
 			}
