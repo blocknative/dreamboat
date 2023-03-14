@@ -41,13 +41,13 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		"withdrawalsNum": len(sbr.Withdrawals()),
 	})
 
-	root, err := verifyWithdrawals(rs.beaconState, sbr)
+	root, wRetried, err := verifyWithdrawals(rs.beaconState, sbr)
 	logger = logger.WithField("withdrawalsRoot", root)
 	if err != nil {
 		return fmt.Errorf("failed to verify withdrawals: %w", err)
 	}
 
-	retried, err := verifyBlock(sbr, rs.beaconState)
+	bRetried, err := verifyBlock(sbr, rs.beaconState)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
@@ -82,9 +82,10 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	}
 
 	logger.With(log.F{
-		"processingTimeMs": time.Since(tStart).Milliseconds(),
-		"is_new_max":       isNewMax,
-		"retry":            retried,
+		"processingTimeMs":  time.Since(tStart).Milliseconds(),
+		"is_new_max":        isNewMax,
+		"retry-withdrawals": wRetried,
+		"retry-block":       bRetried,
 	}).Trace("builder block stored")
 
 	return nil
@@ -248,7 +249,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 	if randao := beaconState.Randao(); randao != sbr.Random().String() {
 		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
 		if randao := beaconState.Randao(); randao != sbr.Random().String() {
-			return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
+			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
 		}
 		return true, nil
 	}
@@ -256,26 +257,27 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 	return false, nil
 }
 
-func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) (root types.Root, err error) {
+func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) (root types.Root, retried bool, err error) {
 	withdrawals := submitBlockRequest.Withdrawals()
 	if withdrawals == nil {
-		return types.Root{}, nil
+		return types.Root{}, false, nil
 	}
 
 	withdrawalState := state.Withdrawals()
 	if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) { // +1 because it's from previous slot
 		// recheck beacon sync state for early blocks
 		time.Sleep(StateRecheckDelay)
+		retried = true
 		withdrawalState = state.Withdrawals()
 		if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) {
-			return root, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
+			return root, retried, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
 		}
 	}
 
 	// get latest withdrawals and verify the roots match
 	withdrawalsRoot, err := withdrawals.HashTreeRoot()
 	if err != nil {
-		return root, fmt.Errorf("failed to compute withdrawals root: %w", err)
+		return root, retried, fmt.Errorf("failed to compute withdrawals root: %w", err)
 	}
 
 	root = types.Root(withdrawalsRoot)
@@ -283,7 +285,7 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		err = fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
 	}
 
-	return root, err
+	return root, retried, err
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
