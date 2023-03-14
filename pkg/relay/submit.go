@@ -81,8 +81,16 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		return err
 	}
 
+	processingTime := time.Since(tStart)
+	// subtract the retry waiting times 
+	if wRetried {
+		processingTime = -StateRecheckDelay
+	}
+	if bRetried {
+		processingTime = -StateRecheckDelay
+	}
 	logger.With(log.F{
-		"processingTimeMs":  time.Since(tStart).Milliseconds(),
+		"processingTimeMs":  processingTime.Milliseconds(),
 		"is_new_max":        isNewMax,
 		"retry-withdrawals": wRetried,
 		"retry-block":       bRetried,
