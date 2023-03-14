@@ -82,12 +82,12 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	}
 
 	processingTime := time.Since(tStart)
-	// subtract the retry waiting times 
+	// subtract the retry waiting times
 	if wRetried {
-		processingTime = -StateRecheckDelay
+		processingTime -= StateRecheckDelay
 	}
 	if bRetried {
-		processingTime = -StateRecheckDelay
+		processingTime -= StateRecheckDelay
 	}
 	logger.With(log.F{
 		"processingTimeMs":  processingTime.Milliseconds(),
