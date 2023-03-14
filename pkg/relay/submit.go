@@ -47,7 +47,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		return fmt.Errorf("failed to verify withdrawals: %w", err)
 	}
 
-	_, err = verifyBlock(sbr, rs.beaconState)
+	retried, err := verifyBlock(sbr, rs.beaconState)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
@@ -84,6 +84,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	logger.With(log.F{
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 		"is_new_max":       isNewMax,
+		"retry":            retried,
 	}).Trace("builder block stored")
 
 	return nil
@@ -229,7 +230,8 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	return newMax, nil
 }
 
-func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error) {
+// returns a bool and an error, the bool indicates whether the block verification retried before succeeding
+func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool, err error) {
 	if sbr == nil || sbr.Slot() == 0 {
 		return false, ErrEmptyBlock
 	}
@@ -248,9 +250,10 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (bool, error
 		if randao := beaconState.Randao(); randao != sbr.Random().String() {
 			return false, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
 		}
+		return true, nil
 	}
 
-	return true, nil
+	return false, nil
 }
 
 func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockRequest) (root types.Root, err error) {
