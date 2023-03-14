@@ -128,7 +128,7 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 
 			// update proposer duties and known validators
 			if err := s.updateKnownValidators(ctx, state, client, headSlot); err != nil {
-				logger.WithError(err).Warn("failed to update known validators")
+				logger.WithError(err).Error("failed to update known validators")
 				continue
 			}
 
@@ -192,7 +192,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				logger.
 					With(ev).
 					WithError(err).
-					Warn("error processing slot")
+					Error("error processing slot")
 				continue
 			}
 
@@ -256,7 +256,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	if (DurationPerEpoch / 2) < time.Since(state.KnownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
 		go func(slot structs.Slot) {
 			if err := s.updateKnownValidators(ctx, state, client, slot); err != nil {
-				logger.WithError(err).Warn("failed to update known validators")
+				logger.WithError(err).Error("failed to update known validators")
 				return
 			}
 		}(received)
