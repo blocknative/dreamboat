@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/structs"
 )
 
 type AtomicState struct {

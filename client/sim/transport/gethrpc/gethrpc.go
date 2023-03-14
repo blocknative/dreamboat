@@ -3,7 +3,7 @@ package gethrpc
 import (
 	"context"
 
-	"github.com/blocknative/dreamboat/pkg/client/sim/types"
+	"github.com/blocknative/dreamboat/client/sim/types"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
