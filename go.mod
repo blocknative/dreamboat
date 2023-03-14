@@ -98,6 +98,3 @@ require (
 )
 
 replace github.com/supranational/blst => github.com/lukanus/blst v0.0.0-20221108180119-1ce3e6f62936
-
-// replace github.com/attestantio/go-eth2-client with custom fork
-replace github.com/attestantio/go-eth2-client => github.com/avalonche/go-eth2-client v0.0.0-20230220205736-f9665d7ade90
