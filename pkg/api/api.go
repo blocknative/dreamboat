@@ -224,7 +224,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		}
 		req = &creq
 		if !creq.Validate() {
-			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()
+			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload validation").Inc()
 			a.l.With(log.F{
 				"code":      400,
 				"endpoint":  "getPayload",
@@ -243,7 +243,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		}
 		req = &breq
 		if !breq.Validate() {
-			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()
+			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload validation").Inc()
 			a.l.With(log.F{
 				"code":      400,
 				"endpoint":  "getPayload",
