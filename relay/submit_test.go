@@ -134,7 +134,8 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		return nil
 	})
 
-	h, err := submitRequest.Withdrawals().HashTreeRoot()
+	hW := structs.HashWithdrawals{Withdrawals: submitRequest.Withdrawals()}
+	h, err := hW.HashTreeRoot()
 	require.NoError(t, err)
 	switch fork {
 	case structs.ForkCapella:
