@@ -284,7 +284,8 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 	}
 
 	// get latest withdrawals and verify the roots match
-	withdrawalsRoot, err := withdrawals.HashTreeRoot()
+	hW := structs.HashWithdrawals{Withdrawals: withdrawals}
+	withdrawalsRoot, err := hW.HashTreeRoot()
 	if err != nil {
 		return root, retried, fmt.Errorf("failed to compute withdrawals root: %w", err)
 	}
