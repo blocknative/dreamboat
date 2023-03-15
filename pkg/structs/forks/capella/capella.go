@@ -177,7 +177,8 @@ func PayloadToPayloadHeader(p *ExecutionPayload) (*ExecutionPayloadHeader, error
 	var withdrawalsRoot [32]byte
 	w := p.EpWithdrawals
 	if w != nil {
-		withdrawalsRoot, err = p.EpWithdrawals.HashTreeRoot()
+		hW := structs.HashWithdrawals{Withdrawals: p.EpWithdrawals}
+		withdrawalsRoot, err = hW.HashTreeRoot()
 		if err != nil {
 			return nil, err
 		}

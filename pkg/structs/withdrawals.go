@@ -8,24 +8,39 @@ import (
 // Withdrawal provides information about a withdrawal.
 type Withdrawals []*Withdrawal
 
+// Withdrawal provides information about a withdrawal.
+type HashWithdrawals struct {
+	Withdrawals Withdrawals `ssz-max:"16"`
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the Withdrawals object
+func (w *HashWithdrawals) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'Withdrawals'
+	size += len(w.Withdrawals) * 44
+
+	return
+}
+
 // HashTreeRoot ssz hashes the Withdrawals object
-func (w Withdrawals) HashTreeRoot() ([32]byte, error) {
+func (w *HashWithdrawals) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(w)
 }
 
 // HashTreeRootWith ssz hashes the Withdrawals object with a hasher
-func (w Withdrawals) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+func (w *HashWithdrawals) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	indx := hh.Index()
 
 	// Field (0) 'Withdrawals'
 	{
 		subIndx := hh.Index()
-		num := uint64(len(w))
+		num := uint64(len(w.Withdrawals))
 		if num > 16 {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
-		for _, elem := range w {
+		for _, elem := range w.Withdrawals {
 			if err = elem.HashTreeRootWith(hh); err != nil {
 				return
 			}
@@ -38,7 +53,7 @@ func (w Withdrawals) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 }
 
 // GetTree ssz hashes the Withdrawals object
-func (w Withdrawals) GetTree() (*ssz.Node, error) {
+func (w *HashWithdrawals) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(w)
 }
 

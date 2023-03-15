@@ -300,8 +300,8 @@ func (m *Manager) updatedExpectedWithdrawals(slot structs.Slot, state State, cli
 		}
 		return
 	}
-
-	root, err := withdrawals.Data.Withdrawals.HashTreeRoot()
+	hW := structs.HashWithdrawals{Withdrawals: withdrawals.Data.Withdrawals}
+	root, err := hW.HashTreeRoot()
 	if err != nil {
 		logger.WithError(err).Warn("failed to compute withdrawals root")
 		return
