@@ -98,7 +98,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 			SubmitBlockRequest: submitRequest,
 		}).Return(nil)
 	case structs.ForkCapella:
-		bvc.EXPECT().ValidateBlockV2(context.Background(), &rpctypes.BuilderBlockValidationRequest{
+		bvc.EXPECT().ValidateBlockV2(context.Background(), &rpctypes.BuilderBlockValidationRequestV2{
 			SubmitBlockRequest: submitRequest,
 		}).Return(nil)
 	}

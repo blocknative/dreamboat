@@ -13,6 +13,8 @@ import (
 
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	"github.com/blocknative/dreamboat/structs"
+	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
+	"github.com/blocknative/dreamboat/structs/forks/capella"
 )
 
 const (
@@ -41,12 +43,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		"withdrawalsNum": len(sbr.Withdrawals()),
 	})
 
-	root, wRetried, err := verifyWithdrawals(rs.beaconState, sbr)
-	logger = logger.WithField("withdrawalsRoot", root)
-	if err != nil {
-		return fmt.Errorf("failed to verify withdrawals: %w", err)
-	}
-
 	bRetried, err := verifyBlock(sbr, rs.beaconState)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
@@ -69,6 +65,12 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		return err
 	}
 	m.AppendSince(tVerify, "submitBlock", "verify")
+
+	root, wRetried, err := verifyWithdrawals(rs.beaconState, sbr)
+	logger = logger.WithField("withdrawalsRoot", root)
+	if err != nil {
+		return fmt.Errorf("failed to verify withdrawals: %w", err)
+	}
 
 	tValidateBlock := time.Now()
 	if err := rs.validateBlock(ctx, sbr); err != nil {
@@ -138,22 +140,38 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 		}
 	}
 
-	rpccall := &rpctypes.BuilderBlockValidationRequest{
-		SubmitBlockRequest: sbr,
-	}
+	switch t := sbr.(type) {
+	case *bellatrix.SubmitBlockRequest:
+		rpccall := &rpctypes.BuilderBlockValidationRequest{
+			SubmitBlockRequest: t,
+		}
 
-	switch rs.beaconState.ForkVersion(structs.Slot(sbr.Slot())) {
-	case structs.ForkBellatrix:
 		if err = rs.bvc.ValidateBlock(ctx, rpccall); err != nil {
 			return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 		}
 		return
-	case structs.ForkCapella:
+
+	case *capella.SubmitBlockRequest:
+		hW := structs.HashWithdrawals{Withdrawals: t.Withdrawals()}
+		withdrawalsRoot, err2 := hW.HashTreeRoot()
+		if err2 != nil {
+			return fmt.Errorf("%w: %s", ErrVerification, err2.Error()) // TODO: multiple err wrapping in Go 1.20
+		}
+		rpccall := &rpctypes.BuilderBlockValidationRequestV2{
+			SubmitBlockRequest: t,
+			WithdrawalsRoot:    withdrawalsRoot,
+		}
 		if err = rs.bvc.ValidateBlockV2(ctx, rpccall); err != nil {
 			return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 		}
 		return
 	}
+	/*
+		switch rs.beaconState.ForkVersion(structs.Slot(sbr.Slot())) {
+		case structs.ForkBellatrix:
+		case structs.ForkCapella:
+		}
+	*/
 
 	return nil
 }
@@ -221,7 +239,6 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
 	tPutHeader := time.Now()
-
 	b, err := json.Marshal(complete.Header)
 	if err != nil {
 		return newMax, fmt.Errorf("%w block as header: %s", ErrMarshal, err.Error()) // TODO: multiple err wrapping in Go 1.20
