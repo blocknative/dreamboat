@@ -10,7 +10,7 @@ import (
 
 type Client interface {
 	ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error)
-	ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error)
+	ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error)
 	Kind() string
 }
 
@@ -60,7 +60,7 @@ func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockV
 	return err
 }
 
-func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
 	if len(f.clients) == 0 {
 		f.m.ServedFrom.WithLabelValues("none", "error").Inc()
 		return client.ErrNotFound
