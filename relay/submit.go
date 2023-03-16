@@ -159,6 +159,7 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 		}
 		rpccall := &rpctypes.BuilderBlockValidationRequestV2{
 			SubmitBlockRequest: t,
+			RegisteredGasLimit: 30000000,
 			WithdrawalsRoot:    withdrawalsRoot,
 		}
 		if err = rs.bvc.ValidateBlockV2(ctx, rpccall); err != nil {
@@ -166,12 +167,6 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 		}
 		return
 	}
-	/*
-		switch rs.beaconState.ForkVersion(structs.Slot(sbr.Slot())) {
-		case structs.ForkBellatrix:
-		case structs.ForkCapella:
-		}
-	*/
 
 	return nil
 }

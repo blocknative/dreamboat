@@ -55,10 +55,10 @@ func (c *Client) validateBlock(ctx context.Context, method string, block any) (e
 		}); err != nil {
 		return err
 	}
-	r, _ := io.ReadAll(buff)
-	c.l.With(log.F{"req": string(r)}).Debug("valblocks")
-	resp, err := justsend(ctx, c.client, c.address, bytes.NewReader(r))
-	//resp, err := justsend(ctx, c.client, c.address, buff)
+	//r, _ := io.ReadAll(buff)
+	//c.l.With(log.F{"req": string(r)}).Debug("valblocks")
+	//resp, err := justsend(ctx, c.client, c.address, bytes.NewReader(r))
+	resp, err := justsend(ctx, c.client, c.address, buff)
 	if err != nil {
 		return err
 	}
