@@ -253,7 +253,7 @@ func (rc *ReConn) Get() (*Conn, error) {
 
 func concatBytes(id uint64, method string, params []byte) []byte {
 	b := bytes.NewBuffer(nil)
-	fmt.Fprintf(b, `{"id": %d,"method": "%s","params": `, id, method)
+	fmt.Fprintf(b, `{"jsonrpc":"2.0", "id": %d, "method": "%s","params": `, id, method)
 	b.Write(params)
 	b.WriteString(` }`)
 	return b.Bytes()

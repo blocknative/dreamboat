@@ -39,17 +39,17 @@ func (c *Client) Kind() string {
 func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV1", block)
 }
-func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV2", block)
 }
 
-func (c *Client) validateBlock(ctx context.Context, method string, block *types.BuilderBlockValidationRequest) (err error) {
+func (c *Client) validateBlock(ctx context.Context, method string, block any) (err error) {
 	conn, err := c.nodeConn.Get()
 	if err != nil {
 		return client.ErrNotFound
 	}
 
-	params, err := json.Marshal([]*types.BuilderBlockValidationRequest{block})
+	params, err := json.Marshal([]any{block})
 	if err != nil {
 		return err
 	}
