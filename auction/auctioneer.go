@@ -28,39 +28,39 @@ func NewAuctioneer() *Auctioneer {
 }
 
 func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) bool {
-	auction := a.auctions[block.Header.Trace().Slot%3]
+	auction := a.auctions[block.Header.BidTrace().Slot%3]
 
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
 
 	//auction.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
-	auction.latestBlockByBuilder[block.Header.Trace().BuilderPubkey] = block
+	auction.latestBlockByBuilder[block.Header.BidTrace().BuilderPubkey] = block
 
 	// always set new value and bigger slot
-	if auction.maxProfit == nil || auction.maxProfit.Header.Trace().Slot < block.Header.Trace().Slot {
+	if auction.maxProfit == nil || auction.maxProfit.Header.BidTrace().Slot < block.Header.BidTrace().Slot {
 		auction.maxProfit = block
 		return true
 	}
 
 	// always discard submissions lower than latest slot
-	if auction.maxProfit.Header.Trace().Slot > block.Header.Trace().Slot {
+	if auction.maxProfit.Header.BidTrace().Slot > block.Header.BidTrace().Slot {
 		return false
 	}
 
 	// accept bigger bid
-	value1 := auction.maxProfit.Header.Trace().Value
-	value2 := block.Header.Trace().Value
+	value1 := auction.maxProfit.Header.BidTrace().Value
+	value2 := block.Header.BidTrace().Value
 	if value1.Cmp(&value2) <= 0 {
 		auction.maxProfit = block
 		return true
 	}
 
 	// reassign biggest for resubmission from the same builder with lower bid
-	if auction.maxProfit.Header.Trace().BuilderPubkey == block.Header.Trace().BuilderPubkey &&
+	if auction.maxProfit.Header.BidTrace().BuilderPubkey == block.Header.BidTrace().BuilderPubkey &&
 		value1.Cmp(&value2) > 0 {
 		auction.maxProfit = block
 		for _, b := range auction.latestBlockByBuilder {
-			if auction.maxProfit.Header.Trace().Slot == b.Header.Trace().Slot && // Only check the current slot
+			if auction.maxProfit.Header.BidTrace().Slot == b.Header.BidTrace().Slot && // Only check the current slot
 				value1.Cmp(&value2) <= 0 {
 				auction.maxProfit = b
 			}
@@ -76,7 +76,7 @@ func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockst
 	auction.mu.RLock()
 	defer auction.mu.RUnlock()
 
-	if auction.maxProfit != nil && structs.Slot(auction.maxProfit.Header.Trace().Slot) == slot {
+	if auction.maxProfit != nil && structs.Slot(auction.maxProfit.Header.BidTrace().Slot) == slot {
 		return auction.maxProfit, true
 	}
 

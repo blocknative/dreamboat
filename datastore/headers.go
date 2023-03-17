@@ -107,7 +107,7 @@ func (s *Datastore) getMaxHeader(ctx context.Context, fork structs.ForkVersion, 
 			h = bellatrix.HeaderAndTrace{}
 			return json.Unmarshal(val, &h)
 		} else if fork == structs.ForkCapella {
-			h = &capella.HeaderAndTrace{}
+			h = capella.HeaderAndTrace{}
 			return json.Unmarshal(val, &h)
 		} else {
 			return errors.New("unknown fork")
@@ -160,18 +160,18 @@ func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
 	defer txn.Discard()
 
 	// we don't need to lock here, as the value would be always different from different block
-	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Header().GetBlockHash().String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.ExecutionHeader().GetBlockHash().String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
 		return err
 	}
 	slot := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slot, uint64(h.Slot))
 
-	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.Header().GetBlockHash()).Bytes(), slot).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.ExecutionHeader().GetBlockHash()).Bytes(), slot).WithTTL(ttl)); err != nil {
 		return err
 	}
 
 	// not needed every time
-	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.Header().GetBlockNumber()).Bytes(), slot).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.ExecutionHeader().GetBlockNumber()).Bytes(), slot).WithTTL(ttl)); err != nil {
 		return err
 	}
 
@@ -440,7 +440,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, latestSlot uint64, ttl
 		if !ok {
 			continue
 		}
-		if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace().BlockHash.String()), ttl); err != nil {
+		if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.BidTrace().BlockHash.String()), ttl); err != nil {
 			return err
 		}
 	}

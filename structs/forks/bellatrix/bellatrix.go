@@ -1,7 +1,6 @@
 package bellatrix
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -142,8 +141,8 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 
 	cbs.Payload = s.toBlockBidAndTrace(signedBuilderBid)
 	cbs.Header = HeaderAndTrace{
-		ExecutionPayloadHeader: signedBuilderBid.BellatrixMessage.BellatrixHeader,
-		BidTraceWithTimestamp: structs.BidTraceWithTimestamp{
+		Header: signedBuilderBid.BellatrixMessage.BellatrixHeader,
+		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 s.Slot(),
@@ -167,16 +166,16 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 }
 
 type HeaderAndTrace struct {
-	*ExecutionPayloadHeader
-	structs.BidTraceWithTimestamp
+	Header *ExecutionPayloadHeader
+	Trace  structs.BidTraceWithTimestamp
 }
 
-func (ht HeaderAndTrace) Header() structs.ExecutionPayloadHeader {
-	return ht.ExecutionPayloadHeader
+func (ht HeaderAndTrace) ExecutionHeader() structs.ExecutionPayloadHeader {
+	return ht.Header
 }
 
-func (ht HeaderAndTrace) Trace() structs.BidTraceWithTimestamp {
-	return ht.BidTraceWithTimestamp
+func (ht HeaderAndTrace) BidTrace() structs.BidTraceWithTimestamp {
+	return ht.Trace
 }
 
 func PayloadToPayloadHeader(p structs.ExecutionPayload) (*ExecutionPayloadHeader, error) {
@@ -287,10 +286,6 @@ func (eph *ExecutionPayloadHeader) GetBlockHash() types.Hash {
 
 func (eph *ExecutionPayloadHeader) GetBlockNumber() uint64 {
 	return eph.BlockNumber
-}
-
-func (eph *ExecutionPayloadHeader) MarshalJson() ([]byte, error) {
-	return json.Marshal(eph)
 }
 
 // ExecutionPayload https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/beacon-chain.md#executionpayload

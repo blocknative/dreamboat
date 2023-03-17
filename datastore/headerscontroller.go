@@ -258,10 +258,10 @@ func (h *IndexedHeaders) GetMaxProfit() (hnt structs.HeaderAndTrace, ok bool) {
 }
 
 func (h *IndexedHeaders) linkHash(hnt structs.HeaderAndTrace) {
-	_, ok := h.blockHashToContentPosition[hnt.Trace().BlockHash]
+	_, ok := h.blockHashToContentPosition[hnt.BidTrace().BlockHash]
 	if !ok {
 		h.content = append(h.content, hnt)
-		h.blockHashToContentPosition[hnt.Trace().BlockHash] = len(h.content) - 1
+		h.blockHashToContentPosition[hnt.BidTrace().BlockHash] = len(h.content) - 1
 	}
 }
 
@@ -291,11 +291,11 @@ func (h *IndexedHeaders) AddContent(hnt structs.HeaderAndTrace) error {
 	h.contentLock.Lock()
 	defer h.contentLock.Unlock()
 
-	value := hnt.Trace().Value
+	value := hnt.BidTrace().Value
 	newEl := IndexMeta{
-		Hash:          hnt.Trace().BlockHash,
+		Hash:          hnt.BidTrace().BlockHash,
 		Value:         value.BigInt(),
-		BuilderPubkey: hnt.Trace().BuilderPubkey,
+		BuilderPubkey: hnt.BidTrace().BuilderPubkey,
 	}
 
 	h.linkHash(hnt)
@@ -309,11 +309,11 @@ func (h *IndexedHeaders) PrependContent(hnts []structs.HeaderAndTrace) error {
 
 	newIndex := h.S.Index[:]
 	for _, hnt := range hnts {
-		value := hnt.Trace().Value
+		value := hnt.BidTrace().Value
 		newEl := IndexMeta{
-			Hash:          hnt.Trace().BlockHash,
+			Hash:          hnt.BidTrace().BlockHash,
 			Value:         value.BigInt(),
-			BuilderPubkey: hnt.Trace().BuilderPubkey,
+			BuilderPubkey: hnt.BidTrace().BuilderPubkey,
 		}
 
 		h.linkHash(hnt)

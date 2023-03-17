@@ -93,7 +93,7 @@ func (r *Relay) GetBlockReceived(ctx context.Context, query structs.HeaderTraceQ
 	if err == nil {
 		traces := make([]structs.BidTraceWithTimestamp, 0, len(events))
 		for _, event := range events {
-			tr := event.Trace()
+			tr := event.BidTrace()
 			traces = append(traces, tr)
 		}
 		return traces, err

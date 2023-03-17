@@ -199,41 +199,41 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	m.AppendSince(tGet, "getHeader", "get")
 
 	if err := rs.d.CacheBlock(ctx, structs.PayloadKey{
-		BlockHash: maxProfitBlock.Header.Trace().BlockHash,
-		Slot:      structs.Slot(maxProfitBlock.Header.Trace().Slot),
-		Proposer:  maxProfitBlock.Header.Trace().ProposerPubkey}, maxProfitBlock); err != nil {
+		BlockHash: maxProfitBlock.Header.BidTrace().BlockHash,
+		Slot:      structs.Slot(maxProfitBlock.Header.BidTrace().Slot),
+		Proposer:  maxProfitBlock.Header.BidTrace().ProposerPubkey}, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
 
 	header := maxProfitBlock.Header
 
-	if header.Header == nil {
+	if header.ExecutionHeader() == nil {
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
 
-	if header.Header().GetParentHash() != parentHash {
+	if header.ExecutionHeader().GetParentHash() != parentHash {
 		logger.WithField("expected", parentHash).WithField("got", parentHash).Debug("invalid parentHash")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
 
-	if header.Trace().ProposerPubkey != pk.PublicKey {
-		logger.WithField("expected", header.Trace().BuilderPubkey).WithField("got", pk.PublicKey).Debug("invalid pubkey")
+	if header.BidTrace().ProposerPubkey != pk.PublicKey {
+		logger.WithField("expected", header.BidTrace().BuilderPubkey).WithField("got", pk.PublicKey).Debug("invalid pubkey")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
 
 	fork := rs.beaconState.ForkVersion(slot)
 	if fork == structs.ForkBellatrix {
-		h, ok := header.Header().(*bellatrix.ExecutionPayloadHeader)
+		h, ok := header.ExecutionHeader().(*bellatrix.ExecutionPayloadHeader)
 		if !ok {
 			return nil, errors.New("incompatible fork state")
 		}
 		bid := &bellatrix.BuilderBid{
 			BellatrixHeader: h,
-			BellatrixValue:  header.Trace().Value,
+			BellatrixValue:  header.BidTrace().Value,
 			BellatrixPubkey: rs.config.PubKey,
 		}
 		tSignature := time.Now()
@@ -243,7 +243,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, ErrInternal
 		}
 
-		value := header.Trace().Value
+		value := header.BidTrace().Value
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
 			"bidValue":         value.String(),
@@ -259,13 +259,13 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 				BellatrixSignature: signature},
 		}, nil
 	} else if fork == structs.ForkCapella {
-		h, ok := header.Header().(*capella.ExecutionPayloadHeader)
+		h, ok := header.ExecutionHeader().(*capella.ExecutionPayloadHeader)
 		if !ok {
 			return nil, errors.New("incompatible fork state")
 		}
 		bid := capella.BuilderBid{
 			CapellaHeader: h,
-			CapellaValue:  header.Trace().Value,
+			CapellaValue:  header.BidTrace().Value,
 			CapellaPubkey: rs.config.PubKey,
 		}
 		tSignature := time.Now()
@@ -275,7 +275,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, ErrInternal
 		}
 
-		value := header.Trace().Value
+		value := header.BidTrace().Value
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
 			"bidValue":         value.String(),

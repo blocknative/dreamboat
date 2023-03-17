@@ -1,7 +1,6 @@
 package capella
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -112,8 +111,8 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 	cbs.Payload = s.toBlockBidAndTrace(signedBuilderBid)
 
 	cbs.Header = HeaderAndTrace{
-		ExecutionPayloadHeader: signedBuilderBid.CapellaMessage.CapellaHeader,
-		BidTraceWithTimestamp: structs.BidTraceWithTimestamp{
+		Header: signedBuilderBid.CapellaMessage.CapellaHeader,
+		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 s.Slot(),
@@ -160,16 +159,16 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 }
 
 type HeaderAndTrace struct {
-	*ExecutionPayloadHeader
-	structs.BidTraceWithTimestamp
+	Header *ExecutionPayloadHeader
+	Trace structs.BidTraceWithTimestamp
 }
 
-func (ht HeaderAndTrace) Header() structs.ExecutionPayloadHeader {
-	return ht.ExecutionPayloadHeader
+func (ht HeaderAndTrace) ExecutionHeader() structs.ExecutionPayloadHeader {
+	return ht.Header
 }
 
-func (ht HeaderAndTrace) Trace() structs.BidTraceWithTimestamp {
-	return ht.BidTraceWithTimestamp
+func (ht HeaderAndTrace) BidTrace() structs.BidTraceWithTimestamp {
+	return ht.Trace
 }
 
 func PayloadToPayloadHeader(p *ExecutionPayload) (*ExecutionPayloadHeader, error) {
@@ -486,10 +485,6 @@ func (eph *ExecutionPayloadHeader) GetBlockHash() types.Hash {
 
 func (eph *ExecutionPayloadHeader) GetBlockNumber() uint64 {
 	return eph.BlockNumber
-}
-
-func (eph *ExecutionPayloadHeader) MarshalJson() ([]byte, error) {
-	return json.Marshal(eph)
 }
 
 // MarshalSSZ ssz marshals the ExecutionPayloadHeader object
