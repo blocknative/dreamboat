@@ -55,7 +55,8 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	m.AppendSince(tCheckDelivered, "submitBlock", "checkDelivered")
 
 	tCheckRegistration := time.Now()
-	if err := rs.checkRegistration(ctx, sbr.ProposerPubkey(), sbr.ProposerFeeRecipient()); err != nil {
+	gasLimit, err := rs.checkRegistration(ctx, sbr.ProposerPubkey(), sbr.ProposerFeeRecipient())
+	if err != nil {
 		return err
 	}
 	m.AppendSince(tCheckRegistration, "submitBlock", "checkRegistration")
@@ -73,7 +74,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	}
 
 	tValidateBlock := time.Now()
-	if err := rs.validateBlock(ctx, sbr); err != nil {
+	if err := rs.validateBlock(ctx, gasLimit, sbr); err != nil {
 		return err
 	}
 	m.AppendSince(tValidateBlock, "submitBlock", "validateBlock")
@@ -129,7 +130,7 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error
 	return nil
 }
 
-func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockRequest) (err error) {
+func (rs *Relay) validateBlock(ctx context.Context, gasLimit uint64, sbr structs.SubmitBlockRequest) (err error) {
 	if !rs.bvc.IsSet() {
 		return nil
 	}
@@ -144,6 +145,7 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 	case *bellatrix.SubmitBlockRequest:
 		rpccall := &rpctypes.BuilderBlockValidationRequest{
 			SubmitBlockRequest: t,
+			RegisteredGasLimit: gasLimit,
 		}
 
 		if err = rs.bvc.ValidateBlock(ctx, rpccall); err != nil {
@@ -159,7 +161,7 @@ func (rs *Relay) validateBlock(ctx context.Context, sbr structs.SubmitBlockReque
 		}
 		rpccall := &rpctypes.BuilderBlockValidationRequestV2{
 			SubmitBlockRequest: t,
-			RegisteredGasLimit: 30000000,
+			RegisteredGasLimit: gasLimit,
 			WithdrawalsRoot:    withdrawalsRoot,
 		}
 		if err = rs.bvc.ValidateBlockV2(ctx, rpccall); err != nil {
@@ -184,31 +186,31 @@ func (rs *Relay) verifySignature(ctx context.Context, sbr structs.SubmitBlockReq
 	return
 }
 
-func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, proposerFeeRecipient types.Address) (err error) {
+func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, proposerFeeRecipient types.Address) (gasLimit uint64, err error) {
 	if v, ok := rs.cache.Get(pubkey); ok {
 		if int(time.Since(v.Time)) > rand.Intn(int(rs.config.RegistrationCacheTTL))+int(rs.config.RegistrationCacheTTL) {
 			rs.cache.Remove(pubkey)
 		}
 
 		if v.Entry.Message.FeeRecipient == proposerFeeRecipient {
-			return
+			return v.Entry.Message.GasLimit, nil
 		}
 	}
 
 	v, err := rs.vstore.GetRegistration(ctx, pubkey)
 	if err != nil {
-		return fmt.Errorf("fail to check registration: %w", err)
+		return 0, fmt.Errorf("fail to check registration: %w", err)
 	}
 
 	if v.Message.FeeRecipient != proposerFeeRecipient {
-		return ErrWrongFeeRecipient
+		return 0, ErrWrongFeeRecipient
 	}
 
 	rs.cache.Add(pubkey, structs.ValidatorCacheEntry{
 		Time:  time.Now(),
 		Entry: v,
 	})
-	return nil
+	return v.Message.GasLimit, nil
 }
 
 func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sbr structs.SubmitBlockRequest) (newMax bool, err error) {
