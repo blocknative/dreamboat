@@ -158,7 +158,7 @@ type DeliveredTrace struct {
 }
 
 type HeaderAndTrace interface {
-	ExecutionHeader() ExecutionPayloadHeader
+	ExecHeader() ExecutionPayloadHeader
 	BidTrace() BidTraceWithTimestamp
 }
 

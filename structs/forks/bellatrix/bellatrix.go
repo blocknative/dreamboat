@@ -170,7 +170,7 @@ type HeaderAndTrace struct {
 	Trace  structs.BidTraceWithTimestamp
 }
 
-func (ht HeaderAndTrace) ExecutionHeader() structs.ExecutionPayloadHeader {
+func (ht HeaderAndTrace) ExecHeader() structs.ExecutionPayloadHeader {
 	return ht.Header
 }
 

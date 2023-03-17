@@ -208,12 +208,12 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	header := maxProfitBlock.Header
 
-	if header.ExecutionHeader() == nil {
+	if header.ExecHeader() == nil {
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
 
-	if header.ExecutionHeader().GetParentHash() != parentHash {
+	if header.ExecHeader().GetParentHash() != parentHash {
 		logger.WithField("expected", parentHash).WithField("got", parentHash).Debug("invalid parentHash")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
@@ -227,7 +227,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	fork := rs.beaconState.ForkVersion(slot)
 	if fork == structs.ForkBellatrix {
-		h, ok := header.ExecutionHeader().(*bellatrix.ExecutionPayloadHeader)
+		h, ok := header.ExecHeader().(*bellatrix.ExecutionPayloadHeader)
 		if !ok {
 			return nil, errors.New("incompatible fork state")
 		}
@@ -259,7 +259,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 				BellatrixSignature: signature},
 		}, nil
 	} else if fork == structs.ForkCapella {
-		h, ok := header.ExecutionHeader().(*capella.ExecutionPayloadHeader)
+		h, ok := header.ExecHeader().(*capella.ExecutionPayloadHeader)
 		if !ok {
 			return nil, errors.New("incompatible fork state")
 		}

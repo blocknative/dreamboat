@@ -160,18 +160,18 @@ func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
 	defer txn.Discard()
 
 	// we don't need to lock here, as the value would be always different from different block
-	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.ExecutionHeader().GetBlockHash().String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.ExecHeader().GetBlockHash().String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
 		return err
 	}
 	slot := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slot, uint64(h.Slot))
 
-	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.ExecutionHeader().GetBlockHash()).Bytes(), slot).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.ExecHeader().GetBlockHash()).Bytes(), slot).WithTTL(ttl)); err != nil {
 		return err
 	}
 
 	// not needed every time
-	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.ExecutionHeader().GetBlockNumber()).Bytes(), slot).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.ExecHeader().GetBlockNumber()).Bytes(), slot).WithTTL(ttl)); err != nil {
 		return err
 	}
 
