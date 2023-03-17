@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/structs"
 )
 
 const (
