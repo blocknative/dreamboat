@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/pkg/structs"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/bellatrix"
+	"github.com/blocknative/dreamboat/pkg/structs/forks/capella"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/flashbots/go-boost-utils/types"
 	ds "github.com/ipfs/go-datastore"
@@ -70,19 +72,19 @@ type SlotInfo struct {
 	Added time.Time
 }
 
-func (s *Datastore) GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error) {
+func (s *Datastore) GetMaxProfitHeader(ctx context.Context, fork structs.ForkVersion, slot uint64) (structs.HeaderAndTrace, error) {
 	p, ok := s.hc.GetMaxProfit(uint64(slot))
 	if ok {
 		return p, nil
 	}
 
-	p, err := s.getMaxHeader(ctx, slot)
+	p, err := s.getMaxHeader(ctx, fork, slot)
 	return p, err
 }
 
 var ErrNotFound = errors.New("not found")
 
-func (s *Datastore) getMaxHeader(ctx context.Context, slot uint64) (h structs.HeaderAndTrace, err error) {
+func (s *Datastore) getMaxHeader(ctx context.Context, fork structs.ForkVersion, slot uint64) (h structs.HeaderAndTrace, err error) {
 	txn := s.Badger.NewTransaction(false)
 	defer txn.Discard()
 
@@ -100,9 +102,16 @@ func (s *Datastore) getMaxHeader(ctx context.Context, slot uint64) (h structs.He
 		return h, err
 	}
 
-	h = structs.HeaderAndTrace{}
 	err = item.Value(func(val []byte) error {
-		return json.Unmarshal(val, &h)
+		if fork == structs.ForkBellatrix {
+			h = bellatrix.HeaderAndTrace{}
+			return json.Unmarshal(val, &h)
+		} else if fork == structs.ForkCapella {
+			h = &capella.HeaderAndTrace{}
+			return json.Unmarshal(val, &h)
+		} else {
+			return errors.New("unknown fork")
+		}
 	})
 
 	return h, err
@@ -151,25 +160,25 @@ func storeHeader(s Badger, h structs.HeaderData, ttl time.Duration) error {
 	defer txn.Discard()
 
 	// we don't need to lock here, as the value would be always different from different block
-	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Header.GetBlockHash().String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(h.Slot), h.Header().GetBlockHash().String()).Bytes(), h.Marshaled).WithTTL(ttl)); err != nil {
 		return err
 	}
 	slot := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slot, uint64(h.Slot))
 
-	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.Header.GetBlockHash()).Bytes(), slot).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(h.Header().GetBlockHash()).Bytes(), slot).WithTTL(ttl)); err != nil {
 		return err
 	}
 
 	// not needed every time
-	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.Header.GetBlockNumber()).Bytes(), slot).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(HeaderNumKey(h.Header().GetBlockNumber()).Bytes(), slot).WithTTL(ttl)); err != nil {
 		return err
 	}
 
 	return txn.Commit()
 }
 
-func (s *Datastore) GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error) {
+func (s *Datastore) GetHeadersBySlot(ctx context.Context, fork structs.ForkVersion, slot uint64) ([]structs.HeaderAndTrace, error) {
 	el, _ := s.hc.GetHeaders(slot, slot, 1)
 	if el != nil {
 		return el, nil
@@ -193,7 +202,11 @@ func (s *Datastore) GetHeadersByBlockNum(ctx context.Context, blockNumber uint64
 	if err != nil {
 		return nil, err
 	}
-	return s.GetHeadersBySlot(ctx, binary.LittleEndian.Uint64(slot))
+
+	if result, err := s.GetHeadersBySlot(ctx, structs.ForkCapella, binary.LittleEndian.Uint64(slot)); err == nil {
+		return result, err
+	}
+	return s.GetHeadersBySlot(ctx, structs.ForkBellatrix, binary.LittleEndian.Uint64(slot))
 }
 
 func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error) {
@@ -204,38 +217,25 @@ func (s *Datastore) GetHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 
 	newContent, err := s.TTLStorage.Get(ctx, HeaderKeyContent(binary.LittleEndian.Uint64(slot), hash.String()))
 	if err != nil {
-		if !errors.Is(err, badger.ErrKeyNotFound) { // do not fail on not found try others
-			return nil, err
-		}
-		// old code fallback - to be removed
-		if true {
-			newContent, err = s.TTLStorage.Get(ctx, HeaderKey(binary.LittleEndian.Uint64(slot)))
-			if err != nil {
-				return nil, err
-			}
-
-			el := []structs.HeaderAndTrace{}
-			if err = json.Unmarshal(newContent, &el); err != nil {
-				return el, err
-			}
-
-			newEl := []structs.HeaderAndTrace{}
-			for _, v := range el {
-				if v.Header.GetBlockHash() == hash {
-					elem := v
-					newEl = append(newEl, elem)
-				}
-			}
-			return newEl, nil
-		}
-
-	}
-
-	el := structs.HeaderAndTrace{}
-	if err = json.Unmarshal(newContent, &el); err != nil {
 		return nil, err
 	}
-	return []structs.HeaderAndTrace{el}, nil
+
+	var el []structs.HeaderAndTrace
+	bel := []bellatrix.HeaderAndTrace{}
+	if err := json.Unmarshal(newContent, &bel); err != nil {
+		cel := []capella.HeaderAndTrace{}
+		if err := json.Unmarshal(newContent, &cel); err != nil {
+			return el, err
+		}
+		for _, ht := range cel {
+			el = append(el, ht)
+		}
+	}
+	for _, ht := range bel {
+		el = append(el, ht)
+	}
+
+	return el, nil
 }
 
 func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error) {
@@ -264,12 +264,21 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag 
 			return el, err
 		}
 		readr.Reset(data)
-		hnt := []structs.HeaderAndTrace{}
-		if err := dec.Decode(&hnt); err != nil {
-			return nil, err
+
+		chnt := []capella.HeaderAndTrace{}
+		if err := dec.Decode(&chnt); err != nil {
+			bhnt := []bellatrix.HeaderAndTrace{}
+			if err := dec.Decode(&bhnt); err != nil {
+				return nil, err
+			}
+			for _, ht := range bhnt {
+				el = append(el, ht)
+			}
 		}
 
-		el = append(el, hnt...)
+		for _, ht := range chnt {
+			el = append(el, ht)
+		}
 		initialSlot--
 		// introduce limit?
 	}
@@ -388,9 +397,16 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, latestSlot uint64, ttl
 				buff.WriteString(",")
 			}
 			io.Copy(buff, bytes.NewReader(payload.Content))
-			hnt := structs.HeaderAndTrace{}
-			if err := json.Unmarshal(payload.Content, &hnt); err != nil {
-				return err
+
+			var hnt structs.HeaderAndTrace
+			chnt := capella.HeaderAndTrace{}
+			hnt = chnt
+			if err := json.Unmarshal(payload.Content, &chnt); err != nil {
+				bhnt := bellatrix.HeaderAndTrace{}
+				if err := json.Unmarshal(payload.Content, &bhnt); err != nil {
+					return err
+				}
+				hnt = bhnt
 			}
 
 			if _, err := tempHC.Add(slot, hnt); err != nil {
@@ -406,7 +422,7 @@ func (s *Datastore) FixOrphanHeaders(ctx context.Context, latestSlot uint64, ttl
 		if !ok {
 			continue
 		}
-		if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace.BlockHash.String()), ttl); err != nil {
+		if err := s.TTLStorage.PutWithTTL(ctx, HeaderMaxNewKey(slot), []byte(maxProfit.Trace().BlockHash.String()), ttl); err != nil {
 			return err
 		}
 	}

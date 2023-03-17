@@ -110,9 +110,9 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 
 	cbs.Payload = s.toBlockBidAndTrace(signedBuilderBid)
 
-	cbs.Header = structs.HeaderAndTrace{
-		Header: signedBuilderBid.CapellaMessage.CapellaHeader,
-		Trace: structs.BidTraceWithTimestamp{
+	cbs.Header = HeaderAndTrace{
+		ExecutionPayloadHeader: signedBuilderBid.CapellaMessage.CapellaHeader,
+		BidTraceWithTimestamp: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 s.Slot(),
@@ -156,6 +156,19 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 		CapellaMessage:   builderBid,
 		CapellaSignature: sig,
 	}, nil
+}
+
+type HeaderAndTrace struct {
+	*ExecutionPayloadHeader
+	structs.BidTraceWithTimestamp
+}
+
+func (ht HeaderAndTrace) Header() structs.ExecutionPayloadHeader {
+	return ht.ExecutionPayloadHeader
+}
+
+func (ht HeaderAndTrace) Trace() structs.BidTraceWithTimestamp {
+	return ht.BidTraceWithTimestamp
 }
 
 func PayloadToPayloadHeader(p *ExecutionPayload) (*ExecutionPayloadHeader, error) {

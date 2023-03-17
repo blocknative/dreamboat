@@ -78,10 +78,10 @@ type Datastore interface {
 
 	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
 	CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error
-	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
+	GetMaxProfitHeader(ctx context.Context, fork structs.ForkVersion, slot uint64) (structs.HeaderAndTrace, error)
 
 	// to be changed
-	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
+	GetHeadersBySlot(ctx context.Context, fork structs.ForkVersion, slot uint64) ([]structs.HeaderAndTrace, error)
 	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
 	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
 	GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
@@ -199,9 +199,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	m.AppendSince(tGet, "getHeader", "get")
 
 	if err := rs.d.CacheBlock(ctx, structs.PayloadKey{
-		BlockHash: maxProfitBlock.Header.Trace.BlockHash,
-		Slot:      structs.Slot(maxProfitBlock.Header.Trace.Slot),
-		Proposer:  maxProfitBlock.Header.Trace.ProposerPubkey}, maxProfitBlock); err != nil {
+		BlockHash: maxProfitBlock.Header.Trace().BlockHash,
+		Slot:      structs.Slot(maxProfitBlock.Header.Trace().Slot),
+		Proposer:  maxProfitBlock.Header.Trace().ProposerPubkey}, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
@@ -213,27 +213,27 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, ErrNoBuilderBid
 	}
 
-	if header.Header.GetParentHash() != parentHash {
+	if header.Header().GetParentHash() != parentHash {
 		logger.WithField("expected", parentHash).WithField("got", parentHash).Debug("invalid parentHash")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
 
-	if header.Trace.ProposerPubkey != pk.PublicKey {
-		logger.WithField("expected", header.Trace.BuilderPubkey).WithField("got", pk.PublicKey).Debug("invalid pubkey")
+	if header.Trace().ProposerPubkey != pk.PublicKey {
+		logger.WithField("expected", header.Trace().BuilderPubkey).WithField("got", pk.PublicKey).Debug("invalid pubkey")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
 
 	fork := rs.beaconState.ForkVersion(slot)
 	if fork == structs.ForkBellatrix {
-		h, ok := header.Header.(*bellatrix.ExecutionPayloadHeader)
+		h, ok := header.Header().(*bellatrix.ExecutionPayloadHeader)
 		if !ok {
 			return nil, errors.New("incompatible fork state")
 		}
 		bid := &bellatrix.BuilderBid{
 			BellatrixHeader: h,
-			BellatrixValue:  header.Trace.Value,
+			BellatrixValue:  header.Trace().Value,
 			BellatrixPubkey: rs.config.PubKey,
 		}
 		tSignature := time.Now()
@@ -243,9 +243,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, ErrInternal
 		}
 
+		value := header.Trace().Value
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
-			"bidValue":         header.Trace.Value.String(),
+			"bidValue":         value.String(),
 			"blockHash":        bid.BellatrixHeader.BlockHash.String(),
 			"feeRecipient":     bid.BellatrixHeader.FeeRecipient.String(),
 			"slot":             slot,
@@ -258,13 +259,13 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 				BellatrixSignature: signature},
 		}, nil
 	} else if fork == structs.ForkCapella {
-		h, ok := header.Header.(*capella.ExecutionPayloadHeader)
+		h, ok := header.Header().(*capella.ExecutionPayloadHeader)
 		if !ok {
 			return nil, errors.New("incompatible fork state")
 		}
 		bid := capella.BuilderBid{
 			CapellaHeader: h,
-			CapellaValue:  header.Trace.Value,
+			CapellaValue:  header.Trace().Value,
 			CapellaPubkey: rs.config.PubKey,
 		}
 		tSignature := time.Now()
@@ -274,9 +275,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, ErrInternal
 		}
 
+		value := header.Trace().Value
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
-			"bidValue":         header.Trace.Value.String(),
+			"bidValue":         value.String(),
 			"blockHash":        bid.CapellaHeader.BlockHash.String(),
 			"feeRecipient":     bid.CapellaHeader.FeeRecipient.String(),
 			"slot":             slot,

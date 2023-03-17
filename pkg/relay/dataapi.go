@@ -81,7 +81,7 @@ func (r *Relay) GetBlockReceived(ctx context.Context, query structs.HeaderTraceQ
 	)
 
 	if query.HasSlot() {
-		events, err = r.d.GetHeadersBySlot(ctx, uint64(query.Slot))
+		events, err = r.d.GetHeadersBySlot(ctx, r.beaconState.ForkVersion(query.Slot) ,uint64(query.Slot))
 	} else if query.HasBlockHash() {
 		events, err = r.d.GetHeadersByBlockHash(ctx, query.BlockHash)
 	} else if query.HasBlockNum() {
@@ -93,7 +93,7 @@ func (r *Relay) GetBlockReceived(ctx context.Context, query structs.HeaderTraceQ
 	if err == nil {
 		traces := make([]structs.BidTraceWithTimestamp, 0, len(events))
 		for _, event := range events {
-			tr := event.Trace
+			tr := event.Trace()
 			traces = append(traces, tr)
 		}
 		return traces, err

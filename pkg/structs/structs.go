@@ -157,9 +157,9 @@ type DeliveredTrace struct {
 	BlockNumber uint64
 }
 
-type HeaderAndTrace struct {
-	Header ExecutionPayloadHeader
-	Trace  BidTraceWithTimestamp
+type HeaderAndTrace interface {
+	Header() ExecutionPayloadHeader
+	Trace()  BidTraceWithTimestamp
 }
 
 type ExecutionPayloadHeader interface {
