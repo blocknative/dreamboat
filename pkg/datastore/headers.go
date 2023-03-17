@@ -189,9 +189,26 @@ func (s *Datastore) GetHeadersBySlot(ctx context.Context, fork structs.ForkVersi
 		return el, err
 	}
 
-	el = []structs.HeaderAndTrace{}
-	if err = json.Unmarshal(data, &el); err != nil {
-		return el, err
+	hts := []structs.HeaderAndTrace{}
+
+	if fork == structs.ForkCapella {
+		chts := []capella.HeaderAndTrace{}
+		if err := json.Unmarshal(data, &chts); err != nil {
+			return hts, err
+		}
+		for _, cht := range chts {
+			hts = append(hts, cht)
+		}
+	} else if fork == structs.ForkBellatrix {
+		bhts := []bellatrix.HeaderAndTrace{}
+		if err := json.Unmarshal(data, &bhts); err != nil {
+			return hts, err
+		}
+		for _, cht := range bhts {
+			hts = append(hts, cht)
+		}
+	} else {
+		return hts, errors.New("unknown fork")
 	}
 
 	return el, err
