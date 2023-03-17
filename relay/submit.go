@@ -228,7 +228,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	}
 	err = rs.d.PutHeader(ctx, structs.HeaderData{
 		Slot:           structs.Slot(sbr.Slot()),
-		Marshaled:      b,
+		Marshaled:      complete.Header.,
 		HeaderAndTrace: complete.Header,
 	}, rs.config.TTL)
 	if err != nil {

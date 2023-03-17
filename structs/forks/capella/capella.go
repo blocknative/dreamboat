@@ -1,6 +1,7 @@
 package capella
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -485,6 +486,10 @@ func (eph *ExecutionPayloadHeader) GetBlockHash() types.Hash {
 
 func (eph *ExecutionPayloadHeader) GetBlockNumber() uint64 {
 	return eph.BlockNumber
+}
+
+func (eph *ExecutionPayloadHeader) MarshalJson() ([]byte, error) {
+	return json.Marshal(eph)
 }
 
 // MarshalSSZ ssz marshals the ExecutionPayloadHeader object

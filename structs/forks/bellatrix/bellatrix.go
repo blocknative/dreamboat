@@ -1,6 +1,7 @@
 package bellatrix
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -286,6 +287,10 @@ func (eph *ExecutionPayloadHeader) GetBlockHash() types.Hash {
 
 func (eph *ExecutionPayloadHeader) GetBlockNumber() uint64 {
 	return eph.BlockNumber
+}
+
+func (eph *ExecutionPayloadHeader) MarshalJson() ([]byte, error) {
+	return json.Marshal(eph)
 }
 
 // ExecutionPayload https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/beacon-chain.md#executionpayload

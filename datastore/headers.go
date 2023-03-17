@@ -291,11 +291,12 @@ func (s *Datastore) GetLatestHeaders(ctx context.Context, limit uint64, stopLag 
 			for _, ht := range bhnt {
 				el = append(el, ht)
 			}
+		} else {
+			for _, ht := range chnt {
+				el = append(el, ht)
+			}
 		}
 
-		for _, ht := range chnt {
-			el = append(el, ht)
-		}
 		initialSlot--
 		// introduce limit?
 	}

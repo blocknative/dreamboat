@@ -159,7 +159,8 @@ type DeliveredTrace struct {
 
 type HeaderAndTrace interface {
 	Header() ExecutionPayloadHeader
-	Trace()  BidTraceWithTimestamp
+	Trace() BidTraceWithTimestamp
+	MarshalJson() ([]byte, error)
 }
 
 type ExecutionPayloadHeader interface {
