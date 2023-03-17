@@ -39,22 +39,22 @@ func (f *Client) IsSet() bool {
 func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV1", block)
 }
-func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV2", block)
 }
 
-func (c *Client) validateBlock(ctx context.Context, method string, block *types.BuilderBlockValidationRequest) (err error) {
+func (c *Client) validateBlock(ctx context.Context, method string, block any) (err error) {
 	buff := new(bytes.Buffer)
 	enc := json.NewEncoder(buff)
 	if err := enc.Encode(
 		types.RpcRequest{
-			ID:     1,
-			Method: c.namespace + "_" + method,
-			Params: []interface{}{block},
+			VersionTag: "2.0",
+			ID:         1,
+			Method:     c.namespace + "_" + method,
+			Params:     []interface{}{block},
 		}); err != nil {
 		return err
 	}
-
 	resp, err := justsend(ctx, c.client, c.address, buff)
 	if err != nil {
 		return err
