@@ -23,6 +23,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// To migrate(?):
+// TestSubmitBlockInvalidTimestamp - and other params
+// TestSubmitBlocksTwoBuilders - probably doesn't matter in this test anymore
+// TestSubmitBlocksCancel - this should probably go to auctioneer
+
 type fields struct {
 	d           Datastore
 	das         DataAPIStore
@@ -257,6 +262,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 			proposerSigningDomain, err := ccommon.ComputeDomain(
 				types.DomainTypeBeaconProposer,
 				types.Root{}.String())
+			require.NoError(t, err)
 
 			var sbbb structs.SignedBlindedBeaconBlock
 			switch s := gh.(type) {
