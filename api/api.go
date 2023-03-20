@@ -58,7 +58,7 @@ type Relay interface {
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
-	GetBlockReceived(context.Context, structs.HeaderTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	GetBlockReceived(ctx context.Context, query structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
 }
 
 type Registrations interface {
@@ -506,7 +506,7 @@ func writeError(w http.ResponseWriter, code int, err error) {
 	})
 }
 
-func validateBuilderBlocksReceived(r *http.Request) (query structs.HeaderTraceQuery, kind string, err error) {
+func validateBuilderBlocksReceived(r *http.Request) (query structs.SubmissionTraceQuery, kind string, err error) {
 
 	slot, err := specificSlot(r)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
@@ -532,7 +532,7 @@ func validateBuilderBlocksReceived(r *http.Request) (query structs.HeaderTraceQu
 		limit = DataLimit
 	}
 
-	return structs.HeaderTraceQuery{
+	return structs.SubmissionTraceQuery{
 		Slot:      slot,
 		BlockHash: bh,
 		BlockNum:  bn,
