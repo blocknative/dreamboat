@@ -25,14 +25,12 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	store, err := dbbadger.NewDatastore("/tmp/EvidenceBadger", &dbbadger.DefaultOptions)
 	require.NoError(t, err)
 	d := badger.NewDatastore(store, store.DB, time.Hour)
+	blockNum := uint64(rand.Int())
 
-	h, _ := types.PayloadToPayloadHeader(&types.ExecutionPayload{
-		BlockNumber: uint64(rand.Int()),
-	})
 	v := types.U256Str{}
 	v.UnmarshalText([]byte("12395274185417459875"))
-	header := structs.HeaderAndTrace{
-		Header: h,
+
+	dt := structs.DeliveredTrace{
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
@@ -40,53 +38,55 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 					BlockHash:      types.Hash(random32Bytes()),
 					ProposerPubkey: types.PublicKey(random48Bytes()),
 				},
-				BlockNumber: h.BlockNumber,
+				BlockNumber: blockNum,
 				NumTx:       999,
 			},
 			Timestamp: uint64(time.Now().UnixMicro()),
 		},
+		BlockNumber: blockNum,
 	}
+
 	slotInt := rand.Int()
 	slot := structs.Slot(slotInt)
-	header.Trace.Slot = uint64(slotInt)
+	dt.Trace.Slot = uint64(slotInt)
 
 	// get
 	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Slot: slot})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block hash
-	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockHash: header.Trace.BlockHash})
+	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockHash: dt.Trace.BlockHash})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block number
-	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: header.Header.GetBlockNumber()})
+	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: dt.BlockNumber})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
-	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Pubkey: header.Trace.ProposerPubkey})
+	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Pubkey: dt.Trace.ProposerPubkey})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// set as delivered and retrieve again
-	err = d.PutDelivered(ctx, slot, structs.DeliveredTrace{Trace: header.Trace, BlockNumber: header.Header.GetBlockNumber()}, time.Minute)
+	err = d.PutDelivered(ctx, slot, dt, time.Minute)
 	require.NoError(t, err)
 
 	// get
 	gotHeader, err := d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Slot: slot})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader[0].BidTrace.Value)
+	require.EqualValues(t, dt.Trace.Value, gotHeader[0].BidTrace.Value)
 
 	// get by block hash
-	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockHash: header.Trace.BlockHash})
+	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockHash: dt.Trace.BlockHash})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader[0].BidTrace.Value)
+	require.EqualValues(t, dt.Trace.Value, gotHeader[0].BidTrace.Value)
 
 	// get by block number
-	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: header.Header.GetBlockNumber()})
+	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: dt.BlockNumber})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader[0].BidTrace.Value)
+	require.EqualValues(t, dt.Trace.Value, gotHeader[0].BidTrace.Value)
 
-	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Pubkey: header.Trace.ProposerPubkey})
+	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Pubkey: dt.Trace.ProposerPubkey})
 	require.NoError(t, err)
-	require.EqualValues(t, header.Trace.Value, gotHeader[0].BidTrace.Value)
+	require.EqualValues(t, dt.Trace.Value, gotHeader[0].BidTrace.Value)
 }
 
 func random32Bytes() (b [32]byte) {
