@@ -33,7 +33,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	v.UnmarshalText([]byte("12395274185417459875"))
 	header := structs.HeaderAndTrace{
 		Header: h,
-		Trace: &structs.BidTraceWithTimestamp{
+		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Value:          v,
