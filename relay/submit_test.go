@@ -69,9 +69,6 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 
 	state.EXPECT().Randao().MaxTimes(1).Return(submitRequest.Random().String())
 
-	ds.EXPECT().CheckSlotDelivered(context.Background(), submitRequest.Slot()).MaxTimes(1).Return(
-		false, nil,
-	)
 	cache.EXPECT().Get(submitRequest.ProposerPubkey()).Return(
 		structs.ValidatorCacheEntry{}, false,
 	)
