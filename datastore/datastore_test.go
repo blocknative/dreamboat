@@ -8,7 +8,10 @@ import (
 
 	datastore "github.com/blocknative/dreamboat/datastore"
 	"github.com/blocknative/dreamboat/test/common"
+	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2"
+
+	tBadger "github.com/blocknative/dreamboat/datastore/transport/badger"
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -24,9 +27,12 @@ func TestPutGetPayload(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	store := newMockDatastore()
+	tB, err := tBadger.Open("/tmp/" + t.Name() + uuid.New().String())
+	require.NoError(t, err)
+	defer tB.Close()
+
 	cache, _ := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](10)
-	ds := datastore.Datastore{TTLStorage: store, PayloadCache: cache}
+	ds := datastore.Datastore{TTLStorage: tB, PayloadCache: cache}
 
 	payload := randomBlockBidAndTrace()
 
