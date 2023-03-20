@@ -25,6 +25,7 @@ import (
 
 type fields struct {
 	d           Datastore
+	das         DataAPIStore
 	a           Auctioneer
 	ver         Verifier
 	config      RelayConfig
@@ -41,6 +42,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		types.DomainTypeBeaconProposer,
 		types.Root{}.String())
 
+	require.NoError(t, err)
 	conf := RelayConfig{
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 			0: proposerSigningDomain,
@@ -51,6 +53,8 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	}
 
 	ds := mocks.NewMockDatastore(ctrl)
+
+	das := mocks.NewMockDataAPIStore(ctrl)
 	state := mocks.NewMockState(ctrl)
 	cache := mocks.NewMockValidatorCache(ctrl)
 	vstore := mocks.NewMockValidatorStore(ctrl)
@@ -59,7 +63,6 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	a := mocks.NewMockAuctioneer(ctrl)
 
 	// Submit Block
-
 	state.EXPECT().Genesis().MaxTimes(1).Return(
 		structs.GenesisInfo{GenesisTime: genesisTime},
 	)
@@ -73,7 +76,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		structs.ValidatorCacheEntry{}, false,
 	)
 
-	state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(2).Return(fork)
+	state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).AnyTimes().Return(fork)
 
 	vstore.EXPECT().GetRegistration(context.Background(), submitRequest.ProposerPubkey()).MaxTimes(1).Return(
 		types.SignedValidatorRegistration{
@@ -93,12 +96,12 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	switch fork {
 	case structs.ForkBellatrix:
 		bvc.EXPECT().ValidateBlock(context.Background(), &rpctypes.BuilderBlockValidationRequest{
-			SubmitBlockRequest: submitRequest,
+			SubmitBlockRequest: submitRequest.(*bellatrix.SubmitBlockRequest),
 			RegisteredGasLimit: 3_000_000,
 		}).Return(nil)
 	case structs.ForkCapella:
 		bvc.EXPECT().ValidateBlockV2(context.Background(), &rpctypes.BuilderBlockValidationRequestV2{
-			SubmitBlockRequest: submitRequest,
+			SubmitBlockRequest: submitRequest.(*capella.SubmitBlockRequest),
 			RegisteredGasLimit: 3_000_000,
 		}).Return(nil)
 	}
@@ -114,6 +117,8 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		bl = block
 		return true
 	})
+
+	das.EXPECT().PutBuilderBlockSubmission(context.Background(), contents.Header.Trace, true).Times(1)
 
 	////   GetHeader
 	a.EXPECT().MaxProfitBlock(structs.Slot(submitRequest.Slot())).Times(1).
@@ -153,6 +158,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	return fields{
 		config:      conf,
 		d:           ds,
+		das:         das,
 		a:           a,
 		ver:         verify,
 		cache:       cache,
@@ -223,6 +229,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				f.ver,
 				f.beaconState,
 				f.d,
+				f.das,
 				f.a,
 				f.bvc)
 
