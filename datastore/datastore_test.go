@@ -87,7 +87,7 @@ func randomPayload() *types.ExecutionPayload {
 	}
 }
 
-func randomBlockBidAndTrace() *structs.BlockBidAndTrace {
+func randomBlockBidAndTrace() structs.BlockBidAndTrace {
 
 	sk, _, _ := bls.GenerateNewKeypair()
 
