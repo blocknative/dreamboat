@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	HeaderContentPrefix = "hc/"
+	HeaderContentPrefix = "hc"
 	maxSlotLag          = 50
 )
 
@@ -90,7 +90,7 @@ func (s *Datastore) getHeadersRange(ctx context.Context, slot, blockhash string)
 		dec := json.NewDecoder(readr)
 		var prefix []byte
 		if blockhash != "" {
-			prefix = []byte(strings.Join([]string{"/" + HeaderContentPrefix, slot, blockhash}, ""))
+			prefix = []byte(strings.Join([]string{"/" + HeaderContentPrefix, slot, blockhash}, "/"))
 		} else {
 			prefix = []byte(strings.Join([]string{"/" + HeaderContentPrefix, slot}, "/"))
 		}
