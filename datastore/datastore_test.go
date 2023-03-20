@@ -15,9 +15,6 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 
-	ds "github.com/ipfs/go-datastore"
-
-	ds_sync "github.com/ipfs/go-datastore/sync"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,7 +25,7 @@ func TestPutGetPayload(t *testing.T) {
 	defer cancel()
 
 	store := newMockDatastore()
-	cache, _ := lru.New[structs.PayloadKey, *structs.BlockBidAndTrace](10)
+	cache, _ := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](10)
 	ds := datastore.Datastore{TTLStorage: store, PayloadCache: cache}
 
 	payload := randomBlockBidAndTrace()
@@ -157,33 +154,4 @@ func random20Bytes() (b [20]byte) {
 func random256Bytes() (b [256]byte) {
 	rand.Read(b[:])
 	return b
-}
-
-var _ datastore.TTLStorage = (*mockDatastore)(nil)
-
-type mockDatastore struct{ ds.Datastore }
-
-func newMockDatastore() mockDatastore {
-	return mockDatastore{ds_sync.MutexWrap(ds.NewMapDatastore())}
-}
-
-func (d mockDatastore) PutWithTTL(ctx context.Context, key ds.Key, value []byte, ttl time.Duration) error {
-	go func() {
-		time.Sleep(ttl)
-		d.Delete(ctx, key)
-	}()
-
-	return d.Datastore.Put(ctx, key, value)
-}
-
-func (d mockDatastore) GetBatch(ctx context.Context, keys []ds.Key) (batch [][]byte, err error) {
-	for _, key := range keys {
-		data, err := d.Datastore.Get(ctx, key)
-		if err != nil {
-			continue
-		}
-		batch = append(batch, data)
-	}
-
-	return
 }

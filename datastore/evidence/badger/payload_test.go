@@ -12,7 +12,7 @@ import (
 
 	dbbadger "github.com/ipfs/go-ds-badger2"
 
-	"github.com/blocknative/dreamboat/pkg/datastore/evidence/badger"
+	"github.com/blocknative/dreamboat/datastore/evidence/badger"
 	"github.com/stretchr/testify/require"
 )
 
@@ -59,14 +59,14 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// get by block number
-	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: header.Header.BlockNumber})
+	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: header.Header.GetBlockNumber()})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Pubkey: header.Trace.ProposerPubkey})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// set as delivered and retrieve again
-	err = d.PutDelivered(ctx, slot, structs.DeliveredTrace{Trace: *header.Trace, BlockNumber: header.Header.BlockNumber}, time.Minute)
+	err = d.PutDelivered(ctx, slot, structs.DeliveredTrace{Trace: header.Trace, BlockNumber: header.Header.GetBlockNumber()}, time.Minute)
 	require.NoError(t, err)
 
 	// get
@@ -80,7 +80,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.EqualValues(t, header.Trace.Value, gotHeader[0].BidTrace.Value)
 
 	// get by block number
-	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: header.Header.BlockNumber})
+	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: header.Header.GetBlockNumber()})
 	require.NoError(t, err)
 	require.EqualValues(t, header.Trace.Value, gotHeader[0].BidTrace.Value)
 
