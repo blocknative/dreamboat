@@ -10,7 +10,6 @@ import (
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
-	"github.com/dgraph-io/badger/v2"
 	lru "github.com/hashicorp/golang-lru/v2"
 	ds "github.com/ipfs/go-datastore"
 )
@@ -20,13 +19,6 @@ var ErrNotFound = errors.New("not found")
 type TTLStorage interface {
 	PutWithTTL(context.Context, ds.Key, []byte, time.Duration) error
 	Get(context.Context, ds.Key) ([]byte, error)
-	Close() error
-}
-
-type Badger interface {
-	View(func(txn *badger.Txn) error) error
-	Update(func(txn *badger.Txn) error) error
-	NewTransaction(bool) *badger.Txn
 }
 
 func PayloadKeyKey(key structs.PayloadKey) ds.Key {
@@ -35,11 +27,10 @@ func PayloadKeyKey(key structs.PayloadKey) ds.Key {
 
 type Datastore struct {
 	TTLStorage
-	Badger
 	PayloadCache *lru.Cache[structs.PayloadKey, structs.BlockBidAndTrace]
 }
 
-func NewDatastore(t TTLStorage, v Badger, payloadCacheSize int) (*Datastore, error) {
+func NewDatastore(t TTLStorage, payloadCacheSize int) (*Datastore, error) {
 	cache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](payloadCacheSize)
 	if err != nil {
 		return nil, err
@@ -47,7 +38,6 @@ func NewDatastore(t TTLStorage, v Badger, payloadCacheSize int) (*Datastore, err
 
 	return &Datastore{
 		TTLStorage:   t,
-		Badger:       v,
 		PayloadCache: cache,
 	}, nil
 }
