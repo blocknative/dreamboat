@@ -42,16 +42,14 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		"withdrawalsNum": len(sbr.Withdrawals()),
 	})
 
+	if rs.lastDeliveredSlot.Load() >= sbr.Slot() {
+		return ErrPayloadAlreadyDelivered
+	}
+
 	bRetried, err := verifyBlock(sbr, rs.beaconState)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
-
-	tCheckDelivered := time.Now()
-	if err := rs.isPayloadDelivered(ctx, sbr.Slot()); err != nil {
-		return err
-	}
-	m.AppendSince(tCheckDelivered, "submitBlock", "checkDelivered")
 
 	tCheckRegistration := time.Now()
 	gasLimit, err := rs.checkRegistration(ctx, sbr.ProposerPubkey(), sbr.ProposerFeeRecipient())
@@ -101,34 +99,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	return nil
 }
 
-func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error) {
-	rs.deliveredCacheLock.RLock()
-	_, ok := rs.deliveredCache[slot]
-	rs.deliveredCacheLock.RUnlock()
-	if ok {
-		return ErrPayloadAlreadyDelivered
-	}
-	/*
-		ok, err = rs.das.CheckSlotDelivered(ctx, slot)
-		if ok {
-			rs.deliveredCacheLock.Lock()
-			if len(rs.deliveredCache) > 50 { // clean everything after every 50 slots
-				for k := range rs.deliveredCache {
-					delete(rs.deliveredCache, k)
-				}
-			}
-			rs.deliveredCache[slot] = struct{}{}
-			rs.deliveredCacheLock.Unlock()
-
-			return ErrPayloadAlreadyDelivered
-		}
-		if err != nil {
-			return err
-		}*/
-
-	return nil
-}
-
 func (rs *Relay) validateBlock(ctx context.Context, gasLimit uint64, sbr structs.SubmitBlockRequest) (err error) {
 	if !rs.bvc.IsSet() {
 		return nil
@@ -173,6 +143,13 @@ func (rs *Relay) validateBlock(ctx context.Context, gasLimit uint64, sbr structs
 }
 
 func (rs *Relay) verifySignature(ctx context.Context, sbr structs.SubmitBlockRequest) (err error) {
+
+	if rs.config.AllowedListedBuilders != nil && sbr.Slot() > 0 {
+		if _, ok := rs.config.AllowedListedBuilders[sbr.BuilderPubkey()]; ok {
+			return nil
+		}
+	}
+
 	msg, err := sbr.ComputeSigningRoot(rs.config.BuilderSigningDomain)
 	if err != nil {
 		return ErrInvalidSignature
