@@ -79,6 +79,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		types.SignedValidatorRegistration{
 			Message: &types.RegisterValidatorRequestMessage{
 				FeeRecipient: submitRequest.ProposerFeeRecipient(),
+				GasLimit:     3_000_000,
 			},
 		}, nil,
 	)
@@ -93,10 +94,12 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	case structs.ForkBellatrix:
 		bvc.EXPECT().ValidateBlock(context.Background(), &rpctypes.BuilderBlockValidationRequest{
 			SubmitBlockRequest: submitRequest,
+			RegisteredGasLimit: 3_000_000,
 		}).Return(nil)
 	case structs.ForkCapella:
 		bvc.EXPECT().ValidateBlockV2(context.Background(), &rpctypes.BuilderBlockValidationRequestV2{
 			SubmitBlockRequest: submitRequest,
+			RegisteredGasLimit: 3_000_000,
 		}).Return(nil)
 	}
 
@@ -111,8 +114,6 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		bl = block
 		return true
 	})
-
-	ds.EXPECT().PutHeader(gomock.Any(), gomock.Any(), conf.TTL)
 
 	////   GetHeader
 	a.EXPECT().MaxProfitBlock(structs.Slot(submitRequest.Slot())).Times(1).

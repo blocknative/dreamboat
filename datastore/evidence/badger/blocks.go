@@ -16,8 +16,6 @@ import (
 
 const (
 	HeaderPrefix = "header-"
-
-// HeaderContentPrefix = "hc/"
 )
 
 func HeaderKeyContent(slot uint64, blockHash string) ds.Key {
@@ -32,9 +30,9 @@ func HeaderNumKey(bn uint64) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-num-%d", bn))
 }
 
-func HeaderSlot(bn uint64) ds.Key {
-	return ds.NewKey(fmt.Sprintf("hs-%d", bn))
-}
+// func HeaderSlot(bn uint64) ds.Key {
+// 	return ds.NewKey(fmt.Sprintf("hs-%d", bn))
+// }
 
 func HeaderKey(slot uint64) ds.Key {
 	return ds.NewKey(fmt.Sprintf("%s%d", HeaderPrefix, slot))
