@@ -42,7 +42,7 @@ func TestPutGetPayload(t *testing.T) {
 		Proposer:  payload.Trace.Message.ProposerPubkey,
 		Slot:      structs.Slot(payload.Trace.Message.Slot),
 	}
-	err := ds.PutPayload(ctx, key, payload, time.Minute)
+	err = ds.PutPayload(ctx, key, payload, time.Minute)
 	require.NoError(t, err)
 
 	// get
@@ -57,9 +57,9 @@ func randomHeaderAndTrace() structs.HeaderAndTrace {
 
 	return structs.HeaderAndTrace{
 		Header: header,
-		Trace: &structs.BidTraceWithTimestamp{
+		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
-				BidTrace:    *block.Trace.Message,
+				BidTrace:    block.Message,
 				BlockNumber: header.BlockNumber,
 				NumTx:       999,
 			},
