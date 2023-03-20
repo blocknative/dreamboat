@@ -35,12 +35,16 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 
 	trPostgres "github.com/blocknative/dreamboat/datastore/transport/postgres"
-	valPostgres "github.com/blocknative/dreamboat/datastore/validator/postgres"
+
+	trBadger "github.com/blocknative/dreamboat/datastore/transport/badger"
+
+	daBadger "github.com/blocknative/dreamboat/datastore/evidence/badger"
+	daPostgres "github.com/blocknative/dreamboat/datastore/evidence/postgres"
 
 	valBadger "github.com/blocknative/dreamboat/datastore/validator/badger"
+	valPostgres "github.com/blocknative/dreamboat/datastore/validator/postgres"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -295,11 +299,17 @@ func run() cli.ActionFunc {
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
 
-		storage, err := badger.NewDatastore(c.String("datadir"), &badger.DefaultOptions)
+		storage, err := trBadger.Open(c.String("datadir"))
 		if err != nil {
 			logger.WithError(err).Error("failed to initialize datastore")
 			return err
 		}
+
+		if err = trBadger.InitDatastoreMetrics(m); err != nil {
+			logger.WithError(err).Error("failed to initialize datastore metrics")
+			return err
+		}
+
 		logger.With(log.F{
 			"service":     "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
@@ -307,19 +317,10 @@ func run() cli.ActionFunc {
 
 		timeRelayStart := time.Now()
 		state := &beacon.AtomicState{}
-
-		hc := datastore.NewHeaderController(c.Uint64("relay-header-memory-slot-lag"), c.Duration("relay-header-memory-slot-time-lag"))
-		hc.AttachMetrics(m)
-
-		ds, err := datastore.NewDatastore(&datastore.TTLDatastoreBatcher{TTLDatastore: storage}, storage.DB, hc, c.Int("relay-payload-cache-size"))
+		ds, err := datastore.NewDatastore(storage, storage.DB, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
-		if err = datastore.InitDatastoreMetrics(m); err != nil {
-			return err
-		}
-
-		go ds.MemoryCleanup(c.Context, c.Duration("relay-header-memory-purge-interval"), TTL)
 
 		beaconCli, err := initBeaconClients(c.Context, logger, c.StringSlice("beacon"), m)
 		if err != nil {
@@ -372,6 +373,21 @@ func run() cli.ActionFunc {
 		validatorCache, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](c.Int("relay-registrations-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to initialize validator cache: %w", err)
+		}
+
+		dbdApiURL := c.String("relay-dataapi-database-url")
+		// DATAAPI
+		var daDS relay.DataAPIStore
+		if dbdApiURL != "" {
+			valPG, err := trPostgres.Open(dbdApiURL, 10, 10, 10) // TODO(l): make configurable
+			if err != nil {
+				return fmt.Errorf("failed to connect to the database: %w", err)
+			}
+			m.RegisterDB(valPG, "dataapi")
+			daDS = daPostgres.NewDatastore(valPG, 0)
+			defer valPG.Close()
+		} else { // by default use existsing storage
+			daDS = daBadger.NewDatastore(storage, storage.DB, TTL)
 		}
 
 		// lazyload validators cache, it's optional and we don't care if it errors out
@@ -439,7 +455,7 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconCli, validatorCache, valDS, verificator, state, ds, auctioneer, simFallb)
+		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
 		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
@@ -474,34 +490,6 @@ func run() cli.ActionFunc {
 			}
 			return err
 		}(m)
-
-		errCh := make(chan error, 1)
-		go func(ctx context.Context, errCh chan error, l log.Logger, st *beacon.AtomicState) {
-			for {
-				cs := uint64(st.Duties().CurrentSlot)
-				if cs == 0 {
-					time.Sleep(time.Second)
-					l.Warn("retrying on getting current slot")
-					continue
-				}
-
-				if err := ds.FixOrphanHeaders(ctx, cs, TTL); err != nil {
-					l.WithError(err).Error("failed to fix orphan headers")
-					errCh <- err
-					return
-				}
-
-				errCh <- nil
-				l.Info("fixed orphan headers")
-				return
-			}
-		}(c.Context, errCh, logger, state)
-
-		if !c.Bool("relay-fast-boot") {
-			if err := <-errCh; err != nil {
-				return fmt.Errorf("fail to fix orphan headers: %w", err)
-			}
-		}
 
 		mux := http.NewServeMux()
 		a.AttachToHandler(mux)

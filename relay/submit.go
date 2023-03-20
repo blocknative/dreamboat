@@ -2,7 +2,6 @@ package relay
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -109,23 +108,23 @@ func (rs *Relay) isPayloadDelivered(ctx context.Context, slot uint64) (err error
 	if ok {
 		return ErrPayloadAlreadyDelivered
 	}
-
-	ok, err = rs.d.CheckSlotDelivered(ctx, slot)
-	if ok {
-		rs.deliveredCacheLock.Lock()
-		if len(rs.deliveredCache) > 50 { // clean everything after every 50 slots
-			for k := range rs.deliveredCache {
-				delete(rs.deliveredCache, k)
+	/*
+		ok, err = rs.das.CheckSlotDelivered(ctx, slot)
+		if ok {
+			rs.deliveredCacheLock.Lock()
+			if len(rs.deliveredCache) > 50 { // clean everything after every 50 slots
+				for k := range rs.deliveredCache {
+					delete(rs.deliveredCache, k)
+				}
 			}
-		}
-		rs.deliveredCache[slot] = struct{}{}
-		rs.deliveredCacheLock.Unlock()
+			rs.deliveredCache[slot] = struct{}{}
+			rs.deliveredCacheLock.Unlock()
 
-		return ErrPayloadAlreadyDelivered
-	}
-	if err != nil {
-		return err
-	}
+			return ErrPayloadAlreadyDelivered
+		}
+		if err != nil {
+			return err
+		}*/
 
 	return nil
 }
@@ -235,20 +234,10 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	newMax = rs.a.AddBlock(&complete)
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
-	tPutHeader := time.Now()
-	b, err := json.Marshal(complete.Header)
-	if err != nil {
-		return newMax, fmt.Errorf("%w block as header: %s", ErrMarshal, err.Error()) // TODO: multiple err wrapping in Go 1.20
-	}
-	err = rs.d.PutHeader(ctx, structs.HeaderData{
-		Slot:           structs.Slot(sbr.Slot()),
-		Marshaled:      b,
-		HeaderAndTrace: complete.Header,
-	}, rs.config.TTL)
+	err = rs.das.PutBuilderBlockSubmission(ctx, complete.Header.Trace, newMax)
 	if err != nil {
 		return newMax, fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
-	m.AppendSince(tPutHeader, "submitBlock", "putHeader")
 
 	return newMax, nil
 }

@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/relay Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient,Auctioneer,Verifier,Beacon
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/relay DataAPIStore,Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient,Auctioneer,Verifier,Beacon
 package relay
 
 import (
@@ -68,24 +68,25 @@ type Verifier interface {
 	Enqueue(ctx context.Context, sig [96]byte, pubkey [48]byte, msg [32]byte) (err error)
 }
 
-type Datastore interface {
-	CheckSlotDelivered(context.Context, uint64) (bool, error)
+type DataAPIStore interface {
+	// CheckSlotDelivered(context.Context, uint64) (bool, error)
+
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDelivered(context.Context, structs.PayloadQuery) (structs.BidTraceWithTimestamp, error)
+	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
+
+	//PutBuilderBlockSubmission(ctx context.Context, bid structs.HeaderData, isMostProfitable bool) (err error)
+	PutBuilderBlockSubmission(ctx context.Context, bid structs.BidTraceWithTimestamp, isMostProfitable bool) (err error)
+	GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+}
+
+type Datastore interface {
+	CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error
+
+	// PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
+	// GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	PutPayload(context.Context, structs.PayloadKey, structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockBidAndTrace, bool, error)
-
-	PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
-	CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error
-	GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
-
-	// to be changed
-	GetHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error)
-	GetHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error)
-	GetHeadersByBlockNum(ctx context.Context, num uint64) ([]structs.HeaderAndTrace, error)
-	GetLatestHeaders(ctx context.Context, limit uint64, stopLag uint64) ([]structs.HeaderAndTrace, error)
-	GetDeliveredBatch(context.Context, []structs.PayloadQuery) ([]structs.BidTraceWithTimestamp, error)
 }
 
 type Auctioneer interface {
@@ -113,7 +114,8 @@ type RelayConfig struct {
 }
 
 type Relay struct {
-	d Datastore
+	d   Datastore
+	das DataAPIStore
 
 	a Auctioneer
 	l log.Logger
@@ -136,9 +138,10 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, a Auctioneer, bvc BlockValidationClient) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient) *Relay {
 	rs := &Relay{
 		d:              d,
+		das:            das,
 		a:              a,
 		l:              l,
 		bvc:            bvc,
@@ -373,7 +376,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		if err != nil {
 			logger.WithError(err).Warn("failed to generate delivered payload")
 		}
-		if err := rs.d.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
+
+		if err := rs.das.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			logger.WithError(err).Warn("failed to set payload after delivery")
 		}
 	}(rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
