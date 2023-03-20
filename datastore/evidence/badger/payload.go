@@ -14,6 +14,10 @@ import (
 	ds "github.com/ipfs/go-datastore"
 )
 
+var (
+	DurationPerSlot = time.Second * 12
+)
+
 func DeliveredKey(slot structs.Slot) ds.Key {
 	return ds.NewKey(fmt.Sprintf("delivered-%d", slot))
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/dgraph-io/badger/v2"
@@ -15,11 +16,12 @@ import (
 )
 
 const (
-	HeaderPrefix = "header-"
+	HeaderContentPrefix = "hc/"
+	maxSlotLag          = 50
 )
 
 func HeaderKeyContent(slot uint64, blockHash string) ds.Key {
-	return ds.NewKey(fmt.Sprintf("hc/%d/%s", slot, blockHash))
+	return ds.NewKey(fmt.Sprintf("%s/%d/%s", HeaderContentPrefix, slot, blockHash))
 }
 
 func HeaderHashKey(bh types.Hash) ds.Key {
@@ -28,14 +30,6 @@ func HeaderHashKey(bh types.Hash) ds.Key {
 
 func HeaderNumKey(bn uint64) ds.Key {
 	return ds.NewKey(fmt.Sprintf("header-num-%d", bn))
-}
-
-// func HeaderSlot(bn uint64) ds.Key {
-// 	return ds.NewKey(fmt.Sprintf("hs-%d", bn))
-// }
-
-func HeaderKey(slot uint64) ds.Key {
-	return ds.NewKey(fmt.Sprintf("%s%d", HeaderPrefix, slot))
 }
 
 func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.BidTraceWithTimestamp, isMostProfitable bool) (err error) {
@@ -53,6 +47,7 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.B
 	if err := txn.SetEntry(badger.NewEntry(HeaderKeyContent(uint64(bid.Slot), bid.BlockHash.String()).Bytes(), data).WithTTL(s.TTL)); err != nil {
 		return err
 	}
+
 	if err := txn.SetEntry(badger.NewEntry(HeaderHashKey(bid.BlockHash).Bytes(), slot).WithTTL(s.TTL)); err != nil {
 		return err
 	}
@@ -64,12 +59,8 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.B
 	return txn.Commit()
 }
 
-func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, query structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, query structs.SubmissionTraceQuery) (events []structs.BidTraceWithTimestamp, err error) {
 
-	var (
-		events []structs.HeaderAndTrace
-		err    error
-	)
 	if query.HasSlot() {
 		events, err = s.getHeadersBySlot(ctx, uint64(query.Slot))
 	} else if query.HasBlockHash() {
@@ -77,38 +68,50 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 	} else if query.HasBlockNum() {
 		events, err = s.getHeadersByBlockNum(ctx, query.BlockNum)
 	} else {
-		events, err = s.getLatestHeaders(ctx, headSlot, int(query.Limit), uint64(s.TTL/DurationPerSlot))
+		events, err = s.getLatestHeaders(ctx, headSlot, int(query.Limit))
 	}
 
-	if err == nil {
-		traces := make([]structs.BidTraceWithTimestamp, 0, len(events))
-		for _, event := range events {
-			traces = append(traces, event.Trace)
+	if err != nil {
+		if errors.Is(err, ds.ErrNotFound) {
+			return []structs.BidTraceWithTimestamp{}, nil
 		}
-		return traces, err
+		return []structs.BidTraceWithTimestamp{}, err
 	}
-
-	if errors.Is(err, ds.ErrNotFound) {
-		return []structs.BidTraceWithTimestamp{}, nil
-	}
-	return nil, err
+	return events, err
 }
 
-func (s *Datastore) getHeadersBySlot(ctx context.Context, slot uint64) ([]structs.HeaderAndTrace, error) {
-	data, err := s.DB.Get(ctx, HeaderKey(slot))
-	if err != nil && errors.Is(err, ds.ErrNotFound) {
-		return nil, err
-	}
+func (s *Datastore) getHeadersBySlot(ctx context.Context, slot uint64) (el []structs.BidTraceWithTimestamp, err error) {
+	err = s.DBInter.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
 
-	el := []structs.HeaderAndTrace{}
-	if err = json.Unmarshal(data, &el); err != nil {
-		return nil, err
-	}
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		readr := bytes.NewReader(nil)
+		dec := json.NewDecoder(readr)
+		prefix := []byte("/" + HeaderContentPrefix + strconv.FormatUint(slot, 10) + "/")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			c, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			readr.Reset(c)
+
+			b := structs.BidTraceWithTimestamp{}
+			if err := dec.Decode(&b); err != nil {
+				return err
+			}
+			el = append(el, b)
+		}
+		return nil
+	})
 
 	return el, err
 }
 
-func (s *Datastore) getHeadersByBlockNum(ctx context.Context, blockNumber uint64) ([]structs.HeaderAndTrace, error) {
+func (s *Datastore) getHeadersByBlockNum(ctx context.Context, blockNumber uint64) ([]structs.BidTraceWithTimestamp, error) {
 	slot, err := s.DB.Get(ctx, HeaderNumKey(blockNumber))
 	if err != nil {
 		return nil, err
@@ -116,7 +119,7 @@ func (s *Datastore) getHeadersByBlockNum(ctx context.Context, blockNumber uint64
 	return s.getHeadersBySlot(ctx, binary.LittleEndian.Uint64(slot))
 }
 
-func (s *Datastore) getHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.HeaderAndTrace, error) {
+func (s *Datastore) getHeadersByBlockHash(ctx context.Context, hash types.Hash) ([]structs.BidTraceWithTimestamp, error) {
 	slot, err := s.DB.Get(ctx, HeaderHashKey(hash))
 	if err != nil {
 		return nil, err
@@ -129,14 +132,42 @@ func (s *Datastore) getHeadersByBlockHash(ctx context.Context, hash types.Hash) 
 		}
 	}
 
-	el := structs.HeaderAndTrace{}
+	el := structs.BidTraceWithTimestamp{}
 	if err = json.Unmarshal(content, &el); err != nil {
 		return nil, err
 	}
-	return []structs.HeaderAndTrace{el}, nil
+	return []structs.BidTraceWithTimestamp{el}, nil
 }
 
-func (s *Datastore) getLatestHeaders(ctx context.Context, headSlot uint64, limit int, stopLag uint64) (el []structs.HeaderAndTrace, err error) {
+func (s *Datastore) getLatestHeaders(ctx context.Context, headSlot uint64, limit int) (el []structs.BidTraceWithTimestamp, err error) {
+	initialSlot := headSlot - 1
+
+	for {
+		events, err := s.getHeadersBySlot(ctx, initialSlot)
+		if err != nil {
+			if errors.Is(err, ds.ErrNotFound) {
+				return el, nil
+			}
+			return el, err
+		}
+
+		el = append(el, events...)
+		if len(el) == limit {
+			return el, nil
+		} else if len(el) > limit {
+			return el[0:limit], nil
+		}
+
+		if headSlot-initialSlot >= maxSlotLag {
+			return el, nil
+		}
+		initialSlot--
+	}
+
+}
+
+/*
+func (s *Datastore) getLatestHeaders(ctx context.Context, headSlot uint64, limit int, stopLag uint64) (el []structs.BidTraceWithTimestamp, err error) {
 
 	initialSlot := headSlot - 1
 	readr := bytes.NewReader(nil)
@@ -171,3 +202,4 @@ func (s *Datastore) getLatestHeaders(ctx context.Context, headSlot uint64, limit
 		initialSlot--
 	}
 }
+*/
