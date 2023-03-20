@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -74,16 +74,12 @@ type DataAPIStore interface {
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
 
-	//PutBuilderBlockSubmission(ctx context.Context, bid structs.HeaderData, isMostProfitable bool) (err error)
 	PutBuilderBlockSubmission(ctx context.Context, bid structs.BidTraceWithTimestamp, isMostProfitable bool) (err error)
 	GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
 }
 
 type Datastore interface {
 	CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error
-
-	// PutHeader(ctx context.Context, hd structs.HeaderData, ttl time.Duration) error
-	// GetMaxProfitHeader(ctx context.Context, slot uint64) (structs.HeaderAndTrace, error)
 
 	PutPayload(context.Context, structs.PayloadKey, structs.BlockBidAndTrace, time.Duration) error
 	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockBidAndTrace, bool, error)
@@ -131,8 +127,7 @@ type Relay struct {
 	beacon      Beacon
 	beaconState State
 
-	deliveredCache     map[uint64]struct{}
-	deliveredCacheLock sync.RWMutex
+	lastDeliveredSlot *atomic.Uint64
 
 	m RelayMetrics
 }
@@ -140,18 +135,18 @@ type Relay struct {
 // NewRelay relay service
 func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient) *Relay {
 	rs := &Relay{
-		d:              d,
-		das:            das,
-		a:              a,
-		l:              l,
-		bvc:            bvc,
-		ver:            ver,
-		config:         config,
-		cache:          cache,
-		vstore:         vstore,
-		beacon:         beacon,
-		beaconState:    beaconState,
-		deliveredCache: make(map[uint64]struct{}),
+		d:                 d,
+		das:               das,
+		a:                 a,
+		l:                 l,
+		bvc:               bvc,
+		ver:               ver,
+		config:            config,
+		cache:             cache,
+		vstore:            vstore,
+		beacon:            beacon,
+		beaconState:       beaconState,
+		lastDeliveredSlot: &atomic.Uint64{},
 	}
 	rs.initMetrics()
 	return rs
@@ -210,7 +205,6 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	logger.Debug("payload cached")
 
 	header := maxProfitBlock.Header
-
 	if header.Header == nil {
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
@@ -353,6 +347,10 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, ErrNoPayloadFound
 	}
 	m.AppendSince(tGet, "getPayload", "get")
+
+	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
+		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
+	}
 
 	// defer put delivered datastore write
 	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
