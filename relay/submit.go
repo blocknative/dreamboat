@@ -211,8 +211,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	newMax = rs.a.AddBlock(&complete)
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
-	err = rs.das.PutBuilderBlockSubmission(ctx, complete.Header.Trace, newMax)
-	if err != nil {
+	if err = rs.das.PutBuilderBlockSubmission(ctx, complete.Header.Trace, newMax); err != nil {
 		return newMax, fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 

@@ -9,11 +9,8 @@ import (
 	ds "github.com/ipfs/go-datastore"
 )
 
-var (
-	DurationPerSlot = time.Second * 12
-)
-
 type DBInter interface {
+	View(func(txn *badger.Txn) error) error
 	NewTransaction(bool) *badger.Txn
 }
 
