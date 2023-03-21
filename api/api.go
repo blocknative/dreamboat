@@ -414,6 +414,11 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) {
 	defer timer.ObserveDuration()
 
 	pkStr := r.URL.Query().Get("pubkey")
+	if pkStr == "" {
+		a.m.ApiReqCounter.WithLabelValues("specificRegistration", "400", "empty pk").Inc()
+		writeError(w, http.StatusBadRequest, errors.New("empty pubkey parameter"))
+		return
+	}
 
 	var pk types.PublicKey
 	if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
