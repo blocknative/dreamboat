@@ -9,6 +9,11 @@ import (
 	ds "github.com/ipfs/go-datastore"
 )
 
+const (
+	maxSlotLagBlocks   = 50
+	maxSlotLagPayloads = 350
+)
+
 type DBInter interface {
 	View(func(txn *badger.Txn) error) error
 	NewTransaction(bool) *badger.Txn

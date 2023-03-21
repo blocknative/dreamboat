@@ -1,6 +1,7 @@
 package badger
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,10 +14,6 @@ import (
 	"golang.org/x/exp/constraints"
 
 	ds "github.com/ipfs/go-datastore"
-)
-
-var (
-	DurationPerSlot = time.Second * 12
 )
 
 func DeliveredKey(slot structs.Slot) ds.Key {
@@ -97,7 +94,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		if query.Cursor != 0 {
 			start = min(headSlot, query.Cursor)
 		}
-		return s.getTailDelivered(ctx, start, query.Limit)
+		return s.getlatestDelivered(ctx, start, int(query.Limit))
 	}
 
 	data, err := s.DB.Get(ctx, key)
@@ -135,66 +132,44 @@ func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.Paylo
 	return ds.NewKey(string(rawKey)), nil
 }
 
-func (s *Datastore) getTailDelivered(ctx context.Context, start, limit uint64) (events []structs.BidTraceExtended, err error) {
+func (s *Datastore) getlatestDelivered(ctx context.Context, start uint64, limit int) (el []structs.BidTraceExtended, err error) {
+	initialSlot := start
 
-	stop := start - min(uint64(s.TTL/DurationPerSlot), start)
-	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
+	readr := bytes.NewReader(nil)
+	dec := json.NewDecoder(readr)
+	el = []structs.BidTraceExtended{}
 
-	queries := make([]uint64, 0, limit)
-
-	for highSlot := start; len(batch) < int(limit) && stop <= highSlot; highSlot -= min(limit, highSlot) {
-		queries = queries[:0]
-		for s := highSlot; highSlot-limit < s && stop <= s; s-- {
-			queries = append(queries, s)
-		}
-
-		nextBatch, err := s.GetDeliveredBatch(ctx, queries)
+	for {
+		payload, err := s.DB.Get(ctx, DeliveredKey(structs.Slot(start)))
 		if err != nil {
-			// r.l.WithError(err).Warn("failed getting header batch")
-			continue
+			if errors.Is(err, ds.ErrNotFound) {
+				initialSlot--
+				if start-initialSlot >= maxSlotLagPayloads {
+					return el, nil
+				}
+				continue
+			}
+			return el, err
+		}
+		readr.Reset(payload)
+
+		bte := structs.BidTraceWithTimestamp{}
+		if err = dec.Decode(&bte); err != nil {
+			return el, err
 		}
 
-		batch = append(batch, nextBatch[:min(int(limit)-len(batch), len(nextBatch))]...)
-	}
-
-	events = []structs.BidTraceExtended{}
-	for _, event := range batch {
-		events = append(events, event.BidTraceExtended)
-	}
-	return events, nil
-}
-
-func (s *Datastore) GetDeliveredBatch(ctx context.Context, queries []uint64) ([]structs.BidTraceWithTimestamp, error) {
-	keys := make([]ds.Key, 0, len(queries))
-	for _, query := range queries {
-		keys = append(keys, ds.NewKey(string(DeliveredKey(structs.Slot(query)).Bytes())))
-	}
-
-	var (
-		batch [][]byte
-		err   error
-	)
-	for _, key := range keys {
-		data, err := s.DB.Get(ctx, key)
-		if err != nil {
-			continue
+		el = append(el, bte.BidTraceExtended)
+		if len(el) == limit {
+			return el, nil
+		} else if len(el) > limit {
+			return el[0:limit], nil
 		}
-		batch = append(batch, data)
-	}
-	if err != nil {
-		return nil, err
-	}
 
-	traceBatch := make([]structs.BidTraceWithTimestamp, 0, len(batch))
-	for _, data := range batch {
-		var trace structs.BidTraceWithTimestamp
-		if err = json.Unmarshal(data, &trace); err != nil {
-			return nil, err
+		if start-initialSlot >= maxSlotLagPayloads {
+			return el, nil
 		}
-		traceBatch = append(traceBatch, trace)
+		initialSlot--
 	}
-
-	return traceBatch, err
 }
 
 func min[T constraints.Ordered](a, b T) T {

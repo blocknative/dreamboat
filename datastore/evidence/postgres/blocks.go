@@ -59,13 +59,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		data = append(data, payload.BlockNum)
 		i++
 	}
-	/*
-		if payload. != "" {
-			parts = append(parts, "builder_pubkey = $"+strconv.Itoa(i))
-			data = append(data, payload.BuilderPubkey)
-			i++
-		}
-	*/
+
 	qBuilder := strings.Builder{}
 	qBuilder.WriteString(`SELECT block_time, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, value, gas_used, gas_limit, block_number, num_tx FROM builder_block_submission `)
 
@@ -100,7 +94,6 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		value                []byte
 	)
 	for rows.Next() {
-
 		bt := structs.BidTraceWithTimestamp{}
 		t := time.Time{}
 		err = rows.Scan(&t, &bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &value,
