@@ -140,7 +140,7 @@ func (s *Datastore) getlatestDelivered(ctx context.Context, start uint64, limit 
 	el = []structs.BidTraceExtended{}
 
 	for {
-		payload, err := s.DB.Get(ctx, DeliveredKey(structs.Slot(start)))
+		payload, err := s.DB.Get(ctx, DeliveredKey(structs.Slot(initialSlot)))
 		if err != nil {
 			if errors.Is(err, ds.ErrNotFound) {
 				initialSlot--
