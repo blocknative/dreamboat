@@ -77,6 +77,8 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 			return []structs.BidTraceWithTimestamp{}, nil
 		}
 		return []structs.BidTraceWithTimestamp{}, err
+	} else if events == nil {
+		return []structs.BidTraceWithTimestamp{}, nil
 	}
 	return events, err
 }

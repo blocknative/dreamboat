@@ -3,6 +3,7 @@ package badger
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -101,12 +102,14 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 
 	data, err := s.DB.Get(ctx, key)
 	if err != nil {
+		if errors.Is(err, ds.ErrNotFound) {
+			return []structs.BidTraceExtended{}, nil
+		}
 		return nil, err
 	}
 
 	var trace structs.BidTraceWithTimestamp
 	err = json.Unmarshal(data, &trace)
-
 	return []structs.BidTraceExtended{trace.BidTraceExtended}, err
 }
 
@@ -132,7 +135,7 @@ func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.Paylo
 	return ds.NewKey(string(rawKey)), nil
 }
 
-func (s *Datastore) getTailDelivered(ctx context.Context, start, limit uint64) ([]structs.BidTraceExtended, error) {
+func (s *Datastore) getTailDelivered(ctx context.Context, start, limit uint64) (events []structs.BidTraceExtended, err error) {
 
 	stop := start - min(uint64(s.TTL/DurationPerSlot), start)
 	batch := make([]structs.BidTraceWithTimestamp, 0, limit)
@@ -154,7 +157,7 @@ func (s *Datastore) getTailDelivered(ctx context.Context, start, limit uint64) (
 		batch = append(batch, nextBatch[:min(int(limit)-len(batch), len(nextBatch))]...)
 	}
 
-	events := make([]structs.BidTraceExtended, 0, len(batch))
+	events = []structs.BidTraceExtended{}
 	for _, event := range batch {
 		events = append(events, event.BidTraceExtended)
 	}

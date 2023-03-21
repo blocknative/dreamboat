@@ -104,7 +104,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
-		return nil, ErrNoRows
+		return []structs.BidTraceExtended{}, nil
 	case err != nil:
 		return nil, fmt.Errorf("query error: %w", err)
 	default:
@@ -136,6 +136,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 
 		bts = append(bts, bt)
 	}
+
 	return bts, err
 }
 

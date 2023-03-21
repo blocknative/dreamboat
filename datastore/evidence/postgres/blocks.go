@@ -84,7 +84,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
-		return nil, ErrNoRows
+		return []structs.BidTraceWithTimestamp{}, nil
 	case err != nil:
 		return nil, fmt.Errorf("query error: %w", err)
 	default:
