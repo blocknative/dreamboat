@@ -68,14 +68,6 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		i++
 	}
 
-	// TODO(l): BUG? Unsupported in relay?
-	/*
-		if queryArgs.ProposerPubkey != "" {
-			parts = append(parts, "proposer_pubkey = $"+strconv.Itoa(i))
-			data = append(data, queryArgs.ProposerPubkey)
-			i++
-		}
-	*/
 	qBuilder := strings.Builder{}
 	qBuilder.WriteString(`SELECT slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, block_number, num_tx, value, gas_used, gas_limit FROM payload_delivered `)
 
@@ -89,11 +81,6 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		}
 	}
 
-	// if filters.OrderByValue > 0 {
-	// 	qBuilder.WriteString(` ORDER BY value ASC `)
-	// } else if filters.OrderByValue < 0 {
-	// 	qBuilder.WriteString(` ORDER BY value DESC `)
-	// } else {
 	qBuilder.WriteString(` ORDER BY slot DESC, inserted_at DESC `)
 
 	if queryArgs.Limit > 0 {

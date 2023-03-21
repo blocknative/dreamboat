@@ -18,7 +18,6 @@ import (
 
 const (
 	HeaderContentPrefix = "hc"
-	maxSlotLag          = 50
 )
 
 func HeaderKeyContent(slot uint64, blockHash string, builderHash string) ds.Key {
@@ -154,7 +153,7 @@ func (s *Datastore) getLatestHeaders(ctx context.Context, headSlot uint64, limit
 			return el[0:limit], nil
 		}
 
-		if headSlot-initialSlot >= maxSlotLag {
+		if headSlot-initialSlot >= maxSlotLagBlocks {
 			return el, nil
 		}
 		initialSlot--
