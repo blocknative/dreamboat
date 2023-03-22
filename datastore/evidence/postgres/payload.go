@@ -50,9 +50,9 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		i++
 	}
 
-	if queryArgs.BlockHash != [32]byte{} {
+	if queryArgs.BlockHash != Emptybytes32 {
 		parts = append(parts, "block_hash = $"+strconv.Itoa(i))
-		data = append(data, queryArgs.BlockHash)
+		data = append(data, queryArgs.BlockHash.String())
 		i++
 	}
 
@@ -62,8 +62,8 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		i++
 	}
 
-	if queryArgs.Pubkey.String() != "" {
-		parts = append(parts, "builder_pubkey = $"+strconv.Itoa(i))
+	if queryArgs.Pubkey != Emptybytes48 {
+		parts = append(parts, "proposer_pubkey = $"+strconv.Itoa(i))
 		data = append(data, queryArgs.Pubkey.String())
 		i++
 	}

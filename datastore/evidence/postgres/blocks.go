@@ -48,7 +48,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		i++
 	}
 
-	if payload.BlockHash != [32]byte{} {
+	if payload.BlockHash != Emptybytes32 {
 		parts = append(parts, "block_hash = $"+strconv.Itoa(i))
 		data = append(data, payload.BlockHash.String())
 		i++
