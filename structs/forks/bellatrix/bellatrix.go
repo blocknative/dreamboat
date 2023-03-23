@@ -535,6 +535,13 @@ func (bbat *BlockBidAndTrace) BidValue() types.U256Str {
 	return bbat.Bid.BellatrixData.Value()
 }
 
+func (bbat *BlockBidAndTrace) Slot() uint64 {
+	return bbat.Trace.Message.Slot
+}
+func (bbat *BlockBidAndTrace) Proposer() types.PublicKey {
+	return bbat.Trace.Message.ProposerPubkey
+}
+
 func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 	return &bbat.Payload.BellatrixData
 }

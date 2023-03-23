@@ -215,6 +215,10 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 		return newMax, fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 
+	if rs.config.Distributed && rs.config.StreamSubmissions {
+		go rs.streamBlockSubmission(complete.Payload)
+	}
+
 	return newMax, nil
 }
 
@@ -275,6 +279,15 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 	}
 
 	return root, retried, err
+}
+
+func (rs *Relay) streamBlockSubmission(block structs.BlockBidAndTrace) {
+	ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
+	defer cancel()
+
+	if err := rs.s.PublishBlockSubmission(ctx, block); err != nil {
+		rs.l.WithError(err).Warn("failed to stream block submission: %w", err)
+	}
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {

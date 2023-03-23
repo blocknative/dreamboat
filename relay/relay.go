@@ -85,6 +85,13 @@ type Datastore interface {
 	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockBidAndTrace, bool, error)
 }
 
+type Streamer interface {
+	PublishBlockSubmission(context.Context, structs.BlockBidAndTrace) error
+	PublishCacheBlock(context.Context, structs.BlockBidAndTrace) error
+	PublishSlotDelivered(context.Context, structs.Slot) error
+	SlotDeliveredChan() <-chan structs.Slot
+}
+
 type Auctioneer interface {
 	AddBlock(block *structs.CompleteBlockstruct) bool
 	MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool)
@@ -107,6 +114,8 @@ type RelayConfig struct {
 	TTL time.Duration
 
 	RegistrationCacheTTL time.Duration
+
+	Distributed, StreamSubmissions bool
 }
 
 type Relay struct {
@@ -122,6 +131,8 @@ type Relay struct {
 	cache  ValidatorCache
 	vstore ValidatorStore
 
+	s Streamer
+
 	bvc BlockValidationClient
 
 	beacon      Beacon
@@ -133,7 +144,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, s Streamer) *Relay {
 	rs := &Relay{
 		d:                 d,
 		das:               das,
@@ -141,6 +152,7 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		l:                 l,
 		bvc:               bvc,
 		ver:               ver,
+		s:                 s,
 		config:            config,
 		cache:             cache,
 		vstore:            vstore,
@@ -150,6 +162,17 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 	}
 	rs.initMetrics()
 	return rs
+}
+
+func (rs *Relay) RunSlotDeliveredUpdater(ctx context.Context) error {
+	for {
+		select {
+		case slot := <-rs.s.SlotDeliveredChan():
+			rs.lastDeliveredSlot.Store(uint64(slot))
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
@@ -240,6 +263,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, ErrInternal
 		}
 
+		if rs.config.Distributed {
+			go rs.streamCacheBlock(maxProfitBlock.Payload)
+		}
+
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
 			"bidValue":         header.Trace.Value.String(),
@@ -271,6 +298,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 			return nil, ErrInternal
 		}
 
+		if rs.config.Distributed {
+			go rs.streamCacheBlock(maxProfitBlock.Payload)
+		}
+
 		logger.With(log.F{
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
 			"bidValue":         header.Trace.Value.String(),
@@ -290,9 +321,17 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 }
 
+func (rs *Relay) streamCacheBlock(block structs.BlockBidAndTrace) {
+	ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
+	defer cancel()
+
+	if err := rs.s.PublishCacheBlock(ctx, block); err != nil {
+		rs.l.WithError(err).Warn("failed to stream cache block: %w", err)
+	}
+}
+
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
 func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
-
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
@@ -382,6 +421,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	exp := payload.ExecutionPayload()
 
+	go rs.streamDeliveredSlot(key.Slot)
+
 	logger = logger.With(log.F{
 		"slot":             payloadRequest.Slot(),
 		"from_cache":       fromCache,
@@ -421,4 +462,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 	return nil, errors.New("unknown fork")
 
+}
+
+func (rs *Relay) streamDeliveredSlot(slot structs.Slot) {
+	ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
+	defer cancel()
+
+	if err := rs.s.PublishSlotDelivered(ctx, slot); err != nil {
+		rs.l.WithError(err).Warn("failed to stream delivered slot: %w", err)
+	}
 }

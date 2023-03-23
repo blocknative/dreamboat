@@ -194,6 +194,8 @@ type ExecutionPayloadHeader interface {
 
 type BlockBidAndTrace interface {
 	BidValue() types.U256Str
+	Slot() uint64
+	Proposer() types.PublicKey
 
 	ExecutionPayload() ExecutionPayload
 	ToDeliveredTrace(slot uint64) (DeliveredTrace, error)
