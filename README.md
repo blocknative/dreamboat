@@ -32,12 +32,12 @@ Documentation can be found [here](https://docs.blocknative.com/mev-relay-instruc
 
 Dreamboat is a relay for Ethereum 2.0, it ships blocks from builders to validators.  Dreamboat is for anyone who wants to strengthen the Eth network by running their own relay.  Dreamboat's all-in-one design, modular code base and stunning performance will dazzle beginners and seasoned hackers alike.  All aboard!
 
-More precisely, Dreamboat is a spec-compliant [builder](https://github.com/ethereum/builder-specs) and [relay](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5) that allows block-builders and validators to interface with eachother through [MEV-boost](https://github.com/flashbots/mev-boost).
+More precisely, Dreamboat is a spec-compliant [builder](https://github.com/ethereum/builder-specs) and [relay](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5) that allows block-builders and validators to interface with each other through [MEV-boost](https://github.com/flashbots/mev-boost).
 
 Eventually Dreamboat will vanish, as if a dream, once in-protocol PBS is live.  Until then, it sails the ephemeral seas of block space, delivering its trusted cargo of blocks to validators, guided simply by a lighthouse.
 
 ## Design Goals
-
+ 
 This is a from-scratch implementation of a PBS relay–aimed at strengthening #RelayDiversity–with the following design goals:
 
 1. **Extensibility.**  Dreamboat provides well-factored interfaces that make it easy to change its behavior.  We use [Go Datastore](https://pkg.go.dev/github.com/ipfs/go-datastore) for its persistence layer, so you can swap out the default [BadgerDB](https://github.com/dgraph-io/badger) store with your favorite database, and provide a clean separation between core relay logic, the beacon-chain client, and the HTTP server.
@@ -55,9 +55,40 @@ The following features and enhancements are in-progress.
 - [x] Runtime profiling & tracing endpoint
 - [x] Parallel validator-signature verification
 - [x] Contention-free execution along hot paths
-- [ ] Support for multiple beacon clients (in testing stage)
+- [x] Support for multiple beacon clients
 - [ ] Support for multiple external block builders
 
+## Extend the blockchain networks
+Do you need to make your relay work with a different blockchain that is not:
+- Mainnet
+- Kiln
+- Ropsten
+- Sepolia
+- Goerli
+
+Then you need to extend the relay by creating a json file called `networks.json`, and put it inside `datadir` (`datadir` is a parameter you set when running the relay).
+
+Inside the network.json file, you need to specify the network name and three other information:
+- GenesisForkVersion
+- GenesisValidatorsRoot
+- BellatrixForkVersion
+
+Here is an example of how you should format the networks:
+
+```
+{
+    "blocknative":{
+        "GenesisForkVersion": "",
+        "GenesisValidatorsRoot":"",
+        "BellatrixForkVersion": ""
+    },
+    "myNetwork":{
+        "GenesisForkVersion": "",
+        "GenesisValidatorsRoot":"",
+        "BellatrixForkVersion": ""
+    },
+}
+```
 
 ## Support
 

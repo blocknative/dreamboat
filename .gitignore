@@ -27,4 +27,6 @@ cmd/scratch/*
 *.prof
 *.svg
 
-relay
+.data
+/dreamboat
+/migration-postgres
