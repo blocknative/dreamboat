@@ -295,12 +295,8 @@ func run() cli.ActionFunc {
 			}
 		}
 
-		if err := cfg.LoadBuilders(c.StringSlice("builder")); err != nil {
-			return err
-		}
-
 		TTL := c.Duration("ttl")
-		logger := logger(c).WithField("fast-boot", c.Bool("relay-fast-boot"))
+		logger := logger(c)
 
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
@@ -401,7 +397,9 @@ func run() cli.ActionFunc {
 
 		validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
-		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+		if c.Uint("relay-workers-store-validator") > 0 {
+			validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+		}
 
 		domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, cfg.GenesisForkVersion, types.Root{}.String())
 		if err != nil {
