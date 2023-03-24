@@ -539,8 +539,15 @@ func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 	return &bbat.Payload.BellatrixData
 }
 
+func (bbat *BlockBidAndTrace) BuilderPubkey() (pub types.PublicKey) {
+	if bbat.Trace == nil || bbat.Trace.Message == nil {
+		return pub
+	}
+	return bbat.Trace.Message.BuilderPubkey
+}
+
 func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) (dt structs.DeliveredTrace, err error) {
-	if bbat.Trace.Message == nil {
+	if bbat.Trace == nil || bbat.Trace.Message == nil {
 		return dt, errors.New("empty trace contents")
 	}
 	return structs.DeliveredTrace{
