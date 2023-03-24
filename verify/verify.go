@@ -25,7 +25,7 @@ type Request struct {
 	Response *StoreResp
 }
 
-// Resp respone structure
+// Resp response structure
 // - potential candidate for structure pool
 // as it's almost constant size
 type Resp struct {
