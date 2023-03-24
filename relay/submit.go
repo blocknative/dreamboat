@@ -83,8 +83,13 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	}
 
 	// wait for validations
-	if err := <-valErr; err != nil {
-		return err
+	select {
+	case err := <-valErr:
+		if err != nil {
+			return err
+		}
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 
 	isNewMax, err := rs.storeSubmission(ctx, m, sbr)
