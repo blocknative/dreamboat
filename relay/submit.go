@@ -58,6 +58,18 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	}
 	m.AppendSince(tCheckRegistration, "submitBlock", "checkRegistration")
 
+	valErr := make(chan error, 1)
+	go func(ctx context.Context, gasLimit uint64, sbr structs.SubmitBlockRequest, chErr chan error) {
+		defer close(chErr)
+
+		tValidateBlock := time.Now()
+		if err := rs.validateBlock(ctx, gasLimit, sbr); err != nil {
+			chErr <- err
+			return
+		}
+		m.AppendSince(tValidateBlock, "submitBlock", "validateBlock")
+	}(ctx, gasLimit, sbr, valErr)
+
 	tVerify := time.Now()
 	if err := rs.verifySignature(ctx, sbr); err != nil {
 		return err
@@ -70,11 +82,10 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		return fmt.Errorf("failed to verify withdrawals: %w", err)
 	}
 
-	tValidateBlock := time.Now()
-	if err := rs.validateBlock(ctx, gasLimit, sbr); err != nil {
+	// wait for validations
+	if err := <-valErr; err != nil {
 		return err
 	}
-	m.AppendSince(tValidateBlock, "submitBlock", "validateBlock")
 
 	isNewMax, err := rs.storeSubmission(ctx, m, sbr)
 	if err != nil {
