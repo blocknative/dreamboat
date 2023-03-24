@@ -67,11 +67,6 @@ var flags = []cli.Flag{
 		Value:   "text",
 		EnvVars: []string{"LOGFMT"},
 	},
-	&cli.BoolFlag{
-		Name:  "profile",
-		Usage: "activates profiling http endpoint",
-		Value: false,
-	},
 	&cli.StringFlag{
 		Name:    "addr",
 		Usage:   "server listen address",
@@ -95,12 +90,7 @@ var flags = []cli.Flag{
 		Usage:   "`url` for beacon endpoint",
 		EnvVars: []string{"RELAY_BEACON"},
 	},
-	&cli.BoolFlag{
-		Name:    "check-builders",
-		Usage:   "check builder blocks",
-		EnvVars: []string{"RELAY_CHECK_BUILDERS"},
-	},
-	&cli.StringSliceFlag{
+	&cli.StringSliceFlag{ // TODO: Remove
 		Name:    "builder",
 		Usage:   "`url` formatted as schema://pubkey@host",
 		EnvVars: []string{"BN_RELAY_BUILDER_URLS"},
@@ -165,18 +155,6 @@ var flags = []cli.Flag{
 		Value:   200,
 		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_LAG"},
 	},
-	&cli.DurationFlag{
-		Name:    "relay-header-memory-slot-time-lag",
-		Usage:   "how log should it take for lagged slot to be eligible fot purge",
-		Value:   time.Minute * 5,
-		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_TIME_LAG"},
-	},
-	&cli.DurationFlag{
-		Name:    "relay-header-memory-purge-interval",
-		Usage:   "how often memory should be purged",
-		Value:   time.Minute * 10,
-		EnvVars: []string{"RELAY_HEADER_MEMORY_PURGE_INTERVAL"},
-	},
 	&cli.IntFlag{
 		Name:    "relay-payload-cache-size",
 		Usage:   "number of payloads to cache for fast in-memory reads",
@@ -213,7 +191,7 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"RELAY_DATAAPI_DATABASE_URL"},
 	},
-	&cli.BoolFlag{
+	&cli.BoolFlag{ // TODO: Remove
 		Name:    "relay-fast-boot",
 		Usage:   "speed up booting up of relay, adding temporary inconsistency on the builder_blocks_received endpoint",
 		Value:   false,
@@ -295,12 +273,8 @@ func run() cli.ActionFunc {
 			}
 		}
 
-		if err := cfg.LoadBuilders(c.StringSlice("builder")); err != nil {
-			return err
-		}
-
 		TTL := c.Duration("ttl")
-		logger := logger(c).WithField("fast-boot", c.Bool("relay-fast-boot"))
+		logger := logger(c)
 
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
@@ -401,7 +375,9 @@ func run() cli.ActionFunc {
 
 		validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
-		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+		if c.Uint("relay-workers-store-validator") > 0 {
+			validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+		}
 
 		domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, cfg.GenesisForkVersion, types.Root{}.String())
 		if err != nil {

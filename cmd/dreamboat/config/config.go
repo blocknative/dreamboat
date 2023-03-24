@@ -2,13 +2,8 @@ package config
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/url"
 	"os"
-	"strings"
-
-	"github.com/blocknative/dreamboat/structs"
 )
 
 const (
@@ -35,8 +30,6 @@ const (
 
 // Config provides all available options for the default BeaconClient and Relay
 type Config struct {
-	builders map[structs.PubKey]*builder
-
 	GenesisForkVersion    string
 	BellatrixForkVersion  string
 	CapellaForkVersion    string
@@ -44,21 +37,7 @@ type Config struct {
 }
 
 func NewConfig() *Config {
-	return &Config{
-		builders: make(map[structs.PubKey]*builder),
-	}
-}
-
-func (c *Config) LoadBuilders(builderURLs []string) (err error) {
-	var entry *builder
-	for _, b := range builderURLs {
-		if entry, err = newBuilderEntry(b); err != nil {
-			break
-		}
-
-		c.builders[entry.PubKey] = entry
-	}
-	return err
+	return &Config{}
 }
 
 func (c *Config) LoadNetwork(network string) {
@@ -115,61 +94,4 @@ func (c *Config) ReadNetworkConfig(datadir, network string) (err error) {
 	c.CapellaForkVersion = config.CapellaForkVersion
 
 	return nil
-}
-
-// builder represents a builder that the relay service connects to.
-type builder struct {
-	PubKey structs.PubKey
-	URL    *url.URL
-}
-
-func (b builder) Loggable() map[string]any {
-	return map[string]any{
-		"pubkey": b.PubKey,
-		"url":    b.URL,
-	}
-}
-
-// NewRelayEntry creates a new instance based on an input string
-// relayURL can be IP@PORT, PUBKEY@IP:PORT, https://IP, etc.
-func newBuilderEntry(relayURL string) (*builder, error) {
-	u, err := url.ParseRequestURI(ensureScheme(relayURL))
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract the relay's public key from the parsed URL.
-	if !hasPubKey(u) {
-		return nil, errors.New("missing relay public key")
-	}
-
-	var pk structs.PubKey
-	if err = pk.UnmarshalText([]byte(u.User.Username())); err != nil {
-		return nil, err
-	}
-
-	return &builder{
-		PubKey: pk,
-		URL:    u,
-	}, nil
-}
-
-// GetURI returns the full request URI with scheme, host, path and args.
-func (b builder) GetURI(path string) string {
-	u := *b.URL
-	u.User = nil
-	u.Path = path
-	return u.String()
-}
-
-func ensureScheme(url string) string {
-	if strings.HasPrefix(url, "http") {
-		return url
-	}
-
-	return fmt.Sprintf("http://%s", url)
-}
-
-func hasPubKey(u *url.URL) bool {
-	return u.User.Username() != ""
 }
