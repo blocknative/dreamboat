@@ -59,8 +59,8 @@ type State interface {
 	KnownValidators() structs.ValidatorsState
 	HeadSlot() structs.Slot
 	Genesis() structs.GenesisInfo
-	Withdrawals() structs.WithdrawalsState
-	Randao() string
+	Withdrawals(uint64) structs.WithdrawalsState
+	Randao(uint64) string
 	ForkVersion(slot structs.Slot) structs.ForkVersion
 }
 

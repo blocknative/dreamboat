@@ -10,6 +10,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
@@ -41,10 +42,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		"bid":            value.String(),
 		"withdrawalsNum": len(sbr.Withdrawals()),
 	})
-
-	if rs.lastDeliveredSlot.Load() >= sbr.Slot() {
-		return ErrPayloadAlreadyDelivered
-	}
 
 	bRetried, err := verifyBlock(sbr, rs.beaconState)
 	if err != nil {
@@ -245,13 +242,13 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, sbr.Timestamp(), expectedTimestamp)
 	}
 
-	if structs.Slot(sbr.Slot()) < beaconState.HeadSlot() {
+	if structs.Slot(sbr.Slot()) < beaconState.HeadSlot()-beacon.NumberOfSlotsInState {
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
 	}
 
-	if randao := beaconState.Randao(); randao != sbr.Random().String() {
+	if randao := beaconState.Randao(sbr.Slot()); randao != sbr.Random().String() {
 		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
-		if randao := beaconState.Randao(); randao != sbr.Random().String() {
+		if randao := beaconState.Randao(sbr.Slot()); randao != sbr.Random().String() {
 			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
 		}
 		return true, nil
@@ -266,13 +263,13 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		return types.Root{}, false, nil
 	}
 
-	withdrawalState := state.Withdrawals()
+	withdrawalState := state.Withdrawals(submitBlockRequest.Slot())
 	retried = false
 	if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) { // +1 because it's from previous slot
 		// recheck beacon sync state for early blocks
 		time.Sleep(StateRecheckDelay)
 		retried = true
-		withdrawalState = state.Withdrawals()
+		withdrawalState = state.Withdrawals(submitBlockRequest.Slot())
 		if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) {
 			return root, retried, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
 		}

@@ -1,24 +1,28 @@
 package beacon
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/blocknative/dreamboat/structs"
 )
 
-type AtomicState struct {
-	duties               atomic.Value
-	knownValidators      atomic.Value
+const (
+	NumberOfSlotsInState = 5
+)
+
+type MultiSlotState struct {
+	mu                   sync.Mutex
+	slots                [NumberOfSlotsInState]AtomicState
 	validatorsUpdateTime atomic.Value
-	genesis              atomic.Value
 	headSlot             atomic.Value
-	withdrawals          atomic.Value
-	randao               atomic.Value
 	fork                 atomic.Value
+	knownValidators      atomic.Value
+	genesis              atomic.Value
 }
 
-func (as *AtomicState) Genesis() structs.GenesisInfo {
+func (as *MultiSlotState) Genesis() structs.GenesisInfo {
 	if val := as.genesis.Load(); val != nil {
 		return val.(structs.GenesisInfo)
 	}
@@ -26,8 +30,105 @@ func (as *AtomicState) Genesis() structs.GenesisInfo {
 	return structs.GenesisInfo{}
 }
 
-func (as *AtomicState) SetGenesis(genesis structs.GenesisInfo) {
+func (as *MultiSlotState) SetGenesis(genesis structs.GenesisInfo) {
 	as.genesis.Store(genesis)
+}
+
+func (as *MultiSlotState) Duties(slot uint64) structs.DutiesState {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	return as.slots[slot%NumberOfSlotsInState].Duties()
+}
+
+func (as *MultiSlotState) SetDuties(duties structs.DutiesState, slot uint64) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	as.slots[slot%NumberOfSlotsInState].SetDuties(duties)
+}
+func (as *MultiSlotState) KnownValidators() structs.ValidatorsState {
+	if val := as.knownValidators.Load(); val != nil {
+		return val.(structs.ValidatorsState)
+	}
+
+	return structs.ValidatorsState{}
+}
+
+func (as *MultiSlotState) SetKnownValidators(validators structs.ValidatorsState) {
+	as.knownValidators.Store(validators)
+	as.validatorsUpdateTime.Store(time.Now())
+}
+
+func (as *MultiSlotState) KnownValidatorsUpdateTime() time.Time {
+	updateTime, ok := as.validatorsUpdateTime.Load().(time.Time)
+	if !ok {
+		return time.Time{}
+	}
+	return updateTime
+}
+
+func (as *MultiSlotState) HeadSlot() structs.Slot {
+	if val := as.headSlot.Load(); val != nil {
+		return val.(structs.Slot)
+	}
+
+	return 0
+}
+
+func (as *MultiSlotState) SetHeadSlot(headSlot structs.Slot) {
+	as.headSlot.Store(headSlot)
+}
+
+func (as *MultiSlotState) Withdrawals(slot uint64) structs.WithdrawalsState {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	return as.slots[slot%NumberOfSlotsInState].Withdrawals()
+}
+
+func (as *MultiSlotState) SetWithdrawals(withdrawals structs.WithdrawalsState, slot uint64) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	as.slots[slot%NumberOfSlotsInState].SetWithdrawals(withdrawals)
+}
+
+func (as *MultiSlotState) Randao(slot uint64) string {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	return as.slots[slot%NumberOfSlotsInState].Randao()
+}
+
+func (as *MultiSlotState) SetRandao(randao string, slot uint64) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	as.slots[slot%NumberOfSlotsInState].SetRandao(randao)
+}
+
+func (as *MultiSlotState) ForkVersion(slot structs.Slot) structs.ForkVersion {
+	return as.Fork().Version(slot)
+}
+
+func (as *MultiSlotState) Fork() structs.ForkState {
+	if val := as.fork.Load(); val != nil {
+		return val.(structs.ForkState)
+	}
+
+	return structs.ForkState{}
+}
+
+func (as *MultiSlotState) SetFork(fork structs.ForkState) {
+	as.fork.Store(fork)
+}
+
+type AtomicState struct {
+	duties          atomic.Value
+	withdrawals     atomic.Value
+	randao          atomic.Value
+	fork            atomic.Value
 }
 
 func (as *AtomicState) Duties() structs.DutiesState {
@@ -40,39 +141,6 @@ func (as *AtomicState) Duties() structs.DutiesState {
 
 func (as *AtomicState) SetDuties(duties structs.DutiesState) {
 	as.duties.Store(duties)
-}
-
-func (as *AtomicState) KnownValidators() structs.ValidatorsState {
-	if val := as.knownValidators.Load(); val != nil {
-		return val.(structs.ValidatorsState)
-	}
-
-	return structs.ValidatorsState{}
-}
-
-func (as *AtomicState) SetKnownValidators(validators structs.ValidatorsState) {
-	as.knownValidators.Store(validators)
-	as.validatorsUpdateTime.Store(time.Now())
-}
-
-func (as *AtomicState) KnownValidatorsUpdateTime() time.Time {
-	updateTime, ok := as.validatorsUpdateTime.Load().(time.Time)
-	if !ok {
-		return time.Time{}
-	}
-	return updateTime
-}
-
-func (as *AtomicState) HeadSlot() structs.Slot {
-	if val := as.headSlot.Load(); val != nil {
-		return val.(structs.Slot)
-	}
-
-	return 0
-}
-
-func (as *AtomicState) SetHeadSlot(headSlot structs.Slot) {
-	as.headSlot.Store(headSlot)
 }
 
 func (as *AtomicState) Withdrawals() structs.WithdrawalsState {
@@ -97,20 +165,4 @@ func (as *AtomicState) Randao() string {
 
 func (as *AtomicState) SetRandao(randao string) {
 	as.randao.Store(randao)
-}
-
-func (as *AtomicState) ForkVersion(slot structs.Slot) structs.ForkVersion {
-	return as.Fork().Version(slot)
-}
-
-func (as *AtomicState) Fork() structs.ForkState {
-	if val := as.fork.Load(); val != nil {
-		return val.(structs.ForkState)
-	}
-
-	return structs.ForkState{}
-}
-
-func (as *AtomicState) SetFork(fork structs.ForkState) {
-	as.fork.Store(fork)
 }
