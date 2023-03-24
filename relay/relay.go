@@ -317,7 +317,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"blockHash": payloadRequest.BlockHash(),
 		"pubkey":    pk,
 	})
-	logger.Info("payload requested")
+	logger.WithField("event", "payload_requested").Info("payload requested")
 
 	forkv := rs.beaconState.ForkVersion(structs.Slot(payloadRequest.Slot()))
 
@@ -337,13 +337,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	key, err := payloadRequest.ToPayloadKey(pk)
 	if err != nil {
-		logger.WithError(err).Warn("error getting payload")
+		logger.WithField("event", "invalid_payload_key").WithError(err).Warn("error getting payload")
 		return nil, ErrNoPayloadFound
 	}
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, forkv, key)
 	if err != nil || payload == nil {
-		logger.WithError(err).Warn("error getting payload")
+		logger.WithField("event", "storage_error").WithError(err).Warn("error getting payload")
 		return nil, ErrNoPayloadFound
 	}
 	m.AppendSince(tGet, "getPayload", "get")
@@ -352,46 +352,49 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
 	}
 
+	logger = logger.With(log.F{
+		"from_cache":       fromCache,
+		"builder":          payload.BuilderPubkey().String(),
+		"processingTimeMs": time.Since(tStart).Milliseconds(),
+	})
+
 	// defer put delivered datastore write
-	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
+	go func(l log.Logger, rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
 		if rs.config.PublishBlock {
 			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 			if err != nil {
-				logger.WithError(err).Warn("fail to create block for publication")
+				l.WithField("event", "wrong_publish_payload").WithError(err).Warn("fail to create block for publication")
 			} else {
 				if err = rs.beacon.PublishBlock(beaconBlock); err != nil {
-					logger.With(log.F{
+					l.With(log.F{
 						"slot":         slot,
 						"block_number": payloadRequest.BlockNumber(),
-					}).WithError(err).Warn("fail to publish block to beacon node")
+					}).WithField("event", "publish_error").WithError(err).Warn("fail to publish block to beacon node")
 				} else {
-					logger.Info("published block to beacon node")
+					l.WithField("event", "published").Info("published block to beacon node")
 				}
 			}
 		}
 
 		trace, err := payload.ToDeliveredTrace(payloadRequest.Slot())
 		if err != nil {
-			logger.WithError(err).Warn("failed to generate delivered payload")
+			l.WithField("event", "wrong_evidence_payload").WithError(err).Warn("failed to generate delivered payload")
+			return
 		}
 
 		if err := rs.das.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
-			logger.WithError(err).Warn("failed to set payload after delivery")
+			l.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		}
-	}(rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
+	}(logger, rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
 
 	exp := payload.ExecutionPayload()
 
-	logger = logger.With(log.F{
-		"slot":             payloadRequest.Slot(),
-		"from_cache":       fromCache,
-		"processingTimeMs": time.Since(tStart).Milliseconds(),
-	})
 	switch forkv {
 	case structs.ForkBellatrix:
 		bep := exp.(*bellatrix.ExecutionPayload)
 		logger.With(log.F{
 			"fork":         "bellatrix",
+			"event":        "payload_sent",
 			"blockHash":    bep.EpBlockHash,
 			"blockNumber":  bep.EpBlockNumber,
 			"stateRoot":    bep.EpStateRoot,
@@ -407,6 +410,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		cep := exp.(*capella.ExecutionPayload)
 		logger.With(log.F{
 			"fork":         "capella",
+			"event":        "payload_sent",
 			"blockHash":    cep.EpBlockHash,
 			"blockNumber":  cep.EpBlockNumber,
 			"stateRoot":    cep.EpStateRoot,
@@ -419,6 +423,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			CapellaData:    *cep,
 		}, nil
 	}
+	logger.Error("unknown fork failure")
 	return nil, errors.New("unknown fork")
 
 }
