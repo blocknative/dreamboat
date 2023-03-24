@@ -218,7 +218,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 
 	tPutPayload := time.Now()
 
-	if err := rs.d.PutPayload(ctx, sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
+	if err := rs.d.PutPayload(context.Background(), sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
@@ -227,7 +227,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	newMax = rs.a.AddBlock(&complete)
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
-	if err = rs.das.PutBuilderBlockSubmission(ctx, complete.Header.Trace, newMax); err != nil {
+	if err = rs.das.PutBuilderBlockSubmission(context.Background(), complete.Header.Trace, newMax); err != nil {
 		return newMax, fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 
