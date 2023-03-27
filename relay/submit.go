@@ -248,10 +248,10 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
 	}
 
-	if randao := beaconState.Randao(sbr.Slot() - 1); randao != sbr.Random().String() {
+	if randao := beaconState.Randao(sbr.Slot() - 1); randao.Randao != sbr.Random().String() {
 		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
-		if randao := beaconState.Randao(sbr.Slot() - 1); randao != sbr.Random().String() {
-			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
+		if randao := beaconState.Randao(sbr.Slot() - 1); randao.Randao != sbr.Random().String() {
+			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao.Randao)
 		}
 		return true, nil
 	}
@@ -267,13 +267,13 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 
 	withdrawalState := state.Withdrawals(submitBlockRequest.Slot() - 1)
 	retried = false
-	if withdrawalState.Slot != structs.Slot(submitBlockRequest.Slot()-1) { // +1 because it's from previous slot
+	if withdrawalState.Slot == 0 {
 		// recheck beacon sync state for early blocks
 		time.Sleep(StateRecheckDelay)
 		retried = true
 		withdrawalState = state.Withdrawals(submitBlockRequest.Slot() - 1)
-		if withdrawalState.Slot != structs.Slot(submitBlockRequest.Slot()-1) {
-			return root, retried, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
+		if withdrawalState.Slot == 0 {
+			return root, retried, fmt.Errorf("randao for slot %d not found", submitBlockRequest.Slot())
 		}
 	}
 

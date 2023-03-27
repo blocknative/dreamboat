@@ -280,6 +280,11 @@ type WithdrawalsState struct {
 	Root types.Root
 }
 
+type RandaoState struct {
+	Slot   uint64
+	Randao string
+}
+
 type ForkState struct {
 	AltairEpoch    Epoch
 	BellatrixEpoch Epoch

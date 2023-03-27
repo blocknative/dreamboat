@@ -13,13 +13,27 @@ const (
 )
 
 type MultiSlotState struct {
-	mu                   sync.Mutex
-	slots                [NumberOfSlotsInState]AtomicState
+	mu    sync.Mutex
+	slots [NumberOfSlotsInState]AtomicState
+
+	duties               atomic.Value
 	validatorsUpdateTime atomic.Value
 	headSlot             atomic.Value
 	fork                 atomic.Value
 	knownValidators      atomic.Value
 	genesis              atomic.Value
+}
+
+func (as *MultiSlotState) Duties() structs.DutiesState {
+	if val := as.duties.Load(); val != nil {
+		return val.(structs.DutiesState)
+	}
+
+	return structs.DutiesState{}
+}
+
+func (as *MultiSlotState) SetDuties(duties structs.DutiesState) {
+	as.duties.Store(duties)
 }
 
 func (as *MultiSlotState) Genesis() structs.GenesisInfo {
@@ -34,19 +48,6 @@ func (as *MultiSlotState) SetGenesis(genesis structs.GenesisInfo) {
 	as.genesis.Store(genesis)
 }
 
-func (as *MultiSlotState) Duties(slot uint64) structs.DutiesState {
-	as.mu.Lock()
-	defer as.mu.Unlock()
-
-	return as.slots[slot%NumberOfSlotsInState].Duties()
-}
-
-func (as *MultiSlotState) SetDuties(slot uint64, duties structs.DutiesState) {
-	as.mu.Lock()
-	defer as.mu.Unlock()
-
-	as.slots[slot%NumberOfSlotsInState].SetDuties(duties)
-}
 func (as *MultiSlotState) KnownValidators() structs.ValidatorsState {
 	if val := as.knownValidators.Load(); val != nil {
 		return val.(structs.ValidatorsState)
@@ -91,25 +92,28 @@ func (as *MultiSlotState) Withdrawals(slot uint64) structs.WithdrawalsState {
 	return structs.WithdrawalsState{}
 }
 
-func (as *MultiSlotState) SetWithdrawals(slot uint64, withdrawals structs.WithdrawalsState) {
+func (as *MultiSlotState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	as.slots[slot%NumberOfSlotsInState].SetWithdrawals(withdrawals)
+	as.slots[withdrawals.Slot%NumberOfSlotsInState].SetWithdrawals(withdrawals)
 }
 
-func (as *MultiSlotState) Randao(slot uint64) string {
+func (as *MultiSlotState) Randao(slot uint64) structs.RandaoState {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	return as.slots[slot%NumberOfSlotsInState].Randao()
+	if randao := as.slots[slot%NumberOfSlotsInState].Randao(); randao.Slot == slot {
+		return randao
+	}
+	return structs.RandaoState{}
 }
 
-func (as *MultiSlotState) SetRandao(slot uint64, randao string) {
+func (as *MultiSlotState) SetRandao(randao structs.RandaoState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	as.slots[slot%NumberOfSlotsInState].SetRandao(randao)
+	as.slots[randao.Slot%NumberOfSlotsInState].SetRandao(randao)
 }
 
 func (as *MultiSlotState) ForkVersion(slot structs.Slot) structs.ForkVersion {
@@ -129,21 +133,8 @@ func (as *MultiSlotState) SetFork(fork structs.ForkState) {
 }
 
 type AtomicState struct {
-	duties      atomic.Value
 	withdrawals atomic.Value
 	randao      atomic.Value
-}
-
-func (as *AtomicState) Duties() structs.DutiesState {
-	if val := as.duties.Load(); val != nil {
-		return val.(structs.DutiesState)
-	}
-
-	return structs.DutiesState{}
-}
-
-func (as *AtomicState) SetDuties(duties structs.DutiesState) {
-	as.duties.Store(duties)
 }
 
 func (as *AtomicState) Withdrawals() structs.WithdrawalsState {
@@ -158,14 +149,14 @@ func (as *AtomicState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 	as.withdrawals.Store(withdrawals)
 }
 
-func (as *AtomicState) Randao() string {
+func (as *AtomicState) Randao() structs.RandaoState {
 	if val := as.randao.Load(); val != nil {
-		return val.(string)
+		return val.(structs.RandaoState)
 	}
 
-	return ""
+	return structs.RandaoState{}
 }
 
-func (as *AtomicState) SetRandao(randao string) {
+func (as *AtomicState) SetRandao(randao structs.RandaoState) {
 	as.randao.Store(randao)
 }

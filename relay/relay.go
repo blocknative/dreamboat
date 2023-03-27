@@ -60,7 +60,7 @@ type State interface {
 	HeadSlot() structs.Slot
 	Genesis() structs.GenesisInfo
 	Withdrawals(uint64) structs.WithdrawalsState
-	Randao(uint64) string
+	Randao(uint64) structs.RandaoState
 	ForkVersion(slot structs.Slot) structs.ForkVersion
 }
 

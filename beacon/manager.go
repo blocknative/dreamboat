@@ -59,7 +59,7 @@ type State interface {
 	Withdrawals(uint64) structs.WithdrawalsState
 	SetWithdrawals(uint64, structs.WithdrawalsState)
 
-	SetRandao(uint64, string)
+	SetRandao(structs.RandaoState)
 	Randao(uint64) string
 
 	Fork() structs.ForkState
@@ -142,7 +142,7 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 			if err != nil {
 				return fmt.Errorf("fail to update randao: %w", err)
 			}
-			state.SetRandao(uint64(headSlot), randao)
+			state.SetRandao(structs.RandaoState{Slot: uint64(headSlot), Randao: randao})
 
 			return nil
 		}
@@ -277,9 +277,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		return fmt.Errorf("fail to update randao: %w", err)
 	}
 
-	state.SetRandao(uint64(headSlot), randao)
-
-	state.SetHeadSlot()
+	state.SetRandao(structs.RandaoState{Slot: uint64(headSlot), Randao: randao})
 
 	return nil
 }
