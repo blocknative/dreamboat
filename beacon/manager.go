@@ -47,7 +47,7 @@ type State interface {
 	SetGenesis(structs.GenesisInfo)
 
 	Duties() structs.DutiesState
-	SetDuties(uint64, structs.DutiesState)
+	SetDuties(structs.DutiesState)
 
 	KnownValidators() structs.ValidatorsState
 	KnownValidatorsUpdateTime() time.Time
@@ -361,7 +361,7 @@ func (s *Manager) storeProposerDuties(ctx context.Context, state State, d Datast
 			Entry: &reg.Entry,
 		})
 	}
-	state.SetDuties(uint64(headSlot), newState)
+	state.SetDuties(newState)
 }
 
 func (s *Manager) updateKnownValidators(ctx context.Context, state State, client BeaconClient, current structs.Slot) error {
