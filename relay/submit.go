@@ -39,7 +39,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		"blockHash":      sbr.BlockHash(),
 		"headSlot":       rs.beaconState.HeadSlot(),
 		"slot":           sbr.Slot(),
-		"slotDiff":       int64(rs.beaconState.HeadSlot()) - int64(sbr.Slot()),
+		"slotDiff":       int64(sbr.Slot()) - int64(rs.beaconState.HeadSlot()),
 		"proposer":       sbr.ProposerPubkey(),
 		"bid":            value.String(),
 		"withdrawalsNum": len(sbr.Withdrawals()),
@@ -248,9 +248,9 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
 	}
 
-	if randao := beaconState.Randao(sbr.Slot()-1); randao != sbr.Random().String() {
+	if randao := beaconState.Randao(sbr.Slot() - 1); randao != sbr.Random().String() {
 		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
-		if randao := beaconState.Randao(sbr.Slot()-1); randao != sbr.Random().String() {
+		if randao := beaconState.Randao(sbr.Slot() - 1); randao != sbr.Random().String() {
 			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
 		}
 		return true, nil
@@ -265,13 +265,13 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		return types.Root{}, false, nil
 	}
 
-	withdrawalState := state.Withdrawals(submitBlockRequest.Slot()-1)
+	withdrawalState := state.Withdrawals(submitBlockRequest.Slot() - 1)
 	retried = false
 	if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) { // +1 because it's from previous slot
 		// recheck beacon sync state for early blocks
 		time.Sleep(StateRecheckDelay)
 		retried = true
-		withdrawalState = state.Withdrawals(submitBlockRequest.Slot()-1)
+		withdrawalState = state.Withdrawals(submitBlockRequest.Slot() - 1)
 		if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) {
 			return root, retried, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
 		}
