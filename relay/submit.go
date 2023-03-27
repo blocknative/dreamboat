@@ -38,6 +38,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		"builder":        sbr.BuilderPubkey(),
 		"blockHash":      sbr.BlockHash(),
 		"slot":           sbr.Slot(),
+		"slotDiff":       uint64(rs.beaconState.HeadSlot()) - sbr.Slot(),
 		"proposer":       sbr.ProposerPubkey(),
 		"bid":            value.String(),
 		"withdrawalsNum": len(sbr.Withdrawals()),
