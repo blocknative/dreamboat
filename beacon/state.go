@@ -41,7 +41,7 @@ func (as *MultiSlotState) Duties(slot uint64) structs.DutiesState {
 	return as.slots[slot%NumberOfSlotsInState].Duties()
 }
 
-func (as *MultiSlotState) SetDuties(duties structs.DutiesState, slot uint64) {
+func (as *MultiSlotState) SetDuties(slot uint64, duties structs.DutiesState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
@@ -84,10 +84,14 @@ func (as *MultiSlotState) Withdrawals(slot uint64) structs.WithdrawalsState {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	return as.slots[slot%NumberOfSlotsInState].Withdrawals()
+	if ws := as.slots[slot%NumberOfSlotsInState].Withdrawals(); uint64(ws.Slot) == slot {
+		return ws
+	}
+
+	return structs.WithdrawalsState{}
 }
 
-func (as *MultiSlotState) SetWithdrawals(withdrawals structs.WithdrawalsState, slot uint64) {
+func (as *MultiSlotState) SetWithdrawals(slot uint64, withdrawals structs.WithdrawalsState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
@@ -101,7 +105,7 @@ func (as *MultiSlotState) Randao(slot uint64) string {
 	return as.slots[slot%NumberOfSlotsInState].Randao()
 }
 
-func (as *MultiSlotState) SetRandao(randao string, slot uint64) {
+func (as *MultiSlotState) SetRandao(slot uint64, randao string) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
@@ -125,10 +129,9 @@ func (as *MultiSlotState) SetFork(fork structs.ForkState) {
 }
 
 type AtomicState struct {
-	duties          atomic.Value
-	withdrawals     atomic.Value
-	randao          atomic.Value
-	fork            atomic.Value
+	duties      atomic.Value
+	withdrawals atomic.Value
+	randao      atomic.Value
 }
 
 func (as *AtomicState) Duties() structs.DutiesState {

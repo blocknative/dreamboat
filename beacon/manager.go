@@ -47,7 +47,7 @@ type State interface {
 	SetGenesis(structs.GenesisInfo)
 
 	Duties(uint64) structs.DutiesState
-	SetDuties(structs.DutiesState, uint64)
+	SetDuties(uint64, structs.DutiesState)
 
 	KnownValidators() structs.ValidatorsState
 	KnownValidatorsUpdateTime() time.Time
@@ -57,9 +57,9 @@ type State interface {
 	SetHeadSlot(structs.Slot)
 
 	Withdrawals(uint64) structs.WithdrawalsState
-	SetWithdrawals(structs.WithdrawalsState, uint64)
+	SetWithdrawals(uint64, structs.WithdrawalsState)
 
-	SetRandao(string, uint64)
+	SetRandao(uint64, string)
 	Randao(uint64) string
 
 	Fork() structs.ForkState
@@ -142,7 +142,7 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 			if err != nil {
 				return fmt.Errorf("fail to update randao: %w", err)
 			}
-			state.SetRandao(randao, uint64(headSlot))
+			state.SetRandao(uint64(headSlot), randao)
 
 			return nil
 		}
@@ -277,7 +277,9 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		return fmt.Errorf("fail to update randao: %w", err)
 	}
 
-	state.SetRandao(randao, uint64(headSlot))
+	state.SetRandao(uint64(headSlot), randao)
+
+	state.SetHeadSlot()
 
 	return nil
 }
@@ -307,7 +309,7 @@ func (m *Manager) updatedExpectedWithdrawals(slot structs.Slot, state State, cli
 		return
 	}
 
-	state.SetWithdrawals(structs.WithdrawalsState{Slot: slot, Root: root}, uint64(slot))
+	state.SetWithdrawals(uint64(slot), structs.WithdrawalsState{Slot: slot, Root: root})
 }
 
 func (s *Manager) getProposerDuties(ctx context.Context, client BeaconClient, headSlot structs.Slot) (entries []bcli.RegisteredProposersResponseData, err error) {
@@ -361,7 +363,7 @@ func (s *Manager) storeProposerDuties(ctx context.Context, state State, d Datast
 			Entry: &reg.Entry,
 		})
 	}
-	state.SetDuties(newState, uint64(headSlot))
+	state.SetDuties(uint64(headSlot), newState)
 }
 
 func (s *Manager) updateKnownValidators(ctx context.Context, state State, client BeaconClient, current structs.Slot) error {
