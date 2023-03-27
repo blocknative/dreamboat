@@ -57,7 +57,7 @@ type State interface {
 	SetHeadSlot(structs.Slot)
 
 	Withdrawals(uint64) structs.WithdrawalsState
-	SetWithdrawals(uint64, structs.WithdrawalsState)
+	SetWithdrawals(structs.WithdrawalsState)
 
 	SetRandao(structs.RandaoState)
 	Randao(uint64) structs.RandaoState
@@ -307,7 +307,7 @@ func (m *Manager) updatedExpectedWithdrawals(slot structs.Slot, state State, cli
 		return
 	}
 
-	state.SetWithdrawals(uint64(slot), structs.WithdrawalsState{Slot: slot, Root: root})
+	state.SetWithdrawals(structs.WithdrawalsState{Slot: slot, Root: root})
 }
 
 func (s *Manager) getProposerDuties(ctx context.Context, client BeaconClient, headSlot structs.Slot) (entries []bcli.RegisteredProposersResponseData, err error) {
