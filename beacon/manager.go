@@ -60,7 +60,7 @@ type State interface {
 	SetWithdrawals(uint64, structs.WithdrawalsState)
 
 	SetRandao(structs.RandaoState)
-	Randao(uint64) string
+	Randao(uint64) structs.RandaoState
 
 	Fork() structs.ForkState
 	SetFork(structs.ForkState)
@@ -207,7 +207,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				"numDuties":                 len(duties.ProposerDutiesResponse),
 				"numKnownValidators":        len(validators.KnownValidators),
 				"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
-				"randao":                    state.Randao(uint64(headSlot)),
+				"randao":                    state.Randao(uint64(headSlot)).Randao,
 				"processingTimeMs":          time.Since(t).Milliseconds(),
 				"withdrawalsRoot":           state.Withdrawals(uint64(headSlot)).Root.String(),
 				"fork":                      state.Fork().Version(headSlot).String(),
