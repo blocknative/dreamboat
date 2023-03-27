@@ -26,7 +26,7 @@ type MultiSlotState interface {
 }
 
 type State interface {
-	Duties(uint64) structs.DutiesState
+	Duties() structs.DutiesState
 	KnownValidators() structs.ValidatorsState
 }
 
@@ -175,5 +175,5 @@ func (rs *Register) GetValidators(m *structs.MetricGroup) structs.BuilderGetVali
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getValidators", "all")
 
-	return rs.beaconState.Duties(uint64(rs.beaconState.HeadSlot())).ProposerDutiesResponse
+	return rs.beaconState.Duties().ProposerDutiesResponse
 }
