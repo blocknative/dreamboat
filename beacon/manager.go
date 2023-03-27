@@ -46,7 +46,7 @@ type BeaconClient interface {
 type State interface {
 	SetGenesis(structs.GenesisInfo)
 
-	Duties(uint64) structs.DutiesState
+	Duties() structs.DutiesState
 	SetDuties(uint64, structs.DutiesState)
 
 	KnownValidators() structs.ValidatorsState
@@ -198,7 +198,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 
 			headSlot := state.HeadSlot()
 			validators := state.KnownValidators()
-			duties := state.Duties(uint64(headSlot))
+			duties := state.Duties()
 
 			logger.With(log.F{
 				"epoch":                     headSlot.Epoch(),
