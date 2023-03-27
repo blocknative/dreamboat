@@ -242,7 +242,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, sbr.Timestamp(), expectedTimestamp)
 	}
 
-	if structs.Slot(sbr.Slot()) < beaconState.HeadSlot()-beacon.NumberOfSlotsInState {
+	if structs.Slot(sbr.Slot()) <= beaconState.HeadSlot()-beacon.NumberOfSlotsInState {
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
 	}
 

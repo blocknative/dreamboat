@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	NumberOfSlotsInState = 5
+	NumberOfSlotsInState = 2
 )
 
 type MultiSlotState struct {
