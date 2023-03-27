@@ -304,6 +304,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		req = &creq
 		l = a.l.With(log.F{
 			"fork":      "capella",
+			"headSlot":  a.st.HeadSlot(),
 			"slot":      creq.CapellaMessage.Slot,
 			"slotDiff":  int64(a.st.HeadSlot()) - int64(creq.CapellaMessage.Slot),
 			"blockHash": creq.CapellaMessage.BlockHash,
