@@ -255,17 +255,17 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // Duties mocks base method.
-func (m *MockState) Duties() structs.DutiesState {
+func (m *MockState) Duties(arg0 uint64) structs.DutiesState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Duties")
+	ret := m.ctrl.Call(m, "Duties", arg0)
 	ret0, _ := ret[0].(structs.DutiesState)
 	return ret0
 }
 
 // Duties indicates an expected call of Duties.
-func (mr *MockStateMockRecorder) Duties() *gomock.Call {
+func (mr *MockStateMockRecorder) Duties(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockState)(nil).Duties))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockState)(nil).Duties), arg0)
 }
 
 // Fork mocks base method.
@@ -325,29 +325,29 @@ func (mr *MockStateMockRecorder) KnownValidatorsUpdateTime() *gomock.Call {
 }
 
 // Randao mocks base method.
-func (m *MockState) Randao() string {
+func (m *MockState) Randao(arg0 uint64) string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Randao")
+	ret := m.ctrl.Call(m, "Randao", arg0)
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
 // Randao indicates an expected call of Randao.
-func (mr *MockStateMockRecorder) Randao() *gomock.Call {
+func (mr *MockStateMockRecorder) Randao(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao), arg0)
 }
 
 // SetDuties mocks base method.
-func (m *MockState) SetDuties(arg0 structs.DutiesState) {
+func (m *MockState) SetDuties(arg0 uint64, arg1 structs.DutiesState) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetDuties", arg0)
+	m.ctrl.Call(m, "SetDuties", arg0, arg1)
 }
 
 // SetDuties indicates an expected call of SetDuties.
-func (mr *MockStateMockRecorder) SetDuties(arg0 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) SetDuties(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDuties", reflect.TypeOf((*MockState)(nil).SetDuties), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDuties", reflect.TypeOf((*MockState)(nil).SetDuties), arg0, arg1)
 }
 
 // SetFork mocks base method.
@@ -399,39 +399,39 @@ func (mr *MockStateMockRecorder) SetKnownValidators(arg0 interface{}) *gomock.Ca
 }
 
 // SetRandao mocks base method.
-func (m *MockState) SetRandao(arg0 string) {
+func (m *MockState) SetRandao(arg0 uint64, arg1 string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetRandao", arg0)
+	m.ctrl.Call(m, "SetRandao", arg0, arg1)
 }
 
 // SetRandao indicates an expected call of SetRandao.
-func (mr *MockStateMockRecorder) SetRandao(arg0 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) SetRandao(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRandao", reflect.TypeOf((*MockState)(nil).SetRandao), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRandao", reflect.TypeOf((*MockState)(nil).SetRandao), arg0, arg1)
 }
 
 // SetWithdrawals mocks base method.
-func (m *MockState) SetWithdrawals(arg0 structs.WithdrawalsState) {
+func (m *MockState) SetWithdrawals(arg0 uint64, arg1 structs.WithdrawalsState) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetWithdrawals", arg0)
+	m.ctrl.Call(m, "SetWithdrawals", arg0, arg1)
 }
 
 // SetWithdrawals indicates an expected call of SetWithdrawals.
-func (mr *MockStateMockRecorder) SetWithdrawals(arg0 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) SetWithdrawals(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWithdrawals", reflect.TypeOf((*MockState)(nil).SetWithdrawals), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetWithdrawals", reflect.TypeOf((*MockState)(nil).SetWithdrawals), arg0, arg1)
 }
 
 // Withdrawals mocks base method.
-func (m *MockState) Withdrawals() structs.WithdrawalsState {
+func (m *MockState) Withdrawals(arg0 uint64) structs.WithdrawalsState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Withdrawals")
+	ret := m.ctrl.Call(m, "Withdrawals", arg0)
 	ret0, _ := ret[0].(structs.WithdrawalsState)
 	return ret0
 }
 
 // Withdrawals indicates an expected call of Withdrawals.
-func (mr *MockStateMockRecorder) Withdrawals() *gomock.Call {
+func (mr *MockStateMockRecorder) Withdrawals(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals), arg0)
 }

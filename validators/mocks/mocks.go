@@ -140,17 +140,17 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // Duties mocks base method.
-func (m *MockState) Duties() structs.DutiesState {
+func (m *MockState) Duties(arg0 uint64) structs.DutiesState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Duties")
+	ret := m.ctrl.Call(m, "Duties", arg0)
 	ret0, _ := ret[0].(structs.DutiesState)
 	return ret0
 }
 
 // Duties indicates an expected call of Duties.
-func (mr *MockStateMockRecorder) Duties() *gomock.Call {
+func (mr *MockStateMockRecorder) Duties(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockState)(nil).Duties))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Duties", reflect.TypeOf((*MockState)(nil).Duties), arg0)
 }
 
 // KnownValidators mocks base method.
