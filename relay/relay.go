@@ -12,6 +12,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
@@ -167,7 +168,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, err
 	}
 
-	if slot < rs.beaconState.HeadSlot()-1 {
+	if slot < rs.beaconState.HeadSlot()+1-beacon.NumberOfSlotsInState {
 		rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
 		return nil, ErrOldSlot
 	}
