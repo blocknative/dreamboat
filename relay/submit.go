@@ -259,7 +259,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 	}
 
 	if bid := sbr.Value(); bid.BigInt().Cmp(big.NewInt(0)) == 0 && sbr.NumTx() == 0 {
-		return false, ErrNoBuilderBid
+		return false, ErrZeroBid
 	}
 
 	if sbr.BlockHash() != sbr.TraceBlockHash() {
