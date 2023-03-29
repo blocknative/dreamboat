@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"time"
 
@@ -239,13 +240,14 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		return false, ErrEmptyBlock
 	}
 
-	expectedTimestamp := beaconState.Genesis().GenesisTime + (sbr.Slot() * 12)
-	if sbr.Timestamp() != expectedTimestamp {
+	if expectedTimestamp := beaconState.Genesis().GenesisTime + (sbr.Slot() * 12); sbr.Timestamp() != expectedTimestamp {
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, sbr.Timestamp(), expectedTimestamp)
 	}
 
-	if structs.Slot(sbr.Slot()) <= beaconState.HeadSlot()-beacon.NumberOfSlotsInState {
-		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
+	maxSlot := beaconState.HeadSlot() + 1
+	minSlot := maxSlot - (beacon.NumberOfSlotsInState - 1)
+	if slot := structs.Slot(sbr.Slot()); slot > maxSlot && slot < minSlot {
+		return false, fmt.Errorf("%w: got %d, expected slot in range [%d-%d]", ErrInvalidSlot, sbr.Slot(), minSlot, maxSlot)
 	}
 
 	if randao := beaconState.Randao(sbr.Slot() - 1); randao.Randao != sbr.Random().String() {
@@ -254,6 +256,18 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao.Randao)
 		}
 		return true, nil
+	}
+
+	if bid := sbr.Value(); bid.BigInt().Cmp(big.NewInt(0)) == 0 && sbr.NumTx() == 0 {
+		return false, ErrZeroBid
+	}
+
+	if sbr.BlockHash() != sbr.TraceBlockHash() {
+		return false, ErrTraceMismatch
+	}
+
+	if sbr.ParentHash() != sbr.TraceParentHash() {
+		return false, ErrTraceMismatch
 	}
 
 	return false, nil

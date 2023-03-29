@@ -12,6 +12,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
@@ -26,6 +27,8 @@ var (
 	ErrMissingRequest          = errors.New("req is nil")
 	ErrMissingSecretKey        = errors.New("secret key is nil")
 	ErrNoBuilderBid            = errors.New("no builder bid")
+	ErrTraceMismatch           = errors.New("trace and payload mismatch")
+	ErrZeroBid                 = errors.New("zero valued builder bid")
 	ErrOldSlot                 = errors.New("requested slot is old")
 	ErrBadHeader               = errors.New("invalid block header from datastore")
 	ErrInvalidSignature        = errors.New("invalid signature")
@@ -165,6 +168,11 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, err
 	}
 
+	if slot < (rs.beaconState.HeadSlot()+1)-(beacon.NumberOfSlotsInState-1) {
+		rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
+		return nil, ErrOldSlot
+	}
+
 	parentHash, err := request.ParentHash()
 	if err != nil {
 		return nil, err
@@ -186,10 +194,6 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
 	if !ok {
-		if slot < rs.beaconState.HeadSlot()-1 {
-			rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
-			return nil, ErrOldSlot
-		}
 		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
 		return nil, ErrNoBuilderBid
 	}
@@ -220,6 +224,11 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		logger.WithField("expected", header.Trace.BuilderPubkey).WithField("got", pk.PublicKey).Debug("invalid pubkey")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
+	}
+
+	if zero := types.IntToU256(0); header.Trace.Value.Cmp(&zero) == 0 {
+		rs.m.MissHeaderCount.WithLabelValues("zeroBid").Add(1)
+		return nil, ErrZeroBid
 	}
 
 	fork := rs.beaconState.ForkVersion(slot)

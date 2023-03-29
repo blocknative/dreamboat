@@ -306,7 +306,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			"fork":      "capella",
 			"headSlot":  a.st.HeadSlot(),
 			"slot":      creq.CapellaMessage.Slot,
-			"slotDiff":  int64(creq.CapellaMessage.Slot)-int64(a.st.HeadSlot()),
+			"slotDiff":  int64(creq.CapellaMessage.Slot) - int64(a.st.HeadSlot()),
 			"blockHash": creq.CapellaMessage.BlockHash,
 			"bidValue":  creq.CapellaMessage.Value,
 			"proposer":  creq.CapellaMessage.ProposerPubkey,
@@ -675,6 +675,10 @@ func unwrapError(err error, defaultMsg string) error {
 		return relay.ErrMissingSecretKey
 	} else if errors.Is(err, relay.ErrNoBuilderBid) {
 		return relay.ErrNoBuilderBid
+	} else if errors.Is(err, relay.ErrTraceMismatch) {
+		return relay.ErrTraceMismatch
+	} else if errors.Is(err, relay.ErrZeroBid) {
+		return relay.ErrZeroBid
 	} else if errors.Is(err, relay.ErrOldSlot) {
 		return relay.ErrOldSlot
 	} else if errors.Is(err, relay.ErrBadHeader) {

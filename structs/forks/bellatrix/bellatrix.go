@@ -25,12 +25,24 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.BellatrixExecutionPayload.EpTimestamp > 0
 }
 
+func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
+	return b.BellatrixMessage.BlockHash
+}
+
+func (b *SubmitBlockRequest) TraceParentHash() types.Hash {
+	return b.BellatrixMessage.ParentHash
+}
+
 func (b *SubmitBlockRequest) Slot() uint64 {
 	return b.BellatrixMessage.Slot
 }
 
 func (b *SubmitBlockRequest) BlockHash() types.Hash {
 	return b.BellatrixExecutionPayload.EpBlockHash
+}
+
+func (b *SubmitBlockRequest) ParentHash() types.Hash {
+	return b.BellatrixExecutionPayload.EpParentHash
 }
 
 func (b *SubmitBlockRequest) BuilderPubkey() types.PublicKey {
