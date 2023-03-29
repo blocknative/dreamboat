@@ -25,8 +25,12 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.BellatrixExecutionPayload.EpTimestamp > 0
 }
 
-func (b *SubmitBlockRequest) BidTrace() types.BidTrace {
-	return b.BellatrixMessage
+func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
+	return b.BellatrixMessage.BlockHash
+}
+
+func (b *SubmitBlockRequest) TraceParentHash() types.Hash {
+	return b.BellatrixMessage.ParentHash
 }
 
 func (b *SubmitBlockRequest) Slot() uint64 {

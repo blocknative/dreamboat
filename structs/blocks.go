@@ -7,11 +7,11 @@ import (
 )
 
 type SubmitBlockRequest interface {
-	BidTrace() types.BidTrace
-
 	Slot() uint64
 	BlockHash() types.Hash
 	ParentHash() types.Hash
+	TraceBlockHash() types.Hash
+	TraceParentHash() types.Hash
 	BuilderPubkey() types.PublicKey
 	ProposerPubkey() types.PublicKey
 	ProposerFeeRecipient() types.Address

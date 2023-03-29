@@ -26,8 +26,12 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.CapellaExecutionPayload.EpTimestamp > 0
 }
 
-func (b *SubmitBlockRequest) BidTrace() types.BidTrace {
-	return b.CapellaMessage
+func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
+	return b.CapellaMessage.BlockHash
+}
+
+func (b *SubmitBlockRequest) TraceParentHash() types.Hash {
+	return b.CapellaMessage.ParentHash
 }
 
 func (b *SubmitBlockRequest) Slot() uint64 {

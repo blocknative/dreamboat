@@ -262,11 +262,11 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		return false, ErrNoBuilderBid
 	}
 
-	if sbr.BlockHash() != sbr.BidTrace().BlockHash {
+	if sbr.BlockHash() != sbr.TraceBlockHash() {
 		return false, ErrTraceMismatch
 	}
 
-	if sbr.ParentHash() != sbr.BidTrace().ParentHash {
+	if sbr.ParentHash() != sbr.TraceParentHash() {
 		return false, ErrTraceMismatch
 	}
 
