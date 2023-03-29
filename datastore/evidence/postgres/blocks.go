@@ -109,7 +109,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		bt.Value.UnmarshalText(value)
 
 		bt.Timestamp = uint64(t.Unix())
-		bt.TimestampMs = uint64(t.UnixMicro())
+		bt.TimestampMs = uint64(t.UnixMilli())
 		bts = append(bts, bt)
 	}
 	return bts, err
