@@ -243,10 +243,10 @@ func (mr *MockStateMockRecorder) KnownValidators() *gomock.Call {
 }
 
 // Randao mocks base method.
-func (m *MockState) Randao(arg0 uint64) string {
+func (m *MockState) Randao(arg0 uint64) structs.RandaoState {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Randao", arg0)
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].(structs.RandaoState)
 	return ret0
 }
 
