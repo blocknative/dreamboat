@@ -168,7 +168,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, err
 	}
 
-	if slot < rs.beaconState.HeadSlot()+1-beacon.NumberOfSlotsInState {
+	if slot < (rs.beaconState.HeadSlot()+1)-(beacon.NumberOfSlotsInState-1) {
 		rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
 		return nil, ErrOldSlot
 	}
