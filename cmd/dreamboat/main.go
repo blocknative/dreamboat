@@ -51,7 +51,7 @@ import (
 )
 
 const (
-	shutdownTimeout = 5 * time.Second
+	shutdownTimeout = 15 * time.Second
 )
 
 var flags = []cli.Flag{
@@ -244,7 +244,7 @@ func main() {
 	app := &cli.App{
 		Name:    "dreamboat",
 		Usage:   "ethereum 2.0 relay, commissioned and put to sea by Blocknative",
-		Version: "0.3.6",
+		Version: "0.4.2",
 		Flags:   flags,
 		Action:  run(),
 	}
@@ -497,16 +497,16 @@ func run() cli.ActionFunc {
 
 		<-c.Context.Done()
 
-		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
+		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout/2)
 		defer closeC()
 		logger.Info("Shutdown initialized")
 		err = srv.Shutdown(ctx)
 		logger.Info("Shutdown returned ", err)
 
-		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
+		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		finish := make(chan struct{})
-		go closemanager(ctx, finish, validatorStoreManager)
+		go closemanager(ctx, finish, validatorStoreManager, r)
 
 		select {
 		case <-finish:
@@ -563,8 +563,9 @@ func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m 
 	return bcli.NewMultiBeaconClient(l, clients), nil
 }
 
-func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager) {
+func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay) {
 	regMgr.Close(ctx)
+	r.Close(ctx)
 	finish <- struct{}{}
 }
 
