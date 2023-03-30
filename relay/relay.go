@@ -158,6 +158,15 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 	return rs
 }
 
+func (rs *Relay) Close(ctx context.Context) {
+	rs.l.Info("Awaiting relay processes to finish")
+	select {
+	case <-rs.runnignAsyncs.C():
+		rs.l.Info("Relay processes finished")
+	case <-ctx.Done():
+	}
+}
+
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
 func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 
@@ -467,13 +476,4 @@ func (wg *TimeoutWaitGroup) Done() {
 
 func (wg *TimeoutWaitGroup) C() <-chan struct{} {
 	return wg.done
-}
-
-func (rs *Relay) Close(ctx context.Context) {
-	rs.l.Info("Awaiting relay processes to finish")
-	select {
-	case <-rs.runnignAsyncs.C():
-		rs.l.Info("Relay processes finished")
-	case <-ctx.Done():
-	}
 }

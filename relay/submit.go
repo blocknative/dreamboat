@@ -206,7 +206,6 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 }
 
 func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sbr structs.SubmitBlockRequest) (newMax bool, err error) {
-
 	if rs.config.SecretKey == nil {
 		return false, ErrMissingSecretKey
 	}
@@ -231,7 +230,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	go func(wg *TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
 		defer wg.Done()
 		if err = rs.das.PutBuilderBlockSubmission(context.Background(), trace, newMax); err != nil {
-			rs.l.Error("error storing block builder submission")
+			rs.l.WithField("trace", trace).WithError(err).Error("error storing block builder submission")
 		}
 	}(rs.runnignAsyncs, complete.Header.Trace, newMax)
 
