@@ -497,13 +497,13 @@ func run() cli.ActionFunc {
 
 		<-c.Context.Done()
 
-		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout/5)
+		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout/2)
 		defer closeC()
 		logger.Info("Shutdown initialized")
 		err = srv.Shutdown(ctx)
 		logger.Info("Shutdown returned ", err)
 
-		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/5)
+		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		finish := make(chan struct{})
 		go closemanager(ctx, finish, validatorStoreManager, r)
