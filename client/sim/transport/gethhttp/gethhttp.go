@@ -44,6 +44,9 @@ func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockV
 }
 
 func (c *Client) validateBlock(ctx context.Context, method string, block any) (err error) {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	buff := new(bytes.Buffer)
 	enc := json.NewEncoder(buff)
 	if err := enc.Encode(

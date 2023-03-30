@@ -200,7 +200,6 @@ func (rc *ReConn) KeepConnection(url string, input chan []byte) {
 
 	var connID int
 	for {
-		_, cancel := context.WithCancel(context.Background())
 		c := NewConn(rc.l, input)
 		rc.lock.Lock()
 		rc.c = append(rc.c, c)
@@ -222,7 +221,6 @@ func (rc *ReConn) KeepConnection(url string, input chan []byte) {
 		}
 
 		<-c.Done
-		cancel()
 
 		rc.lock.Lock()
 		if len(rc.c) == 1 {

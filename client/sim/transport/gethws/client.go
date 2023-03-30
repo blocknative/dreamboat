@@ -44,6 +44,10 @@ func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockV
 }
 
 func (c *Client) validateBlock(ctx context.Context, method string, block any) (err error) {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	conn, err := c.nodeConn.Get()
 	if err != nil {
 		return client.ErrNotFound
