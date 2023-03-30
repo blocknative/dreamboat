@@ -451,7 +451,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 }
 
 type TimeoutWaitGroup struct {
-	runnign int64
+	running int64
 	done    chan struct{}
 }
 
