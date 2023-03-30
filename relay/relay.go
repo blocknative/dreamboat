@@ -187,8 +187,10 @@ func (wg *TimeoutWaitGroup) C() <-chan struct{} {
 }
 
 func (rs *Relay) Close(ctx context.Context) {
+	rs.l.Info("Awaiting relay processes to finish")
 	select {
 	case <-rs.runnignAsyncs.C():
+		rs.l.Info("Relay processes finished")
 	case <-ctx.Done():
 	}
 }
