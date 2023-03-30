@@ -81,6 +81,15 @@ func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBloc
 			return
 		}
 
+		if ctx.Err() != nil {
+			f.m.ServedFrom.WithLabelValues(c.Kind(), "ctx").Inc()
+			return ctx.Err()
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			f.m.ServedFrom.WithLabelValues(c.Kind(), "ctx").Inc()
+			return err
+		}
+
 		if !(errors.Is(err, client.ErrNotFound) || errors.Is(err, client.ErrConnectionFailure)) {
 			f.m.ServedFrom.WithLabelValues(c.Kind(), "error").Inc()
 			return err
