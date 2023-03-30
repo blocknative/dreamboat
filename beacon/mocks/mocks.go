@@ -216,6 +216,18 @@ func (mr *MockBeaconClientMockRecorder) SubscribeToHeadEvents(arg0, arg1 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToHeadEvents", reflect.TypeOf((*MockBeaconClient)(nil).SubscribeToHeadEvents), arg0, arg1)
 }
 
+// SubscribeToPayloadAttributesEvents mocks base method.
+func (m *MockBeaconClient) SubscribeToPayloadAttributesEvents(arg0 chan client.PayloadAttributesEvent) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubscribeToPayloadAttributesEvents", arg0)
+}
+
+// SubscribeToPayloadAttributesEvents indicates an expected call of SubscribeToPayloadAttributesEvents.
+func (mr *MockBeaconClientMockRecorder) SubscribeToPayloadAttributesEvents(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToPayloadAttributesEvents", reflect.TypeOf((*MockBeaconClient)(nil).SubscribeToPayloadAttributesEvents), arg0)
+}
+
 // SyncStatus mocks base method.
 func (m *MockBeaconClient) SyncStatus() (*client.SyncStatusPayloadData, error) {
 	m.ctrl.T.Helper()
@@ -324,6 +336,20 @@ func (mr *MockStateMockRecorder) KnownValidatorsUpdateTime() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidatorsUpdateTime", reflect.TypeOf((*MockState)(nil).KnownValidatorsUpdateTime))
 }
 
+// ParentBlockHash mocks base method.
+func (m *MockState) ParentBlockHash() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ParentBlockHash")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// ParentBlockHash indicates an expected call of ParentBlockHash.
+func (mr *MockStateMockRecorder) ParentBlockHash() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParentBlockHash", reflect.TypeOf((*MockState)(nil).ParentBlockHash))
+}
+
 // Randao mocks base method.
 func (m *MockState) Randao(arg0 uint64) structs.RandaoState {
 	m.ctrl.T.Helper()
@@ -396,6 +422,18 @@ func (m *MockState) SetKnownValidators(arg0 structs.ValidatorsState) {
 func (mr *MockStateMockRecorder) SetKnownValidators(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetKnownValidators", reflect.TypeOf((*MockState)(nil).SetKnownValidators), arg0)
+}
+
+// SetParentBlockHash mocks base method.
+func (m *MockState) SetParentBlockHash(arg0 string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetParentBlockHash", arg0)
+}
+
+// SetParentBlockHash indicates an expected call of SetParentBlockHash.
+func (mr *MockStateMockRecorder) SetParentBlockHash(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetParentBlockHash", reflect.TypeOf((*MockState)(nil).SetParentBlockHash), arg0)
 }
 
 // SetRandao mocks base method.

@@ -270,6 +270,11 @@ var flags = []cli.Flag{
 		Usage:   "The maximum time allowed to wait for a response from the beacon",
 		Value:   20 * time.Second,
 		EnvVars: []string{"BEACON_QUERY_TIMEOUT"},
+	&cli.BoolFlag{
+		Name:    "beacon-payload-attributes-subscription",
+		Usage:   "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)",
+		Value:   false,
+		EnvVars: []string{"BEACON_PAYLOAD_ATTRIBUTES_SUBSCRIPTION"},
 	},
 }
 
@@ -430,8 +435,9 @@ func run() cli.ActionFunc {
 		validatorRelay := validators.NewRegister(logger, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
 		b := beacon.NewManager(logger, beacon.Config{
-			BellatrixForkVersion: cfg.BellatrixForkVersion,
-			CapellaForkVersion:   cfg.CapellaForkVersion,
+			BellatrixForkVersion:             cfg.BellatrixForkVersion,
+			CapellaForkVersion:               cfg.CapellaForkVersion,
+			RunPayloadAttributesSubscription: c.Bool("beacon-payload-attributes-subscription"),
 		})
 
 		auctioneer := auction.NewAuctioneer()
