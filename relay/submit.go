@@ -227,9 +227,13 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	newMax = rs.a.AddBlock(&complete)
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
-	if err = rs.das.PutBuilderBlockSubmission(context.Background(), complete.Header.Trace, newMax); err != nil {
-		return newMax, fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
-	}
+	rs.runnignAsyncs.Add(1)
+	go func(wg *TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
+		defer wg.Done()
+		if err = rs.das.PutBuilderBlockSubmission(context.Background(), trace, newMax); err != nil {
+			rs.l.Error("error storing block builder submission")
+		}
+	}(rs.runnignAsyncs, complete.Header.Trace, newMax)
 
 	return newMax, nil
 }

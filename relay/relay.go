@@ -133,6 +133,8 @@ type Relay struct {
 	lastDeliveredSlot *atomic.Uint64
 
 	m RelayMetrics
+
+	runnignAsyncs *TimeoutWaitGroup
 }
 
 // NewRelay relay service
@@ -150,9 +152,45 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		beacon:            beacon,
 		beaconState:       beaconState,
 		lastDeliveredSlot: &atomic.Uint64{},
+		runnignAsyncs:     NewTimeoutWaitGroup(),
 	}
 	rs.initMetrics()
 	return rs
+}
+
+type TimeoutWaitGroup struct {
+	runnign int64
+	done    chan struct{}
+}
+
+func NewTimeoutWaitGroup() *TimeoutWaitGroup {
+	return &TimeoutWaitGroup{done: make(chan struct{})}
+}
+
+func (wg *TimeoutWaitGroup) Add(i int64) {
+	select {
+	case <-wg.done:
+		return
+	default:
+	}
+	atomic.AddInt64(&wg.runnign, i)
+}
+
+func (wg *TimeoutWaitGroup) Done() {
+	if atomic.AddInt64(&wg.runnign, -1) == 0 {
+		close(wg.done)
+	}
+}
+
+func (wg *TimeoutWaitGroup) C() <-chan struct{} {
+	return wg.done
+}
+
+func (rs *Relay) Close(ctx context.Context) {
+	select {
+	case <-rs.runnignAsyncs.C():
+	case <-ctx.Done():
+	}
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
@@ -367,8 +405,9 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	})
 
-	// defer put delivered datastore write
-	go func(l log.Logger, rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
+	rs.runnignAsyncs.Add(1)
+	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
+		defer wg.Done()
 		if rs.config.PublishBlock {
 			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 			if err != nil {
@@ -394,7 +433,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		if err := rs.das.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
 			l.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		}
-	}(logger, rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
+	}(rs.runnignAsyncs, logger, rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
 
 	exp := payload.ExecutionPayload()
 

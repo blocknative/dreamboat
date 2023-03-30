@@ -128,7 +128,7 @@ func (a *API) AttachToHandler(m *http.ServeMux) {
 	m.Handle("/", router)
 }
 
-func status(w http.ResponseWriter, r *http.Request) {
+func status(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 }
