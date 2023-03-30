@@ -158,43 +158,6 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 	return rs
 }
 
-type TimeoutWaitGroup struct {
-	runnign int64
-	done    chan struct{}
-}
-
-func NewTimeoutWaitGroup() *TimeoutWaitGroup {
-	return &TimeoutWaitGroup{done: make(chan struct{})}
-}
-
-func (wg *TimeoutWaitGroup) Add(i int64) {
-	select {
-	case <-wg.done:
-		return
-	default:
-	}
-	atomic.AddInt64(&wg.runnign, i)
-}
-
-func (wg *TimeoutWaitGroup) Done() {
-	if atomic.AddInt64(&wg.runnign, -1) == 0 {
-		close(wg.done)
-	}
-}
-
-func (wg *TimeoutWaitGroup) C() <-chan struct{} {
-	return wg.done
-}
-
-func (rs *Relay) Close(ctx context.Context) {
-	rs.l.Info("Awaiting relay processes to finish")
-	select {
-	case <-rs.runnignAsyncs.C():
-		rs.l.Info("Relay processes finished")
-	case <-ctx.Done():
-	}
-}
-
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
 func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 
@@ -476,4 +439,41 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	logger.Error("unknown fork failure")
 	return nil, errors.New("unknown fork")
 
+}
+
+type TimeoutWaitGroup struct {
+	runnign int64
+	done    chan struct{}
+}
+
+func NewTimeoutWaitGroup() *TimeoutWaitGroup {
+	return &TimeoutWaitGroup{done: make(chan struct{})}
+}
+
+func (wg *TimeoutWaitGroup) Add(i int64) {
+	select {
+	case <-wg.done:
+		return
+	default:
+	}
+	atomic.AddInt64(&wg.runnign, i)
+}
+
+func (wg *TimeoutWaitGroup) Done() {
+	if atomic.AddInt64(&wg.runnign, -1) == 0 {
+		close(wg.done)
+	}
+}
+
+func (wg *TimeoutWaitGroup) C() <-chan struct{} {
+	return wg.done
+}
+
+func (rs *Relay) Close(ctx context.Context) {
+	rs.l.Info("Awaiting relay processes to finish")
+	select {
+	case <-rs.runnignAsyncs.C():
+		rs.l.Info("Relay processes finished")
+	case <-ctx.Done():
+	}
 }
