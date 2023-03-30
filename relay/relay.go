@@ -450,8 +450,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 }
 
-type TimeoutWaitGroup struct {
-	runnign int64
+type TimeoutWaitGroup struct { 
+	running int64 
 	done    chan struct{}
 }
 
@@ -464,12 +464,12 @@ func (wg *TimeoutWaitGroup) Add(i int64) {
 	case <-wg.done:
 		return
 	default:
-	}
-	atomic.AddInt64(&wg.runnign, i)
+	} 
+	atomic.AddInt64(&wg.running, i)
 }
 
 func (wg *TimeoutWaitGroup) Done() {
-	if atomic.AddInt64(&wg.runnign, -1) == 0 {
+	if atomic.AddInt64(&wg.running, -1) == 0 { 
 		close(wg.done)
 	}
 }
