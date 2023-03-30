@@ -44,6 +44,10 @@ func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockV
 	}
 
 	for _, c := range f.clients {
+		if ctx.Err() != nil {
+			f.m.ServedFrom.WithLabelValues(c.Kind(), "ctx").Inc()
+			return ctx.Err()
+		}
 		err = c.ValidateBlock(ctx, block)
 		if err == nil {
 			f.m.ServedFrom.WithLabelValues(c.Kind(), "ok").Inc()
@@ -67,6 +71,10 @@ func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBloc
 	}
 
 	for _, c := range f.clients {
+		if ctx.Err() != nil {
+			f.m.ServedFrom.WithLabelValues(c.Kind(), "ctx").Inc()
+			return ctx.Err()
+		}
 		err = c.ValidateBlockV2(ctx, block)
 		if err == nil {
 			f.m.ServedFrom.WithLabelValues(c.Kind(), "ok").Inc()
