@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
@@ -36,15 +38,13 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		"method":         "SubmitBlock",
 		"builder":        sbr.BuilderPubkey(),
 		"blockHash":      sbr.BlockHash(),
+		"headSlot":       rs.beaconState.HeadSlot(),
 		"slot":           sbr.Slot(),
+		"slotDiff":       int64(sbr.Slot()) - int64(rs.beaconState.HeadSlot()),
 		"proposer":       sbr.ProposerPubkey(),
 		"bid":            value.String(),
 		"withdrawalsNum": len(sbr.Withdrawals()),
 	})
-
-	if rs.lastDeliveredSlot.Load() >= sbr.Slot() {
-		return ErrPayloadAlreadyDelivered
-	}
 
 	bRetried, err := verifyBlock(sbr, rs.beaconState)
 	if err != nil {
@@ -58,6 +58,18 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	}
 	m.AppendSince(tCheckRegistration, "submitBlock", "checkRegistration")
 
+	valErr := make(chan error, 1)
+	go func(ctx context.Context, gasLimit uint64, sbr structs.SubmitBlockRequest, chErr chan error) {
+		defer close(chErr)
+
+		tValidateBlock := time.Now()
+		if err := rs.validateBlock(ctx, gasLimit, sbr); err != nil {
+			chErr <- err
+			return
+		}
+		m.AppendSince(tValidateBlock, "submitBlock", "validateBlock")
+	}(ctx, gasLimit, sbr, valErr)
+
 	tVerify := time.Now()
 	if err := rs.verifySignature(ctx, sbr); err != nil {
 		return err
@@ -70,11 +82,15 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		return fmt.Errorf("failed to verify withdrawals: %w", err)
 	}
 
-	tValidateBlock := time.Now()
-	if err := rs.validateBlock(ctx, gasLimit, sbr); err != nil {
-		return err
+	// wait for validations
+	select {
+	case err := <-valErr:
+		if err != nil {
+			return err
+		}
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	m.AppendSince(tValidateBlock, "submitBlock", "validateBlock")
 
 	isNewMax, err := rs.storeSubmission(ctx, m, sbr)
 	if err != nil {
@@ -190,7 +206,6 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 }
 
 func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sbr structs.SubmitBlockRequest) (newMax bool, err error) {
-
 	if rs.config.SecretKey == nil {
 		return false, ErrMissingSecretKey
 	}
@@ -202,7 +217,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 
 	tPutPayload := time.Now()
 
-	if err := rs.d.PutPayload(ctx, sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
+	if err := rs.d.PutPayload(context.Background(), sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
@@ -211,9 +226,13 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	newMax = rs.a.AddBlock(&complete)
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
-	if err = rs.das.PutBuilderBlockSubmission(ctx, complete.Header.Trace, newMax); err != nil {
-		return newMax, fmt.Errorf("%w block as header: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
-	}
+	rs.runnignAsyncs.Add(1)
+	go func(wg *TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
+		defer wg.Done()
+		if err = rs.das.PutBuilderBlockSubmission(context.Background(), trace, newMax); err != nil {
+			rs.l.WithField("trace", trace).WithError(err).Error("error storing block builder submission")
+		}
+	}(rs.runnignAsyncs, complete.Header.Trace, newMax)
 
 	if rs.config.Distributed && rs.config.StreamSubmissions {
 		go rs.streamBlockSubmission(complete.Payload)
@@ -228,21 +247,38 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		return false, ErrEmptyBlock
 	}
 
-	expectedTimestamp := beaconState.Genesis().GenesisTime + (sbr.Slot() * 12)
-	if sbr.Timestamp() != expectedTimestamp {
+	if expectedTimestamp := beaconState.Genesis().GenesisTime + (sbr.Slot() * 12); sbr.Timestamp() != expectedTimestamp {
 		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidTimestamp, sbr.Timestamp(), expectedTimestamp)
 	}
 
-	if structs.Slot(sbr.Slot()) < beaconState.HeadSlot() {
-		return false, fmt.Errorf("%w: got %d, expected %d", ErrInvalidSlot, sbr.Slot(), beaconState.HeadSlot())
+	maxSlot := beaconState.HeadSlot() + 1
+	minSlot := maxSlot - (beacon.NumberOfSlotsInState - 1)
+	if slot := structs.Slot(sbr.Slot()); slot > maxSlot || slot < minSlot {
+		return false, fmt.Errorf("%w: got %d, expected slot in range [%d-%d]", ErrInvalidSlot, sbr.Slot(), minSlot, maxSlot)
 	}
 
-	if randao := beaconState.Randao(); randao != sbr.Random().String() {
+	if randao := beaconState.Randao(sbr.Slot() - 1); randao.Randao == "" || randao.Randao != sbr.Random().String() {
 		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
-		if randao := beaconState.Randao(); randao != sbr.Random().String() {
-			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao)
+		randao := beaconState.Randao(sbr.Slot() - 1)
+		if randao.Randao == "" {
+			return true, fmt.Errorf("randao for slot %d not found", sbr.Slot())
+		}
+		if randao.Randao != sbr.Random().String() {
+			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao.Randao)
 		}
 		return true, nil
+	}
+
+	if bid := sbr.Value(); bid.BigInt().Cmp(big.NewInt(0)) == 0 && sbr.NumTx() == 0 {
+		return false, ErrZeroBid
+	}
+
+	if sbr.BlockHash() != sbr.TraceBlockHash() {
+		return false, ErrTraceMismatch
+	}
+
+	if sbr.ParentHash() != sbr.TraceParentHash() {
+		return false, ErrTraceMismatch
 	}
 
 	return false, nil
@@ -254,15 +290,15 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		return types.Root{}, false, nil
 	}
 
-	withdrawalState := state.Withdrawals()
+	withdrawalState := state.Withdrawals(submitBlockRequest.Slot() - 1)
 	retried = false
-	if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) { // +1 because it's from previous slot
+	if withdrawalState.Slot == 0 {
 		// recheck beacon sync state for early blocks
 		time.Sleep(StateRecheckDelay)
 		retried = true
-		withdrawalState = state.Withdrawals()
-		if withdrawalState.Slot+1 != structs.Slot(submitBlockRequest.Slot()) {
-			return root, retried, fmt.Errorf("%w: got %d, expected %d", ErrInvalidWithdrawalSlot, submitBlockRequest.Slot(), withdrawalState.Slot)
+		withdrawalState = state.Withdrawals(submitBlockRequest.Slot() - 1)
+		if withdrawalState.Slot == 0 {
+			return root, retried, fmt.Errorf("withdrawals for slot %d not found", submitBlockRequest.Slot())
 		}
 	}
 

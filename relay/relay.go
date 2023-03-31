@@ -12,6 +12,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
+	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
@@ -26,6 +27,8 @@ var (
 	ErrMissingRequest          = errors.New("req is nil")
 	ErrMissingSecretKey        = errors.New("secret key is nil")
 	ErrNoBuilderBid            = errors.New("no builder bid")
+	ErrTraceMismatch           = errors.New("trace and payload mismatch")
+	ErrZeroBid                 = errors.New("zero valued builder bid")
 	ErrOldSlot                 = errors.New("requested slot is old")
 	ErrBadHeader               = errors.New("invalid block header from datastore")
 	ErrInvalidSignature        = errors.New("invalid signature")
@@ -59,8 +62,8 @@ type State interface {
 	KnownValidators() structs.ValidatorsState
 	HeadSlot() structs.Slot
 	Genesis() structs.GenesisInfo
-	Withdrawals() structs.WithdrawalsState
-	Randao() string
+	Withdrawals(uint64) structs.WithdrawalsState
+	Randao(uint64) structs.RandaoState
 	ForkVersion(slot structs.Slot) structs.ForkVersion
 }
 
@@ -141,6 +144,8 @@ type Relay struct {
 	lastDeliveredSlot *atomic.Uint64
 
 	m RelayMetrics
+
+	runnignAsyncs *TimeoutWaitGroup
 }
 
 // NewRelay relay service
@@ -159,6 +164,7 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		beacon:            beacon,
 		beaconState:       beaconState,
 		lastDeliveredSlot: &atomic.Uint64{},
+		runnignAsyncs:     NewTimeoutWaitGroup(),
 	}
 	rs.initMetrics()
 	return rs
@@ -175,6 +181,15 @@ func (rs *Relay) RunSlotDeliveredUpdater(ctx context.Context) error {
 	}
 }
 
+func (rs *Relay) Close(ctx context.Context) {
+	rs.l.Info("Awaiting relay processes to finish")
+	select {
+	case <-rs.runnignAsyncs.C():
+		rs.l.Info("Relay processes finished")
+	case <-ctx.Done():
+	}
+}
+
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
 func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 
@@ -186,6 +201,11 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	slot, err := request.Slot()
 	if err != nil {
 		return nil, err
+	}
+
+	if slot < (rs.beaconState.HeadSlot()+1)-(beacon.NumberOfSlotsInState-1) {
+		rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
+		return nil, ErrOldSlot
 	}
 
 	parentHash, err := request.ParentHash()
@@ -209,10 +229,6 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
 	if !ok {
-		if slot < rs.beaconState.HeadSlot()-1 {
-			rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
-			return nil, ErrOldSlot
-		}
 		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
 		return nil, ErrNoBuilderBid
 	}
@@ -243,6 +259,11 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		logger.WithField("expected", header.Trace.BuilderPubkey).WithField("got", pk.PublicKey).Debug("invalid pubkey")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
+	}
+
+	if zero := types.IntToU256(0); header.Trace.Value.Cmp(&zero) == 0 {
+		rs.m.MissHeaderCount.WithLabelValues("zeroBid").Add(1)
+		return nil, ErrZeroBid
 	}
 
 	fork := rs.beaconState.ForkVersion(slot)
@@ -356,7 +377,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"blockHash": payloadRequest.BlockHash(),
 		"pubkey":    pk,
 	})
-	logger.Info("payload requested")
+	logger.WithField("event", "payload_requested").Info("payload requested")
 
 	forkv := rs.beaconState.ForkVersion(structs.Slot(payloadRequest.Slot()))
 
@@ -376,13 +397,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	key, err := payloadRequest.ToPayloadKey(pk)
 	if err != nil {
-		logger.WithError(err).Warn("error getting payload")
+		logger.WithField("event", "invalid_payload_key").WithError(err).Warn("error getting payload")
 		return nil, ErrNoPayloadFound
 	}
 
 	payload, fromCache, err := rs.d.GetPayload(ctx, forkv, key)
 	if err != nil || payload == nil {
-		logger.WithError(err).Warn("error getting payload")
+		logger.WithField("event", "storage_error").WithError(err).Warn("error getting payload")
 		return nil, ErrNoPayloadFound
 	}
 	m.AppendSince(tGet, "getPayload", "get")
@@ -391,33 +412,41 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
 	}
 
-	// defer put delivered datastore write
-	go func(rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
+	logger = logger.With(log.F{
+		"from_cache":       fromCache,
+		"builder":          payload.BuilderPubkey().String(),
+		"processingTimeMs": time.Since(tStart).Milliseconds(),
+	})
+
+	rs.runnignAsyncs.Add(1)
+	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
+		defer wg.Done()
 		if rs.config.PublishBlock {
 			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 			if err != nil {
-				logger.WithError(err).Warn("fail to create block for publication")
+				l.WithField("event", "wrong_publish_payload").WithError(err).Warn("fail to create block for publication")
 			} else {
 				if err = rs.beacon.PublishBlock(beaconBlock); err != nil {
-					logger.With(log.F{
+					l.With(log.F{
 						"slot":         slot,
 						"block_number": payloadRequest.BlockNumber(),
-					}).WithError(err).Warn("fail to publish block to beacon node")
+					}).WithField("event", "publish_error").WithError(err).Warn("fail to publish block to beacon node")
 				} else {
-					logger.Info("published block to beacon node")
+					l.WithField("event", "published").Info("published block to beacon node")
 				}
 			}
 		}
 
 		trace, err := payload.ToDeliveredTrace(payloadRequest.Slot())
 		if err != nil {
-			logger.WithError(err).Warn("failed to generate delivered payload")
+			l.WithField("event", "wrong_evidence_payload").WithError(err).Warn("failed to generate delivered payload")
+			return
 		}
 
 		if err := rs.das.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
-			logger.WithError(err).Warn("failed to set payload after delivery")
+			l.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		}
-	}(rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
+	}(rs.runnignAsyncs, logger, rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
 
 	exp := payload.ExecutionPayload()
 
@@ -433,6 +462,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		bep := exp.(*bellatrix.ExecutionPayload)
 		logger.With(log.F{
 			"fork":         "bellatrix",
+			"event":        "payload_sent",
 			"blockHash":    bep.EpBlockHash,
 			"blockNumber":  bep.EpBlockNumber,
 			"stateRoot":    bep.EpStateRoot,
@@ -448,6 +478,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		cep := exp.(*capella.ExecutionPayload)
 		logger.With(log.F{
 			"fork":         "capella",
+			"event":        "payload_sent",
 			"blockHash":    cep.EpBlockHash,
 			"blockNumber":  cep.EpBlockNumber,
 			"stateRoot":    cep.EpStateRoot,
@@ -460,6 +491,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			CapellaData:    *cep,
 		}, nil
 	}
+	logger.Error("unknown fork failure")
 	return nil, errors.New("unknown fork")
 
 }
@@ -471,4 +503,32 @@ func (rs *Relay) streamDeliveredSlot(slot structs.Slot) {
 	if err := rs.s.PublishSlotDelivered(ctx, slot); err != nil {
 		rs.l.WithError(err).Warn("failed to stream delivered slot: %w", err)
 	}
+}
+
+type TimeoutWaitGroup struct {
+	running int64
+	done    chan struct{}
+}
+
+func NewTimeoutWaitGroup() *TimeoutWaitGroup {
+	return &TimeoutWaitGroup{done: make(chan struct{})}
+}
+
+func (wg *TimeoutWaitGroup) Add(i int64) {
+	select {
+	case <-wg.done:
+		return
+	default:
+	}
+	atomic.AddInt64(&wg.running, i)
+}
+
+func (wg *TimeoutWaitGroup) Done() {
+	if atomic.AddInt64(&wg.running, -1) == 0 {
+		close(wg.done)
+	}
+}
+
+func (wg *TimeoutWaitGroup) C() <-chan struct{} {
+	return wg.done
 }

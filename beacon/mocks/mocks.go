@@ -325,17 +325,17 @@ func (mr *MockStateMockRecorder) KnownValidatorsUpdateTime() *gomock.Call {
 }
 
 // Randao mocks base method.
-func (m *MockState) Randao() string {
+func (m *MockState) Randao(arg0 uint64) structs.RandaoState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Randao")
-	ret0, _ := ret[0].(string)
+	ret := m.ctrl.Call(m, "Randao", arg0)
+	ret0, _ := ret[0].(structs.RandaoState)
 	return ret0
 }
 
 // Randao indicates an expected call of Randao.
-func (mr *MockStateMockRecorder) Randao() *gomock.Call {
+func (mr *MockStateMockRecorder) Randao(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao), arg0)
 }
 
 // SetDuties mocks base method.
@@ -399,7 +399,7 @@ func (mr *MockStateMockRecorder) SetKnownValidators(arg0 interface{}) *gomock.Ca
 }
 
 // SetRandao mocks base method.
-func (m *MockState) SetRandao(arg0 string) {
+func (m *MockState) SetRandao(arg0 structs.RandaoState) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetRandao", arg0)
 }
@@ -423,15 +423,15 @@ func (mr *MockStateMockRecorder) SetWithdrawals(arg0 interface{}) *gomock.Call {
 }
 
 // Withdrawals mocks base method.
-func (m *MockState) Withdrawals() structs.WithdrawalsState {
+func (m *MockState) Withdrawals(arg0 uint64) structs.WithdrawalsState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Withdrawals")
+	ret := m.ctrl.Call(m, "Withdrawals", arg0)
 	ret0, _ := ret[0].(structs.WithdrawalsState)
 	return ret0
 }
 
 // Withdrawals indicates an expected call of Withdrawals.
-func (mr *MockStateMockRecorder) Withdrawals() *gomock.Call {
+func (mr *MockStateMockRecorder) Withdrawals(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals), arg0)
 }

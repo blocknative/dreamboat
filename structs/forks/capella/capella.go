@@ -26,12 +26,24 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.CapellaExecutionPayload.EpTimestamp > 0
 }
 
+func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
+	return b.CapellaMessage.BlockHash
+}
+
+func (b *SubmitBlockRequest) TraceParentHash() types.Hash {
+	return b.CapellaMessage.ParentHash
+}
+
 func (b *SubmitBlockRequest) Slot() uint64 {
 	return b.CapellaMessage.Slot
 }
 
 func (b *SubmitBlockRequest) BlockHash() types.Hash {
 	return b.CapellaExecutionPayload.EpBlockHash
+}
+
+func (b *SubmitBlockRequest) ParentHash() types.Hash {
+	return b.CapellaExecutionPayload.EpParentHash
 }
 
 func (b *SubmitBlockRequest) BuilderPubkey() types.PublicKey {
@@ -729,8 +741,15 @@ func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 	return &bbat.Payload.CapellaData
 }
 
+func (bbat *BlockBidAndTrace) BuilderPubkey() (pub types.PublicKey) {
+	if bbat.Trace == nil || bbat.Trace.Message == nil {
+		return pub
+	}
+	return bbat.Trace.Message.BuilderPubkey
+}
+
 func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) (dt structs.DeliveredTrace, err error) {
-	if bbat.Trace.Message == nil {
+	if bbat.Trace == nil || bbat.Trace.Message == nil {
 		return dt, errors.New("empty message")
 	}
 	return structs.DeliveredTrace{

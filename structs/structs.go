@@ -196,6 +196,7 @@ type BlockBidAndTrace interface {
 	BidValue() types.U256Str
 	Slot() uint64
 	Proposer() types.PublicKey
+	BuilderPubkey() (pub types.PublicKey)
 
 	ExecutionPayload() ExecutionPayload
 	ToDeliveredTrace(slot uint64) (DeliveredTrace, error)
@@ -279,6 +280,11 @@ type ValidatorCacheEntry struct {
 type WithdrawalsState struct {
 	Slot Slot
 	Root types.Root
+}
+
+type RandaoState struct {
+	Slot   uint64
+	Randao string
 }
 
 type ForkState struct {

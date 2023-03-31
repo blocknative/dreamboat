@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/blocknative/dreamboat/beacon"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/verify"
 
@@ -19,6 +20,10 @@ var (
 	ErrUnknownValidator = errors.New("unknown validator")
 	ErrInvalidTimestamp = errors.New("invalid timestamp")
 )
+
+type MultiSlotState interface {
+	Get(uint64) State
+}
 
 type State interface {
 	Duties() structs.DutiesState
@@ -38,7 +43,7 @@ type RegistrationManager interface {
 type Register struct {
 	regMngr     RegistrationManager
 	ver         Verifier
-	beaconState State
+	beaconState *beacon.MultiSlotState
 
 	builderSigningDomain types.Domain
 
@@ -46,7 +51,7 @@ type Register struct {
 	m RegisterMetrics
 }
 
-func NewRegister(l log.Logger, builderSigningDomain types.Domain, beaconState State, ver Verifier, regMngr RegistrationManager) *Register {
+func NewRegister(l log.Logger, builderSigningDomain types.Domain, beaconState *beacon.MultiSlotState, ver Verifier, regMngr RegistrationManager) *Register {
 	reg := &Register{
 		l:                    l,
 		ver:                  ver,

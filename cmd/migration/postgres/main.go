@@ -28,7 +28,7 @@ var cf = flags{}
 
 func init() {
 	flag.StringVar(&cf.databaseURL, "db", "", "Database URL")
-	flag.StringVar(&cf.migrationType, "migrations", "", `Type of migration (available: "validators")`)
+	flag.StringVar(&cf.migrationType, "migrations", "", `Type of migration (available: "validators","evidence")`)
 	flag.BoolVar(&cf.verbose, "verbose", true, "Verbosity of logs during run")
 	flag.UintVar(&cf.version, "version", 0, "Version parameter sets db changes to specified revision (up or down)")
 	flag.Parse()
@@ -53,7 +53,7 @@ func migrateDB(dburl string) error {
 	}
 	defer db.Close()
 
-	if cf.migrationType != "validators" { // it will have more
+	if cf.migrationType != "validators" && cf.migrationType != "evidence" { // it will have more
 		log.Fatal("migration type (`migrations`) is not properly set")
 	}
 

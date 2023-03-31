@@ -58,7 +58,7 @@ import (
 )
 
 const (
-	shutdownTimeout = 5 * time.Second
+	shutdownTimeout = 15 * time.Second
 )
 
 var flags = []cli.Flag{
@@ -73,11 +73,6 @@ var flags = []cli.Flag{
 		Usage:   "format logs as text, json or none",
 		Value:   "text",
 		EnvVars: []string{"LOGFMT"},
-	},
-	&cli.BoolFlag{
-		Name:  "profile",
-		Usage: "activates profiling http endpoint",
-		Value: false,
 	},
 	&cli.StringFlag{
 		Name:    "addr",
@@ -102,12 +97,7 @@ var flags = []cli.Flag{
 		Usage:   "`url` for beacon endpoint",
 		EnvVars: []string{"RELAY_BEACON"},
 	},
-	&cli.BoolFlag{
-		Name:    "check-builders",
-		Usage:   "check builder blocks",
-		EnvVars: []string{"RELAY_CHECK_BUILDERS"},
-	},
-	&cli.StringSliceFlag{
+	&cli.StringSliceFlag{ // TODO: Remove
 		Name:    "builder",
 		Usage:   "`url` formatted as schema://pubkey@host",
 		EnvVars: []string{"BN_RELAY_BUILDER_URLS"},
@@ -172,18 +162,6 @@ var flags = []cli.Flag{
 		Value:   200,
 		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_LAG"},
 	},
-	&cli.DurationFlag{
-		Name:    "relay-header-memory-slot-time-lag",
-		Usage:   "how log should it take for lagged slot to be eligible fot purge",
-		Value:   time.Minute * 5,
-		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_TIME_LAG"},
-	},
-	&cli.DurationFlag{
-		Name:    "relay-header-memory-purge-interval",
-		Usage:   "how often memory should be purged",
-		Value:   time.Minute * 10,
-		EnvVars: []string{"RELAY_HEADER_MEMORY_PURGE_INTERVAL"},
-	},
 	&cli.IntFlag{
 		Name:    "relay-payload-cache-size",
 		Usage:   "number of payloads to cache for fast in-memory reads",
@@ -220,7 +198,7 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"RELAY_DATAAPI_DATABASE_URL"},
 	},
-	&cli.BoolFlag{
+	&cli.BoolFlag{ // TODO: Remove
 		Name:    "relay-fast-boot",
 		Usage:   "speed up booting up of relay, adding temporary inconsistency on the builder_blocks_received endpoint",
 		Value:   false,
@@ -322,7 +300,7 @@ func main() {
 	app := &cli.App{
 		Name:    "dreamboat",
 		Usage:   "ethereum 2.0 relay, commissioned and put to sea by Blocknative",
-		Version: "0.3.6",
+		Version: "0.4.2",
 		Flags:   flags,
 		Action:  run(),
 	}
@@ -351,12 +329,8 @@ func run() cli.ActionFunc {
 			}
 		}
 
-		if err := cfg.LoadBuilders(c.StringSlice("builder")); err != nil {
-			return err
-		}
-
 		TTL := c.Duration("ttl")
-		logger := logger(c).WithField("fast-boot", c.Bool("relay-fast-boot"))
+		logger := logger(c)
 
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
@@ -393,7 +367,7 @@ func run() cli.ActionFunc {
 		}).Info("data store initialized")
 
 		timeRelayStart := time.Now()
-		state := &beacon.AtomicState{}
+		state := &beacon.MultiSlotState{}
 		ds, err := datastore.NewDatastore(storage, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("failed to create datastore: %w", err)
@@ -490,7 +464,9 @@ func run() cli.ActionFunc {
 
 		validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
-		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+		if c.Uint("relay-workers-store-validator") > 0 {
+			validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+		}
 
 		domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, cfg.GenesisForkVersion, types.Root{}.String())
 		if err != nil {
@@ -610,16 +586,16 @@ func run() cli.ActionFunc {
 
 		<-c.Context.Done()
 
-		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
+		ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout/2)
 		defer closeC()
 		logger.Info("Shutdown initialized")
 		err = srv.Shutdown(ctx)
 		logger.Info("Shutdown returned ", err)
 
-		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout/2)
+		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		finish := make(chan struct{})
-		go closemanager(ctx, finish, validatorStoreManager)
+		go closemanager(ctx, finish, validatorStoreManager, r)
 
 		select {
 		case <-finish:
@@ -676,8 +652,9 @@ func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m 
 	return bcli.NewMultiBeaconClient(l, clients), nil
 }
 
-func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager) {
+func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay) {
 	regMgr.Close(ctx)
+	r.Close(ctx)
 	finish <- struct{}{}
 }
 
