@@ -227,6 +227,12 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_WS"},
 	},
+	&cli.BoolFlag{
+		Name:    "block-validation-ws-retry",
+		Usage:   "retry to other connection on failure",
+		Value:   false,
+		EnvVars: []string{"BLOCK_VALIDATION_WS_RETRY"},
+	},
 	&cli.StringFlag{
 		Name:    "block-validation-endpoint-rpc",
 		Usage:   "rpc block validation rawurl (eg. ipc path)",
@@ -324,7 +330,7 @@ func run() cli.ActionFunc {
 				input := make(chan []byte, 1000)
 				go simWSConn.KeepConnection(s, input)
 			}
-			simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, logger)
+			simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, c.Bool("block-validation-ws-retry"), logger)
 			simFallb.AddClient(simWSCli)
 		}
 

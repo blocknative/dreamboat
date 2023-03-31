@@ -42,7 +42,7 @@ type Conn struct {
 
 func NewConn(l log.Logger, input chan []byte) *Conn {
 	return &Conn{
-		l:         l,
+		l:         l.WithField("module", "gethws"),
 		messageID: 2,
 		input:     input,
 		Done:      make(chan struct{}),
@@ -100,13 +100,16 @@ func (conn *Conn) Connect(url string) (err error) {
 	return nil
 }
 
-func (conn *Conn) rpcDecoder(in <-chan []byte) {
+func (conn *Conn) rpcDecoder(ctx context.Context, in <-chan []byte) {
 	readr := bytes.NewReader(nil)
 	dec := json.NewDecoder(readr)
 	for msg := range in {
 		readr.Reset(msg)
 		r := types.RpcRawResponse{}
 		if err := dec.Decode(&r); err != nil {
+			conn.l.With(log.F{
+				"response": r,
+			}).Error("error decoding response")
 			continue
 		}
 
@@ -115,22 +118,37 @@ func (conn *Conn) rpcDecoder(in <-chan []byte) {
 		}
 
 		ch, ok := conn.rc.Get(r.ID)
-		if !ok && r.Error != nil && r.Error.Message != "" {
-			conn.l.With(log.F{
-				"response": r,
-			}).Error("error in async call")
+		if !ok {
+			if r.Error != nil && r.Error.Message != "" { // log if we don't return to people
+				conn.l.With(log.F{
+					"response": r,
+				}).Warn("error in async call")
+			}
 			continue
 		}
-		ch <- r
+
+		select {
+		case <-ctx.Done():
+			conn.l.With(log.F{
+				"response": r,
+			}).Warn("context closed")
+		case ch <- r:
+		default:
+			conn.l.With(log.F{
+				"response": r,
+			}).Error("impossible to send response")
+		}
 	}
 }
 
 func (conn *Conn) readHandler() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// run parallel decoder
 	ch := make(chan []byte, workersQueueLen)
 	defer close(ch)
 	for i := 0; i < decodeWorkersNumber; i++ {
-		go conn.rpcDecoder(ch)
+		go conn.rpcDecoder(ctx, ch)
 	}
 	for {
 		_, message, err := conn.c.ReadMessage() // why not NextReader? We allocate more but process jsonDecode faster in workers
@@ -152,8 +170,7 @@ func (conn *Conn) writeHandler() {
 	for {
 		select {
 		case in := <-conn.input:
-			err := conn.c.WriteMessage(websocket.TextMessage, in)
-			if err != nil {
+			if err := conn.c.WriteMessage(websocket.TextMessage, in); err != nil {
 				conn.l.WithError(err).Warn("error writing from ws")
 				return
 			}
@@ -163,8 +180,7 @@ func (conn *Conn) writeHandler() {
 				return
 			}
 
-			err := conn.c.WriteMessage(websocket.TextMessage, []byte(`{"jsonrpc": "2.0", "id": 1, "method": "net_version"}`))
-			if err != nil {
+			if err := conn.c.WriteMessage(websocket.TextMessage, []byte(`{"jsonrpc": "2.0", "id": 1, "method": "net_version"}`)); err != nil {
 				conn.l.WithError(err).Warn("error writing from ws")
 				return
 			}
@@ -206,8 +222,7 @@ func (rc *ReConn) KeepConnection(url string, input chan []byte) {
 		connID = len(rc.c)
 		rc.lock.Unlock()
 
-		err := c.Connect(url)
-		if err != nil {
+		if err := c.Connect(url); err != nil {
 			rc.l.WithError(err).Warn("error connecting")
 			rc.lock.Lock()
 			if len(rc.c) == 1 {
@@ -233,19 +248,39 @@ func (rc *ReConn) KeepConnection(url string, input chan []byte) {
 	}
 }
 
-func (rc *ReConn) Next() *Conn {
+func (rc *ReConn) Next() (*Conn, uint32) {
 	rc.lock.RLock()
 	defer rc.lock.RUnlock()
 	n := atomic.AddUint32(&rc.next, 1)
-	return rc.c[(int(n)-1)%len(rc.c)]
+	return rc.c[(int(n)-1)%len(rc.c)], n
 }
 
-func (rc *ReConn) Get() (*Conn, error) {
-	c := rc.Next()
+func (rc *ReConn) Get() (*Conn, uint32, error) {
+	c, n := rc.Next()
+	if c == nil || !c.healthy {
+		return nil, 0, client.ErrConnectionFailure
+	}
+
+	return c, n, nil
+}
+
+func (rc *ReConn) TryOtherThan(e uint32) (*Conn, error) {
+	rc.lock.RLock()
+	defer rc.lock.RUnlock()
+	l := uint32(len(rc.c))
+	if l < 2 {
+		return nil, client.ErrConnectionFailure
+	}
+	var c *Conn
+	if l-1 > e {
+		c = rc.c[e+1]
+	} else {
+		c = rc.c[0]
+	}
+
 	if c == nil || !c.healthy {
 		return nil, client.ErrConnectionFailure
 	}
-
 	return c, nil
 }
 

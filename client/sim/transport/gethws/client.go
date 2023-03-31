@@ -11,20 +11,23 @@ import (
 )
 
 type Connectionner interface {
-	Get() (*Conn, error)
+	Get() (*Conn, uint32, error)
+	TryOtherThan(uint32) (*Conn, error)
 }
 
 type Client struct {
-	nodeConn  Connectionner
-	namespace string
-	l         log.Logger
+	nodeConn           Connectionner
+	namespace          string
+	tryOtherConnection bool
+	l                  log.Logger
 }
 
-func NewClient(nodeConn Connectionner, namespace string, l log.Logger) *Client {
+func NewClient(nodeConn Connectionner, namespace string, try bool, l log.Logger) *Client {
 	return &Client{
-		nodeConn:  nodeConn,
-		namespace: namespace,
-		l:         l,
+		nodeConn:           nodeConn,
+		namespace:          namespace,
+		tryOtherConnection: try,
+		l:                  l,
 	}
 }
 
@@ -48,7 +51,7 @@ func (c *Client) validateBlock(ctx context.Context, method string, block any) (e
 		return ctx.Err()
 	}
 
-	conn, err := c.nodeConn.Get()
+	conn, n, err := c.nodeConn.Get()
 	if err != nil {
 		return client.ErrNotFound
 	}
@@ -56,6 +59,23 @@ func (c *Client) validateBlock(ctx context.Context, method string, block any) (e
 	params, err := json.Marshal([]any{block})
 	if err != nil {
 		return err
+	}
+
+	err = c.trySend(ctx, conn, method, params)
+	if c.tryOtherConnection && err == client.ErrConnectionFailure {
+		tConn, iErr := c.nodeConn.TryOtherThan(n)
+		if iErr != nil {
+			return err
+		}
+		err = c.trySend(ctx, tConn, method, params)
+	}
+
+	return err
+}
+
+func (c *Client) trySend(ctx context.Context, conn *Conn, method string, params []byte) (err error) {
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
 	resp, err := conn.RequestRPC(ctx, c.namespace+"_"+method, params)
