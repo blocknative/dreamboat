@@ -133,6 +133,10 @@ func (conn *Conn) rpcDecoder(ctx context.Context, in <-chan []byte) {
 				"response": r,
 			}).Warn("context closed")
 		case ch <- r:
+		default:
+			conn.l.With(log.F{
+				"response": r,
+			}).Error("impossible to send response")
 		}
 	}
 }
