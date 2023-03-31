@@ -94,7 +94,7 @@ func (s *Client) RunSubscriberParallel(ctx context.Context, ds Datastore, num ui
 
 func (s *Client) RunBlockSubscriber(ctx context.Context, ds Datastore, blocks chan []byte) error {
 	for rawSBlock := range blocks {
-		sBlock, err := s.Unmarshal(rawSBlock)
+		sBlock, err := s.decode(rawSBlock)
 		if err != nil {
 			s.Logger.Warnf("fail to decode stream block: %s", err.Error())
 		}
@@ -197,18 +197,18 @@ func (s *Client) SlotDeliveredChan() <-chan structs.Slot {
 
 func (s *Client) encodeAndPublish(ctx context.Context, block structs.BlockBidAndTrace, isCache bool) {
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "encode"))
-	gBlock := GenericStreamBlock{BlockBidAndTrace: block, IsBlockCache: isCache, StreamSource: s.Config.ID}
-	rawBlock, err := json.Marshal(gBlock)
+	b, err := s.encode(block, isCache)
 	if err != nil {
-		s.Logger.Warnf("fail to encode encode and stream block: %s", err.Error())
 		timer1.ObserveDuration()
+		s.Logger.Warnf("fail to encode encode and stream block: %s", err.Error())
 		return
 	}
 	timer1.ObserveDuration()
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "publish"))
 	defer timer2.ObserveDuration()
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic, rawBlock); err != nil {
+
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic, b); err != nil {
 		s.Logger.Warnf("fail to encode encode and stream block: %s", err.Error())
 		return
 	}
@@ -234,8 +234,20 @@ func payloadToKey(bbt structs.BlockBidAndTrace) structs.PayloadKey {
 	}
 }
 
-func (s *Client) Unmarshal(b []byte) (StreamBlock, error) {
-	fork := s.st.ForkVersion(s.st.HeadSlot())
+func (s *Client) encode(block structs.BlockBidAndTrace, isCache bool) ([]byte, error) {
+	gBlock := GenericStreamBlock{BlockBidAndTrace: block, IsBlockCache: isCache, StreamSource: s.Config.ID}
+	rawBlock, err := json.Marshal(gBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(rawBlock, byte(s.st.ForkVersion(structs.Slot(block.Slot())))), nil
+}
+
+func (s *Client) decode(b []byte) (StreamBlock, error) {
+	fork := structs.ForkVersion(b[len(b)-1])
+	b = b[:len(b)-1]
+
 	switch fork {
 	case structs.ForkCapella:
 		var creq CapellaStreamBlock
