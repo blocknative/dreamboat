@@ -224,16 +224,15 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 					"epoch":                     headSlot.Epoch(),
 					"slotHead":                  headSlot,
 					"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
+					"fork":                      state.Fork().Version(headSlot).String(),
 					"numDuties":                 len(duties.ProposerDutiesResponse),
 					"numKnownValidators":        len(validators.KnownValidators),
 					"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
 					"randao":                    state.Randao(uint64(headSlot)).Randao,
-					"processingTimeMs":          time.Since(t).Milliseconds(),
 					"withdrawalsRoot":           state.Withdrawals(uint64(headSlot)).Root.String(),
-					"fork":                      state.Fork().Version(headSlot).String(),
+					"processingTimeMs":          time.Since(t).Milliseconds(),
 				}).Debug("processed new slot")
 			}
-
 		}
 	}
 }
@@ -243,24 +242,25 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 
 	c := make(chan bcli.PayloadAttributesEvent)
 	client.SubscribeToPayloadAttributesEvents(c)
+
 	for payloadAttributes := range c {
-		logger.WithField("slot", payloadAttributes.Data.ProposalSlot)
+		logger = logger.WithField("slot", payloadAttributes.Data.ProposalSlot)
 
 		headSlot := state.HeadSlot()
 		proposalSlot := payloadAttributes.Data.ProposalSlot
 
 		if proposalSlot <= uint64(headSlot) {
-			return
+			continue
 		}
 
 		// discard repetitive payload attributes (we receive them once from each beacon node)
 		latestParentBlockHash := state.ParentBlockHash()
 		if latestParentBlockHash == payloadAttributes.Data.ParentBlockHash {
-			return
+			continue
 		}
 
 		if fork := state.Fork().Version(structs.Slot(proposalSlot)); fork == structs.ForkAltair || fork == structs.ForkBellatrix {
-			return
+			continue
 		}
 
 		// update withdrawals
@@ -268,7 +268,7 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 		root, err := hW.HashTreeRoot()
 		if err != nil {
 			logger.WithError(err).Warn("failed to compute withdrawals root")
-			return
+			continue
 		}
 
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(proposalSlot), Root: root})

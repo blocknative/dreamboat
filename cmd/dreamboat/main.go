@@ -316,6 +316,8 @@ func run() cli.ActionFunc {
 			}
 		}
 
+		println(c.String("beacon-payload-attributes-subscription"))
+
 		TTL := c.Duration("ttl")
 		logger := logger(c)
 
