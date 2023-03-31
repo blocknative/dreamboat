@@ -247,9 +247,9 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 		logger = logger.WithField("slot", payloadAttributes.Data.ProposalSlot)
 
 		headSlot := state.HeadSlot()
-		proposalSlot := payloadAttributes.Data.ProposalSlot
+		proposalSlot := payloadAttributes.Data.ProposalSlot - 1
 
-		if proposalSlot <= uint64(headSlot) {
+		if proposalSlot < uint64(headSlot) {
 			continue
 		}
 
