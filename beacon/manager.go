@@ -274,10 +274,11 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(proposalSlot), Root: root})
 
 		// update randao
-		state.SetRandao(structs.RandaoState{Slot: uint64(headSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
+		state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
 
 		logger.With(log.F{
 			"epoch":              headSlot.Epoch(),
+			"slot":               proposalSlot,
 			"slotHead":           headSlot,
 			"slotStartNextEpoch": structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
 			"fork":               state.Fork().Version(headSlot).String(),
