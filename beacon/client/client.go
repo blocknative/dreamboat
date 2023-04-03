@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	beaconEventTick = structs.DurationPerSlot * 2
+	beaconEventTimeout = structs.DurationPerSlot * 2
 )
 
 var (
@@ -61,10 +61,10 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 			go b.runNewHeadSubscriptionLoop(loopCtx, logger, slotC, newEvent)
 
 			for {
-				timer := time.NewTimer(beaconEventTick)
+				timer := time.NewTimer(beaconEventTimeout)
 				select {
 				case <-newEvent:
-					timer.Reset(beaconEventTick)
+					timer.Reset(beaconEventTimeout)
 					continue
 				case <-timer.C:
 					logger.Warn("timed out head events subscription, restarting..")
