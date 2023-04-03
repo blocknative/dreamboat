@@ -20,6 +20,7 @@ import (
 var (
 	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
 	ErrNodesUnavailable  = errors.New("beacon nodes are unavailable")
+	ErrBlockPublish202   = errors.New("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
 )
 
 type beaconClient struct {
@@ -196,7 +197,7 @@ func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBea
 	}
 
 	if resp.StatusCode == 202 { // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
-		return fmt.Errorf("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
+		return ErrBlockPublish202
 	} else if resp.StatusCode >= 300 {
 		ec := &struct {
 			Code    int    `json:"code"`

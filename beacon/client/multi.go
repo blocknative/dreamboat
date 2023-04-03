@@ -15,6 +15,7 @@ import (
 var (
 	ErrBeaconNodeSyncing      = errors.New("beacon node is syncing")
 	ErrWithdrawalsUnsupported = errors.New("withdrawals are not supported")
+	ErrFailedToPublish        = errors.New("failed to publish")
 )
 
 type BeaconNode interface {
@@ -233,16 +234,35 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconNode {
 
 func (b *MultiBeaconClient) PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) (err error) {
 	resp := make(chan error, 20)
+	var i int
 	for _, client := range b.clientsByLastResponse() {
+		i++
 		c := client
 		go publishAsync(ctx, c, b.Log, block, resp)
 	}
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case e := <-resp:
-		return e
+	var (
+		defError error
+		r        int
+	)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case e := <-resp:
+			r++
+			switch e {
+			case nil:
+				return nil
+			case ErrBlockPublish202:
+				return ErrFailedToPublish
+			default:
+				defError = e
+				if r == i {
+					return defError
+				}
+			}
+		}
 	}
 }
 
