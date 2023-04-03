@@ -20,6 +20,7 @@ import (
 var (
 	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
 	ErrNodesUnavailable  = errors.New("beacon nodes are unavailable")
+	ErrBlockPublish202   = errors.New("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
 )
 
 type beaconClient struct {
@@ -174,22 +175,29 @@ func (b *beaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err err
 	return resp, err
 }
 
-func (b *beaconClient) PublishBlock(block structs.SignedBeaconBlock) error {
-	bb, err := json.Marshal(block)
-	if err != nil {
+func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) error {
+	buff := bytes.NewBuffer(nil)
+	enc := json.NewEncoder(buff)
+	if err := enc.Encode(block); err != nil {
 		return fmt.Errorf("fail to marshal block: %w", err)
 	}
 
 	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/blocks", "POST"))
 	defer t.ObserveDuration()
 
-	resp, err := http.Post(b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", "application/json", bytes.NewBuffer(bb))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", buff)
+	if err != nil {
+		return fmt.Errorf("fail to publish block: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("fail to publish block: %w", err)
 	}
 
 	if resp.StatusCode == 202 { // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
-		return fmt.Errorf("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
+		return ErrBlockPublish202
 	} else if resp.StatusCode >= 300 {
 		ec := &struct {
 			Code    int    `json:"code"`

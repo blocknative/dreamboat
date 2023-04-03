@@ -239,6 +239,12 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
+	&cli.DurationFlag{
+		Name:    "block-publication-delay",
+		Usage:   "Delay between lock publication and returning request to validator",
+		Value:   time.Second,
+		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
+	},
 }
 
 const (
@@ -434,6 +440,7 @@ func run() cli.ActionFunc {
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain: domainBuilder,
+			BlockPublishDelay:    c.Duration("block-publication-delay"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
 				structs.ForkCapella:   capellaBeaconProposer},
