@@ -254,8 +254,6 @@ func (b *MultiBeaconClient) PublishBlock(ctx context.Context, block structs.Sign
 			switch e {
 			case nil:
 				return nil
-			case ErrBlockPublish202:
-				return ErrFailedToPublish
 			default:
 				defError = e
 				if r == i {
