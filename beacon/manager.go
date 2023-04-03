@@ -19,8 +19,6 @@ const (
 )
 
 var (
-	DurationPerSlot  = time.Second * 12
-	DurationPerEpoch = DurationPerSlot * time.Duration(structs.SlotsPerEpoch)
 	ErrUnkownFork    = errors.New("beacon node fork is unknown")
 )
 
@@ -253,7 +251,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	headSlot = received
 
 	// update proposer duties and known validators in the background
-	if (DurationPerEpoch / 2) < time.Since(state.KnownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
+	if (structs.DurationPerEpoch / 2) < time.Since(state.KnownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
 		go func(slot structs.Slot) {
 			if err := s.updateKnownValidators(ctx, state, client, slot); err != nil {
 				logger.WithError(err).Error("failed to update known validators")
