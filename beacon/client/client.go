@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	beaconEventTick = structs.DurationPerSlot + (structs.DurationPerSlot / 2)
+	beaconEventTick = structs.DurationPerSlot * 2
 )
 
 var (
