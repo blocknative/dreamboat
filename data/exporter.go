@@ -30,25 +30,30 @@ func (s ExportService) RunParallel(ctx context.Context, numWorkers int) error {
 	}
 
 	for i := 0; i < numWorkers; i++ {
+		files := exportFiles{}
 		// create files
+		// // BlockBidAndTrace
 		filename := fmt.Sprintf("%s/blockBidAndTrace/output_%d.json", s.datadir, i)
 		file, err := os.Create(filename)
 		if err != nil {
 			return fmt.Errorf("failed to create file: %w", err)
 		}
+		files.BlockBidAndTrace = file
 
-		go func(ctx context.Context, file *os.File) {
-			defer file.Close()
-
-			bufWriter := bufio.NewWriterSize(file, 10*2060) // TODO: 2060B = 20Kb is the expected capella payload size. Bufio is a performance optimization for reducing disk writes
-			defer bufWriter.Flush()
+		go func(ctx context.Context, files exportFiles) {
+			defer files.Close()
 
 			encs := exportEncoders{}
-			encs.BlockBidAndTrace = json.NewEncoder(file)
+
+			// init BlockBidAndTrace encoder
+			bbtBuf := bufio.NewWriterSize(files.BlockBidAndTrace, 10*2060) // TODO: 2060B = 20Kb is the expected capella payload size. Bufio is a performance optimization for reducing disk writes
+			defer bbtBuf.Flush()
+
+			encs.BlockBidAndTrace = json.NewEncoder(bbtBuf)
 			encs.BlockBidAndTrace.SetIndent("", "") //  the output JSON will be written on a single line without any whitespace: '{"field1":"value1","field2":{"nested1":"value2","nested2":"value3"}}'
 
 			s.Run(ctx, logger.WithField("file", filename), encs)
-		}(ctx, file)
+		}(ctx, files)
 	}
 
 	return nil

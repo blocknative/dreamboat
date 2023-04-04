@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"errors"
+	"os"
 )
 
 var (
@@ -20,6 +21,14 @@ type exportRequest struct {
 	data   any
 	caller string
 	err    chan error
+}
+
+type exportFiles struct {
+	BlockBidAndTrace *os.File
+}
+
+func (f exportFiles) Close() {
+	f.BlockBidAndTrace.Close()
 }
 
 type exportEncoders struct {
