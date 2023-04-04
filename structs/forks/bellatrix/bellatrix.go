@@ -25,6 +25,10 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.BellatrixExecutionPayload.EpTimestamp > 0
 }
 
+func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
+	return &b.BellatrixExecutionPayload
+}
+
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
 	return b.BellatrixMessage.BlockHash
 }

@@ -26,6 +26,10 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.CapellaExecutionPayload.EpTimestamp > 0
 }
 
+func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
+	return &b.CapellaExecutionPayload
+}
+
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
 	return b.CapellaMessage.BlockHash
 }

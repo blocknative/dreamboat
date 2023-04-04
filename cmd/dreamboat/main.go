@@ -22,6 +22,7 @@ import (
 	"github.com/blocknative/dreamboat/client/sim/transport/gethhttp"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethrpc"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethws"
+	"github.com/blocknative/dreamboat/data"
 	"github.com/blocknative/dreamboat/metrics"
 
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
@@ -245,6 +246,26 @@ var flags = []cli.Flag{
 		Value:   time.Second,
 		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
 	},
+
+	// data export flags
+	&cli.BoolFlag{
+		Name:    "data-export",
+		Usage:   "Export data from the relay to the filesystem",
+		Value:   false,
+		EnvVars: []string{"DATA_EXPORT"},
+	},
+	&cli.StringFlag{
+		Name:    "data-export-dir",
+		Usage:   "Data directory where the data is exported",
+		Value:   "/data/relay/export",
+		EnvVars: []string{"DATA_EXPORT_DIR"},
+	},
+	&cli.IntFlag{
+		Name:    "data-export-workers",
+		Usage:   "Number of workers for exporting the data",
+		Value:   32,
+		EnvVars: []string{"DATA_EXPORT_WORKERS"},
+	},
 }
 
 const (
@@ -438,6 +459,16 @@ func run() cli.ActionFunc {
 			return err
 		}
 
+		var exporter relay.DataExporter
+		if c.Bool("data-export") {
+			exportService := data.NewExportService(logger, c.String("data-export-dir"), c.Int("data-export-workers"))
+			if err := exportService.RunParallel(c.Context, c.Int("data-export-workers")); err != nil {
+				return fmt.Errorf("failed to run data exporter: %w", err)
+			}
+
+			exporter = exportService
+		}
+
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain: domainBuilder,
 			BlockPublishDelay:    c.Duration("block-publication-delay"),
@@ -450,7 +481,8 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
+			ExportData:            c.Bool("data-export"),
+		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, exporter)
 		r.AttachMetrics(m)
 
 		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))

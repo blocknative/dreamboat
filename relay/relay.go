@@ -99,6 +99,10 @@ type Beacon interface {
 	PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) error
 }
 
+type DataExporter interface {
+	Submit(context.Context, structs.ExecutionPayload) error
+}
+
 type RelayConfig struct {
 	BuilderSigningDomain  types.Domain
 	ProposerSigningDomain map[structs.ForkVersion]types.Domain
@@ -109,6 +113,8 @@ type RelayConfig struct {
 	AllowedListedBuilders map[[48]byte]struct{}
 
 	PublishBlock bool
+
+	ExportData bool
 
 	TTL time.Duration
 
@@ -133,6 +139,8 @@ type Relay struct {
 	beacon      Beacon
 	beaconState State
 
+	exp DataExporter
+
 	lastDeliveredSlot *atomic.Uint64
 
 	m RelayMetrics
@@ -141,7 +149,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, exp DataExporter) *Relay {
 	rs := &Relay{
 		d:                 d,
 		das:               das,
@@ -153,6 +161,7 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		cache:             cache,
 		vstore:            vstore,
 		beacon:            beacon,
+		exp:               exp,
 		beaconState:       beaconState,
 		lastDeliveredSlot: &atomic.Uint64{},
 		runnignAsyncs:     NewTimeoutWaitGroup(),
