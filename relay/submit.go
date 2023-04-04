@@ -97,14 +97,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		return err
 	}
 
-	go func() {
-		if err := rs.exp.Submit(context.Background(), sbr.ExecutionPayload()); err != nil {
-			logger.WithError(err).Error("failed to export payload")
-		} else {
-			logger.Debug("exported payload")
-		}
-	}()
-
 	processingTime := time.Since(tStart)
 	// subtract the retry waiting times
 	if wRetried {

@@ -18,8 +18,8 @@ type ExportService struct {
 }
 
 type exportRequest struct {
-	payload structs.ExecutionPayload
-	err     chan error
+	bbt structs.BlockBidAndTrace
+	err chan error
 }
 
 func NewExportService(logger log.Logger, datadir string, bufSize int) ExportService {
@@ -62,7 +62,9 @@ func (s ExportService) Run(ctx context.Context, logger log.Logger, encoder *json
 			select {
 			case req.err <- encoder.Encode(req): // does not block because it is buffered (1) channel, but better safe than sorry
 			case <-ctx.Done():
-				logger.WithField("blockHash", req.payload.BlockHash()).Error("failed to export request")
+				logger.
+					WithField("blockHash", req.bbt.ExecutionPayload().BlockHash()).
+					Error("failed to export request")
 			}
 		case <-ctx.Done():
 			return
@@ -70,8 +72,8 @@ func (s ExportService) Run(ctx context.Context, logger log.Logger, encoder *json
 	}
 }
 
-func (s ExportService) Submit(ctx context.Context, payload structs.ExecutionPayload) error {
-	request := exportRequest{payload: payload, err: make(chan error, 1)}
+func (s ExportService) SubmitBlockBidAndTrace(ctx context.Context, bbt structs.BlockBidAndTrace) error {
+	request := exportRequest{bbt: bbt, err: make(chan error, 1)}
 
 	// submit request
 	select {
