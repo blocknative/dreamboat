@@ -100,7 +100,7 @@ type Beacon interface {
 }
 
 type DataExporter interface {
-	SubmitBlockBidAndTrace(context.Context, structs.BlockBidAndTrace) error
+	SubmitBlockBidAndTrace(ctx context.Context, bbt structs.BlockBidAndTrace, caller string) error
 }
 
 type RelayConfig struct {
@@ -393,7 +393,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	})
 
 	go func() {
-		if err := rs.exp.SubmitBlockBidAndTrace(context.Background(), payload); err != nil {
+		if err := rs.exp.SubmitBlockBidAndTrace(context.Background(), payload, "getPayload"); err != nil {
 			logger.WithError(err).Error("failed to export payload")
 		} else {
 			logger.Debug("exported payload")

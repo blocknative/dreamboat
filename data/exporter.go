@@ -30,7 +30,8 @@ func (s ExportService) RunParallel(ctx context.Context, numWorkers int) error {
 	}
 
 	for i := 0; i < numWorkers; i++ {
-		filename := fmt.Sprintf("%s/output_%d.json", datadir, i)
+		// create files
+		filename := fmt.Sprintf("%s/blockBidAndTrace/output_%d.json", s.datadir, i)
 		file, err := os.Create(filename)
 		if err != nil {
 			return fmt.Errorf("failed to create file: %w", err)
@@ -65,8 +66,9 @@ func (s ExportService) Run(ctx context.Context, logger log.Logger, encs exportEn
 				logger.WithError(err).Error("failed to export request")
 			}
 
+			data := dataWithCaller{Data: req.data, Caller: req.caller}
 			select {
-			case req.err <- enc.Encode(req.data): // does not block because it is buffered (1) channel, but better safe than sorry
+			case req.err <- enc.Encode(data): // does not block because it is buffered (1) channel, but better safe than sorry
 			case <-ctx.Done():
 				logger.WithError(ctx.Err()).Error("failed to export request")
 			}
@@ -76,8 +78,8 @@ func (s ExportService) Run(ctx context.Context, logger log.Logger, encs exportEn
 	}
 }
 
-func (s ExportService) SubmitBlockBidAndTrace(ctx context.Context, bbt structs.BlockBidAndTrace) error {
-	request := exportRequest{dt: BlockBidAndTraceData, data: bbt, err: make(chan error, 1)}
+func (s ExportService) SubmitBlockBidAndTrace(ctx context.Context, bbt structs.BlockBidAndTrace, caller string) error {
+	request := exportRequest{dt: BlockBidAndTraceData, data: bbt, caller: caller, err: make(chan error, 1)}
 
 	// submit request
 	select {

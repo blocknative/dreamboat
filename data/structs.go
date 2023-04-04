@@ -16,9 +16,10 @@ const (
 )
 
 type exportRequest struct {
-	dt   DataType
-	data any
-	err  chan error
+	dt     DataType
+	data   any
+	caller string
+	err    chan error
 }
 
 type exportEncoders struct {
@@ -32,4 +33,9 @@ func selectEncoder(req exportRequest, encoders exportEncoders) (*json.Encoder, e
 	}
 
 	return nil, ErrUnknownType
+}
+
+type dataWithCaller struct {
+	Data   any    `json:"data"`
+	Caller string `json:"caller"`
 }
