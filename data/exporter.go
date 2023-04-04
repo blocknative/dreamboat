@@ -50,7 +50,7 @@ func (s ExportService) RunParallel(ctx context.Context, numWorkers int) error {
 			encoder := json.NewEncoder(file)
 			encoder.SetIndent("", "") //  the output JSON will be written on a single line without any whitespace: '{"field1":"value1","field2":{"nested1":"value2","nested2":"value3"}}'
 
-			go s.Run(ctx, logger.WithField("file", filename), encoder)
+			s.Run(ctx, logger.WithField("file", filename), encoder)
 		}(ctx, file)
 	}
 
