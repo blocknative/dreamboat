@@ -466,6 +466,12 @@ func run() cli.ActionFunc {
 				return fmt.Errorf("failed to run data exporter: %w", err)
 			}
 
+			logger.With(log.F{
+				"service": "data-exporter",
+				"datadir": c.String("data-export-dir"),
+				"workers": c.Int("data-export-workers"),
+			}).Info("initialized")
+
 			exporter = exportService
 		}
 
