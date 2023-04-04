@@ -30,7 +30,7 @@ func (s ExportService) RunParallel(ctx context.Context, numWorkers int) error {
 	logger := s.logger.WithField("service", "data-exporter")
 
 	for i := 0; i < numWorkers; i++ {
-		filename := fmt.Sprintf("%s/output_%d.json", s.datadir, i)
+		filename := fmt.Sprintf("%s/blockBidAndTrace/output_%d.json", s.datadir, i)
 		file, err := os.Create(filename)
 		if err != nil {
 			return fmt.Errorf("failed to create file: %w", err)
