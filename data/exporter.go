@@ -46,17 +46,17 @@ func (s *ExportService) Run(ctx context.Context, datadir string, id int) {
 		select {
 		case req := <-s.requests:
 			file, err := worker.getOrCreateFile(req)
-			if err != nil {
+			if err == nil {
+				err = writeToFile(file, req)
+				if err != nil {
+					logger.WithError(err).With(req).Error("failed to write")
+
+					file.Write([]byte("\n"))
+					worker.closeFile(file)
+					logger.WithField("filename", file.Name()).Debug("corrupted file closed")
+				}
+			} else {
 				logger.WithError(err).Error("failed to get/create file: %w", err)
-			}
-
-			err = writeToFile(file, req)
-			if err != nil {
-				logger.WithError(err).With(req).Error("failed to write")
-
-				file.Write([]byte("\n"))
-				worker.closeFile(file)
-				logger.WithField("filename", file.Name()).Debug("corrupted file closed")
 			}
 
 			select {
@@ -151,11 +151,6 @@ type worker struct {
 
 func newWorker(id int, datadir string, logger log.Logger) *worker {
 	return &worker{id: id, datadir: datadir, files: make(map[string]fileWithTimestamp), logger: logger}
-}
-
-type fileWithTimestamp struct {
-	*os.File
-	ts time.Time
 }
 
 func (w *worker) getOrCreateFile(req exportRequest) (*os.File, error) {

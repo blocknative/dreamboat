@@ -2,6 +2,7 @@ package data
 
 import (
 	"errors"
+	"os"
 	"time"
 )
 
@@ -40,4 +41,9 @@ func (req exportRequest) Loggable() map[string]any {
 		"slot":      req.slot,
 		"timestamp": req.timestamp.String(),
 	}
+}
+
+type fileWithTimestamp struct {
+	*os.File
+	ts time.Time
 }
