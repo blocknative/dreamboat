@@ -248,12 +248,6 @@ var flags = []cli.Flag{
 	},
 
 	// data export flags
-	&cli.BoolFlag{
-		Name:    "data-export",
-		Usage:   "Export data from the relay to the filesystem",
-		Value:   false,
-		EnvVars: []string{"DATA_EXPORT"},
-	},
 	&cli.StringFlag{
 		Name:    "data-export-dir",
 		Usage:   "Data directory where the data is exported",
@@ -262,8 +256,8 @@ var flags = []cli.Flag{
 	},
 	&cli.IntFlag{
 		Name:    "data-export-workers",
-		Usage:   "Number of workers for exporting the data",
-		Value:   32,
+		Usage:   "Number of workers for exporting the data, if 0, then data is not exported",
+		Value:   0,
 		EnvVars: []string{"DATA_EXPORT_WORKERS"},
 	},
 }
@@ -460,7 +454,7 @@ func run() cli.ActionFunc {
 		}
 
 		var exporter relay.DataExporter
-		if c.Bool("data-export") {
+		if c.Int("data-export-workers") > 0 {
 			exportService := data.NewExportService(logger, c.Int("data-export-workers"))
 
 			datadir := c.String("data-export-dir")
@@ -493,7 +487,6 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-			ExportData:            c.Bool("data-export"),
 		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, exporter)
 		r.AttachMetrics(m)
 
