@@ -71,7 +71,7 @@ func (s *ExportService) Run(ctx context.Context, datadir string, id int) {
 }
 
 func (s *ExportService) SubmitGetPayloadRequest(ctx context.Context, gpr structs.SignedBlindedBeaconBlock) error {
-	request := exportRequest{dt: BlockBidAndTraceData, data: gpr.Raw(), meta: ExportMeta{Slot: gpr.Slot(), Timestamp: time.Now()}, id: gpr.BlockHash().String(), err: make(chan error, 1)}
+	request := exportRequest{dt: BlockBidAndTraceData, data: gpr.Raw(), slot: gpr.Slot(), timestamp: time.Now(), id: gpr.BlockHash().String(), err: make(chan error, 1)}
 
 	// submit request
 	select {
@@ -91,14 +91,14 @@ func (s *ExportService) SubmitGetPayloadRequest(ctx context.Context, gpr structs
 
 func writeToFile(file *os.File, req exportRequest) error {
 	// Encode struct as JSON and write to base64 encoder
-	_, err := file.Write([]byte(strconv.Itoa(req.meta.Timestamp.Nanosecond())))
+	_, err := file.Write([]byte(strconv.Itoa(req.timestamp.Nanosecond())))
 	if err != nil {
 		return fmt.Errorf("failed to write data timestamp: %w", err)
 	}
 
-	_, err = file.Write([]byte(","))
+	_, err = file.Write([]byte(";"))
 	if err != nil {
-		return fmt.Errorf("failed to write data sep ',': %w", err)
+		return fmt.Errorf("failed to write data sep ';': %w", err)
 	}
 
 	_, err = file.Write([]byte(req.id))
@@ -106,9 +106,9 @@ func writeToFile(file *os.File, req exportRequest) error {
 		return fmt.Errorf("failed to write data identifier: %w", err)
 	}
 
-	_, err = file.Write([]byte(","))
+	_, err = file.Write([]byte(";"))
 	if err != nil {
-		return fmt.Errorf("failed to write data sep ',': %w", err)
+		return fmt.Errorf("failed to write data sep ';': %w", err)
 	}
 
 	// Create base64 encoder that writes directly to gzip writer
@@ -133,9 +133,9 @@ func writeToFile(file *os.File, req exportRequest) error {
 		return fmt.Errorf("failed to close encoder: %w", err)
 	}
 
-	_, err = file.Write([]byte(";"))
+	_, err = file.Write([]byte("\n"))
 	if err != nil {
-		return fmt.Errorf("failed to write data sep ';': %w", err)
+		return fmt.Errorf("failed to write new data sep newline': %w", err)
 	}
 
 	return nil
@@ -160,7 +160,7 @@ type fileWithTimestamp struct {
 
 func (w *worker) getOrCreateFile(req exportRequest) (*os.File, error) {
 	// get
-	filename := fmt.Sprintf("%s/%s/output_%d.json", w.datadir, toString(req.dt), w.id)
+	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, toString(req.dt), req.slot, w.id)
 	fileWithTs, ok := w.files[filename]
 	if ok {
 		fileWithTs.ts = time.Now()
