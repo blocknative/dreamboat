@@ -92,7 +92,7 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 			select {
 			case slotC <- head:
 			case <-time.After(structs.DurationPerSlot / 2): // relief pressure if
-				logger.WithField("timemout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
+				logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
 			case <-ctx.Done():
 			}
 		})
