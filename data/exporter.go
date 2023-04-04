@@ -65,7 +65,7 @@ func (s ExportService) Run(ctx context.Context, logger log.Logger, encoder *json
 		select {
 		case req := <-s.requests:
 			select {
-			case req.err <- encoder.Encode(req): // does not block because it is buffered (1) channel, but better safe than sorry
+			case req.err <- encoder.Encode(req.bbt): // does not block because it is buffered (1) channel, but better safe than sorry
 			case <-ctx.Done():
 				logger.
 					WithField("blockHash", req.bbt.ExecutionPayload().BlockHash()).
