@@ -52,7 +52,7 @@ func NewBeaconClient(l log.Logger, endpoint string) (*beaconClient, error) {
 }
 
 func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
-	logger := b.log.WithField("method", "SubscribeToHeadEvents")\
+	logger := b.log.WithField("method", "SubscribeToHeadEvents")
 	defer logger.Debug("head events subscription stopped")
 
 	for {
@@ -76,7 +76,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 }
 
 func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, timer *time.Timer, slotC chan<- HeadEvent) {
-	
+
 	for {
 		client := sse.NewClient(fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String()))
 		err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
