@@ -53,6 +53,7 @@ type GetPayloadResponse interface {
 }
 
 type SignedBlindedBeaconBlock interface {
+	Raw() []byte
 	Slot() uint64
 	BlockHash() types.Hash
 	BlockNumber() uint64

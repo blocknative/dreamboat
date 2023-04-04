@@ -100,7 +100,7 @@ type Beacon interface {
 }
 
 type DataExporter interface {
-	SubmitBlockBidAndTrace(ctx context.Context, bbt structs.BlockBidAndTrace, caller string) error
+	SubmitGetPayloadRequest(ctx context.Context, gpr structs.SignedBlindedBeaconBlock) error
 }
 
 type RelayConfig struct {
@@ -113,8 +113,6 @@ type RelayConfig struct {
 	AllowedListedBuilders map[[48]byte]struct{}
 
 	PublishBlock bool
-
-	ExportData bool
 
 	TTL time.Duration
 
@@ -325,7 +323,6 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
 func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
-
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
@@ -392,13 +389,15 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	})
 
-	go func() {
-		if err := rs.exp.SubmitBlockBidAndTrace(context.Background(), payload, "getPayload"); err != nil {
-			logger.WithError(err).Error("failed to export payload")
-		} else {
-			logger.Debug("exported payload")
-		}
-	}()
+	if rs.exp != nil {
+		go func() {
+			if err := rs.exp.SubmitGetPayloadRequest(context.Background(), payloadRequest); err != nil {
+				logger.WithError(err).Error("failed to export payload")
+			} else {
+				logger.Debug("exported payload")
+			}
+		}()
+	}
 
 	if rs.config.PublishBlock {
 		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())

@@ -2,9 +2,12 @@ package data
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
+	"time"
 )
 
 var (
@@ -17,11 +20,34 @@ const (
 	BlockBidAndTraceData DataType = iota
 )
 
+func toString(data DataType) string {
+	switch data {
+	case BlockBidAndTraceData:
+		return "BlockBidAndTraceData"
+	default:
+		return "unknown"
+	}
+}
+
+type ExportMeta struct {
+	Slot      uint64
+	Timestamp time.Time
+}
+
 type exportRequest struct {
-	dt     DataType
-	data   any
-	caller string
-	err    chan error
+	dt   DataType
+	data []byte
+	id   string
+	meta ExportMeta
+	err  chan error
+}
+
+func (req exportRequest) Loggable() map[string]any {
+	return map[string]any{
+		"id":        req.id,
+		"slot":      req.meta.Slot,
+		"timestamp": req.meta.Timestamp.String(),
+	}
 }
 
 type exportFiles struct {
@@ -48,4 +74,10 @@ func selectEncoder(req exportRequest, encoders exportEncoders) (*json.Encoder, e
 type dataWithCaller struct {
 	Data   any    `json:"data"`
 	Caller string `json:"caller"`
+}
+
+type writer struct {
+	file       *os.File
+	encoder    io.WriteCloser
+	compressor *gzip.Writer
 }

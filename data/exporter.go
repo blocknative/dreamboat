@@ -1,11 +1,12 @@
 package data
 
 import (
-	"bufio"
+	"compress/gzip"
 	"context"
-	"encoding/json"
+	"encoding/base64"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/blocknative/dreamboat/beacon"
@@ -13,82 +14,53 @@ import (
 	"github.com/lthibault/log"
 )
 
+var (
+	fileIdleTime = beacon.DurationPerSlot
+)
+
 type ExportService struct {
 	logger   log.Logger
 	requests chan exportRequest
-	datadir  string
 }
 
-func NewExportService(logger log.Logger, datadir string, bufSize int) ExportService {
-	return ExportService{logger: logger, datadir: datadir, requests: make(chan exportRequest, bufSize)}
+func NewExportService(logger log.Logger, bufSize int) *ExportService {
+	return &ExportService{logger: logger, requests: make(chan exportRequest, bufSize)}
 }
 
-func (s ExportService) RunParallel(ctx context.Context, numWorkers int) error {
-	logger := s.logger.WithField("service", "data-exporter")
-
-	datadir := fmt.Sprintf("%s/blockBidAndTrace", s.datadir)
-	if err := os.MkdirAll(datadir, 0755); err != nil {
-		return fmt.Errorf("failed to create datadir: %w", err)
-	}
-
+func (s *ExportService) RunParallel(ctx context.Context, datadir string, numWorkers int) error {
 	for i := 0; i < numWorkers; i++ {
-		files := exportFiles{}
-		// create files
-		// // BlockBidAndTrace
-		filename := fmt.Sprintf("%s/blockBidAndTrace/output_%d.json", s.datadir, i)
-		file, err := os.Create(filename)
-		if err != nil {
-			return fmt.Errorf("failed to create file: %w", err)
-		}
-		files.BlockBidAndTrace = file
-
-		go func(ctx context.Context, i int, files exportFiles) {
-			defer files.BlockBidAndTrace.Close()
-
-			encs := exportEncoders{}
-			buffers := exportBuffers{}
-
-			// init buffers
-			buffers.BlockBidAndTrace = bufio.NewWriterSize(files.BlockBidAndTrace, 10*2060) // TODO: 2060B = 20Kb is the expected capella payload size. Bufio is a performance optimization for reducing disk writes
-			go func(ctx context.Context, buffers exportBuffers) {
-				ticker := time.NewTicker(beacon.DurationPerSlot)
-				for {
-					select {
-					case <-ticker.C:
-						buffers.BlockBidAndTrace.Flush()
-					case <-ctx.Done():
-						buffers.BlockBidAndTrace.Flush()
-						return
-					}
-				}
-			}(ctx, buffers)
-
-			// init encoders
-			encs.BlockBidAndTrace = json.NewEncoder(buffers.BlockBidAndTrace)
-			encs.BlockBidAndTrace.SetIndent("", "") //  the output JSON will be written on a single line without any whitespace: '{"field1":"value1","field2":{"nested1":"value2","nested2":"value3"}}'
-
-			s.Run(ctx, logger.WithField("worker", i), encs)
-		}(ctx, i, files)
+		go s.Run(ctx, datadir, i)
 	}
 
 	return nil
 }
 
-func (s ExportService) Run(ctx context.Context, logger log.Logger, encs exportEncoders) {
+func (s *ExportService) Run(ctx context.Context, datadir string, id int) {
+	logger := s.logger.WithField("id", id)
+
 	logger.Info("started")
 	defer logger.Info("stopped")
 
+	worker := newWorker(id, datadir, logger)
 	for {
 		select {
 		case req := <-s.requests:
-			enc, err := selectEncoder(req, encs)
+			file, err := worker.getOrCreateFile(req)
 			if err != nil {
-				logger.WithError(err).Error("failed to export request")
+				logger.WithError(err).Error("failed to get/create file: %w", err)
 			}
 
-			data := dataWithCaller{Data: req.data, Caller: req.caller}
+			err = writeToFile(file, req)
+			if err != nil {
+				logger.WithError(err).With(req).Error("failed to write")
+
+				file.Write([]byte("\n"))
+				worker.closeFile(file)
+				logger.WithField("filename", file.Name()).Debug("corrupted file closed")
+			}
+
 			select {
-			case req.err <- enc.Encode(data): // does not block because it is buffered (1) channel, but better safe than sorry
+			case req.err <- err: // does not block because it is buffered (1) channel, but better safe than sorry
 			case <-ctx.Done():
 				logger.WithError(ctx.Err()).Error("failed to export request")
 			}
@@ -98,8 +70,8 @@ func (s ExportService) Run(ctx context.Context, logger log.Logger, encs exportEn
 	}
 }
 
-func (s ExportService) SubmitBlockBidAndTrace(ctx context.Context, bbt structs.BlockBidAndTrace, caller string) error {
-	request := exportRequest{dt: BlockBidAndTraceData, data: bbt, caller: caller, err: make(chan error, 1)}
+func (s *ExportService) SubmitGetPayloadRequest(ctx context.Context, gpr structs.SignedBlindedBeaconBlock) error {
+	request := exportRequest{dt: BlockBidAndTraceData, data: gpr.Raw(), meta: ExportMeta{Slot: gpr.Slot(), Timestamp: time.Now()}, id: gpr.BlockHash().String(), err: make(chan error, 1)}
 
 	// submit request
 	select {
@@ -115,4 +87,111 @@ func (s ExportService) SubmitBlockBidAndTrace(ctx context.Context, bbt structs.B
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func writeToFile(file *os.File, req exportRequest) error {
+	// Encode struct as JSON and write to base64 encoder
+	_, err := file.Write([]byte(strconv.Itoa(req.meta.Timestamp.Nanosecond())))
+	if err != nil {
+		return fmt.Errorf("failed to write data timestamp: %w", err)
+	}
+
+	_, err = file.Write([]byte(","))
+	if err != nil {
+		return fmt.Errorf("failed to write data sep ',': %w", err)
+	}
+
+	_, err = file.Write([]byte(req.id))
+	if err != nil {
+		return fmt.Errorf("failed to write data identifier: %w", err)
+	}
+
+	_, err = file.Write([]byte(","))
+	if err != nil {
+		return fmt.Errorf("failed to write data sep ',': %w", err)
+	}
+
+	// Create base64 encoder that writes directly to gzip writer
+	encoder := base64.NewEncoder(base64.StdEncoding, file)
+	encoder.Close()
+
+	// Create gzip writer that writes directly to file
+	writer := gzip.NewWriter(encoder)
+	defer writer.Close()
+
+	_, err = writer.Write(req.data)
+	if err != nil {
+		return fmt.Errorf("failed to write data: %w", err)
+	}
+
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush writer: %w", err)
+	}
+
+	// Flush any remaining data from the encoder and writer
+	if err := encoder.Close(); err != nil {
+		return fmt.Errorf("failed to close encoder: %w", err)
+	}
+
+	_, err = file.Write([]byte(";"))
+	if err != nil {
+		return fmt.Errorf("failed to write data sep ';': %w", err)
+	}
+
+	return nil
+}
+
+type worker struct {
+	id      int
+	datadir string
+	files   map[string]fileWithTimestamp
+
+	logger log.Logger
+}
+
+func newWorker(id int, datadir string, logger log.Logger) *worker {
+	return &worker{id: id, datadir: datadir, files: make(map[string]fileWithTimestamp), logger: logger}
+}
+
+type fileWithTimestamp struct {
+	*os.File
+	ts time.Time
+}
+
+func (w *worker) getOrCreateFile(req exportRequest) (*os.File, error) {
+	// get
+	filename := fmt.Sprintf("%s/%s/output_%d.json", w.datadir, toString(req.dt), w.id)
+	fileWithTs, ok := w.files[filename]
+	if ok {
+		fileWithTs.ts = time.Now()
+		return fileWithTs.File, nil
+	}
+
+	// create
+	file, err := os.Create(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file: %w", err)
+	}
+
+	w.files[filename] = fileWithTimestamp{File: file, ts: time.Now()}
+	return file, nil
+}
+
+func (w *worker) closeIdleFiles() {
+	for filename, file := range w.files {
+		if time.Since(file.ts) > fileIdleTime {
+			if err := file.Close(); err != nil {
+				w.logger.WithError(err).WithField("filename", filename).Error("failed to close file")
+			}
+			delete(w.files, filename)
+		}
+	}
+}
+
+func (w *worker) closeFile(file *os.File) error {
+	if _, ok := w.files[file.Name()]; ok {
+		delete(w.files, file.Name())
+	}
+
+	return file.Close()
 }

@@ -461,8 +461,14 @@ func run() cli.ActionFunc {
 
 		var exporter relay.DataExporter
 		if c.Bool("data-export") {
-			exportService := data.NewExportService(logger, c.String("data-export-dir"), c.Int("data-export-workers"))
-			if err := exportService.RunParallel(c.Context, c.Int("data-export-workers")); err != nil {
+			exportService := data.NewExportService(logger, c.Int("data-export-workers"))
+
+			datadir := c.String("data-export-dir")
+			if err := os.MkdirAll(datadir, 0755); err != nil {
+				return fmt.Errorf("failed to create datadir: %w", err)
+			}
+
+			if err := exportService.RunParallel(c.Context, datadir, c.Int("data-export-workers")); err != nil {
 				return fmt.Errorf("failed to run data exporter: %w", err)
 			}
 

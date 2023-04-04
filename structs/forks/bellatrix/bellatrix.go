@@ -354,8 +354,13 @@ func (ep *ExecutionPayload) Transactions() []hexutil.Bytes {
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
+	SRaw       []byte                   `json:"-"`
 	SMessage   types.BlindedBeaconBlock `json:"message"`
 	SSignature types.Signature          `json:"signature" ssz-size:"96"`
+}
+
+func (b *SignedBlindedBeaconBlock) Raw() []byte {
+	return b.SRaw
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {

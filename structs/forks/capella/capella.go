@@ -335,12 +335,17 @@ func (s *SignedBuilderBid) GetTree() (*ssz.Node, error) {
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
+	SRaw       []byte             `json:"-"`
 	SMessage   BlindedBeaconBlock `json:"message"`
 	SSignature types.Signature    `json:"signature" ssz-size:"96"`
 }
 
 func (b *SignedBlindedBeaconBlock) Validate() bool {
 	return b.SMessage.Body != nil && b.SMessage.Body.ExecutionPayloadHeader != nil
+}
+
+func (b *SignedBlindedBeaconBlock) Raw() []byte {
+	return b.SRaw
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
