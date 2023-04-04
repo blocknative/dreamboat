@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	beaconEventTimeout = structs.DurationPerSlot * 2
+	BeaconEventTimeout = structs.DurationPerSlot * 2
 )
 
 var (
@@ -52,40 +52,33 @@ func NewBeaconClient(l log.Logger, endpoint string) (*beaconClient, error) {
 }
 
 func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
-	go func() {
-		logger := b.log.WithField("method", "SubscribeToHeadEvents")
-		newEvent := make(chan struct{}, 1)
-
-		for {
-			loopCtx, cancelLoop := context.WithCancel(ctx)
-			go b.runNewHeadSubscriptionLoop(loopCtx, logger, slotC, newEvent)
-
-			for {
-				timer := time.NewTimer(beaconEventTimeout)
-				select {
-				case <-newEvent:
-					timer.Reset(beaconEventTimeout)
-					continue
-				case <-timer.C:
-					logger.Warn("timed out head events subscription, restarting..")
-					cancelLoop()
-					break
-				case <-ctx.Done():
-					cancelLoop()
-					return
-				}
-			}
-		}
-	}()
-}
-
-func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, slotC chan<- HeadEvent, newEvent chan<- struct{}) {
-	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String())
-
+	logger := b.log.WithField("method", "SubscribeToHeadEvents")\
 	defer logger.Debug("head events subscription stopped")
 
 	for {
-		client := sse.NewClient(eventsURL)
+		loopCtx, cancelLoop := context.WithCancel(ctx)
+		timer := time.NewTimer(BeaconEventTimeout)
+		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
+
+	EventSelect:
+		for {
+			select {
+			case <-timer.C:
+				logger.Warn("timed out head events subscription, restarting..")
+				cancelLoop()
+				break EventSelect
+			case <-ctx.Done():
+				cancelLoop()
+				return
+			}
+		}
+	}
+}
+
+func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, timer *time.Timer, slotC chan<- HeadEvent) {
+	
+	for {
+		client := sse.NewClient(fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String()))
 		err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
 			var head HeadEvent
 			if err := json.Unmarshal(msg.Data, &head); err != nil {
@@ -95,22 +88,16 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 			select {
 			case <-ctx.Done():
 				return
-			case newEvent <- struct{}{}:
-			}
-
-			select {
-			case <-ctx.Done():
-				return
 			case slotC <- head:
+				timer.Reset(BeaconEventTimeout)
 			}
-
 		})
 
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return
 		}
 
-		logger.WithError(err).Debug("beacon subscription failed, restarting...")
+		logger.WithError(err).Warn("beacon subscription failed, restarting...")
 	}
 }
 
