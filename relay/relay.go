@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -74,7 +75,7 @@ type Verifier interface {
 }
 
 type DataAPIStore interface {
-	// CheckSlotDelivered(context.Context, uint64) (bool, error)
+	//CheckSlotDelivered(context.Context, uint64) (bool, error)
 
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
@@ -375,6 +376,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
 		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
+	} else {
+		return nil, ErrPayloadAlreadyDelivered
 	}
 
 	logger = logger.With(log.F{
@@ -395,7 +398,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
 		// Delay the return of response block publishing
-		time.Sleep(rs.config.BlockPublishDelay)
+		time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	}
 
 	rs.runnignAsyncs.Add(1)
