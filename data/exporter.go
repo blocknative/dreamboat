@@ -29,8 +29,13 @@ func NewExportService(logger log.Logger, datadir string, bufSize int) ExportServ
 func (s ExportService) RunParallel(ctx context.Context, numWorkers int) error {
 	logger := s.logger.WithField("service", "data-exporter")
 
+	datadir := fmt.Sprintf("%s/blockBidAndTrace", s.datadir)
+	if err := os.MkdirAll(datadir, 0755); err != nil {
+		return fmt.Errorf("failed to create datadir: %w", err)
+	}
+
 	for i := 0; i < numWorkers; i++ {
-		filename := fmt.Sprintf("%s/blockBidAndTrace/output_%d.json", s.datadir, i)
+		filename := fmt.Sprintf("%s/output_%d.json", datadir, i)
 		file, err := os.Create(filename)
 		if err != nil {
 			return fmt.Errorf("failed to create file: %w", err)
