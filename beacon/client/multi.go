@@ -189,10 +189,8 @@ func (b *MultiBeaconClient) Randao(slot structs.Slot) (randao string, err error)
 			b.Log.WithError(err).WithField("slot", slot).WithField("endpoint", client.Endpoint()).Warn("failed to get randao")
 			continue
 		}
-
 		return
 	}
-
 	return
 }
 
@@ -204,10 +202,8 @@ func (b *MultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, er
 				Warn("failed to get fork")
 			continue
 		}
-
 		return spec, nil
 	}
-
 	return spec, err
 }
 
