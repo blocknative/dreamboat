@@ -314,7 +314,7 @@ func run() cli.ActionFunc {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
 
-		beaconCli, err := initBeaconClients(c.Context, logger, c.StringSlice("beacon"), m)
+		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
@@ -562,7 +562,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
