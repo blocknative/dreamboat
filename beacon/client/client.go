@@ -84,13 +84,16 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 			var head HeadEvent
 			if err := json.Unmarshal(msg.Data, &head); err != nil {
 				logger.WithError(err).Warn("event subscription failed")
+				return
 			}
 
+			timer.Reset(BeaconEventTimeout)
+
 			select {
-			case <-ctx.Done():
-				return
 			case slotC <- head:
-				timer.Reset(BeaconEventTimeout)
+			case <-time.After(structs.DurationPerSlot / 2): // relief pressure if
+				logger.WithField("timemout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
+			case <-ctx.Done():
 			}
 		})
 
