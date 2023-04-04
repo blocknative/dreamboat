@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	fileIdleTime = beacon.DurationPerSlot
+	fileIdleTime   = beacon.DurationPerSlot
+	filesPruneTick = fileIdleTime * 3
 )
 
 type ExportService struct {
@@ -42,6 +43,7 @@ func (s *ExportService) Run(ctx context.Context, datadir string, id int) {
 	defer logger.Info("stopped")
 
 	worker := newWorker(id, datadir, logger)
+	ticker := time.NewTicker(filesPruneTick)
 	for {
 		select {
 		case req := <-s.requests:
@@ -64,7 +66,10 @@ func (s *ExportService) Run(ctx context.Context, datadir string, id int) {
 			case <-ctx.Done():
 				logger.WithError(ctx.Err()).Error("failed to export request")
 			}
+		case <-ticker.C:
+			worker.closeIdleFiles()
 		case <-ctx.Done():
+			worker.closeIdleFiles()
 			return
 		}
 	}
@@ -183,10 +188,12 @@ func (w *worker) closeIdleFiles() {
 	}
 }
 
-func (w *worker) closeFile(file *os.File) error {
+func (w *worker) closeFile(file *os.File) {
 	if _, ok := w.files[file.Name()]; ok {
 		delete(w.files, file.Name())
 	}
 
-	return file.Close()
+	if err := file.Close(); err != nil {
+		w.logger.WithError(err).WithField("filename", file.Name()).Error("failed to close file")
+	}
 }
