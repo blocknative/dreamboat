@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/blocknative/dreamboat/beacon"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/lthibault/log"
 )
@@ -40,20 +42,33 @@ func (s ExportService) RunParallel(ctx context.Context, numWorkers int) error {
 		}
 		files.BlockBidAndTrace = file
 
-		go func(ctx context.Context, files exportFiles) {
-			defer files.Close()
+		go func(ctx context.Context, i int, files exportFiles) {
+			defer files.BlockBidAndTrace.Close()
 
 			encs := exportEncoders{}
+			buffers := exportBuffers{}
 
-			// init BlockBidAndTrace encoder
-			bbtBuf := bufio.NewWriterSize(files.BlockBidAndTrace, 10*2060) // TODO: 2060B = 20Kb is the expected capella payload size. Bufio is a performance optimization for reducing disk writes
-			defer bbtBuf.Flush()
+			// init buffers
+			buffers.BlockBidAndTrace = bufio.NewWriterSize(files.BlockBidAndTrace, 10*2060) // TODO: 2060B = 20Kb is the expected capella payload size. Bufio is a performance optimization for reducing disk writes
+			go func(ctx context.Context, buffers exportBuffers) {
+				ticker := time.NewTicker(beacon.DurationPerSlot)
+				for {
+					select {
+					case <-ticker.C:
+						buffers.BlockBidAndTrace.Flush()
+					case <-ctx.Done():
+						buffers.BlockBidAndTrace.Flush()
+						return
+					}
+				}
+			}(ctx, buffers)
 
-			encs.BlockBidAndTrace = json.NewEncoder(bbtBuf)
+			// init encoders
+			encs.BlockBidAndTrace = json.NewEncoder(buffers.BlockBidAndTrace)
 			encs.BlockBidAndTrace.SetIndent("", "") //  the output JSON will be written on a single line without any whitespace: '{"field1":"value1","field2":{"nested1":"value2","nested2":"value3"}}'
 
-			s.Run(ctx, logger.WithField("file", filename), encs)
-		}(ctx, files)
+			s.Run(ctx, logger.WithField("worker", i), encs)
+		}(ctx, i, files)
 	}
 
 	return nil

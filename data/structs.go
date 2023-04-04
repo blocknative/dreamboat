@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"os"
@@ -27,12 +28,12 @@ type exportFiles struct {
 	BlockBidAndTrace *os.File
 }
 
-func (f exportFiles) Close() {
-	f.BlockBidAndTrace.Close()
-}
-
 type exportEncoders struct {
 	BlockBidAndTrace *json.Encoder
+}
+
+type exportBuffers struct {
+	BlockBidAndTrace *bufio.Writer
 }
 
 func selectEncoder(req exportRequest, encoders exportEncoders) (*json.Encoder, error) {
