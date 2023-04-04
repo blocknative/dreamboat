@@ -105,7 +105,7 @@ type RelayConfig struct {
 	ProposerSigningDomain map[structs.ForkVersion]types.Domain
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
-	BlockPublishDelay     time.Duration
+	MaxBlockPublishDelay  time.Duration
 
 	AllowedListedBuilders map[[48]byte]struct{}
 
@@ -397,9 +397,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			return nil, ErrFailedToPublish
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
-		// Delay the return of response block publishing
-		time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	}
+
+	// Delay the return of response block publishing
+	randomDuration := time.Duration(rand.Int63n(int64(rs.config.MaxBlockPublishDelay)))
+	time.Sleep(randomDuration)
 
 	rs.runnignAsyncs.Add(1)
 	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {

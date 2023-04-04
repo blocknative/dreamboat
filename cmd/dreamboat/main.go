@@ -176,7 +176,7 @@ var flags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
 		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
-		Value:   false,
+		Value:   true,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
 	&cli.StringFlag{
@@ -241,8 +241,8 @@ var flags = []cli.Flag{
 	},
 	&cli.DurationFlag{
 		Name:    "block-publication-delay",
-		Usage:   "Delay between lock publication and returning request to validator",
-		Value:   time.Second,
+		Usage:   "Maximum delay between block publication and returning request to validator",
+		Value:   500 * time.Millisecond,
 		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
 	},
 }
@@ -440,7 +440,7 @@ func run() cli.ActionFunc {
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain: domainBuilder,
-			BlockPublishDelay:    c.Duration("block-publication-delay"),
+			MaxBlockPublishDelay: c.Duration("block-publication-delay"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
 				structs.ForkCapella:   capellaBeaconProposer},
