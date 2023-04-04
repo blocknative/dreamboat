@@ -17,11 +17,6 @@ type ExportService struct {
 	datadir  string
 }
 
-type exportRequest struct {
-	bbt structs.BlockBidAndTrace
-	err chan error
-}
-
 func NewExportService(logger log.Logger, datadir string, bufSize int) ExportService {
 	return ExportService{logger: logger, datadir: datadir, requests: make(chan exportRequest, bufSize)}
 }
@@ -47,29 +42,33 @@ func (s ExportService) RunParallel(ctx context.Context, numWorkers int) error {
 			bufWriter := bufio.NewWriterSize(file, 10*2060) // TODO: 2060B = 20Kb is the expected capella payload size. Bufio is a performance optimization for reducing disk writes
 			defer bufWriter.Flush()
 
-			encoder := json.NewEncoder(file)
-			encoder.SetIndent("", "") //  the output JSON will be written on a single line without any whitespace: '{"field1":"value1","field2":{"nested1":"value2","nested2":"value3"}}'
+			encs := exportEncoders{}
+			encs.BlockBidAndTrace = json.NewEncoder(file)
+			encs.BlockBidAndTrace.SetIndent("", "") //  the output JSON will be written on a single line without any whitespace: '{"field1":"value1","field2":{"nested1":"value2","nested2":"value3"}}'
 
-			s.Run(ctx, logger.WithField("file", filename), encoder)
+			s.Run(ctx, logger.WithField("file", filename), encs)
 		}(ctx, file)
 	}
 
 	return nil
 }
 
-func (s ExportService) Run(ctx context.Context, logger log.Logger, encoder *json.Encoder) {
+func (s ExportService) Run(ctx context.Context, logger log.Logger, encs exportEncoders) {
 	logger.Info("started")
 	defer logger.Info("stopped")
 
 	for {
 		select {
 		case req := <-s.requests:
+			enc, err := selectEncoder(req, encs)
+			if err != nil {
+				logger.WithError(err).Error("failed to export request")
+			}
+
 			select {
-			case req.err <- encoder.Encode(req.bbt): // does not block because it is buffered (1) channel, but better safe than sorry
+			case req.err <- enc.Encode(req.data): // does not block because it is buffered (1) channel, but better safe than sorry
 			case <-ctx.Done():
-				logger.
-					WithField("blockHash", req.bbt.ExecutionPayload().BlockHash()).
-					Error("failed to export request")
+				logger.WithError(ctx.Err()).Error("failed to export request")
 			}
 		case <-ctx.Done():
 			return
@@ -78,7 +77,7 @@ func (s ExportService) Run(ctx context.Context, logger log.Logger, encoder *json
 }
 
 func (s ExportService) SubmitBlockBidAndTrace(ctx context.Context, bbt structs.BlockBidAndTrace) error {
-	request := exportRequest{bbt: bbt, err: make(chan error, 1)}
+	request := exportRequest{dt: BlockBidAndTraceData, data: bbt, err: make(chan error, 1)}
 
 	// submit request
 	select {
