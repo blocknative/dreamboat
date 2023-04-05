@@ -334,8 +334,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 
 	slotStart := (rs.beaconState.Genesis().GenesisTime + (payloadRequest.Slot() * 12)) * 1000
-	currTime := uint64(time.Now().UnixMilli())
-	if msIntoSlot := currTime - slotStart; msIntoSlot > uint64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
+	now := uint64(time.Now().UnixMilli())
+	if msIntoSlot := now - slotStart; msIntoSlot > uint64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
 		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too late")
 		return nil, ErrLateRequest
 	}
