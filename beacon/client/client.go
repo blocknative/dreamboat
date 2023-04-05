@@ -60,7 +60,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 		timer := time.NewTimer(BeaconEventTimeout)
 		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
 
-		lastTimeout := time.Now().Add(-(BeaconEventTimeout * 2)) //
+		lastTimeout := time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC) // zeroed value time.Time
 	EventSelect:
 		for {
 			select {
