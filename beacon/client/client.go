@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	BeaconEventTimeout = structs.DurationPerSlot * 2
+	BeaconEventTimeout = structs.DurationPerSlot + (structs.DurationPerSlot / 4)
 	BeaconQueryTimeout = 20 * time.Second
 )
 
@@ -61,13 +61,23 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 		timer := time.NewTimer(BeaconEventTimeout)
 		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
 
+		lastTimeout := time.Time{} // zeroed value time.Time
 	EventSelect:
 		for {
 			select {
 			case <-timer.C:
-				logger.Warn("timed out head events subscription, restarting..")
-				cancelLoop()
-				break EventSelect
+				logger.Warn("timed out head events subscription, restarting and manually querying latest header")
+
+				go b.manuallyFetchLatestHeader(ctx, logger, slotC)
+
+				// to prevent disconnection due to multiple timeouts occurring very close in time, the subscription loop is canceled and restarted
+				if time.Since(lastTimeout) <= BeaconEventTimeout*2 {
+					cancelLoop()
+					break EventSelect
+				}
+				lastTimeout = time.Now()
+				timer.Reset(BeaconEventTimeout)
+
 			case <-ctx.Done():
 				cancelLoop()
 				return
@@ -77,6 +87,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 }
 
 func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, timer *time.Timer, slotC chan<- HeadEvent) {
+	logger.Debug("subscription loop started")
 	defer logger.Warn("subscription loop exited")
 
 	for {
@@ -92,10 +103,11 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 
 			select {
 			case slotC <- head:
-			case <-time.After(structs.DurationPerSlot / 2): // relief pressure if
+			case <-time.After(structs.DurationPerSlot / 2): // relief pressure
 				logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
 				return
 			case <-ctx.Done():
+				logger.WithError(ctx.Err()).Warn("context cancelled waiting to consume head event after manual querying")
 				return
 			}
 		})
@@ -106,6 +118,46 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 
 		logger.WithError(err).Warn("beacon subscription failed, restarting...")
 	}
+}
+
+func (b *beaconClient) manuallyFetchLatestHeader(ctx context.Context, logger log.Logger, slotC chan HeadEvent) {
+	// fetch head slot manully
+	header, err := b.queryLatestHeader()
+	if err != nil {
+		logger.WithError(err).Warn("failed querying latest header manually")
+		return
+	} else if len(header.Data) != 1 {
+		logger.Warnf("failed to query latest header manually, unexpected amount of header: expected 1 - got %d", len(header.Data))
+		return
+	}
+
+	// send slot to beacon manager to consume async
+	event := HeadEvent{Slot: header.Data[0].Header.Message.Slot}
+	logger.With(event).Debug("manually fetched latest beacon header")
+
+	select {
+	case slotC <- event:
+		return
+	case <-time.After(structs.DurationPerSlot / 2):
+		logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event after manual querying")
+		return
+	case <-ctx.Done():
+		logger.WithError(ctx.Err()).Warn("context cancelled waiting to consume head event after manual querying")
+		return
+	}
+}
+
+// Returns the latest header from the beacon chain
+func (b *beaconClient) queryLatestHeader() (*HeaderRootObject, error) {
+	u := *b.beaconEndpoint
+	u.Path = fmt.Sprintf("/eth/v1/beacon/headers")
+	resp := new(HeaderRootObject)
+
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/headers", "GET"))
+	defer t.ObserveDuration()
+
+	err := b.queryBeacon(&u, "GET", resp)
+	return resp, err
 }
 
 // Returns proposer duties for every slot in this epoch
@@ -319,17 +371,42 @@ type SyncStatusPayloadData struct {
 
 // HeadEvent is emitted when subscribing to head events
 type HeadEvent struct {
-	Slot  uint64 `json:"slot,string"`
-	Block string `json:"block"`
-	State string `json:"state"`
+	Slot uint64 `json:"slot,string"`
+	// Block string `json:"block"`
+	// State string `json:"state"`
 }
 
 func (h HeadEvent) Loggable() map[string]any {
 	return map[string]any{
-		"slot":  h.Slot,
-		"block": h.Block,
-		"state": h.State,
+		"slot": h.Slot,
+		// "block": h.Block,
+		// "state": h.State,
 	}
+}
+
+// Header is the block header from the beacon chain
+type Message struct {
+	Slot          uint64 `json:"slot,string"`
+	ProposerIndex string `json:"proposer_index"`
+	ParentRoot    string `json:"parent_root"`
+	StateRoot     string `json:"state_root"`
+	BodyRoot      string `json:"body_root"`
+}
+
+type Header struct {
+	Message   Message `json:"message"`
+	Signature string  `json:"signature"`
+}
+
+type Data struct {
+	Root      string `json:"root"`
+	Canonical bool   `json:"canonical"`
+	Header    Header `json:"header"`
+}
+
+type HeaderRootObject struct {
+	ExecutionOptimistic bool   `json:"execution_optimistic"`
+	Data                []Data `json:"data"`
 }
 
 // RegisteredProposersResponse is the response for querying proposer duties
