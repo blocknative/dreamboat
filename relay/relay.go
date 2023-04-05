@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -74,7 +75,7 @@ type Verifier interface {
 }
 
 type DataAPIStore interface {
-	// CheckSlotDelivered(context.Context, uint64) (bool, error)
+	//CheckSlotDelivered(context.Context, uint64) (bool, error)
 
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
@@ -104,7 +105,7 @@ type RelayConfig struct {
 	ProposerSigningDomain map[structs.ForkVersion]types.Domain
 	PubKey                types.PublicKey
 	SecretKey             *bls.SecretKey
-	BlockPublishDelay     time.Duration
+	MaxBlockPublishDelay  time.Duration
 
 	AllowedListedBuilders map[[48]byte]struct{}
 
@@ -375,6 +376,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
 		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
+	} else {
+		return nil, ErrPayloadAlreadyDelivered
 	}
 
 	logger = logger.With(log.F{
@@ -394,9 +397,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			return nil, ErrFailedToPublish
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
-		// Delay the return of response block publishing
-		time.Sleep(rs.config.BlockPublishDelay)
 	}
+
+	// Delay the return of response block publishing
+	randomDelay := time.Duration(rand.Int63n(int64(rs.config.MaxBlockPublishDelay)))
+	time.Sleep(randomDelay)
 
 	rs.runnignAsyncs.Add(1)
 	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
@@ -425,6 +430,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": bep.EpFeeRecipient,
 			"numTx":        len(bep.EpTransactions),
 			"bid":          payload.BidValue(),
+			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
@@ -441,6 +447,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": cep.EpFeeRecipient,
 			"numTx":        len(cep.EpTransactions),
 			"bid":          payload.BidValue(),
+			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),
