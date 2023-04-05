@@ -248,7 +248,7 @@ var flags = []cli.Flag{
 	&cli.DurationFlag{
 		Name:    "getpayload-request-time-limit",
 		Usage:   "Time allowed for GetPayload requests since the slot started",
-		Value:   3 * time.Second,
+		Value:   4 * time.Second,
 		EnvVars: []string{"GETPAYLOAD_REQUEST_TIME_LIMIT"},
 	},
 }
