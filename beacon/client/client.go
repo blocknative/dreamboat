@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	BeaconEventTimeout = structs.DurationPerSlot * 2
+	BeaconEventTimeout = structs.DurationPerSlot + (structs.DurationPerSlot / 2)
 )
 
 var (
@@ -76,8 +76,11 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 
 				// send slot to beacon manager to consume async
 				go func() {
+					event := HeadEvent{Slot: header.Data[0].Header.Message.Slot}
+					logger.With(event).Debug("manually fetched latest beacon header")
+					
 					select {
-					case slotC <- HeadEvent{Slot: header.Data[0].Header.Message.Slot}:
+					case slotC <- event:
 					case <-time.After(structs.DurationPerSlot):
 						logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event after manual querying")
 					case <-ctx.Done():
@@ -349,14 +352,14 @@ type SyncStatusPayloadData struct {
 
 // HeadEvent is emitted when subscribing to head events
 type HeadEvent struct {
-	Slot  uint64 `json:"slot,string"`
+	Slot uint64 `json:"slot,string"`
 	// Block string `json:"block"`
 	// State string `json:"state"`
 }
 
 func (h HeadEvent) Loggable() map[string]any {
 	return map[string]any{
-		"slot":  h.Slot,
+		"slot": h.Slot,
 		// "block": h.Block,
 		// "state": h.State,
 	}
