@@ -74,10 +74,10 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 				if time.Since(lastTimeout) <= BeaconEventTimeout*2 {
 					cancelLoop()
 					break EventSelect
-				} else {
-					lastTimeout = time.Now()
-					timer.Reset(BeaconEventTimeout)
 				}
+				lastTimeout = time.Now()
+				timer.Reset(BeaconEventTimeout)
+
 			case <-ctx.Done():
 				cancelLoop()
 				return
