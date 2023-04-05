@@ -351,7 +351,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, err
 	}
 
-	logger = rs.l.WithField("pubkey", pk)
+	logger = logger.WithField("pubkey", pk)
 	logger.WithField("event", "payload_requested").Info("payload requested")
 
 	forkv := rs.beaconState.ForkVersion(structs.Slot(payloadRequest.Slot()))
