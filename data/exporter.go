@@ -4,28 +4,33 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/blocknative/dreamboat/beacon"
-	"github.com/blocknative/dreamboat/structs"
 	"github.com/lthibault/log"
 )
 
 var (
 	fileIdleTime   = beacon.DurationPerSlot
 	filesPruneTick = fileIdleTime * 3
+	ErrClosed      = errors.New("closed")
 )
 
 type ExportService struct {
 	logger   log.Logger
-	requests chan exportRequest
+	requests chan ExportRequest
+
+	shutdown chan struct{}
+	wg       sync.WaitGroup
 }
 
 func NewExportService(logger log.Logger, bufSize int) *ExportService {
-	return &ExportService{logger: logger, requests: make(chan exportRequest, bufSize)}
+	return &ExportService{logger: logger, requests: make(chan ExportRequest)} // channel must be unbuffered, for not accepting requests that will not be handled
 }
 
 func (s *ExportService) RunParallel(ctx context.Context, datadir string, numWorkers int) error {
@@ -37,64 +42,100 @@ func (s *ExportService) RunParallel(ctx context.Context, datadir string, numWork
 }
 
 func (s *ExportService) Run(ctx context.Context, datadir string, id int) {
+	s.wg.Add(1)
+	defer s.wg.Done()
+
 	logger := s.logger.WithField("id", id)
 
 	logger.Info("started")
 	defer logger.Info("stopped")
 
-	worker := newWorker(id, datadir, logger)
+	w := newWorker(id, datadir, logger)
 	ticker := time.NewTicker(filesPruneTick)
 	for {
 		select {
 		case req := <-s.requests:
-			file, err := worker.getOrCreateFile(req)
-			if err == nil {
-				err = writeToFile(file, req)
-				if err != nil {
-					logger.WithError(err).With(req).Error("failed to write")
-
-					file.Write([]byte("\n"))
-					worker.closeFile(file)
-					logger.WithField("filename", file.Name()).Debug("corrupted file closed")
-				}
-			} else {
-				logger.WithError(err).Error("failed to get/create file: %w", err)
-			}
-
-			select {
-			case req.err <- err: // does not block because it is buffered (1) channel, but better safe than sorry
-			case <-ctx.Done():
-				logger.WithError(ctx.Err()).Error("failed to export request")
-			}
+			s.handleRequest(ctx, logger, w, req)
+			continue
 		case <-ticker.C:
-			worker.closeIdleFiles()
+			w.closeIdleFiles()
+			continue
 		case <-ctx.Done():
-			worker.closeIdleFiles()
+			w.closeAllFiles()
+			return
+		case <-s.shutdown:
+			w.closeAllFiles()
 			return
 		}
 	}
 }
 
-func (s *ExportService) SubmitGetPayloadRequest(ctx context.Context, gpr structs.SignedBlindedBeaconBlock) error {
-	request := exportRequest{dt: BlockBidAndTraceData, data: gpr.Raw(), slot: gpr.Slot(), timestamp: time.Now(), id: gpr.BlockHash().String(), err: make(chan error, 1)}
+func (s *ExportService) handleRequest(ctx context.Context, logger log.Logger, w *worker, req ExportRequest) {
+	file, err := w.getOrCreateFile(req)
+	if err == nil {
+		err = writeToFile(file, req)
+		if err != nil {
+			logger.WithError(err).With(req).Error("failed to write")
+
+			file.Write([]byte("\n"))
+			w.closeFile(file)
+			logger.WithField("filename", file.Name()).Debug("corrupted file closed")
+		}
+	} else {
+		logger.WithError(err).Error("failed to get/create file: %w", err)
+	}
+
+	select {
+	case req.err <- err: // if does not block, means it is buffered (1) channel
+	default:
+	}
+
+	select {
+	case req.err <- err:
+		return
+	case <-s.shutdown:
+		logger.WithError(ErrClosed).Error("failed to export request")
+		return
+	case <-ctx.Done():
+		logger.WithError(ctx.Err()).Error("failed to export request")
+		return
+	}
+}
+
+func (s *ExportService) Close() {
+	close(s.shutdown) // prevent new requests from being added
+	s.wg.Wait()       // wait for inflight requests to complete
+}
+
+func (s *ExportService) Store(ctx context.Context, req ExportRequest) error {
+	// check if service is closed
+	select {
+	case <-s.shutdown:
+		return ErrClosed
+	default:
+	}
 
 	// submit request
 	select {
-	case s.requests <- request:
+	case s.requests <- req:
+	case <-s.shutdown:
+		return ErrClosed
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 
 	// wait for response
 	select {
-	case err := <-request.err:
+	case err := <-req.err:
 		return err
+	case <-s.shutdown:
+		return ErrClosed
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-func writeToFile(file *os.File, req exportRequest) error {
+func writeToFile(file *os.File, req ExportRequest) error {
 	// Encode struct as JSON and write to base64 encoder
 	_, err := file.Write([]byte(strconv.Itoa(req.timestamp.Nanosecond())))
 	if err != nil {
@@ -106,7 +147,7 @@ func writeToFile(file *os.File, req exportRequest) error {
 		return fmt.Errorf("failed to write data sep ';': %w", err)
 	}
 
-	_, err = file.Write([]byte(req.id))
+	_, err = file.Write([]byte(req.Id))
 	if err != nil {
 		return fmt.Errorf("failed to write data identifier: %w", err)
 	}
@@ -124,7 +165,7 @@ func writeToFile(file *os.File, req exportRequest) error {
 	writer := gzip.NewWriter(encoder)
 	defer writer.Close()
 
-	_, err = writer.Write(req.data)
+	_, err = writer.Write(req.Data)
 	if err != nil {
 		return fmt.Errorf("failed to write data: %w", err)
 	}
@@ -158,17 +199,17 @@ func newWorker(id int, datadir string, logger log.Logger) *worker {
 	return &worker{id: id, datadir: datadir, files: make(map[string]fileWithTimestamp), logger: logger}
 }
 
-func (w *worker) getOrCreateFile(req exportRequest) (*os.File, error) {
+func (w *worker) getOrCreateFile(req ExportRequest) (*os.File, error) {
 	// get
-	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, toString(req.dt), req.slot, w.id)
+	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, toString(req.Dt), req.slot, w.id)
 	fileWithTs, ok := w.files[filename]
 	if ok {
 		fileWithTs.ts = time.Now()
 		return fileWithTs.File, nil
 	}
 
-	// create
-	file, err := os.Create(filename)
+	// open or create file
+	file, err := openOrCreateFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
@@ -188,6 +229,15 @@ func (w *worker) closeIdleFiles() {
 	}
 }
 
+func (w *worker) closeAllFiles() {
+	for filename, file := range w.files {
+		if err := file.Close(); err != nil {
+			w.logger.WithError(err).WithField("filename", filename).Error("failed to close file")
+		}
+		delete(w.files, filename)
+	}
+}
+
 func (w *worker) closeFile(file *os.File) {
 	if _, ok := w.files[file.Name()]; ok {
 		delete(w.files, file.Name())
@@ -196,4 +246,25 @@ func (w *worker) closeFile(file *os.File) {
 	if err := file.Close(); err != nil {
 		w.logger.WithError(err).WithField("filename", file.Name()).Error("failed to close file")
 	}
+}
+
+func openOrCreateFile(filename string) (*os.File, error) {
+	var file *os.File
+
+	// check if file exists
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		// file doesn't exist, create a new one
+		file, err = os.Create(filename)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// file exists, open it for appending
+		file, err = os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return file, nil
 }

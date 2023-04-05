@@ -14,6 +14,7 @@ import (
 
 	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
+	"github.com/blocknative/dreamboat/data"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -100,7 +101,7 @@ type Beacon interface {
 }
 
 type DataExporter interface {
-	SubmitGetPayloadRequest(ctx context.Context, gpr structs.SignedBlindedBeaconBlock) error
+	SubmitGetPayloadRequest(ctx context.Context, req data.ExportRequest) error
 }
 
 type RelayConfig struct {

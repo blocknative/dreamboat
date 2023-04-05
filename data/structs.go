@@ -25,21 +25,17 @@ func toString(data DataType) string {
 	}
 }
 
-type exportRequest struct {
-	dt        DataType
-	data      []byte
-	id        string
-	slot      uint64
-	timestamp time.Time
+type ExportRequest struct {
+	Dt   DataType
+	Data []byte
+	Id   string
 
 	err chan error
 }
 
-func (req exportRequest) Loggable() map[string]any {
+func (req ExportRequest) Loggable() map[string]any {
 	return map[string]any{
-		"id":        req.id,
-		"slot":      req.slot,
-		"timestamp": req.timestamp.String(),
+		"id": req.Id,
 	}
 }
 
