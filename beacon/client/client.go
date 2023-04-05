@@ -103,7 +103,7 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 
 			select {
 			case slotC <- head:
-			case <-time.After(structs.DurationPerSlot / 2): // relief pressure if
+			case <-time.After(structs.DurationPerSlot / 2): // relief pressure
 				logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
 				return
 			case <-ctx.Done():
@@ -138,7 +138,7 @@ func (b *beaconClient) manuallyFetchLatestHeader(ctx context.Context, logger log
 	select {
 	case slotC <- event:
 		return
-	case <-time.After(structs.DurationPerSlot):
+	case <-time.After(structs.DurationPerSlot / 2):
 		logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event after manual querying")
 		return
 	case <-ctx.Done():
