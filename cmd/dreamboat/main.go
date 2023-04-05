@@ -245,6 +245,12 @@ var flags = []cli.Flag{
 		Value:   500 * time.Millisecond,
 		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
 	},
+	&cli.DurationFlag{
+		Name:    "getpayload-request-time-limit",
+		Usage:   "Time allowed for GetPayload requests since the slot started",
+		Value:   4 * time.Second,
+		EnvVars: []string{"GETPAYLOAD_REQUEST_TIME_LIMIT"},
+	},
 }
 
 const (
@@ -439,8 +445,9 @@ func run() cli.ActionFunc {
 		}
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
-			BuilderSigningDomain: domainBuilder,
-			MaxBlockPublishDelay: c.Duration("max-block-publication-delay"),
+			BuilderSigningDomain:       domainBuilder,
+			MaxBlockPublishDelay:       c.Duration("max-block-publication-delay"),
+			GetPayloadRequestTimeLimit: c.Duration("getpayload-request-time-limit"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
 				structs.ForkCapella:   capellaBeaconProposer},
