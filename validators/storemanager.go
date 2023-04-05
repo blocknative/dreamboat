@@ -99,8 +99,8 @@ func (rm *StoreManager) SendStore(request StoreReq) {
 	}
 }
 
-func (rm *StoreManager) RunStore(num uint) {
-	for i := uint(0); i < num; i++ {
+func (rm *StoreManager) RunStore(num uint64) {
+	for i := uint64(0); i < num; i++ {
 		rm.storeWorkersCounter.Add(1)
 		go rm.ParallelStore(rm.store)
 	}

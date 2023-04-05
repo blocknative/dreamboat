@@ -522,7 +522,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		tPublish := time.Now()
 		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 		if err != nil {
-			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
+			logger.With(log.F{
+				"event":            "wrong_publish_payload",
+				"processingTimeMs": time.Since(tStart).Milliseconds()}).
+				WithError(err).
+				Error("fail to create block for publication")
 			return nil, ErrWrongPayload
 		}
 		if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
@@ -556,6 +560,24 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		return nil, ErrHigherSlotDelivered
 	}
 
+	rs.runnignAsyncs.Add(1)
+	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
+		defer wg.Done()
+		trace, err := payload.ToDeliveredTrace(slot)
+		if err != nil {
+			l.With(log.F{
+				"event":            "wrong_evidence_payload",
+				"processingTimeMs": time.Since(tStart).Milliseconds()}).WithError(err).Error("failed to generate delivered payload")
+			return
+		}
+
+		if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
+			l.With(log.F{
+				"event":            "evidence_failure",
+				"processingTimeMs": time.Since(tStart).Milliseconds()}).WithError(err).Warn("failed to set payload after delivery")
+		}
+	}(rs.runnignAsyncs, logger, rs, payloadRequest.Slot())
+
 	exp := payload.ExecutionPayload()
 
 	// TODO: stream delivered
@@ -578,8 +600,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			"stateRoot":        bep.EpStateRoot,
 			"feeRecipient":     bep.EpFeeRecipient,
 			"numTx":            len(bep.EpTransactions),
-			"bid":              payload.BidValue(),
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
+			"bid":              payload.BidValue(),
 		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
@@ -595,8 +617,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			"stateRoot":        cep.EpStateRoot,
 			"feeRecipient":     cep.EpFeeRecipient,
 			"numTx":            len(cep.EpTransactions),
-			"bid":              payload.BidValue(),
 			"processingTimeMs": time.Since(tStart).Milliseconds(),
+			"bid":              payload.BidValue(),
 		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),

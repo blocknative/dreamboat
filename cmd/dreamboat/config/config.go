@@ -1,65 +1,144 @@
 package config
 
+import "time"
+
+type Config struct {
+	configFile string
+
+	// http server on which relay serves external connections
+	ExternalHttp HTTPConfig `config:"external_http"` // localhost:18550
+
+	// internal port for metrics profiling and management
+	InternalHttp HTTPConfig `config:"internal_http"` //"0.0.0.0:19550"
+
+	//
+	Relay RelayConfig `config:"relay"`
+
+	//
+	Beacon BeaconConfig `config:"beacon"`
+
+	//
+	Verify VerifyConfig `config:"verify"`
+
+	//
+	Validators ValidatorsConfig `config:"validators"`
+
+	//
+	DataAPI DataAPIConfig `config:"dataapi"`
+}
+
+func NewConfig(configFile string) *Config {
+	return &Config{
+		configFile: configFile,
+	}
+}
+
+type HTTPConfig struct {
+	// address (ip+port) on which http should be served
+	Address      string        `config:"address"`
+	ReadTimeout  time.Duration `config:"read_timeout"`  //time.Second * 2,
+	WriteTimeout time.Duration `config:"write_timeout"` //time.Second * 2,
+}
+
+var DefaultHTTPConfig = HTTPConfig{
+	ReadTimeout:  2 * time.Second,
+	WriteTimeout: 2 * time.Second,
+}
+
+type SQLConfig struct {
+	// database connection query string
+	URL string `config:"url"`
+
+	MaxOpenConns    int           `config:"max_open_conns"`
+	MaxIdleConns    int           `config:"max_idle_conns"`
+	ConnMaxIdleTime time.Duration `config:"conn_max_idle_time"`
+}
+
+var DefaultSQLConfig = SQLConfig{
+	MaxOpenConns:    10,
+	MaxIdleConns:    10,
+	ConnMaxIdleTime: 15 * time.Second,
+}
+
+type BadgerDBConfig struct {
+	TTL time.Duration `config:"ttl"`
+}
+
+var DefaultBadgerDBConfig = BadgerDBConfig{
+	TTL: 48 * time.Hour,
+}
+
+type RelayConfig struct {
+	// name of the network in which relay oparates
+	Network string `config:"network"` // mainnet
+	// secret key used to sign messages
+	SecretKey string `config:"secret_key"`
+
+	// for publishing payloads to beacon nodes after a delivery
+	PublishBlock bool `config:"publish_block"`
+
+	// block publish delay
+	BlockPublishDelay time.Duration `config:"block_publish_delay"`
+}
+
+var DefaultRelayConfig = RelayConfig{
+	PublishBlock:      true,
+	BlockPublishDelay: time.Second,
+}
+
+type BeaconConfig struct {
+	// comma separate list of urls to beacon endpoints
+	Addresses []string `config:"addresses"`
+}
+
+type BlockSimulationConfig struct {
+}
+
+type ValidatorsConfig struct {
+	// Address of postgress database for validator registrations, if empty - default, badger will be used",
+	DB SQLConfig `config:"db"`
+	// BadgerDB config if sql is not used
+	Badger BadgerDBConfig `config:"badger"`
+	// The size of response queue, should be set to expected number of validators in one request
+	QueueSize uint64 `config:"queue_size"`
+	// Number of workers storing validators in parallel
+	StoreWorkersNum uint64 `config:"store_workers"`
+	// Registrations cache size
+	RegistrationsCacheSize int `config:"registrations_cache_size"`
+	// Registrations cache ttl
+	RegistrationsCacheTTL time.Duration `config:"registrations_cache_ttl"`
+}
+
+var DefaultValidatorsConfig = ValidatorsConfig{
+	QueueSize:              100_000,
+	StoreWorkersNum:        400,
+	RegistrationsCacheSize: 600_000,
+	RegistrationsCacheTTL:  time.Hour,
+}
+
+type VerifyConfig struct {
+	// Number of workers running verify in parallel
+	WorkersNum uint64 `config:"workers"`
+	//size of verify queue
+	QueueSize uint `config:"queue_size"`
+}
+
+var DefaultVerifyConfig = VerifyConfig{
+	WorkersNum: 2000,
+	QueueSize:  100_000,
+}
+
+type DataAPIConfig struct {
+	// Address of postgress database for validator registrations, if empty - default, badger will be used",
+	DB SQLConfig `config:"db"`
+	// BadgerDB config if sql is not used
+	Badger BadgerDBConfig `config:"badger"`
+}
+
+var DefaultDataAPIConfig = DataAPIConfig{}
+
 /*
 var flags = []cli.Flag{
-	&cli.StringFlag{
-		Name:    "loglvl",
-		Usage:   "logging level: trace, debug, info, warn, error or fatal",
-		Value:   "info",
-		EnvVars: []string{"LOGLVL"},
-	},
-	&cli.StringFlag{
-		Name:    "logfmt",
-		Usage:   "format logs as text, json or none",
-		Value:   "text",
-		EnvVars: []string{"LOGFMT"},
-	},
-	&cli.StringFlag{
-		Name:    "addr",
-		Usage:   "server listen address",
-		Value:   "localhost:18550",
-		EnvVars: []string{"RELAY_ADDR"},
-	},
-	&cli.StringFlag{
-		Name:    "internalAddr",
-		Usage:   "server listen address",
-		Value:   "0.0.0.0:19550",
-		EnvVars: []string{"RELAY_INTERNAL_ADDR"},
-	},
-	&cli.DurationFlag{
-		Name:    "timeout",
-		Usage:   "request timeout",
-		Value:   time.Second * 2,
-		EnvVars: []string{"RELAY_TIMEOUT"},
-	},
-	&cli.StringSliceFlag{
-		Name:    "beacon",
-		Usage:   "`url` for beacon endpoint",
-		EnvVars: []string{"RELAY_BEACON"},
-	},
-	&cli.StringSliceFlag{ // TODO: Remove
-		Name:    "builder",
-		Usage:   "`url` formatted as schema://pubkey@host",
-		EnvVars: []string{"BN_RELAY_BUILDER_URLS"},
-	},
-	&cli.StringFlag{
-		Name:    "network",
-		Usage:   "the networks the relay works on",
-		Value:   "mainnet",
-		EnvVars: []string{"RELAY_NETWORK"},
-	},
-	&cli.StringFlag{
-		Name:     "secretKey",
-		Usage:    "secret key used to sign messages",
-		Required: true,
-		EnvVars:  []string{"RELAY_SECRET_KEY"},
-	},
-	&cli.StringFlag{
-		Name:    "datadir",
-		Usage:   "data directory where blocks and validators are stored in the default datastore implementation",
-		Value:   "/tmp/relay",
-		EnvVars: []string{"RELAY_DATADIR"},
-	},
 	&cli.DurationFlag{
 		Name:    "ttl",
 		Usage:   "ttl of the data",
@@ -67,40 +146,10 @@ var flags = []cli.Flag{
 		EnvVars: []string{"BN_RELAY_TTL"},
 	},
 	&cli.Uint64Flag{
-		Name:    "relay-validator-queue-size",
-		Usage:   "The size of response queue, should be set to expected number of validators in one request",
-		Value:   100_000,
-		EnvVars: []string{"RELAY_QUEUE_REQ"},
-	},
-	&cli.Uint64Flag{
-		Name:    "relay-workers-verify",
-		Usage:   "number of workers running verify in parallel",
-		Value:   2000,
-		EnvVars: []string{"RELAY_WORKERS_VERIFY"},
-	},
-	&cli.Uint64Flag{
-		Name:    "relay-workers-store-validator",
-		Usage:   "number of workers storing validators in parallel",
-		Value:   400,
-		EnvVars: []string{"RELAY_WORKERS_STORE_VALIDATOR"},
-	},
-	&cli.Uint64Flag{
-		Name:    "relay-verify-queue-size",
-		Usage:   "size of verify queue",
-		Value:   100_000,
-		EnvVars: []string{"RELAY_VERIFY_QUEUE_SIZE"},
-	},
-	&cli.Uint64Flag{
 		Name:    "relay-store-queue-size",
 		Usage:   "size of store queue",
 		Value:   100_000,
 		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
-	},
-	&cli.Uint64Flag{
-		Name:    "relay-header-memory-slot-lag",
-		Usage:   "how many slots from the head relay should keep in memory",
-		Value:   200,
-		EnvVars: []string{"RELAY_HEADER_MEMORY_SLOT_LAG"},
 	},
 	&cli.IntFlag{
 		Name:    "relay-payload-cache-size",
@@ -108,41 +157,11 @@ var flags = []cli.Flag{
 		Value:   1_000,
 		EnvVars: []string{"RELAY_PAYLOAD_CACHE_SIZE"},
 	},
-	&cli.IntFlag{
-		Name:    "relay-registrations-cache-size",
-		Usage:   "relay registrations cache size",
-		Value:   600_000,
-		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
-	},
-	&cli.DurationFlag{
-		Name:    "relay-registrations-cache-ttl",
-		Usage:   "registrations cache ttl",
-		Value:   time.Hour,
-		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_TTL"},
-	},
-	&cli.BoolFlag{
-		Name:    "relay-publish-block",
-		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
-		Value:   false,
-		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
-	},
-	&cli.StringFlag{
-		Name:    "relay-validator-database-url",
-		Usage:   "address of postgress database for validator registrations, if empty - default, badger will be used",
-		Value:   "",
-		EnvVars: []string{"RELAY_VALIDATOR_DATABASE_URL"},
-	},
 	&cli.StringFlag{
 		Name:    "relay-dataapi-database-url",
 		Usage:   "address of postgress database for dataapi, if empty - default, badger will be used",
 		Value:   "",
 		EnvVars: []string{"RELAY_DATAAPI_DATABASE_URL"},
-	},
-	&cli.BoolFlag{ // TODO: Remove
-		Name:    "relay-fast-boot",
-		Usage:   "speed up booting up of relay, adding temporary inconsistency on the builder_blocks_received endpoint",
-		Value:   false,
-		EnvVars: []string{"RELAY_FAST_BOOT"},
 	},
 	&cli.StringFlag{
 		Name:    "relay-allow-listed-builder",
@@ -186,14 +205,5 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
-	&cli.DurationFlag{
-		Name:    "block-publication-delay",
-		Usage:   "Delay between lock publication and returning request to validator",
-		Value:   time.Second,
-		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
-	},
 }
 */
-
-type Config struct {
-}

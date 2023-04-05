@@ -57,40 +57,46 @@ const (
 )
 
 var (
-	loglvl string
-	logfmt string
+	loglvl     string
+	logfmt     string
+	datadir    string
+	configFile string
 )
 
 func init() {
 	flag.StringVar(&loglvl, "loglvl", "info", "logging level: trace, debug, info, warn, error or fatal")
 	flag.StringVar(&logfmt, "logfmt", "text", "format logs as text, json or none")
+	flag.StringVar(&configFile, "config", "./config", "configuration file needed for relay to run")
+	flag.StringVar(&datadir, "datadir", "/tmp/relay", "data directory where blocks and validators are stored in the default datastore implementation")
 }
 
 // Main starts the relay
 func main() {
-	osSig := make(chan os.Signal, 2)
+	ctx, cancel := context.WithCancel(context.Background())
 
+	osSig := make(chan os.Signal, 2)
 	signal.Notify(osSig, syscall.SIGTERM)
 	signal.Notify(osSig, syscall.SIGINT)
-
-	ctx, cancel := context.WithCancel(context.Background())
 	go waitForSignal(cancel, osSig)
 
-	logger := logger(loglvl, logfmt, false, false)
+	cfg := config.NewConfig(configFile)
+
+	logger := logger(loglvl, logfmt, false, false, os.Stdout)
 	chainCfg := config.NewChainConfig()
-	chainCfg.LoadNetwork(c.String("network"))
+	chainCfg.LoadNetwork(cfg.Relay.Network)
 	if chainCfg.GenesisForkVersion == "" {
-		if err := chainCfg.ReadNetworkConfig(c.String("datadir"), c.String("network")); err != nil {
+		if err := chainCfg.ReadNetworkConfig(datadir, cfg.Relay.Network); err != nil {
 			logger.WithError(err).Fatal("failed read chain configuration")
 			return
 		}
 	}
-	TTL := c.Duration("ttl")
+	//TTL := c.Duration("ttl")
 
 	timeDataStoreStart := time.Now()
 	m := metrics.NewMetrics()
 
-	storage, err := trBadger.Open(c.String("datadir"))
+	// BadgerDB
+	storage, err := trBadger.Open(datadir)
 	if err != nil {
 		logger.WithError(err).Fatal("failed to initialize datastore")
 		return
@@ -107,14 +113,13 @@ func main() {
 	}).Info("data store initialized")
 
 	timeRelayStart := time.Now()
-	state := &beacon.MultiSlotState{}
 	ds, err := datastore.NewDatastore(storage, c.Int("relay-payload-cache-size"))
 	if err != nil {
 		logger.Fatalf("fail to create datastore: %w", err)
 		return
 	}
 
-	beaconCli, err := initBeaconClients(ctx, logger, c.StringSlice("beacon"), m)
+	beaconCli, err := initBeaconClients(ctx, logger, cfg.Beacon.Addresses, m)
 	if err != nil {
 		logger.Fatalf("fail to initialize beacon: %w", err)
 		return
@@ -147,14 +152,16 @@ func main() {
 		simFallb.AddClient(simHTTPCli)
 	}
 
-	verificator := verify.NewVerificationManager(logger, c.Uint("relay-verify-queue-size"))
-	verificator.RunVerify(c.Uint("relay-workers-verify"))
+	verificator := verify.NewVerificationManager(logger, cfg.Verify.QueueSize)
+	verificator.RunVerify(cfg.Verify.QueueSize)
 
-	dbURL := c.String("relay-validator-database-url")
 	// VALIDATOR MANAGEMENT
 	var valDS ValidatorStore
-	if dbURL != "" {
-		valPG, err := trPostgres.Open(dbURL, 10, 10, 10)
+	if cfg.Validators.DB.URL != "" {
+		valPG, err := trPostgres.Open(cfg.Validators.DB.URL,
+			cfg.Validators.DB.MaxOpenConns,
+			cfg.Validators.DB.MaxIdleConns,
+			cfg.Validators.DB.ConnMaxIdleTime)
 		if err != nil {
 			logger.WithError(err).Fatalf("failed to connect to the database")
 			return
@@ -162,10 +169,10 @@ func main() {
 		m.RegisterDB(valPG, "registrations")
 		valDS = valPostgres.NewDatastore(valPG)
 	} else { // by default use existsing storage
-		valDS = valBadger.NewDatastore(storage, TTL)
+		valDS = valBadger.NewDatastore(storage, cfg.Validators.Badger.TTL)
 	}
 
-	validatorCache, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](c.Int("relay-registrations-cache-size"))
+	validatorCache, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](cfg.Validators.RegistrationsCacheSize)
 	if err != nil {
 		logger.WithError(err).Fatalf("fail to initialize validator cache")
 		return
@@ -192,8 +199,8 @@ func main() {
 
 	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
 	validatorStoreManager.AttachMetrics(m)
-	if c.Uint("relay-workers-store-validator") > 0 {
-		validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
+	if cfg.Validators.StoreWorkersNum > 0 {
+		validatorStoreManager.RunStore(cfg.Validators.StoreWorkersNum)
 	}
 
 	domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, chainCfg.GenesisForkVersion, types.Root{}.String())
@@ -201,6 +208,8 @@ func main() {
 		logger.WithError(err).Fatal("error computing genesis domain")
 		return
 	}
+
+	state := &beacon.MultiSlotState{}
 
 	validatorRelay := validators.NewRegister(logger, domainBuilder, state, verificator, validatorStoreManager)
 	validatorRelay.AttachMetrics(m)
@@ -225,7 +234,7 @@ func main() {
 		}
 	}
 
-	skBytes, err := hexutil.Decode(c.String("secretKey"))
+	skBytes, err := hexutil.Decode(cfg.Relay.SecretKey)
 	if err != nil {
 		logger.WithError(err).Fatal("decoding secret key")
 		return
@@ -250,16 +259,16 @@ func main() {
 
 	r := relay.NewRelay(logger, relay.RelayConfig{
 		BuilderSigningDomain: domainBuilder,
-		BlockPublishDelay:    c.Duration("block-publication-delay"),
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 			structs.ForkBellatrix: bellatrixBeaconProposer,
 			structs.ForkCapella:   capellaBeaconProposer},
 		PubKey:                pk,
 		SecretKey:             sk,
-		RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
+		RegistrationCacheTTL:  cfg.Validators.RegistrationsCacheTTL,
 		TTL:                   TTL,
 		AllowedListedBuilders: allowed,
-		PublishBlock:          c.Bool("relay-publish-block"),
+		PublishBlock:          cfg.Relay.PublishBlock,
+		BlockPublishDelay:     cfg.Relay.BlockPublishDelay,
 	}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 	r.AttachMetrics(m)
 
@@ -302,7 +311,7 @@ func main() {
 		internalMux.Handle("/metrics", m.Handler())
 		logger.Info("internal server listening")
 		internalSrv := http.Server{
-			Addr:    c.String("internalAddr"),
+			Addr:    cfg.InternalHttp.Address,
 			Handler: internalMux,
 		}
 
@@ -319,9 +328,9 @@ func main() {
 	// run the http server
 	go func(srv http.Server) (err error) {
 		svr := http.Server{
-			Addr:           c.String("addr"),
-			ReadTimeout:    c.Duration("timeout"),
-			WriteTimeout:   c.Duration("timeout"),
+			Addr:           cfg.ExternalHttp.Address,
+			ReadTimeout:    cfg.ExternalHttp.ReadTimeout,
+			WriteTimeout:   cfg.ExternalHttp.WriteTimeout,
 			IdleTimeout:    time.Second * 2,
 			Handler:        mux,
 			MaxHeaderBytes: 4096,
