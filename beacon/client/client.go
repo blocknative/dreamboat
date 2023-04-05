@@ -107,6 +107,7 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 				logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
 				return
 			case <-ctx.Done():
+				logger.WithError(ctx.Err()).Warn("context cancelled waiting to consume head event after manual querying")
 				return
 			}
 		})
@@ -124,8 +125,10 @@ func (b *beaconClient) manuallyFetchLatestHeader(ctx context.Context, logger log
 	header, err := b.queryLatestHeader()
 	if err != nil {
 		logger.WithError(err).Warn("failed querying latest header manually")
+		return
 	} else if len(header.Data) != 1 {
 		logger.Warnf("failed to query latest header manually, unexpected amount of header: expected 1 - got %d", len(header.Data))
+		return
 	}
 
 	// send slot to beacon manager to consume async
@@ -134,9 +137,13 @@ func (b *beaconClient) manuallyFetchLatestHeader(ctx context.Context, logger log
 
 	select {
 	case slotC <- event:
+		return
 	case <-time.After(structs.DurationPerSlot):
 		logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event after manual querying")
+		return
 	case <-ctx.Done():
+		logger.WithError(ctx.Err()).Warn("context cancelled waiting to consume head event after manual querying")
+		return
 	}
 }
 
