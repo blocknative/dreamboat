@@ -21,10 +21,6 @@ import (
 	"github.com/blocknative/dreamboat/verify"
 )
 
-const (
-	GetPayloadRequestLimit = 10 * time.Second
-)
-
 var (
 	ErrUnknownValue            = errors.New("value is unknown")
 	ErrPayloadAlreadyDelivered = errors.New("slot payload already delivered")
@@ -106,11 +102,12 @@ type Beacon interface {
 }
 
 type RelayConfig struct {
-	BuilderSigningDomain  types.Domain
-	ProposerSigningDomain map[structs.ForkVersion]types.Domain
-	PubKey                types.PublicKey
-	SecretKey             *bls.SecretKey
-	MaxBlockPublishDelay  time.Duration
+	BuilderSigningDomain       types.Domain
+	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
+	PubKey                     types.PublicKey
+	SecretKey                  *bls.SecretKey
+	MaxBlockPublishDelay       time.Duration
+	GetPayloadRequestTimeLimit time.Duration
 
 	AllowedListedBuilders map[[48]byte]struct{}
 
@@ -338,7 +335,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	slotStart := (rs.beaconState.Genesis().GenesisTime + (payloadRequest.Slot() * 12)) * 1000
 	currTime := uint64(time.Now().UnixMilli())
-	if msIntoSlot := currTime - slotStart; msIntoSlot > uint64(GetPayloadRequestLimit.Milliseconds()) {
+	if msIntoSlot := currTime - slotStart; msIntoSlot > uint64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
 		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too late")
 		return nil, ErrLateRequest
 	}
