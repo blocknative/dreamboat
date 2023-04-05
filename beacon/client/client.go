@@ -71,8 +71,8 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 					header, err := b.queryLatestHeader()
 					if err != nil {
 						logger.WithError(err).Warn("failed querying latest header manually")
-					} else if len(header.Data) != 0 {
-						logger.Warn("failed to query latest header manually, unexpected amount of header: expected 1 - got %d", len(header.Data))
+					} else if len(header.Data) != 1 {
+						logger.Warnf("failed to query latest header manually, unexpected amount of header: expected 1 - got %d", len(header.Data))
 					}
 
 					// send slot to beacon manager to consume async
