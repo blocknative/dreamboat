@@ -66,12 +66,13 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 		for {
 			select {
 			case <-timer.C:
-				logger.Warn("timed out head events subscription, restarting and manually querying latest header")
+				logger.Debug("timed out head events subscription, manually querying latest header")
 
 				go b.manuallyFetchLatestHeader(ctx, logger, slotC)
 
 				// to prevent disconnection due to multiple timeouts occurring very close in time, the subscription loop is canceled and restarted
 				if time.Since(lastTimeout) <= BeaconEventTimeout*2 {
+					logger.Warn("consecutive time out head events subscription, restarting subcription")
 					cancelLoop()
 					break EventSelect
 				}
