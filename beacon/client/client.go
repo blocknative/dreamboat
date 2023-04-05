@@ -367,7 +367,7 @@ func (h HeadEvent) Loggable() map[string]any {
 
 // Header is the block header from the beacon chain
 type Message struct {
-	Slot          uint64 `json:"slot"`
+	Slot          uint64 `json:"slot,string"`
 	ProposerIndex string `json:"proposer_index"`
 	ParentRoot    string `json:"parent_root"`
 	StateRoot     string `json:"state_root"`
