@@ -13,22 +13,26 @@ var (
 type DataType uint8
 
 const (
-	BlockBidAndTraceData DataType = iota
+	GetPayloadRequest DataType = iota
+	SubmitBlockRequest
 )
 
 func toString(data DataType) string {
 	switch data {
-	case BlockBidAndTraceData:
-		return "BlockBidAndTraceData"
+	case GetPayloadRequest:
+		return "GetPayloadRequest"
+	case SubmitBlockRequest:
+		return "SubmitBlockRequest"
 	default:
 		return "unknown"
 	}
 }
 
 type ExportRequest struct {
-	Dt   DataType
-	Data []byte
-	Id   string
+	DataType DataType
+	Data     []byte
+	Slot     uint64
+	Id       string
 
 	err chan error
 }

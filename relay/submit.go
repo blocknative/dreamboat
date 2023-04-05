@@ -13,6 +13,7 @@ import (
 
 	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
+	"github.com/blocknative/dreamboat/data"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -95,6 +96,22 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	isNewMax, err := rs.storeSubmission(ctx, m, sbr)
 	if err != nil {
 		return err
+	}
+
+	if rs.exp != nil {
+		go func() {
+			req := data.ExportRequest{
+				DataType: data.SubmitBlockRequest,
+				Data:     sbr.Raw(),
+				Slot:     sbr.Slot(),
+				Id:       fmt.Sprintf("%s,%s", tStart.String(), sbr.BlockHash().String()),
+			}
+			if err := rs.exp.Store(context.Background(), req); err != nil {
+				logger.WithError(err).Warn("failed to export")
+				return
+			}
+			logger.Debug("exported")
+		}()
 	}
 
 	processingTime := time.Since(tStart)

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -108,20 +107,8 @@ func (s *ExportService) Close() {
 }
 
 func (s *ExportService) Store(ctx context.Context, req ExportRequest) error {
-	// check if service is closed
-	select {
-	case <-s.shutdown:
-		return ErrClosed
-	default:
-	}
-
-	// submit request
-	select {
-	case s.requests <- req:
-	case <-s.shutdown:
-		return ErrClosed
-	case <-ctx.Done():
-		return ctx.Err()
+	if err := s.StoreAsync(ctx, req); err != nil {
+		return err
 	}
 
 	// wait for response
@@ -135,31 +122,35 @@ func (s *ExportService) Store(ctx context.Context, req ExportRequest) error {
 	}
 }
 
+func (s *ExportService) StoreAsync(ctx context.Context, req ExportRequest) error {
+	// check if service is closed
+	select {
+	case <-s.shutdown:
+		return ErrClosed
+	default:
+	}
+
+	// submit request
+	select {
+	case s.requests <- req:
+		return nil
+	case <-s.shutdown:
+		return ErrClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func writeToFile(file *os.File, req ExportRequest) error {
 	// Encode struct as JSON and write to base64 encoder
-	_, err := file.Write([]byte(strconv.Itoa(req.timestamp.Nanosecond())))
+	_, err := file.Write(append([]byte(req.Id), byte(';')))
 	if err != nil {
 		return fmt.Errorf("failed to write data timestamp: %w", err)
 	}
 
-	_, err = file.Write([]byte(";"))
-	if err != nil {
-		return fmt.Errorf("failed to write data sep ';': %w", err)
-	}
-
-	_, err = file.Write([]byte(req.Id))
-	if err != nil {
-		return fmt.Errorf("failed to write data identifier: %w", err)
-	}
-
-	_, err = file.Write([]byte(";"))
-	if err != nil {
-		return fmt.Errorf("failed to write data sep ';': %w", err)
-	}
-
 	// Create base64 encoder that writes directly to gzip writer
 	encoder := base64.NewEncoder(base64.StdEncoding, file)
-	encoder.Close()
+	defer encoder.Close()
 
 	// Create gzip writer that writes directly to file
 	writer := gzip.NewWriter(encoder)
@@ -201,7 +192,7 @@ func newWorker(id int, datadir string, logger log.Logger) *worker {
 
 func (w *worker) getOrCreateFile(req ExportRequest) (*os.File, error) {
 	// get
-	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, toString(req.Dt), req.slot, w.id)
+	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, toString(req.DataType), req.Slot, w.id)
 	fileWithTs, ok := w.files[filename]
 	if ok {
 		fileWithTs.ts = time.Now()

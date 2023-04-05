@@ -101,7 +101,7 @@ type Beacon interface {
 }
 
 type DataExporter interface {
-	SubmitGetPayloadRequest(ctx context.Context, req data.ExportRequest) error
+	Store(ctx context.Context, req data.ExportRequest) error
 }
 
 type RelayConfig struct {
@@ -390,15 +390,24 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	})
 
-	if rs.exp != nil {
+	var (
+		storeRequest = rs.exp != nil
+		storeTrace   = false
+	)
+	defer func() {
 		go func() {
-			if err := rs.exp.SubmitGetPayloadRequest(context.Background(), payloadRequest); err != nil {
-				logger.WithError(err).Error("failed to export payload")
-			} else {
-				logger.Debug("exported payload")
+			rs.runnignAsyncs.Add(1)
+			defer rs.runnignAsyncs.Done()
+
+			if storeRequest {
+				rs.storeGetPayloadRequest(logger, tStart, payloadRequest)
+			}
+
+			if storeTrace {
+				rs.storeTraceDelivered(logger, payloadRequest.Slot(), payload)
 			}
 		}()
-	}
+	}()
 
 	if rs.config.PublishBlock {
 		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
@@ -415,19 +424,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		time.Sleep(rs.config.BlockPublishDelay)
 	}
 
-	rs.runnignAsyncs.Add(1)
-	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
-		defer wg.Done()
-		trace, err := payload.ToDeliveredTrace(slot)
-		if err != nil {
-			l.WithField("event", "wrong_evidence_payload").WithError(err).Error("failed to generate delivered payload")
-			return
-		}
-
-		if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
-			l.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
-		}
-	}(rs.runnignAsyncs, logger, rs, payloadRequest.Slot())
+	storeTrace = true // everything was correct, so flag to store the trace
 
 	exp := payload.ExecutionPayload()
 	switch forkv {
@@ -467,6 +464,35 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	logger.Error("unknown fork failure")
 	return nil, errors.New("unknown fork")
 
+}
+
+func (rs *Relay) storeGetPayloadRequest(logger log.Logger, ts time.Time, payloadRequest structs.SignedBlindedBeaconBlock) {
+	req := data.ExportRequest{
+		DataType: data.GetPayloadRequest,
+		Data:     payloadRequest.Raw(),
+		Slot:     payloadRequest.Slot(),
+		Id:       fmt.Sprintf("%s,%s", ts.String(), payloadRequest.BlockHash().String()),
+	}
+
+	if err := rs.exp.Store(context.Background(), req); err != nil {
+		logger.WithError(err).Error("failed to export")
+		return
+	} else {
+		logger.Debug("exported")
+	}
+}
+
+func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload structs.BlockBidAndTrace) {
+	trace, err := payload.ToDeliveredTrace(slot)
+	if err != nil {
+		logger.WithField("event", "wrong_evidence_payload").WithError(err).Error("failed to generate delivered payload")
+		return
+	}
+
+	if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
+		logger.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
+		return
+	}
 }
 
 type TimeoutWaitGroup struct {

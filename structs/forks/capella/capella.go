@@ -14,6 +14,7 @@ import (
 )
 
 type SubmitBlockRequest struct {
+	CapellaRaw              []byte           `json:"-"`
 	CapellaMessage          types.BidTrace   `json:"message"`
 	CapellaExecutionPayload ExecutionPayload `json:"execution_payload"`
 	CapellaSignature        types.Signature  `json:"signature" ssz-size:"96"`
@@ -24,6 +25,10 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.CapellaMessage.Slot != 0 &&
 		b.CapellaExecutionPayload.EpBlockNumber > 0 &&
 		b.CapellaExecutionPayload.EpTimestamp > 0
+}
+
+func (b *SubmitBlockRequest) Raw() []byte {
+	return b.CapellaRaw
 }
 
 func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
