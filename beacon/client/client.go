@@ -147,10 +147,9 @@ func (b *beaconClient) manuallyFetchLatestHeader(ctx context.Context, logger log
 	}
 }
 
-// Returns proposer duties for every slot in this epoch
+// Returns the latest header from the beacon chain
 func (b *beaconClient) queryLatestHeader() (*HeaderRootObject, error) {
 	u := *b.beaconEndpoint
-	// https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties
 	u.Path = fmt.Sprintf("/eth/v1/beacon/headers")
 	resp := new(HeaderRootObject)
 
