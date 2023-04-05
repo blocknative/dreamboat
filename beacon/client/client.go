@@ -64,7 +64,27 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 		for {
 			select {
 			case <-timer.C:
-				logger.Warn("timed out head events subscription, restarting..")
+				logger.Warn("timed out head events subscription, restarting and manually querying latest header")
+
+				// fetch head slot manully
+				header, err := b.queryLatestHeader()
+				if err != nil {
+					logger.WithError(err).Warn("failed querying latest header manually")
+				} else if len(header.Data) != 0 {
+					logger.Warn("failed to query latest header manually, unexpected amount of header: expected 1 - got %d", len(header.Data))
+				}
+
+				// send slot to beacon manager to consume async
+				go func() {
+					select {
+					case slotC <- HeadEvent{Slot: header.Data[0].Header.Message.Slot}:
+					case <-time.After(structs.DurationPerSlot):
+						logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event after manual querying")
+					case <-ctx.Done():
+					}
+				}()
+
+				// cancel subscription loop to force reconnection
 				cancelLoop()
 				break EventSelect
 			case <-ctx.Done():
@@ -105,6 +125,20 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 
 		logger.WithError(err).Warn("beacon subscription failed, restarting...")
 	}
+}
+
+// Returns proposer duties for every slot in this epoch
+func (b *beaconClient) queryLatestHeader() (*HeaderRootObject, error) {
+	u := *b.beaconEndpoint
+	// https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties
+	u.Path = fmt.Sprintf("/eth/v1/beacon/headers")
+	resp := new(HeaderRootObject)
+
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/headers", "GET"))
+	defer t.ObserveDuration()
+
+	err := b.queryBeacon(&u, "GET", resp)
+	return resp, err
 }
 
 // Returns proposer duties for every slot in this epoch
@@ -316,16 +350,41 @@ type SyncStatusPayloadData struct {
 // HeadEvent is emitted when subscribing to head events
 type HeadEvent struct {
 	Slot  uint64 `json:"slot,string"`
-	Block string `json:"block"`
-	State string `json:"state"`
+	// Block string `json:"block"`
+	// State string `json:"state"`
 }
 
 func (h HeadEvent) Loggable() map[string]any {
 	return map[string]any{
 		"slot":  h.Slot,
-		"block": h.Block,
-		"state": h.State,
+		// "block": h.Block,
+		// "state": h.State,
 	}
+}
+
+// Header is the block header from the beacon chain
+type Message struct {
+	Slot          uint64 `json:"slot"`
+	ProposerIndex string `json:"proposer_index"`
+	ParentRoot    string `json:"parent_root"`
+	StateRoot     string `json:"state_root"`
+	BodyRoot      string `json:"body_root"`
+}
+
+type Header struct {
+	Message   Message `json:"message"`
+	Signature string  `json:"signature"`
+}
+
+type Data struct {
+	Root      string `json:"root"`
+	Canonical bool   `json:"canonical"`
+	Header    Header `json:"header"`
+}
+
+type HeaderRootObject struct {
+	ExecutionOptimistic bool   `json:"execution_optimistic"`
+	Data                []Data `json:"data"`
 }
 
 // RegisteredProposersResponse is the response for querying proposer duties
