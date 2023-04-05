@@ -20,6 +20,7 @@ import (
 
 const (
 	BeaconEventTimeout = structs.DurationPerSlot * 2
+	BeaconQueryTimeout = 20 * time.Second
 )
 
 var (
@@ -264,7 +265,10 @@ func (b *beaconClient) AttachMetrics(m *metrics.Metrics) {
 }
 
 func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
-	req, err := http.NewRequest(method, u.String(), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), BeaconQueryTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("invalid request for %s: %w", u, err)
 	}
