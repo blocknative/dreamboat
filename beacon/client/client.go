@@ -72,7 +72,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 
 				// to prevent disconnection due to multiple timeouts occurring very close in time, the subscription loop is canceled and restarted
 				if time.Since(lastTimeout) <= BeaconEventTimeout*2 {
-					logger.Warn("consecutive time out head events subscription, restarting subcription")
+					logger.Warn("consecutive timed out head events subscription, restarting subcription")
 					cancelLoop()
 					break EventSelect
 				}
