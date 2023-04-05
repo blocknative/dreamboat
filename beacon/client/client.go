@@ -9,12 +9,17 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/r3labs/sse/v2"
+)
+
+const (
+	BeaconEventTimeout = structs.DurationPerSlot * 2
 )
 
 var (
@@ -48,34 +53,58 @@ func NewBeaconClient(l log.Logger, endpoint string) (*beaconClient, error) {
 
 func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
 	logger := b.log.WithField("method", "SubscribeToHeadEvents")
+	defer logger.Debug("head events subscription stopped")
 
-	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String())
+	for {
+		loopCtx, cancelLoop := context.WithCancel(ctx)
+		timer := time.NewTimer(BeaconEventTimeout)
+		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
 
-	go func() {
-		defer logger.Debug("head events subscription stopped")
-
+	EventSelect:
 		for {
-			client := sse.NewClient(eventsURL)
-			err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
-				var head HeadEvent
-				if err := json.Unmarshal(msg.Data, &head); err != nil {
-					logger.WithError(err).Debug("event subscription failed")
-				}
+			select {
+			case <-timer.C:
+				logger.Warn("timed out head events subscription, restarting..")
+				cancelLoop()
+				break EventSelect
+			case <-ctx.Done():
+				cancelLoop()
+				return
+			}
+		}
+	}
+}
 
-				select {
-				case <-ctx.Done():
-					return
-				case slotC <- head:
-				}
-			})
+func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, timer *time.Timer, slotC chan<- HeadEvent) {
+	defer logger.Warn("subscription loop exited")
 
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	for {
+		client := sse.NewClient(fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String()))
+		err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
+			var head HeadEvent
+			if err := json.Unmarshal(msg.Data, &head); err != nil {
+				logger.WithError(err).Warn("event subscription failed")
 				return
 			}
 
-			logger.WithError(err).Debug("beacon subscription failed, restarting...")
+			timer.Reset(BeaconEventTimeout)
+
+			select {
+			case slotC <- head:
+			case <-time.After(structs.DurationPerSlot / 2): // relief pressure if
+				logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
+				return
+			case <-ctx.Done():
+				return
+			}
+		})
+
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
 		}
-	}()
+
+		logger.WithError(err).Warn("beacon subscription failed, restarting...")
+	}
 }
 
 // Returns proposer duties for every slot in this epoch

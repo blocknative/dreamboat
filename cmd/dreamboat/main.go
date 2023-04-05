@@ -176,7 +176,7 @@ var flags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
 		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
-		Value:   false,
+		Value:   true,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
 	&cli.StringFlag{
@@ -240,9 +240,9 @@ var flags = []cli.Flag{
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
 	&cli.DurationFlag{
-		Name:    "block-publication-delay",
-		Usage:   "Delay between lock publication and returning request to validator",
-		Value:   time.Second,
+		Name:    "max-block-publication-delay",
+		Usage:   "Maximum delay between block publication and returning request to validator",
+		Value:   500 * time.Millisecond,
 		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
 	},
 }
@@ -314,7 +314,7 @@ func run() cli.ActionFunc {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
 
-		beaconCli, err := initBeaconClients(c.Context, logger, c.StringSlice("beacon"), m)
+		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
@@ -440,7 +440,7 @@ func run() cli.ActionFunc {
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain: domainBuilder,
-			BlockPublishDelay:    c.Duration("block-publication-delay"),
+			MaxBlockPublishDelay: c.Duration("max-block-publication-delay"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
 				structs.ForkCapella:   capellaBeaconProposer},
@@ -562,7 +562,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
