@@ -400,8 +400,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 
 	// Delay the return of response block publishing
-	randomDuration := time.Duration(rand.Int63n(int64(rs.config.MaxBlockPublishDelay)))
-	time.Sleep(randomDuration)
+	randomDelay := time.Duration(rand.Int63n(int64(rs.config.MaxBlockPublishDelay)))
+	time.Sleep(randomDelay)
 
 	rs.runnignAsyncs.Add(1)
 	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
@@ -430,6 +430,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": bep.EpFeeRecipient,
 			"numTx":        len(bep.EpTransactions),
 			"bid":          payload.BidValue(),
+			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
@@ -446,6 +447,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": cep.EpFeeRecipient,
 			"numTx":        len(cep.EpTransactions),
 			"bid":          payload.BidValue(),
+			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),
