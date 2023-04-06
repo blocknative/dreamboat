@@ -244,7 +244,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
 	rs.runnignAsyncs.Add(1)
-	go func(wg *TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
+	go func(wg *structs.TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
 		defer wg.Done()
 		if err = rs.das.PutBuilderBlockSubmission(context.Background(), trace, newMax); err != nil {
 			rs.l.WithField("trace", trace).WithError(err).Error("error storing block builder submission")

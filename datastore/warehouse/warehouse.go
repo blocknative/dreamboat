@@ -7,15 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
-	"github.com/blocknative/dreamboat/beacon"
+	"github.com/blocknative/dreamboat/structs"
 	"github.com/lthibault/log"
 )
 
 var (
-	fileIdleTime   = beacon.DurationPerSlot
+	fileIdleTime   = structs.DurationPerSlot
 	filesPruneTick = fileIdleTime * 3
 	ErrClosed      = errors.New("closed")
 )
@@ -24,14 +23,14 @@ type Warehouse struct {
 	logger   log.Logger
 	requests chan StoreRequest
 
-	shutdown chan struct{}
-	wg       sync.WaitGroup
+	shutdown       chan struct{}
+	runningWorkers *structs.TimeoutWaitGroup
 
 	m WarehouseMetrics
 }
 
 func NewWarehouse(logger log.Logger, bufSize int) *Warehouse {
-	wh := &Warehouse{logger: logger, requests: make(chan StoreRequest)} // channel must be unbuffered, for not accepting requests that will not be handled
+	wh := &Warehouse{logger: logger.WithField("service", "warehouse"), requests: make(chan StoreRequest), runningWorkers: structs.NewTimeoutWaitGroup()} // channel must be unbuffered, for not accepting requests that will not be handled
 	wh.initMetrics()
 	return wh
 }
@@ -45,10 +44,13 @@ func (s *Warehouse) RunParallel(ctx context.Context, datadir string, numWorkers 
 }
 
 func (s *Warehouse) Run(ctx context.Context, datadir string, id int) {
-	s.wg.Add(1)
-	defer s.wg.Done()
+	s.runningWorkers.Add(1)
+	defer s.runningWorkers.Done()
 
-	logger := s.logger.WithField("id", id)
+	logger := s.logger.With(log.F{
+		"workerId": id,
+		"datadir":  datadir,
+	})
 
 	logger.Info("started")
 	defer logger.Info("stopped")
@@ -88,6 +90,12 @@ func (s *Warehouse) handleRequest(ctx context.Context, logger log.Logger, w *wor
 		logger.WithError(err).Error("failed to get/create file: %w", err)
 	}
 
+	if err == nil {
+		s.m.Writes.WithLabelValues(toString(req.DataType)).Add(1)
+	} else {
+		s.m.FailedWrites.WithLabelValues(toString(req.DataType)).Add(1)
+	}
+
 	select {
 	case req.err <- err: // if does not block, means it is buffered (1) channel
 	default:
@@ -105,9 +113,14 @@ func (s *Warehouse) handleRequest(ctx context.Context, logger log.Logger, w *wor
 	}
 }
 
-func (s *Warehouse) Close() {
+func (s *Warehouse) Close(ctx context.Context) {
 	close(s.shutdown) // prevent new requests from being added
-	s.wg.Wait()       // wait for inflight requests to complete
+
+	// wait for inflight requests to complete
+	select {
+	case <-s.runningWorkers.C():
+	case <-ctx.Done():
+	}
 }
 
 func (s *Warehouse) Store(ctx context.Context, req StoreRequest) error {

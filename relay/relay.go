@@ -147,11 +147,11 @@ type Relay struct {
 
 	m RelayMetrics
 
-	runnignAsyncs *TimeoutWaitGroup
+	runnignAsyncs *structs.TimeoutWaitGroup
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, exp Warehouse) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse) *Relay {
 	rs := &Relay{
 		d:                 d,
 		das:               das,
@@ -163,10 +163,10 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		cache:             cache,
 		vstore:            vstore,
 		beacon:            beacon,
-		wh:                exp,
+		wh:                wh,
 		beaconState:       beaconState,
 		lastDeliveredSlot: &atomic.Uint64{},
-		runnignAsyncs:     NewTimeoutWaitGroup(),
+		runnignAsyncs:     structs.NewTimeoutWaitGroup(),
 	}
 	rs.initMetrics()
 	return rs
@@ -510,32 +510,4 @@ func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload str
 		logger.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		return
 	}
-}
-
-type TimeoutWaitGroup struct {
-	running int64
-	done    chan struct{}
-}
-
-func NewTimeoutWaitGroup() *TimeoutWaitGroup {
-	return &TimeoutWaitGroup{done: make(chan struct{})}
-}
-
-func (wg *TimeoutWaitGroup) Add(i int64) {
-	select {
-	case <-wg.done:
-		return
-	default:
-	}
-	atomic.AddInt64(&wg.running, i)
-}
-
-func (wg *TimeoutWaitGroup) Done() {
-	if atomic.AddInt64(&wg.running, -1) == 0 {
-		close(wg.done)
-	}
-}
-
-func (wg *TimeoutWaitGroup) C() <-chan struct{} {
-	return wg.done
 }

@@ -458,7 +458,7 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		var rWarehouse relay.Warehouse
+		var relayWh *wh.Warehouse
 		if c.Int("warehouse-workers") > 0 {
 			warehouse := wh.NewWarehouse(logger, c.Int("warehouse-workers"))
 
@@ -479,7 +479,7 @@ func run() cli.ActionFunc {
 				"workers": c.Int("warehouse-workers"),
 			}).Info("initialized")
 
-			rWarehouse = warehouse
+			relayWh = warehouse
 		}
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
@@ -495,7 +495,7 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, rWarehouse)
+		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh)
 		r.AttachMetrics(m)
 
 		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
@@ -564,7 +564,7 @@ func run() cli.ActionFunc {
 		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		finish := make(chan struct{})
-		go closemanager(ctx, finish, validatorStoreManager, r)
+		go closemanager(ctx, finish, validatorStoreManager, r, relayWh)
 
 		select {
 		case <-finish:
@@ -621,9 +621,10 @@ func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics) (*b
 	return bcli.NewMultiBeaconClient(l, clients), nil
 }
 
-func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay) {
+func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay, relayWh *wh.Warehouse) {
 	regMgr.Close(ctx)
 	r.Close(ctx)
+	relayWh.Close(ctx)
 	finish <- struct{}{}
 }
 
