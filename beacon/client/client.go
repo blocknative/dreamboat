@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	BeaconEventTimeout = structs.DurationPerSlot + (structs.DurationPerSlot / 4)
-	BeaconQueryTimeout = 20 * time.Second
+	BeaconEventTimeout       = structs.DurationPerSlot + (structs.DurationPerSlot / 4)
+	BeaconConsecutiveTimeout = 3
+	BeaconQueryTimeout       = 20 * time.Second
 )
 
 var (
@@ -53,7 +54,7 @@ func NewBeaconClient(l log.Logger, endpoint string) (*beaconClient, error) {
 }
 
 func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
-	logger := b.log.WithField("method", "SubscribeToHeadEvents")
+	logger := b.log.With(log.F{"method": "SubscribeToHeadEvents", "beaconEventTimeout": BeaconEventTimeout, "beaconConsecutiveTimeout": BeaconConsecutiveTimeout})
 	defer logger.Debug("head events subscription stopped")
 
 	for {
@@ -62,6 +63,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
 
 		lastTimeout := time.Time{} // zeroed value time.Time
+		timeoutCounter := 0
 	EventSelect:
 		for {
 			select {
@@ -72,13 +74,18 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 
 				// to prevent disconnection due to multiple timeouts occurring very close in time, the subscription loop is canceled and restarted
 				if time.Since(lastTimeout) <= BeaconEventTimeout*2 {
-					logger.Warn("consecutive timed out head events subscription, restarting subcription")
-					cancelLoop()
-					break EventSelect
+					timeoutCounter++
+					if timeoutCounter >= BeaconConsecutiveTimeout {
+						logger.WithField("timeoutCounter", timeoutCounter).Debug("restarting subcription")
+						cancelLoop()
+						break EventSelect
+					}
+				} else {
+					timeoutCounter = 0
 				}
+
 				lastTimeout = time.Now()
 				timer.Reset(BeaconEventTimeout)
-
 			case <-ctx.Done():
 				cancelLoop()
 				return
