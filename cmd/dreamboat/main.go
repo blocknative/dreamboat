@@ -177,7 +177,7 @@ var flags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
 		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
-		Value:   false,
+		Value:   true,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
 	&cli.StringFlag{
@@ -241,24 +241,29 @@ var flags = []cli.Flag{
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
 	&cli.DurationFlag{
-		Name:    "block-publication-delay",
-		Usage:   "Delay between lock publication and returning request to validator",
-		Value:   time.Second,
+		Name:    "max-block-publication-delay",
+		Usage:   "Maximum delay between block publication and returning request to validator",
+		Value:   500 * time.Millisecond,
 		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
 	},
-
-	// data export flags
+	&cli.DurationFlag{
+		Name:    "getpayload-request-time-limit",
+		Usage:   "Time allowed for GetPayload requests since the slot started",
+		Value:   4 * time.Second,
+		EnvVars: []string{"GETPAYLOAD_REQUEST_TIME_LIMIT"},
+	},
+	// warehouse flags
 	&cli.StringFlag{
 		Name:    "warehouse-dir",
-		Usage:   "Data directory where the data is exported",
+		Usage:   "Data directory where the data is stored in the warehouse",
 		Value:   "/data/relay/export",
-		EnvVars: []string{"DATA_EXPORT_DIR"},
+		EnvVars: []string{"WAREHOUSE_DIR"},
 	},
 	&cli.IntFlag{
 		Name:    "warehouse-workers",
-		Usage:   "Number of workers for exporting the data, if 0, then data is not exported",
+		Usage:   "Number of workers for storing data in warehouse, if 0, then data is not exported",
 		Value:   0,
-		EnvVars: []string{"DATA_EXPORT_WORKERS"},
+		EnvVars: []string{"WAREHOUSE_WORKERS"},
 	},
 }
 
@@ -329,7 +334,7 @@ func run() cli.ActionFunc {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
 
-		beaconCli, err := initBeaconClients(c.Context, logger, c.StringSlice("beacon"), m)
+		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
@@ -478,8 +483,9 @@ func run() cli.ActionFunc {
 		}
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
-			BuilderSigningDomain: domainBuilder,
-			BlockPublishDelay:    c.Duration("block-publication-delay"),
+			BuilderSigningDomain:       domainBuilder,
+			MaxBlockPublishDelay:       c.Duration("max-block-publication-delay"),
+			GetPayloadRequestTimeLimit: c.Duration("getpayload-request-time-limit"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
 				structs.ForkCapella:   capellaBeaconProposer},
@@ -601,7 +607,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {

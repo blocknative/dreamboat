@@ -9,12 +9,18 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/r3labs/sse/v2"
+)
+
+const (
+	BeaconEventTimeout = structs.DurationPerSlot + (structs.DurationPerSlot / 4)
+	BeaconQueryTimeout = 20 * time.Second
 )
 
 var (
@@ -48,34 +54,111 @@ func NewBeaconClient(l log.Logger, endpoint string) (*beaconClient, error) {
 
 func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
 	logger := b.log.WithField("method", "SubscribeToHeadEvents")
+	defer logger.Debug("head events subscription stopped")
 
-	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String())
+	for {
+		loopCtx, cancelLoop := context.WithCancel(ctx)
+		timer := time.NewTimer(BeaconEventTimeout)
+		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
 
-	go func() {
-		defer logger.Debug("head events subscription stopped")
-
+		lastTimeout := time.Time{} // zeroed value time.Time
+	EventSelect:
 		for {
-			client := sse.NewClient(eventsURL)
-			err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
-				var head HeadEvent
-				if err := json.Unmarshal(msg.Data, &head); err != nil {
-					logger.WithError(err).Debug("event subscription failed")
-				}
+			select {
+			case <-timer.C:
+				logger.Debug("timed out head events subscription, manually querying latest header")
 
-				select {
-				case <-ctx.Done():
-					return
-				case slotC <- head:
-				}
-			})
+				go b.manuallyFetchLatestHeader(ctx, logger, slotC)
 
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				// to prevent disconnection due to multiple timeouts occurring very close in time, the subscription loop is canceled and restarted
+				if time.Since(lastTimeout) <= BeaconEventTimeout*2 {
+					logger.Warn("consecutive timed out head events subscription, restarting subcription")
+					cancelLoop()
+					break EventSelect
+				}
+				lastTimeout = time.Now()
+				timer.Reset(BeaconEventTimeout)
+
+			case <-ctx.Done():
+				cancelLoop()
+				return
+			}
+		}
+	}
+}
+
+func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, timer *time.Timer, slotC chan<- HeadEvent) {
+	logger.Debug("subscription loop started")
+	defer logger.Warn("subscription loop exited")
+
+	for {
+		client := sse.NewClient(fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String()))
+		err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
+			var head HeadEvent
+			if err := json.Unmarshal(msg.Data, &head); err != nil {
+				logger.WithError(err).Warn("event subscription failed")
 				return
 			}
 
-			logger.WithError(err).Debug("beacon subscription failed, restarting...")
+			timer.Reset(BeaconEventTimeout)
+
+			select {
+			case slotC <- head:
+			case <-time.After(structs.DurationPerSlot / 2): // relief pressure
+				logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
+				return
+			case <-ctx.Done():
+				logger.WithError(ctx.Err()).Warn("context cancelled waiting to consume head event after manual querying")
+				return
+			}
+		})
+
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
 		}
-	}()
+
+		logger.WithError(err).Warn("beacon subscription failed, restarting...")
+	}
+}
+
+func (b *beaconClient) manuallyFetchLatestHeader(ctx context.Context, logger log.Logger, slotC chan HeadEvent) {
+	// fetch head slot manully
+	header, err := b.queryLatestHeader()
+	if err != nil {
+		logger.WithError(err).Warn("failed querying latest header manually")
+		return
+	} else if len(header.Data) != 1 {
+		logger.Warnf("failed to query latest header manually, unexpected amount of header: expected 1 - got %d", len(header.Data))
+		return
+	}
+
+	// send slot to beacon manager to consume async
+	event := HeadEvent{Slot: header.Data[0].Header.Message.Slot}
+	logger.With(event).Debug("manually fetched latest beacon header")
+
+	select {
+	case slotC <- event:
+		return
+	case <-time.After(structs.DurationPerSlot / 2):
+		logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event after manual querying")
+		return
+	case <-ctx.Done():
+		logger.WithError(ctx.Err()).Warn("context cancelled waiting to consume head event after manual querying")
+		return
+	}
+}
+
+// Returns the latest header from the beacon chain
+func (b *beaconClient) queryLatestHeader() (*HeaderRootObject, error) {
+	u := *b.beaconEndpoint
+	u.Path = fmt.Sprintf("/eth/v1/beacon/headers")
+	resp := new(HeaderRootObject)
+
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/headers", "GET"))
+	defer t.ObserveDuration()
+
+	err := b.queryBeacon(&u, "GET", resp)
+	return resp, err
 }
 
 // Returns proposer duties for every slot in this epoch
@@ -235,7 +318,10 @@ func (b *beaconClient) AttachMetrics(m *metrics.Metrics) {
 }
 
 func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
-	req, err := http.NewRequest(method, u.String(), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), BeaconQueryTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("invalid request for %s: %w", u, err)
 	}
@@ -286,17 +372,42 @@ type SyncStatusPayloadData struct {
 
 // HeadEvent is emitted when subscribing to head events
 type HeadEvent struct {
-	Slot  uint64 `json:"slot,string"`
-	Block string `json:"block"`
-	State string `json:"state"`
+	Slot uint64 `json:"slot,string"`
+	// Block string `json:"block"`
+	// State string `json:"state"`
 }
 
 func (h HeadEvent) Loggable() map[string]any {
 	return map[string]any{
-		"slot":  h.Slot,
-		"block": h.Block,
-		"state": h.State,
+		"slot": h.Slot,
+		// "block": h.Block,
+		// "state": h.State,
 	}
+}
+
+// Header is the block header from the beacon chain
+type Message struct {
+	Slot          uint64 `json:"slot,string"`
+	ProposerIndex string `json:"proposer_index"`
+	ParentRoot    string `json:"parent_root"`
+	StateRoot     string `json:"state_root"`
+	BodyRoot      string `json:"body_root"`
+}
+
+type Header struct {
+	Message   Message `json:"message"`
+	Signature string  `json:"signature"`
+}
+
+type Data struct {
+	Root      string `json:"root"`
+	Canonical bool   `json:"canonical"`
+	Header    Header `json:"header"`
+}
+
+type HeaderRootObject struct {
+	ExecutionOptimistic bool   `json:"execution_optimistic"`
+	Data                []Data `json:"data"`
 }
 
 // RegisteredProposersResponse is the response for querying proposer duties

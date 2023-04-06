@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -43,6 +44,7 @@ var (
 	ErrEmptyBlock              = errors.New("block is empty")
 	ErrWrongPayload            = errors.New("wrong publish payload")
 	ErrFailedToPublish         = errors.New("failed to publish block")
+	ErrLateRequest             = errors.New("request too late")
 )
 
 type BlockValidationClient interface {
@@ -75,7 +77,7 @@ type Verifier interface {
 }
 
 type DataAPIStore interface {
-	// CheckSlotDelivered(context.Context, uint64) (bool, error)
+	//CheckSlotDelivered(context.Context, uint64) (bool, error)
 
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
@@ -105,11 +107,12 @@ type Warehouse interface {
 }
 
 type RelayConfig struct {
-	BuilderSigningDomain  types.Domain
-	ProposerSigningDomain map[structs.ForkVersion]types.Domain
-	PubKey                types.PublicKey
-	SecretKey             *bls.SecretKey
-	BlockPublishDelay     time.Duration
+	BuilderSigningDomain       types.Domain
+	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
+	PubKey                     types.PublicKey
+	SecretKey                  *bls.SecretKey
+	MaxBlockPublishDelay       time.Duration
+	GetPayloadRequestTimeLimit time.Duration
 
 	AllowedListedBuilders map[[48]byte]struct{}
 
@@ -327,8 +330,22 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
+	logger := rs.l.With(log.F{
+		"method":       "GetPayload",
+		"slot":         payloadRequest.Slot(),
+		"block_number": payloadRequest.BlockNumber(),
+		"blockHash":    payloadRequest.BlockHash(),
+	})
+
 	if len(payloadRequest.Signature()) != 96 {
 		return nil, ErrInvalidSignature
+	}
+
+	slotStart := (rs.beaconState.Genesis().GenesisTime + (payloadRequest.Slot() * 12)) * 1000
+	now := uint64(time.Now().UnixMilli())
+	if msIntoSlot := now - slotStart; msIntoSlot > uint64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
+		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too late")
+		return nil, ErrLateRequest
 	}
 
 	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
@@ -342,13 +359,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, err
 	}
 
-	logger := rs.l.With(log.F{
-		"method":       "GetPayload",
-		"slot":         payloadRequest.Slot(),
-		"block_number": payloadRequest.BlockNumber(),
-		"blockHash":    payloadRequest.BlockHash(),
-		"pubkey":       pk,
-	})
+	logger = logger.WithField("pubkey", pk)
 	logger.WithField("event", "payload_requested").Info("payload requested")
 
 	forkv := rs.beaconState.ForkVersion(structs.Slot(payloadRequest.Slot()))
@@ -382,6 +393,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
 		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
+	} else {
+		return nil, ErrPayloadAlreadyDelivered
 	}
 
 	logger = logger.With(log.F{
@@ -420,11 +433,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			return nil, ErrFailedToPublish
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
-		// Delay the return of response block publishing
-		time.Sleep(rs.config.BlockPublishDelay)
 	}
 
 	storeTrace = true // everything was correct, so flag to store the trace
+
+	// Delay the return of response block publishing
+	randomDelay := time.Duration(rand.Int63n(int64(rs.config.MaxBlockPublishDelay)))
+	time.Sleep(randomDelay)
 
 	exp := payload.ExecutionPayload()
 	switch forkv {
@@ -439,6 +454,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": bep.EpFeeRecipient,
 			"numTx":        len(bep.EpTransactions),
 			"bid":          payload.BidValue(),
+			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
@@ -455,6 +471,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": cep.EpFeeRecipient,
 			"numTx":        len(cep.EpTransactions),
 			"bid":          payload.BidValue(),
+			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),
