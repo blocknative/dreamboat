@@ -13,7 +13,7 @@ import (
 
 	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
-	"github.com/blocknative/dreamboat/data"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -98,15 +98,15 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 		return err
 	}
 
-	if rs.exp != nil {
+	if rs.wh != nil {
 		go func() {
-			req := data.ExportRequest{
-				DataType: data.SubmitBlockRequest,
+			req := wh.StoreRequest{
+				DataType: wh.SubmitBlockRequest,
 				Data:     sbr.Raw(),
 				Slot:     sbr.Slot(),
 				Id:       fmt.Sprintf("%s,%s", tStart.String(), sbr.BlockHash().String()),
 			}
-			if err := rs.exp.Store(context.Background(), req); err != nil {
+			if err := rs.wh.Store(context.Background(), req); err != nil {
 				logger.WithError(err).Warn("failed to export")
 				return
 			}

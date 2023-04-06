@@ -1,4 +1,4 @@
-package data
+package warehouse
 
 import (
 	"compress/gzip"
@@ -20,19 +20,23 @@ var (
 	ErrClosed      = errors.New("closed")
 )
 
-type ExportService struct {
+type Warehouse struct {
 	logger   log.Logger
-	requests chan ExportRequest
+	requests chan StoreRequest
 
 	shutdown chan struct{}
 	wg       sync.WaitGroup
+
+	m WarehouseMetrics
 }
 
-func NewExportService(logger log.Logger, bufSize int) *ExportService {
-	return &ExportService{logger: logger, requests: make(chan ExportRequest)} // channel must be unbuffered, for not accepting requests that will not be handled
+func NewWarehouse(logger log.Logger, bufSize int) *Warehouse {
+	wh := &Warehouse{logger: logger, requests: make(chan StoreRequest)} // channel must be unbuffered, for not accepting requests that will not be handled
+	wh.initMetrics()
+	return wh
 }
 
-func (s *ExportService) RunParallel(ctx context.Context, datadir string, numWorkers int) error {
+func (s *Warehouse) RunParallel(ctx context.Context, datadir string, numWorkers int) error {
 	for i := 0; i < numWorkers; i++ {
 		go s.Run(ctx, datadir, i)
 	}
@@ -40,7 +44,7 @@ func (s *ExportService) RunParallel(ctx context.Context, datadir string, numWork
 	return nil
 }
 
-func (s *ExportService) Run(ctx context.Context, datadir string, id int) {
+func (s *Warehouse) Run(ctx context.Context, datadir string, id int) {
 	s.wg.Add(1)
 	defer s.wg.Done()
 
@@ -69,7 +73,7 @@ func (s *ExportService) Run(ctx context.Context, datadir string, id int) {
 	}
 }
 
-func (s *ExportService) handleRequest(ctx context.Context, logger log.Logger, w *worker, req ExportRequest) {
+func (s *Warehouse) handleRequest(ctx context.Context, logger log.Logger, w *worker, req StoreRequest) {
 	file, err := w.getOrCreateFile(req)
 	if err == nil {
 		err = writeToFile(file, req)
@@ -101,12 +105,12 @@ func (s *ExportService) handleRequest(ctx context.Context, logger log.Logger, w 
 	}
 }
 
-func (s *ExportService) Close() {
+func (s *Warehouse) Close() {
 	close(s.shutdown) // prevent new requests from being added
 	s.wg.Wait()       // wait for inflight requests to complete
 }
 
-func (s *ExportService) Store(ctx context.Context, req ExportRequest) error {
+func (s *Warehouse) Store(ctx context.Context, req StoreRequest) error {
 	if err := s.StoreAsync(ctx, req); err != nil {
 		return err
 	}
@@ -122,7 +126,7 @@ func (s *ExportService) Store(ctx context.Context, req ExportRequest) error {
 	}
 }
 
-func (s *ExportService) StoreAsync(ctx context.Context, req ExportRequest) error {
+func (s *Warehouse) StoreAsync(ctx context.Context, req StoreRequest) error {
 	// check if service is closed
 	select {
 	case <-s.shutdown:
@@ -141,7 +145,7 @@ func (s *ExportService) StoreAsync(ctx context.Context, req ExportRequest) error
 	}
 }
 
-func writeToFile(file *os.File, req ExportRequest) error {
+func writeToFile(file *os.File, req StoreRequest) error {
 	// Encode struct as JSON and write to base64 encoder
 	_, err := file.Write(append([]byte(req.Id), byte(';')))
 	if err != nil {
@@ -190,7 +194,7 @@ func newWorker(id int, datadir string, logger log.Logger) *worker {
 	return &worker{id: id, datadir: datadir, files: make(map[string]fileWithTimestamp), logger: logger}
 }
 
-func (w *worker) getOrCreateFile(req ExportRequest) (*os.File, error) {
+func (w *worker) getOrCreateFile(req StoreRequest) (*os.File, error) {
 	// get
 	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, toString(req.DataType), req.Slot, w.id)
 	fileWithTs, ok := w.files[filename]

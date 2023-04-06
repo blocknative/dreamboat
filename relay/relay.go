@@ -14,7 +14,7 @@ import (
 
 	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
-	"github.com/blocknative/dreamboat/data"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -100,8 +100,8 @@ type Beacon interface {
 	PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) error
 }
 
-type DataExporter interface {
-	Store(ctx context.Context, req data.ExportRequest) error
+type Warehouse interface {
+	Store(ctx context.Context, req wh.StoreRequest) error
 }
 
 type RelayConfig struct {
@@ -138,7 +138,7 @@ type Relay struct {
 	beacon      Beacon
 	beaconState State
 
-	exp DataExporter
+	wh Warehouse
 
 	lastDeliveredSlot *atomic.Uint64
 
@@ -148,7 +148,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, exp DataExporter) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, exp Warehouse) *Relay {
 	rs := &Relay{
 		d:                 d,
 		das:               das,
@@ -160,7 +160,7 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		cache:             cache,
 		vstore:            vstore,
 		beacon:            beacon,
-		exp:               exp,
+		wh:                exp,
 		beaconState:       beaconState,
 		lastDeliveredSlot: &atomic.Uint64{},
 		runnignAsyncs:     NewTimeoutWaitGroup(),
@@ -391,7 +391,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	})
 
 	var (
-		storeRequest = rs.exp != nil
+		storeRequest = rs.wh != nil
 		storeTrace   = false
 	)
 	defer func() {
@@ -467,14 +467,14 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 }
 
 func (rs *Relay) storeGetPayloadRequest(logger log.Logger, ts time.Time, payloadRequest structs.SignedBlindedBeaconBlock) {
-	req := data.ExportRequest{
-		DataType: data.GetPayloadRequest,
+	req := wh.StoreRequest{
+		DataType: wh.GetPayloadRequest,
 		Data:     payloadRequest.Raw(),
 		Slot:     payloadRequest.Slot(),
 		Id:       fmt.Sprintf("%s,%s", ts.String(), payloadRequest.BlockHash().String()),
 	}
 
-	if err := rs.exp.Store(context.Background(), req); err != nil {
+	if err := rs.wh.Store(context.Background(), req); err != nil {
 		logger.WithError(err).Error("failed to export")
 		return
 	} else {

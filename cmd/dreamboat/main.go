@@ -22,7 +22,7 @@ import (
 	"github.com/blocknative/dreamboat/client/sim/transport/gethhttp"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethrpc"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethws"
-	"github.com/blocknative/dreamboat/data"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
 
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
@@ -249,13 +249,13 @@ var flags = []cli.Flag{
 
 	// data export flags
 	&cli.StringFlag{
-		Name:    "data-export-dir",
+		Name:    "warehouse-dir",
 		Usage:   "Data directory where the data is exported",
 		Value:   "/data/relay/export",
 		EnvVars: []string{"DATA_EXPORT_DIR"},
 	},
 	&cli.IntFlag{
-		Name:    "data-export-workers",
+		Name:    "warehouse-workers",
 		Usage:   "Number of workers for exporting the data, if 0, then data is not exported",
 		Value:   0,
 		EnvVars: []string{"DATA_EXPORT_WORKERS"},
@@ -453,26 +453,28 @@ func run() cli.ActionFunc {
 			return err
 		}
 
-		var exporter relay.DataExporter
-		if c.Int("data-export-workers") > 0 {
-			exportService := data.NewExportService(logger, c.Int("data-export-workers"))
+		var rWarehouse relay.Warehouse
+		if c.Int("warehouse-workers") > 0 {
+			warehouse := wh.NewWarehouse(logger, c.Int("warehouse-workers"))
 
-			datadir := c.String("data-export-dir")
+			datadir := c.String("warehouse-dir")
 			if err := os.MkdirAll(datadir, 0755); err != nil {
 				return fmt.Errorf("failed to create datadir: %w", err)
 			}
 
-			if err := exportService.RunParallel(c.Context, datadir, c.Int("data-export-workers")); err != nil {
+			if err := warehouse.RunParallel(c.Context, datadir, c.Int("warehouse-workers")); err != nil {
 				return fmt.Errorf("failed to run data exporter: %w", err)
 			}
 
+			warehouse.AttachMetrics(m)
+
 			logger.With(log.F{
-				"service": "data-exporter",
-				"datadir": c.String("data-export-dir"),
-				"workers": c.Int("data-export-workers"),
+				"service": "warehouseer",
+				"datadir": c.String("warehouse-dir"),
+				"workers": c.Int("warehouse-workers"),
 			}).Info("initialized")
 
-			exporter = exportService
+			rWarehouse = warehouse
 		}
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
@@ -487,7 +489,7 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, exporter)
+		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, rWarehouse)
 		r.AttachMetrics(m)
 
 		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))

@@ -1,4 +1,4 @@
-package data
+package warehouse
 
 import (
 	"errors"
@@ -28,7 +28,7 @@ func toString(data DataType) string {
 	}
 }
 
-type ExportRequest struct {
+type StoreRequest struct {
 	DataType DataType
 	Data     []byte
 	Slot     uint64
@@ -37,7 +37,7 @@ type ExportRequest struct {
 	err chan error
 }
 
-func (req ExportRequest) Loggable() map[string]any {
+func (req StoreRequest) Loggable() map[string]any {
 	return map[string]any{
 		"id": req.Id,
 	}
