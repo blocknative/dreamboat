@@ -219,9 +219,11 @@ func (s *Manager) waitSynced(ctx context.Context, client BeaconClient) (*bcli.Sy
 
 	for {
 		status, err := client.SyncStatus()
-		if err != nil && !errors.Is(err, bcli.ErrBeaconNodeSyncing) {
-			return nil, err
-		} else if err == nil && !status.IsSyncing {
+		if err != nil {
+			if !errors.Is(err, bcli.ErrBeaconNodeSyncing) {
+				return nil, err
+			}
+		} else if !status.IsSyncing {
 			return status, nil
 		}
 
