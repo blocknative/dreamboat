@@ -76,7 +76,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 				if time.Since(lastTimeout) <= BeaconEventTimeout*2 {
 					timeoutCounter++
 					if timeoutCounter >= BeaconConsecutiveTimeout {
-						logger.WithField("timeoutCounter", timeoutCounter).Debug("restarting subcription")
+						logger.WithField("timeoutCounter", timeoutCounter).Warn("restarting subcription")
 						cancelLoop()
 						break EventSelect
 					}
