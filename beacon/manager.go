@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	ErrUnkownFork    = errors.New("beacon node fork is unknown")
+	ErrUnkownFork = errors.New("beacon node fork is unknown")
 )
 
 type Datastore interface {
@@ -219,8 +219,10 @@ func (s *Manager) waitSynced(ctx context.Context, client BeaconClient) (*bcli.Sy
 
 	for {
 		status, err := client.SyncStatus()
-		if err != nil || !status.IsSyncing {
-			return status, err
+		if err != nil && !errors.Is(err, bcli.ErrBeaconNodeSyncing) {
+			return nil, err
+		} else if err == nil && !status.IsSyncing {
+			return status, nil
 		}
 
 		logger.Debug("beacon clients are syncing...")
