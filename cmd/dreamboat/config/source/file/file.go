@@ -42,7 +42,11 @@ func (s *Source) Load() (c config.Config, e error) {
 
 func parseIni(r io.Reader) (c config.Config, e error) {
 
-	cfg := &config.Config{}
+	cfg := &config.Config{
+		Api: config.ApiConfig{
+			SubmissionLimitRate: 2,
+		},
+	}
 
 	elem := reflect.ValueOf(cfg).Elem()
 	t := elem.Type()
@@ -64,6 +68,7 @@ func parseIni(r io.Reader) (c config.Config, e error) {
 			if !ok {
 				return c, errors.New("parse failure")
 			}
+			tag = strings.TrimSpace(tag)
 
 			for i := 0; i < t.NumField(); i++ {
 				f := t.Field(i)
@@ -73,20 +78,19 @@ func parseIni(r io.Reader) (c config.Config, e error) {
 					continue
 				}
 			}
-
 		default:
 			if len(line) == 0 {
 				continue
 			}
-			key, value, found := strings.Cut(line, " = ")
+			key, value, found := strings.Cut(line, "=")
 			if !found {
 				return c, errors.New("parse failure")
 			}
 
-			if err := parseParam(currentSection, key, value); err != nil {
+			if err := parseParam(currentSection, strings.TrimSpace(key), strings.TrimSpace(value)); err != nil {
 				return c, err
 			}
-			log.Println("currentSection", currentSection)
+			// log.Println("currentSection", currentSection)
 		}
 	}
 
@@ -98,6 +102,8 @@ func parseIni(r io.Reader) (c config.Config, e error) {
 }
 
 func parseParam(currentSection *reflect.Value, key, value string) error {
+	key, rest, _ := strings.Cut(key, ".")
+
 	t := currentSection.Type()
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -113,6 +119,7 @@ func parseParam(currentSection *reflect.Value, key, value string) error {
 				}
 				el.Set(reflect.ValueOf(b))
 				continue
+			default:
 			}
 
 			switch f.Type.Kind() {
@@ -121,28 +128,40 @@ func parseParam(currentSection *reflect.Value, key, value string) error {
 				if err != nil {
 					return err
 				}
+				if el.Bool() != b {
+					log.Println("different value, setting b ", b)
+					el.SetBool(b)
+				}
 
-				el.SetBool(b)
 			case reflect.Int:
 				intP, err := paramParseInt(v)
 				if err != nil {
 					return err
 				}
-				el.SetInt(intP)
+				if el.Int() != intP {
+					log.Println("different value, setting i ", intP)
+					el.SetInt(intP)
+				}
+
 			case reflect.String:
 				s, err := paramParseString(v)
 				if err != nil {
 					return err
 				}
-				el.SetString(s)
-			case reflect.Struct:
+				if el.String() != s {
+					log.Println("different value, setting s ", s)
+					el.SetString(s)
+				}
 
-				//log.Println("struct type", currentSection.Kind())
-				//parseParam(currentSection *reflect.Value, key, value string) error
+			case reflect.Struct:
+				err := parseParam(&el, rest, value)
+				if err != nil {
+					return err
+				}
 			default:
 				log.Println("unsupported type", currentSection.Kind())
 			}
-			log.Println("key", key, value, currentSection.Kind(), el)
+			//log.Println("key", key, value, currentSection.Kind(), el)
 		}
 	}
 	return nil
@@ -169,19 +188,3 @@ func paramParseTimeDuration(value string) (time.Duration, error) {
 func paramParseInt(value string) (int64, error) {
 	return strconv.ParseInt(value, 10, 64)
 }
-
-/*
-func paramParseStruct(currentSection *reflect.Value) (string, error) {
-
-	switch currentSection.Kind().String() {
-	case "time.Duration":
-		s, err := paramParseTimeDuration(v)
-		if err != nil {
-			return err
-		}
-		el.SetString(s)
-		f.name
-	}
-}
-
-*/
