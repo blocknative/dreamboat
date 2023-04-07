@@ -19,8 +19,6 @@ require (
 	github.com/sirupsen/logrus v1.9.2
 	github.com/stretchr/testify v1.8.2
 	github.com/supranational/blst v0.3.10
-	github.com/urfave/cli/v2 v2.25.0
-	go.uber.org/atomic v1.11.0
 	golang.org/x/exp v0.0.0-20230307190834-24139beb5833
 	golang.org/x/time v0.3.0
 )
@@ -78,6 +76,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
+	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/crypto v0.8.0 // indirect

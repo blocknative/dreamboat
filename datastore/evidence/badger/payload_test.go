@@ -8,11 +8,11 @@ import (
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/google/uuid"
 	ds "github.com/ipfs/go-datastore"
 
-	dbbadger "github.com/ipfs/go-ds-badger2"
-
 	"github.com/blocknative/dreamboat/datastore/evidence/badger"
+	tBadger "github.com/blocknative/dreamboat/datastore/transport/badger"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,8 +22,10 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	store, err := dbbadger.NewDatastore("/tmp/EvidenceBadger", &dbbadger.DefaultOptions)
+	store, err := tBadger.Open("/tmp/" + t.Name() + uuid.New().String())
 	require.NoError(t, err)
+	defer store.Close()
+
 	d := badger.NewDatastore(store, store.DB, time.Hour)
 	blockNum := uint64(rand.Int())
 

@@ -6,10 +6,10 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/lthibault/log"
-	uberatomic "go.uber.org/atomic"
 )
 
 var (
@@ -36,7 +36,7 @@ type MultiBeaconClient struct {
 	Log     log.Logger
 	Clients []BeaconNode
 
-	bestBeaconIndex uberatomic.Int64
+	bestBeaconIndex atomic.Int64
 }
 
 func NewMultiBeaconClient(l log.Logger, clients []BeaconNode) *MultiBeaconClient {
