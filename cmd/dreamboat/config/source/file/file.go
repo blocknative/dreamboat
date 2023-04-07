@@ -24,29 +24,22 @@ func NewSource(filepath string) (s *Source) {
 	}
 }
 
-func (s *Source) Load() (c config.Config, e error) {
+func (s *Source) Load(c *config.Config) (e error) {
 	fh, err := os.Open(s.filepath)
 	if err != nil {
-		return c, err
+		return err
 	}
 	defer fh.Close()
 
 	// only ini suported
-	c, err = parseIni(fh)
-	if err != nil {
-		return c, err
+	if err = parseIni(fh, c); err != nil {
+		return err
 	}
 
-	return c, nil
+	return nil
 }
 
-func parseIni(r io.Reader) (c config.Config, e error) {
-
-	cfg := &config.Config{
-		Api: config.ApiConfig{
-			SubmissionLimitRate: 2,
-		},
-	}
+func parseIni(r io.Reader, cfg *config.Config) (e error) {
 
 	elem := reflect.ValueOf(cfg).Elem()
 	t := elem.Type()
@@ -66,7 +59,7 @@ func parseIni(r io.Reader) (c config.Config, e error) {
 		case '[': // section
 			tag, _, ok := strings.Cut(line[1:], "]")
 			if !ok {
-				return c, errors.New("parse failure")
+				return errors.New("parse failure")
 			}
 			tag = strings.TrimSpace(tag)
 
@@ -84,21 +77,20 @@ func parseIni(r io.Reader) (c config.Config, e error) {
 			}
 			key, value, found := strings.Cut(line, "=")
 			if !found {
-				return c, errors.New("parse failure")
+				return errors.New("parse failure")
 			}
 
 			if err := parseParam(currentSection, strings.TrimSpace(key), strings.TrimSpace(value)); err != nil {
-				return c, err
+				return err
 			}
-			// log.Println("currentSection", currentSection)
 		}
 	}
 
 	if err := s.Err(); err != nil {
-		return c, err
+		return err
 	}
 
-	return *cfg, nil
+	return nil
 }
 
 func parseParam(currentSection *reflect.Value, key, value string) error {

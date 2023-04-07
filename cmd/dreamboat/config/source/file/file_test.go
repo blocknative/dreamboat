@@ -29,13 +29,15 @@ func TestSource_Load(t *testing.T) {
 			s := &Source{
 				filepath: tt.fields.filepath,
 			}
-			gotC, err := s.Load()
+			c := &config.Config{}
+
+			err := s.Load(c)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Source.Load() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(gotC, tt.wantC) {
-				t.Errorf("Source.Load() = %v, want %v", gotC, tt.wantC)
+			if !reflect.DeepEqual(c, tt.wantC) {
+				t.Errorf("Source.Load() = %v, want %v", c, tt.wantC)
 			}
 		})
 	}

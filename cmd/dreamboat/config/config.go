@@ -5,10 +5,10 @@ import "time"
 type Config struct {
 
 	// http server on which relay serves external connections
-	ExternalHttp HTTPConfig `config:"external_http"` // localhost:18550
+	ExternalHttp HTTPConfig `config:"external_http"`
 
 	// internal port for metrics profiling and management
-	InternalHttp HTTPConfig `config:"internal_http"` //"0.0.0.0:19550"
+	InternalHttp HTTPConfig `config:"internal_http"`
 
 	//
 	Api ApiConfig `config:"api"`
