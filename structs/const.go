@@ -1,8 +1,11 @@
 package structs
 
-import "time"
+import (
+	"time"
+)
 
 const (
-	SlotsPerEpoch   Slot = 32
-	DurationPerSlot      = time.Second * 12
+	SlotsPerEpoch    Slot = 32
+	DurationPerSlot       = time.Second * 12
+	DurationPerEpoch      = DurationPerSlot * time.Duration(SlotsPerEpoch)
 )

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +41,9 @@ var (
 	ErrInvalidTimestamp        = errors.New("invalid timestamp")
 	ErrInvalidSlot             = errors.New("invalid slot")
 	ErrEmptyBlock              = errors.New("block is empty")
+	ErrWrongPayload            = errors.New("wrong publish payload")
+	ErrFailedToPublish         = errors.New("failed to publish block")
+	ErrLateRequest             = errors.New("request too late")
 )
 
 type BlockValidationClient interface {
@@ -72,7 +76,7 @@ type Verifier interface {
 }
 
 type DataAPIStore interface {
-	// CheckSlotDelivered(context.Context, uint64) (bool, error)
+	//CheckSlotDelivered(context.Context, uint64) (bool, error)
 
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
 	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
@@ -101,14 +105,16 @@ type Auctioneer interface {
 }
 
 type Beacon interface {
-	PublishBlock(block structs.SignedBeaconBlock) error
+	PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) error
 }
 
 type RelayConfig struct {
-	BuilderSigningDomain  types.Domain
-	ProposerSigningDomain map[structs.ForkVersion]types.Domain
-	PubKey                types.PublicKey
-	SecretKey             *bls.SecretKey
+	BuilderSigningDomain       types.Domain
+	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
+	PubKey                     types.PublicKey
+	SecretKey                  *bls.SecretKey
+	MaxBlockPublishDelay       time.Duration
+	GetPayloadRequestTimeLimit time.Duration
 
 	AllowedListedBuilders map[[48]byte]struct{}
 
@@ -356,8 +362,22 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
+	logger := rs.l.With(log.F{
+		"method":       "GetPayload",
+		"slot":         payloadRequest.Slot(),
+		"block_number": payloadRequest.BlockNumber(),
+		"blockHash":    payloadRequest.BlockHash(),
+	})
+
 	if len(payloadRequest.Signature()) != 96 {
 		return nil, ErrInvalidSignature
+	}
+
+	slotStart := (rs.beaconState.Genesis().GenesisTime + (payloadRequest.Slot() * 12)) * 1000
+	now := uint64(time.Now().UnixMilli())
+	if msIntoSlot := now - slotStart; msIntoSlot > uint64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
+		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too late")
+		return nil, ErrLateRequest
 	}
 
 	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
@@ -371,12 +391,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, err
 	}
 
-	logger := rs.l.With(log.F{
-		"method":    "GetPayload",
-		"slot":      payloadRequest.Slot(),
-		"blockHash": payloadRequest.BlockHash(),
-		"pubkey":    pk,
-	})
+	logger = logger.WithField("pubkey", pk)
 	logger.WithField("event", "payload_requested").Info("payload requested")
 
 	forkv := rs.beaconState.ForkVersion(structs.Slot(payloadRequest.Slot()))
@@ -410,6 +425,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
 		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
+	} else {
+		return nil, ErrPayloadAlreadyDelivered
 	}
 
 	logger = logger.With(log.F{
@@ -418,35 +435,36 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	})
 
-	rs.runnignAsyncs.Add(1)
-	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot structs.Slot, payloadRequest structs.SignedBlindedBeaconBlock) {
-		defer wg.Done()
-		if rs.config.PublishBlock {
-			beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
-			if err != nil {
-				l.WithField("event", "wrong_publish_payload").WithError(err).Warn("fail to create block for publication")
-			} else {
-				if err = rs.beacon.PublishBlock(beaconBlock); err != nil {
-					l.With(log.F{
-						"slot":         slot,
-						"block_number": payloadRequest.BlockNumber(),
-					}).WithField("event", "publish_error").WithError(err).Warn("fail to publish block to beacon node")
-				} else {
-					l.WithField("event", "published").Info("published block to beacon node")
-				}
-			}
-		}
-
-		trace, err := payload.ToDeliveredTrace(payloadRequest.Slot())
+	if rs.config.PublishBlock {
+		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 		if err != nil {
-			l.WithField("event", "wrong_evidence_payload").WithError(err).Warn("failed to generate delivered payload")
+			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
+			return nil, ErrWrongPayload
+		}
+		if err = rs.beacon.PublishBlock(ctx, beaconBlock); err != nil {
+			logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node")
+			return nil, ErrFailedToPublish
+		}
+		logger.WithField("event", "published").Info("published block to beacon node")
+	}
+
+	// Delay the return of response block publishing
+	randomDelay := time.Duration(rand.Int63n(int64(rs.config.MaxBlockPublishDelay)))
+	time.Sleep(randomDelay)
+
+	rs.runnignAsyncs.Add(1)
+	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
+		defer wg.Done()
+		trace, err := payload.ToDeliveredTrace(slot)
+		if err != nil {
+			l.WithField("event", "wrong_evidence_payload").WithError(err).Error("failed to generate delivered payload")
 			return
 		}
 
-		if err := rs.das.PutDelivered(context.Background(), slot, trace, rs.config.TTL); err != nil {
+		if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
 			l.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		}
-	}(rs.runnignAsyncs, logger, rs, structs.Slot(payloadRequest.Slot()), payloadRequest)
+	}(rs.runnignAsyncs, logger, rs, payloadRequest.Slot())
 
 	exp := payload.ExecutionPayload()
 
@@ -469,6 +487,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": bep.EpFeeRecipient,
 			"numTx":        len(bep.EpTransactions),
 			"bid":          payload.BidValue(),
+			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
@@ -485,6 +504,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": cep.EpFeeRecipient,
 			"numTx":        len(cep.EpTransactions),
 			"bid":          payload.BidValue(),
+			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),

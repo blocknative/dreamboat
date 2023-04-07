@@ -183,7 +183,7 @@ var flags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
 		Usage:   "flag for publishing payloads to beacon nodes after a delivery",
-		Value:   false,
+		Value:   true,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
 	&cli.StringFlag{
@@ -234,13 +234,18 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_WS"},
 	},
+	&cli.BoolFlag{
+		Name:    "block-validation-ws-retry",
+		Usage:   "retry to other connection on failure",
+		Value:   false,
+		EnvVars: []string{"BLOCK_VALIDATION_WS_RETRY"},
+	},
 	&cli.StringFlag{
 		Name:    "block-validation-endpoint-rpc",
 		Usage:   "rpc block validation rawurl (eg. ipc path)",
 		Value:   "",
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
-
 	// streaming layer flags
 	&cli.BoolFlag{
 		Name:    "relay-distribution",
@@ -288,6 +293,18 @@ var flags = []cli.Flag{
 		Name:    "relay-distribution-redis-uri",
 		Usage:   "Redis URI",
 		EnvVars: []string{"RELAY_DISTRIBUTION_REDIS_URI"},
+	},
+	&cli.DurationFlag{
+		Name:    "max-block-publication-delay",
+		Usage:   "Maximum delay between block publication and returning request to validator",
+		Value:   500 * time.Millisecond,
+		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
+	},
+	&cli.DurationFlag{
+		Name:    "getpayload-request-time-limit",
+		Usage:   "Time allowed for GetPayload requests since the slot started",
+		Value:   4 * time.Second,
+		EnvVars: []string{"GETPAYLOAD_REQUEST_TIME_LIMIT"},
 	},
 }
 
@@ -383,7 +400,7 @@ func run() cli.ActionFunc {
 			}
 		}
 
-		beaconCli, err := initBeaconClients(c.Context, logger, c.StringSlice("beacon"), m)
+		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
@@ -405,7 +422,7 @@ func run() cli.ActionFunc {
 				input := make(chan []byte, 1000)
 				go simWSConn.KeepConnection(s, input)
 			}
-			simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, logger)
+			simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, c.Bool("block-validation-ws-retry"), logger)
 			simFallb.AddClient(simWSCli)
 		}
 
@@ -516,7 +533,9 @@ func run() cli.ActionFunc {
 		}
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
-			BuilderSigningDomain: domainBuilder,
+			BuilderSigningDomain:       domainBuilder,
+			MaxBlockPublishDelay:       c.Duration("max-block-publication-delay"),
+			GetPayloadRequestTimeLimit: c.Duration("getpayload-request-time-limit"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
 				structs.ForkCapella:   capellaBeaconProposer},
@@ -638,7 +657,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(ctx context.Context, l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {

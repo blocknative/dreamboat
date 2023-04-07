@@ -19,9 +19,7 @@ const (
 )
 
 var (
-	DurationPerSlot  = time.Second * 12
-	DurationPerEpoch = DurationPerSlot * time.Duration(structs.SlotsPerEpoch)
-	ErrUnkownFork    = errors.New("beacon node fork is unknown")
+	ErrUnkownFork = errors.New("beacon node fork is unknown")
 )
 
 type Datastore interface {
@@ -221,8 +219,12 @@ func (s *Manager) waitSynced(ctx context.Context, client BeaconClient) (*bcli.Sy
 
 	for {
 		status, err := client.SyncStatus()
-		if err != nil || !status.IsSyncing {
-			return status, err
+		if err != nil {
+			if !errors.Is(err, bcli.ErrBeaconNodeSyncing) {
+				return nil, err
+			}
+		} else if !status.IsSyncing {
+			return status, nil
 		}
 
 		logger.Debug("beacon clients are syncing...")
@@ -253,7 +255,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	headSlot = received
 
 	// update proposer duties and known validators in the background
-	if (DurationPerEpoch / 2) < time.Since(state.KnownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
+	if (structs.DurationPerEpoch / 2) < time.Since(state.KnownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
 		go func(slot structs.Slot) {
 			if err := s.updateKnownValidators(ctx, state, client, slot); err != nil {
 				logger.WithError(err).Error("failed to update known validators")

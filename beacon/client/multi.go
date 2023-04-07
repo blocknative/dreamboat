@@ -15,6 +15,7 @@ import (
 var (
 	ErrBeaconNodeSyncing      = errors.New("beacon node is syncing")
 	ErrWithdrawalsUnsupported = errors.New("withdrawals are not supported")
+	ErrFailedToPublish        = errors.New("failed to publish")
 )
 
 type BeaconNode interface {
@@ -24,7 +25,7 @@ type BeaconNode interface {
 	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
 	Genesis() (structs.GenesisInfo, error)
 	GetForkSchedule() (*GetForkScheduleResponse, error)
-	PublishBlock(block structs.SignedBeaconBlock) error
+	PublishBlock(context.Context, structs.SignedBeaconBlock) error
 	Randao(structs.Slot) (string, error)
 	Endpoint() string
 	GetWithdrawals(structs.Slot) (*GetWithdrawalsResponse, error)
@@ -231,17 +232,44 @@ func (b *MultiBeaconClient) clientsByLastResponse() []BeaconNode {
 	return instances
 }
 
-func (b *MultiBeaconClient) PublishBlock(block structs.SignedBeaconBlock) (err error) {
+func (b *MultiBeaconClient) PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) (err error) {
+	resp := make(chan error, 20)
+	var i int
 	for _, client := range b.clientsByLastResponse() {
-		if err = client.PublishBlock(block); err != nil {
-			b.Log.WithError(err).
-				WithField("endpoint", client.Endpoint()).
-				Warn("failed to publish block to beacon")
-			continue
-		}
-
-		return nil
+		i++
+		c := client
+		go publishAsync(ctx, c, b.Log, block, resp)
 	}
 
-	return err
+	var (
+		defError error
+		r        int
+	)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case e := <-resp:
+			r++
+			switch e {
+			case nil:
+				return nil
+			default:
+				defError = e
+				if r == i {
+					return defError
+				}
+			}
+		}
+	}
+}
+
+func publishAsync(ctx context.Context, client BeaconNode, l log.Logger, block structs.SignedBeaconBlock, resp chan<- error) {
+	err := client.PublishBlock(ctx, block)
+	if err != nil {
+		l.WithError(err).
+			WithField("endpoint", client.Endpoint()).
+			Warn("failed to publish block to beacon")
+	}
+	resp <- err
 }
