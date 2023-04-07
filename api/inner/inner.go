@@ -58,9 +58,9 @@ func (a *API) setAvailability(w http.ResponseWriter, r *http.Request) {
 		}
 		var val bool
 		switch strings.ToLower(v[0]) {
-		case "true":
+		case "true", "1":
 			val = true
-		case "false":
+		case "false", "0":
 		default:
 			w.Write([]byte(`{"error": "wrong parameter"}`))
 			w.WriteHeader(http.StatusBadRequest)
@@ -77,7 +77,7 @@ func (a *API) setAvailability(w http.ResponseWriter, r *http.Request) {
 }
 
 type Status struct {
-	Services ServiceStatus `json:"enabled_services"`
+	Services ServiceStatus `json:"endpoints"`
 }
 
 type ServiceStatus struct {
