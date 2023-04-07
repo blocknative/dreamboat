@@ -240,10 +240,16 @@ var flags = []cli.Flag{
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
 	&cli.DurationFlag{
-		Name:    "max-block-publication-delay",
+		Name:    "getpayload-response-delay",
+		Usage:   "Maximum delay between block publication and returning request to validator",
+		Value:   1 * time.Second,
+		EnvVars: []string{"GETPAYLOAD_RESPONSE_DELAY"},
+	},
+	&cli.DurationFlag{
+		Name:    "getpayload-publish-random-delay",
 		Usage:   "Maximum delay between block publication and returning request to validator",
 		Value:   500 * time.Millisecond,
-		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
+		EnvVars: []string{"GETPAYLOAD_PUBLISH_RANDOM_DELAY"},
 	},
 	&cli.DurationFlag{
 		Name:    "getpayload-request-time-limit",
@@ -445,9 +451,10 @@ func run() cli.ActionFunc {
 		}
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
-			BuilderSigningDomain:       domainBuilder,
-			MaxBlockPublishDelay:       c.Duration("max-block-publication-delay"),
-			GetPayloadRequestTimeLimit: c.Duration("getpayload-request-time-limit"),
+			BuilderSigningDomain:         domainBuilder,
+			GetPayloadResponseDelay:      c.Duration("getpayload-response-delay"),
+			GetPayloadPublishRandomDelay: c.Duration("getpayload-publish-random-delay"),
+			GetPayloadRequestTimeLimit:   c.Duration("getpayload-request-time-limit"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
 				structs.ForkCapella:   capellaBeaconProposer},

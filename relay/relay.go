@@ -102,12 +102,13 @@ type Beacon interface {
 }
 
 type RelayConfig struct {
-	BuilderSigningDomain       types.Domain
-	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
-	PubKey                     types.PublicKey
-	SecretKey                  *bls.SecretKey
-	MaxBlockPublishDelay       time.Duration
-	GetPayloadRequestTimeLimit time.Duration
+	BuilderSigningDomain         types.Domain
+	ProposerSigningDomain        map[structs.ForkVersion]types.Domain
+	PubKey                       types.PublicKey
+	SecretKey                    *bls.SecretKey
+	GetPayloadResponseDelay      time.Duration
+	GetPayloadPublishRandomDelay time.Duration
+	GetPayloadRequestTimeLimit   time.Duration
 
 	AllowedListedBuilders map[[48]byte]struct{}
 
@@ -323,10 +324,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	defer m.AppendSince(tStart, "getPayload", "all")
 
 	logger := rs.l.With(log.F{
-		"method":       "GetPayload",
-		"slot":         payloadRequest.Slot(),
-		"block_number": payloadRequest.BlockNumber(),
-		"blockHash":    payloadRequest.BlockHash(),
+		"method":        "GetPayload",
+		"slot":          payloadRequest.Slot(),
+		"block_number":  payloadRequest.BlockNumber(),
+		"blockHash":     payloadRequest.BlockHash(),
+		"responseDelay": rs.config.GetPayloadResponseDelay,
 	})
 
 	if len(payloadRequest.Signature()) != 96 {
@@ -396,6 +398,10 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	})
 
 	if rs.config.PublishBlock {
+		randomPublishDelay := time.Duration(rand.Int63n(int64(rs.config.GetPayloadPublishRandomDelay)))
+		time.Sleep(randomPublishDelay)
+		logger.WithField("publishDelay", randomPublishDelay)
+
 		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 		if err != nil {
 			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
@@ -409,8 +415,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 
 	// Delay the return of response block publishing
-	randomDelay := time.Duration(rand.Int63n(int64(rs.config.MaxBlockPublishDelay)))
-	time.Sleep(randomDelay)
+	time.Sleep(rs.config.GetPayloadResponseDelay)
 
 	rs.runnignAsyncs.Add(1)
 	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
@@ -439,7 +444,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": bep.EpFeeRecipient,
 			"numTx":        len(bep.EpTransactions),
 			"bid":          payload.BidValue(),
-			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
@@ -456,7 +460,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": cep.EpFeeRecipient,
 			"numTx":        len(cep.EpTransactions),
 			"bid":          payload.BidValue(),
-			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),
