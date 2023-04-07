@@ -397,7 +397,7 @@ func BenchmarkAPISequential(b *testing.B) {
 	service := mock_relay.NewMockRelay(ctrl)
 	register := mock_relay.NewMockRegistrations(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
-	server := api.NewApi(logger, service, register, nil, api.NewLimitter(1, 1, nil))
+	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil))
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 
@@ -428,7 +428,7 @@ func BenchmarkAPIParallel(b *testing.B) {
 
 	register := mock_relay.NewMockRegistrations(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
-	server := api.NewApi(logger, service, register, nil, api.NewLimitter(1, 1, nil))
+	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil))
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 
