@@ -31,7 +31,7 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.B
 		block_time = EXCLUDED.block_time,
 		inserted_at = NOW()`,
 		s.RelayID, bid.Slot, bid.ParentHash.String(), bid.BlockHash.String(), bid.BuilderPubkey.String(), bid.ProposerPubkey.String(),
-		bid.ProposerFeeRecipient.String(), bid.GasUsed, bid.GasLimit, bid.Value.String(), uint64(bid.Slot)/uint64(SlotsPerEpoch),
+		bid.ProposerFeeRecipient.String(), bid.GasUsed, bid.GasLimit, bid.Value.String(), uint64(bid.Slot)/uint64(structs.SlotsPerEpoch),
 		bid.NumTx, bid.BlockNumber, isMostProfitable, time.UnixMilli(int64(bid.TimestampMs)))
 	return err
 }

@@ -24,6 +24,9 @@ type Config struct {
 	Validators ValidatorsConfig `config:"validators"`
 
 	//
+	Payload PayloadConfig `config:"payload"`
+
+	//
 	DataAPI DataAPIConfig `config:"dataapi"`
 }
 
@@ -71,6 +74,7 @@ var DefaultBadgerDBConfig = BadgerDBConfig{
 type RelayConfig struct {
 	// name of the network in which relay oparates
 	Network string `config:"network"` // mainnet
+
 	// secret key used to sign messages
 	SecretKey string `config:"secret_key"`
 
@@ -137,6 +141,15 @@ type DataAPIConfig struct {
 
 var DefaultDataAPIConfig = DataAPIConfig{}
 
+type PayloadConfig struct {
+	// number of payloads to cache for fast in-memory reads
+	CacheSize int `config:"cache_size"`
+}
+
+var DefaultPayloadConfig = PayloadConfig{
+	CacheSize: 1_000,
+}
+
 /*
 var flags = []cli.Flag{
 	&cli.DurationFlag{
@@ -150,12 +163,6 @@ var flags = []cli.Flag{
 		Usage:   "size of store queue",
 		Value:   100_000,
 		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
-	},
-	&cli.IntFlag{
-		Name:    "relay-payload-cache-size",
-		Usage:   "number of payloads to cache for fast in-memory reads",
-		Value:   1_000,
-		EnvVars: []string{"RELAY_PAYLOAD_CACHE_SIZE"},
 	},
 	&cli.StringFlag{
 		Name:    "relay-dataapi-database-url",

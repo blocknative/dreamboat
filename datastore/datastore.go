@@ -27,6 +27,11 @@ type TTLStorage interface {
 	Get(context.Context, ds.Key) ([]byte, error)
 }
 
+type Cache interface {
+	Add(key structs.PayloadKey, block structs.BlockBidAndTrace) (ok bool)
+	Get(key structs.PayloadKey) (block structs.BlockBidAndTrace, ok bool)
+}
+
 func PayloadKeyKey(key structs.PayloadKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("payload-%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot))
 }
@@ -48,7 +53,7 @@ func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payl
 	if err != nil {
 		return err
 	}
-	return s.TTLStorage.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
+	return s.TTLStorage.PutWithTTL(ctx, PayloadKeyKey(key), data, s.ttl)
 }
 
 func (s *Datastore) GetPayload(ctx context.Context, fork structs.ForkVersion, key structs.PayloadKey) (payload structs.BlockAndTraceExtended, err error) {

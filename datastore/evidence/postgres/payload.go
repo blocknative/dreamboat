@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/blocknative/dreamboat/structs"
 )
 
-func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, payload structs.DeliveredTrace, ttl time.Duration) (err error) {
+func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, payload structs.DeliveredTrace) (err error) {
 	_, err = s.DB.ExecContext(ctx, `INSERT INTO payload_delivered
 	( relay_id, slot, epoch, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, num_tx, block_number, gas_used, gas_limit, value )
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
@@ -27,7 +26,7 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, payload
 		num_tx = EXCLUDED.num_tx,
 		block_number = EXCLUDED.block_number,
 		inserted_at = NOW()`,
-		s.RelayID, uint64(slot), uint64(slot)/uint64(SlotsPerEpoch), payload.Trace.BidTraceExtended.BuilderPubkey.String(), payload.Trace.BidTraceExtended.ProposerPubkey.String(),
+		s.RelayID, uint64(slot), uint64(slot)/uint64(structs.SlotsPerEpoch), payload.Trace.BidTraceExtended.BuilderPubkey.String(), payload.Trace.BidTraceExtended.ProposerPubkey.String(),
 		payload.Trace.BidTraceExtended.ProposerFeeRecipient.String(), payload.Trace.BidTraceExtended.ParentHash.String(), payload.Trace.BidTraceExtended.BlockHash.String(),
 		payload.Trace.BidTraceExtended.NumTx, payload.BlockNumber, payload.Trace.BidTraceExtended.GasUsed, payload.Trace.BidTraceExtended.GasLimit,
 		payload.Trace.BidTraceExtended.Value.String())

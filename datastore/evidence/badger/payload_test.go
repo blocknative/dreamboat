@@ -68,7 +68,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// set as delivered and retrieve again
-	err = d.PutDelivered(ctx, slot, dt, time.Minute)
+	err = d.PutDelivered(ctx, slot, dt)
 	require.NoError(t, err)
 
 	// get

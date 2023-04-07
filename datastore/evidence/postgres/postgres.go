@@ -9,8 +9,6 @@ var (
 	Emptybytes48 = [48]byte{}
 )
 
-var SlotsPerEpoch = 32
-
 type Datastore struct {
 	RelayID uint64
 	DB      *sql.DB

@@ -79,7 +79,12 @@ func main() {
 	signal.Notify(osSig, syscall.SIGINT)
 	go waitForSignal(cancel, osSig)
 
+	reloadSig := make(chan os.Signal, 2)
+	signal.Notify(reloadSig, syscall.SIGHUP)
+
 	cfg := config.NewConfig(configFile)
+
+	go reloadConfigSignal(reloadSig, cfg)
 
 	logger := logger(loglvl, logfmt, false, false, os.Stdout)
 	chainCfg := config.NewChainConfig()
@@ -113,7 +118,14 @@ func main() {
 	}).Info("data store initialized")
 
 	timeRelayStart := time.Now()
-	ds, err := datastore.NewDatastore(storage, c.Int("relay-payload-cache-size"))
+
+	payloadCache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](cfg.Payload.CacheSize)
+	if err != nil {
+		logger.WithError(err).Fatal("failed to initialize payload cache")
+		return
+	}
+
+	ds, err := datastore.NewDatastore(storage, payloadCache)
 	if err != nil {
 		logger.Fatalf("fail to create datastore: %w", err)
 		return
@@ -265,7 +277,6 @@ func main() {
 		PubKey:                pk,
 		SecretKey:             sk,
 		RegistrationCacheTTL:  cfg.Validators.RegistrationsCacheTTL,
-		TTL:                   TTL,
 		AllowedListedBuilders: allowed,
 		PublishBlock:          cfg.Relay.PublishBlock,
 		MaxBlockPublishDelay:  cfg.Relay.MaxBlockPublishDelay,
@@ -369,6 +380,12 @@ func waitForSignal(cancel context.CancelFunc, osSig chan os.Signal) {
 	for range osSig {
 		cancel()
 		return
+	}
+}
+
+func reloadConfigSignal(osSig chan os.Signal, cfg *config.Config) {
+	for range osSig {
+		cfg.Reload()
 	}
 }
 

@@ -121,20 +121,19 @@ type Warehouse interface {
 }
 
 type RelayConfig struct {
-	BuilderSigningDomain       types.Domain
-	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
-	PubKey                     types.PublicKey
-	SecretKey                  *bls.SecretKey
-	GetPayloadResponseDelay    time.Duration
+	BuilderSigningDomain  types.Domain
+	ProposerSigningDomain map[structs.ForkVersion]types.Domain
+	PubKey                types.PublicKey
+	SecretKey             *bls.SecretKey
+	// to check
+	GetPayloadResponseDelay time.Duration
+	MaxBlockPublishDelay    time.Duration
+	RegistrationCacheTTL    time.Duration
+	////
 	GetPayloadRequestTimeLimit time.Duration
+	PublishBlock               bool
 
 	AllowedListedBuilders map[[48]byte]struct{}
-
-	PublishBlock bool
-
-	TTL time.Duration
-
-	RegistrationCacheTTL time.Duration
 
 	Distributed, StreamSubmissions bool
 }
@@ -571,7 +570,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			return
 		}
 
-		if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
+		if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace); err != nil {
 			l.With(log.F{
 				"event":            "evidence_failure",
 				"processingTimeMs": time.Since(tStart).Milliseconds()}).WithError(err).Warn("failed to set payload after delivery")

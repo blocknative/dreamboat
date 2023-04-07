@@ -115,7 +115,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	require.NoError(t, err)
 	log.Debug(contents)
 
-	ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), contents.Payload, conf.TTL).Return(nil)
+	ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), contents.Payload).Return(nil)
 
 	var bl *structs.CompleteBlockstruct
 	a.EXPECT().AddBlock(gomock.Any()).Times(1).DoAndReturn(func(block *structs.CompleteBlockstruct) bool {
