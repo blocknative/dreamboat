@@ -103,7 +103,7 @@ type Beacon interface {
 }
 
 type Warehouse interface {
-	Store(ctx context.Context, req wh.StoreRequest) error
+	StoreAsync(ctx context.Context, req wh.StoreRequest) error
 }
 
 type RelayConfig struct {
@@ -413,7 +413,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			defer rs.runnignAsyncs.Done()
 
 			if storeRequest {
-				rs.storeGetPayloadRequest(logger, tStart, payloadRequest)
+				rs.storeGetPayloadRequest(logger, m, tStart, payloadRequest)
 			}
 
 			if storeTrace {
@@ -483,20 +483,24 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 
 }
 
-func (rs *Relay) storeGetPayloadRequest(logger log.Logger, ts time.Time, payloadRequest structs.SignedBlindedBeaconBlock) {
+func (rs *Relay) storeGetPayloadRequest(logger log.Logger, m *structs.MetricGroup, ts time.Time, payloadRequest structs.SignedBlindedBeaconBlock) {
+	tStoreWarehouse := time.Now()
+
 	req := wh.StoreRequest{
-		DataType: wh.GetPayloadRequest,
-		Data:     payloadRequest.Raw(),
-		Slot:     payloadRequest.Slot(),
-		Id:       fmt.Sprintf("%s,%s", ts.String(), payloadRequest.BlockHash().String()),
+		DataType:  wh.GetPayloadRequest,
+		Data:      payloadRequest.Raw(),
+		Slot:      payloadRequest.Slot(),
+		Id:        payloadRequest.BlockHash().String(),
+		Timestamp: ts,
 	}
 
-	if err := rs.wh.Store(context.Background(), req); err != nil {
-		logger.WithError(err).Error("failed to export")
+	if err := rs.wh.StoreAsync(context.Background(), req); err != nil {
+		logger.WithError(err).Warn("failed to store in warehouse")
 		return
-	} else {
-		logger.Debug("exported")
 	}
+
+	m.AppendSince(tStoreWarehouse, "getPayload", "storeWarehouse")
+	logger.Debug("stored in warehouse")
 }
 
 func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload structs.BlockBidAndTrace) {

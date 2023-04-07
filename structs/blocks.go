@@ -8,7 +8,6 @@ import (
 
 type SubmitBlockRequest interface {
 	Raw() []byte
-	ExecutionPayload() ExecutionPayload
 	Slot() uint64
 	BlockHash() types.Hash
 	ParentHash() types.Hash

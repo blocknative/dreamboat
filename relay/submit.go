@@ -99,19 +99,21 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	}
 
 	if rs.wh != nil {
-		go func() {
-			req := wh.StoreRequest{
-				DataType: wh.SubmitBlockRequest,
-				Data:     sbr.Raw(),
-				Slot:     sbr.Slot(),
-				Id:       fmt.Sprintf("%s,%s", tStart.String(), sbr.BlockHash().String()),
-			}
-			if err := rs.wh.Store(context.Background(), req); err != nil {
-				logger.WithError(err).Warn("failed to export")
-				return
-			}
-			logger.Debug("exported")
-		}()
+		tStoreWarehouse := time.Now()
+		req := wh.StoreRequest{
+			DataType:  wh.SubmitBlockRequest,
+			Data:      sbr.Raw(),
+			Slot:      sbr.Slot(),
+			Id:        sbr.BlockHash().String(),
+			Timestamp: tStart,
+		}
+		if err := rs.wh.StoreAsync(context.Background(), req); err != nil {
+			logger.WithError(err).Warn("failed to store in warehouse")
+			// we should not return error because it's already been stored for delivery
+		} else {
+			m.AppendSince(tStoreWarehouse, "submitBlock", "storeWarehouse")
+			logger.Debug("stored in warehouse")
+		}
 	}
 
 	processingTime := time.Since(tStart)

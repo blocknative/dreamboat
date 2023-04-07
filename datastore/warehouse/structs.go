@@ -29,17 +29,21 @@ func toString(data DataType) string {
 }
 
 type StoreRequest struct {
-	DataType DataType
-	Data     []byte
-	Slot     uint64
-	Id       string
+	DataType  DataType
+	Data      []byte
+	Slot      uint64
+	Id        string
+	Timestamp time.Time
 
-	err chan error
+	header []byte
 }
 
 func (req StoreRequest) Loggable() map[string]any {
 	return map[string]any{
-		"id": req.Id,
+		"id":        req.Id,
+		"timestamp": req.Timestamp,
+		"dataType":  toString(req.DataType),
+		"slot":      req.Slot,
 	}
 }
 

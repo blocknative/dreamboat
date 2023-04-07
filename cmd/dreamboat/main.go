@@ -253,6 +253,12 @@ var flags = []cli.Flag{
 		EnvVars: []string{"GETPAYLOAD_REQUEST_TIME_LIMIT"},
 	},
 	// warehouse flags
+	&cli.BoolFlag{
+		Name:    "warehouse",
+		Usage:   "Enable warehouse storage of data",
+		Value:   true,
+		EnvVars: []string{"WAREHOUSE"},
+	},
 	&cli.StringFlag{
 		Name:    "warehouse-dir",
 		Usage:   "Data directory where the data is stored in the warehouse",
@@ -262,7 +268,13 @@ var flags = []cli.Flag{
 	&cli.IntFlag{
 		Name:    "warehouse-workers",
 		Usage:   "Number of workers for storing data in warehouse, if 0, then data is not exported",
-		Value:   0,
+		Value:   32,
+		EnvVars: []string{"WAREHOUSE_WORKERS"},
+	},
+	&cli.IntFlag{
+		Name:    "warehouse-buffer",
+		Usage:   "Size of the buffer for processing requests",
+		Value:   1_000,
 		EnvVars: []string{"WAREHOUSE_WORKERS"},
 	},
 }
@@ -459,8 +471,8 @@ func run() cli.ActionFunc {
 		}
 
 		var relayWh *wh.Warehouse
-		if c.Int("warehouse-workers") > 0 {
-			warehouse := wh.NewWarehouse(logger, c.Int("warehouse-workers"))
+		if c.Bool("warehouse") {
+			warehouse := wh.NewWarehouse(logger, c.Int("warehouse-buffer"))
 
 			datadir := c.String("warehouse-dir")
 			if err := os.MkdirAll(datadir, 0755); err != nil {

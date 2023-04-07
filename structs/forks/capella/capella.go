@@ -31,10 +31,6 @@ func (b *SubmitBlockRequest) Raw() []byte {
 	return b.CapellaRaw
 }
 
-func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
-	return &b.CapellaExecutionPayload
-}
-
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
 	return b.CapellaMessage.BlockHash
 }

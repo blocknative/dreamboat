@@ -1,12 +1,14 @@
 package warehouse
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/blocknative/dreamboat/structs"
@@ -23,14 +25,14 @@ type Warehouse struct {
 	logger   log.Logger
 	requests chan StoreRequest
 
-	shutdown       chan struct{}
+	cleanShutdown  chan struct{}
 	runningWorkers *structs.TimeoutWaitGroup
 
 	m WarehouseMetrics
 }
 
 func NewWarehouse(logger log.Logger, bufSize int) *Warehouse {
-	wh := &Warehouse{logger: logger.WithField("service", "warehouse"), requests: make(chan StoreRequest), runningWorkers: structs.NewTimeoutWaitGroup()} // channel must be unbuffered, for not accepting requests that will not be handled
+	wh := &Warehouse{logger: logger.WithField("service", "warehouse"), requests: make(chan StoreRequest, bufSize), runningWorkers: structs.NewTimeoutWaitGroup()} // channel must be unbuffered, for not accepting requests that will not be handled
 	wh.initMetrics()
 	return wh
 }
@@ -56,19 +58,31 @@ func (s *Warehouse) Run(ctx context.Context, datadir string, id int) {
 	defer logger.Info("stopped")
 
 	w := newWorker(id, datadir, logger)
-	ticker := time.NewTicker(filesPruneTick)
+	pruneTicker := time.NewTicker(filesPruneTick)
+WorkerLoop:
 	for {
 		select {
 		case req := <-s.requests:
 			s.handleRequest(ctx, logger, w, req)
 			continue
-		case <-ticker.C:
+		case <-pruneTicker.C:
 			w.closeIdleFiles()
 			continue
 		case <-ctx.Done():
+			// if context is cancelled, then stop without processing remaining requests in buffered channel
 			w.closeAllFiles()
 			return
-		case <-s.shutdown:
+		case <-s.cleanShutdown:
+			break WorkerLoop
+		}
+	}
+
+	// 'cleanShutdown' was called, so loop over all the requests in the buffered 's.requests' channel
+	for {
+		select {
+		case req := <-s.requests:
+			s.handleRequest(ctx, logger, w, req)
+		default:
 			w.closeAllFiles()
 			return
 		}
@@ -76,45 +90,31 @@ func (s *Warehouse) Run(ctx context.Context, datadir string, id int) {
 }
 
 func (s *Warehouse) handleRequest(ctx context.Context, logger log.Logger, w *worker, req StoreRequest) {
+	logger = logger.With(req)
+
 	file, err := w.getOrCreateFile(req)
-	if err == nil {
-		err = writeToFile(file, req)
-		if err != nil {
-			logger.WithError(err).With(req).Error("failed to write")
-
-			file.Write([]byte("\n"))
-			w.closeFile(file)
-			logger.WithField("filename", file.Name()).Debug("corrupted file closed")
-		}
-	} else {
-		logger.WithError(err).Error("failed to get/create file: %w", err)
-	}
-
-	if err == nil {
-		s.m.Writes.WithLabelValues(toString(req.DataType)).Add(1)
-	} else {
+	if err != nil {
 		s.m.FailedWrites.WithLabelValues(toString(req.DataType)).Add(1)
+		logger.WithError(err).Error("failed to get/create file: %w", err)
+		return
 	}
 
-	select {
-	case req.err <- err: // if does not block, means it is buffered (1) channel
-	default:
+	err = writeToFile(file, req)
+	if err != nil {
+		s.m.FailedWrites.WithLabelValues(toString(req.DataType)).Add(1)
+		logger.WithError(err).Error("failed to write")
+
+		file.Write([]byte("\n"))
+		w.closeFile(file)
+		logger.WithField("filename", file.Name()).Debug("corrupted file closed")
+		return
 	}
 
-	select {
-	case req.err <- err:
-		return
-	case <-s.shutdown:
-		logger.WithError(ErrClosed).Error("failed to export request")
-		return
-	case <-ctx.Done():
-		logger.WithError(ctx.Err()).Error("failed to export request")
-		return
-	}
+	s.m.Writes.WithLabelValues(toString(req.DataType)).Add(1)
 }
 
 func (s *Warehouse) Close(ctx context.Context) {
-	close(s.shutdown) // prevent new requests from being added
+	close(s.cleanShutdown) // signal workers to process remaining request in buffered channel and stop
 
 	// wait for inflight requests to complete
 	select {
@@ -123,44 +123,28 @@ func (s *Warehouse) Close(ctx context.Context) {
 	}
 }
 
-func (s *Warehouse) Store(ctx context.Context, req StoreRequest) error {
-	if err := s.StoreAsync(ctx, req); err != nil {
-		return err
-	}
-
-	// wait for response
-	select {
-	case err := <-req.err:
-		return err
-	case <-s.shutdown:
-		return ErrClosed
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 func (s *Warehouse) StoreAsync(ctx context.Context, req StoreRequest) error {
-	// check if service is closed
-	select {
-	case <-s.shutdown:
-		return ErrClosed
-	default:
-	}
+	// pre-calculate header of the data
+	var header bytes.Buffer
+	header.WriteString("\n")
+	header.WriteString(strconv.Itoa(req.Timestamp.Nanosecond()))
+	header.WriteString(";")
+	header.WriteString(req.Id)
+	header.WriteString(";")
+	req.header = header.Bytes()
 
-	// submit request
 	select {
 	case s.requests <- req:
 		return nil
-	case <-s.shutdown:
-		return ErrClosed
 	case <-ctx.Done():
+		s.logger.With(req).WithError(ctx.Err()).Warn("failed to store")
 		return ctx.Err()
 	}
 }
 
 func writeToFile(file *os.File, req StoreRequest) error {
 	// Encode struct as JSON and write to base64 encoder
-	_, err := file.Write(append([]byte(req.Id), byte(';')))
+	_, err := file.Write(req.header)
 	if err != nil {
 		return fmt.Errorf("failed to write data timestamp: %w", err)
 	}
@@ -187,11 +171,6 @@ func writeToFile(file *os.File, req StoreRequest) error {
 		return fmt.Errorf("failed to close encoder: %w", err)
 	}
 
-	_, err = file.Write([]byte("\n"))
-	if err != nil {
-		return fmt.Errorf("failed to write new data sep newline': %w", err)
-	}
-
 	return nil
 }
 
@@ -210,8 +189,7 @@ func newWorker(id int, datadir string, logger log.Logger) *worker {
 func (w *worker) getOrCreateFile(req StoreRequest) (*os.File, error) {
 	// get
 	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, toString(req.DataType), req.Slot, w.id)
-	fileWithTs, ok := w.files[filename]
-	if ok {
+	if fileWithTs, ok := w.files[filename]; ok {
 		fileWithTs.ts = time.Now()
 		return fileWithTs.File, nil
 	}
@@ -227,22 +205,16 @@ func (w *worker) getOrCreateFile(req StoreRequest) (*os.File, error) {
 }
 
 func (w *worker) closeIdleFiles() {
-	for filename, file := range w.files {
+	for _, file := range w.files {
 		if time.Since(file.ts) > fileIdleTime {
-			if err := file.Close(); err != nil {
-				w.logger.WithError(err).WithField("filename", filename).Error("failed to close file")
-			}
-			delete(w.files, filename)
+			w.closeFile(file.File)
 		}
 	}
 }
 
 func (w *worker) closeAllFiles() {
-	for filename, file := range w.files {
-		if err := file.Close(); err != nil {
-			w.logger.WithError(err).WithField("filename", filename).Error("failed to close file")
-		}
-		delete(w.files, filename)
+	for _, file := range w.files {
+		w.closeFile(file.File)
 	}
 }
 
@@ -262,16 +234,14 @@ func openOrCreateFile(filename string) (*os.File, error) {
 	// check if file exists
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		// file doesn't exist, create a new one
-		file, err = os.Create(filename)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// file exists, open it for appending
-		file, err = os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return nil, err
-		}
+		return os.Create(filename)
+
+	}
+
+	// file exists, open it for appending
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
 	}
 
 	return file, nil

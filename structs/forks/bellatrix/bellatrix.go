@@ -30,10 +30,6 @@ func (b *SubmitBlockRequest) Raw() []byte {
 	return b.BellatrixRaw
 }
 
-func (b *SubmitBlockRequest) ExecutionPayload() structs.ExecutionPayload {
-	return &b.BellatrixExecutionPayload
-}
-
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
 	return b.BellatrixMessage.BlockHash
 }

@@ -3,10 +3,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -214,14 +216,23 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 
 	var req structs.SignedBlindedBeaconBlock
 	fork := a.st.ForkVersion(a.st.HeadSlot())
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r.Body); err != nil {
+		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "read body").Inc()
+		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
+		return
+	}
+
 	switch fork {
 	case structs.ForkCapella:
 		var creq capella.SignedBlindedBeaconBlock
-		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+		if err := json.NewDecoder(&buf).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request cappella decode"))
 			return
 		}
+		creq.SRaw = buf.Bytes()
 		req = &creq
 		if !creq.Validate() {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload validation").Inc()
@@ -236,11 +247,12 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		}
 	case structs.ForkBellatrix:
 		var breq bellatrix.SignedBlindedBeaconBlock
-		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+		if err := json.NewDecoder(&buf).Decode(&breq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request bellatrix decode"))
 			return
 		}
+		breq.SRaw = buf.Bytes()
 		req = &breq
 		if !breq.Validate() {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload validation").Inc()
@@ -293,14 +305,22 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	defer timer.ObserveDuration()
 	var req structs.SubmitBlockRequest
 
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r.Body); err != nil {
+		a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "read body").Inc()
+		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
+		return
+	}
+
 	switch a.st.ForkVersion(a.st.HeadSlot()) {
 	case structs.ForkCapella:
 		var creq capella.SubmitBlockRequest
-		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+		if err := json.NewDecoder(&buf).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode"))
 			return
 		}
+		creq.CapellaRaw = buf.Bytes()
 		req = &creq
 		l = a.l.With(log.F{
 			"fork":      "capella",
@@ -320,11 +340,12 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		}
 	case structs.ForkBellatrix:
 		var breq bellatrix.SubmitBlockRequest
-		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+		if err := json.NewDecoder(&buf).Decode(&breq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request bellatrix decode"))
 			return
 		}
+		breq.BellatrixRaw = buf.Bytes()
 		req = &breq
 		l = a.l.With(log.F{
 			"fork":      "bellatrix",
