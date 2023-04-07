@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/api"
+	"github.com/blocknative/dreamboat/api/inner"
 	"github.com/blocknative/dreamboat/auction"
 	"github.com/blocknative/dreamboat/beacon"
 	"github.com/blocknative/dreamboat/beacon/client"
@@ -125,7 +126,7 @@ func main() {
 		return
 	}
 
-	ds, err := datastore.NewDatastore(storage, payloadCache)
+	ds, err := datastore.NewDatastore(storage, cfg.Payload.Badger.TTL, payloadCache)
 	if err != nil {
 		logger.Fatalf("fail to create datastore: %w", err)
 		return
@@ -190,20 +191,22 @@ func main() {
 		return
 	}
 
-	dbdApiURL := c.String("relay-dataapi-database-url")
 	// DATAAPI
 	var daDS relay.DataAPIStore
-	if dbdApiURL != "" {
-		valPG, err := trPostgres.Open(dbdApiURL, 10, 10, 10) // TODO(l): make configurable
+	if cfg.DataAPI.DB.URL != "" {
+		daPG, err := trPostgres.Open(cfg.DataAPI.DB.URL,
+			cfg.DataAPI.DB.MaxOpenConns,
+			cfg.DataAPI.DB.MaxIdleConns,
+			cfg.DataAPI.DB.ConnMaxIdleTime)
 		if err != nil {
 			logger.WithError(err).Fatal("failed to connect to the database")
 			return
 		}
-		m.RegisterDB(valPG, "dataapi")
-		daDS = daPostgres.NewDatastore(valPG, 0)
-		defer valPG.Close()
+		m.RegisterDB(daPG, "dataapi")
+		daDS = daPostgres.NewDatastore(daPG, 0)
+		defer daPG.Close()
 	} else { // by default use existsing storage
-		daDS = daBadger.NewDatastore(storage, storage.DB, TTL)
+		daDS = daBadger.NewDatastore(storage, storage.DB, cfg.DataAPI.Badger.TTL)
 	}
 
 	// lazyload validators cache, it's optional and we don't care if it errors out
@@ -283,7 +286,14 @@ func main() {
 	}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 	r.AttachMetrics(m)
 
-	a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
+	ee := &api.EnabledEndpoints{
+		GetHeader:   true,
+		GetPayload:  true,
+		SubmitBlock: true,
+	}
+	iApi := inner.NewAPI(ee)
+	limitter := api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed)
+	a := api.NewApi(logger, r, validatorRelay, state, limitter)
 	a.AttachMetrics(m)
 	logger.With(log.F{
 		"service":     "relay",
@@ -314,11 +324,12 @@ func main() {
 
 	logger.Info("beacon manager ready")
 
-	// run internal http server
-	go func(m *metrics.Metrics) (err error) {
-		internalMux := http.NewServeMux()
-		metrics.AttachProfiler(internalMux)
+	internalMux := http.NewServeMux()
+	iApi.AttachToHandler(internalMux)
+	metrics.AttachProfiler(internalMux)
 
+	// run internal http server
+	go func(m *metrics.Metrics, internalMux *http.ServeMux) (err error) {
 		internalMux.Handle("/metrics", m.Handler())
 		logger.Info("internal server listening")
 		internalSrv := http.Server{
@@ -330,7 +341,7 @@ func main() {
 			err = nil
 		}
 		return err
-	}(m)
+	}(m, internalMux)
 
 	mux := http.NewServeMux()
 	a.AttachToHandler(mux)

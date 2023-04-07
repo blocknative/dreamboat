@@ -142,11 +142,14 @@ type DataAPIConfig struct {
 var DefaultDataAPIConfig = DataAPIConfig{}
 
 type PayloadConfig struct {
+	// BadgerDB config if sql is not used
+	Badger BadgerDBConfig `config:"badger"`
 	// number of payloads to cache for fast in-memory reads
 	CacheSize int `config:"cache_size"`
 }
 
 var DefaultPayloadConfig = PayloadConfig{
+	Badger:    DefaultBadgerDBConfig,
 	CacheSize: 1_000,
 }
 
