@@ -72,6 +72,7 @@ func init() {
 	flag.StringVar(&logfmt, "logfmt", "text", "format logs as text, json or none")
 	flag.StringVar(&configFile, "config", "./config", "configuration file needed for relay to run")
 	flag.StringVar(&datadir, "datadir", "/tmp/relay", "data directory where blocks and validators are stored in the default datastore implementation")
+	flag.Parse()
 }
 
 // Main starts the relay
@@ -87,12 +88,16 @@ func main() {
 	signal.Notify(reloadSig, syscall.SIGHUP)
 	cFile := fileS.NewSource(configFile)
 
+	logger := logger(loglvl, logfmt, false, false, os.Stdout)
+
 	cfg := config.NewConfigManager(cFile)
-	cfg.Load()
+	if err := cfg.Load(); err != nil {
+		logger.WithError(err).Fatal("failed loading config file")
+		return
+	}
 
 	go reloadConfigSignal(reloadSig, cfg)
 
-	logger := logger(loglvl, logfmt, false, false, os.Stdout)
 	chainCfg := config.NewChainConfig()
 	chainCfg.LoadNetwork(cfg.Relay.Network)
 	if chainCfg.GenesisForkVersion == "" {
@@ -281,10 +286,10 @@ func main() {
 			structs.ForkCapella:   capellaBeaconProposer},
 		PubKey:                pk,
 		SecretKey:             sk,
-		RegistrationCacheTTL:  cfg.Validators.RegistrationsCacheTTL,
+		RegistrationCacheTTL:  &cfg.Validators.RegistrationsCacheTTL,
 		AllowedListedBuilders: allowed,
 		PublishBlock:          cfg.Relay.PublishBlock,
-		MaxBlockPublishDelay:  cfg.Relay.MaxBlockPublishDelay,
+		MaxBlockPublishDelay:  &cfg.Relay.MaxBlockPublishDelay,
 	}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 	r.AttachMetrics(m)
 
