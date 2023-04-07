@@ -328,7 +328,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		"slot":          payloadRequest.Slot(),
 		"block_number":  payloadRequest.BlockNumber(),
 		"blockHash":     payloadRequest.BlockHash(),
-		"responseDelay": rs.config.GetPayloadResponseDelay,
+		"responseDelay": rs.config.GetPayloadResponseDelay.String(),
 	})
 
 	if len(payloadRequest.Signature()) != 96 {
@@ -400,7 +400,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	if rs.config.PublishBlock {
 		randomPublishDelay := time.Duration(rand.Int63n(int64(rs.config.GetPayloadPublishRandomDelay)))
 		time.Sleep(randomPublishDelay)
-		logger.WithField("publishDelay", randomPublishDelay)
+		logger = logger.WithField("randomPublishDelay", randomPublishDelay.String())
 
 		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 		if err != nil {
