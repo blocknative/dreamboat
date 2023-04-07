@@ -10,14 +10,15 @@ type ConfigManager struct {
 }
 
 func NewConfigManager(s Source) *ConfigManager {
+	dc := DefaultConfig()
 	return &ConfigManager{
 		s:      s,
-		Config: defaultConfig(),
+		Config: &dc,
 	}
 }
 
-func defaultConfig() *Config {
-	c := &Config{
+func DefaultConfig() Config {
+	c := Config{
 		ExternalHttp: DefaultHTTPConfig,
 		InternalHttp: DefaultHTTPConfig,
 		Api:          DefaultApiConfig,

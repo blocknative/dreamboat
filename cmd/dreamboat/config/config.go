@@ -191,13 +191,3 @@ var DefaultPayloadConfig = PayloadConfig{
 	Badger:    DefaultBadgerDBConfig,
 	CacheSize: 1_000,
 }
-
-/*
-var flags = []cli.Flag{
-	&cli.Uint64Flag{
-		Name:    "relay-store-queue-size",
-		Usage:   "size of store queue",
-		Value:   100_000,
-		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
-	},
-*/
