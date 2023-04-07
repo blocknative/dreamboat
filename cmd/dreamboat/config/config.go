@@ -3,7 +3,6 @@ package config
 import "time"
 
 type Config struct {
-	configFile string
 
 	// http server on which relay serves external connections
 	ExternalHttp HTTPConfig `config:"external_http"` // localhost:18550
@@ -34,12 +33,6 @@ type Config struct {
 
 	//
 	DataAPI DataAPIConfig `config:"dataapi"`
-}
-
-func NewConfig(configFile string) *Config {
-	return &Config{
-		configFile: configFile,
-	}
 }
 
 type HTTPConfig struct {

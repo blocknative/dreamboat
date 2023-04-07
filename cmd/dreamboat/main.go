@@ -24,6 +24,7 @@ import (
 	"github.com/blocknative/dreamboat/client/sim/transport/gethrpc"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethws"
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
+	fileS "github.com/blocknative/dreamboat/cmd/dreamboat/config/source/file"
 	"github.com/blocknative/dreamboat/datastore"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/relay"
@@ -47,6 +48,9 @@ import (
 	valBadger "github.com/blocknative/dreamboat/datastore/validator/badger"
 	valPostgres "github.com/blocknative/dreamboat/datastore/validator/postgres"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 )
@@ -81,8 +85,10 @@ func main() {
 
 	reloadSig := make(chan os.Signal, 2)
 	signal.Notify(reloadSig, syscall.SIGHUP)
+	cFile := fileS.NewSource(configFile)
 
-	cfg := config.NewConfig(configFile)
+	cfg := config.NewConfigManager(cFile)
+	cfg.Load()
 
 	go reloadConfigSignal(reloadSig, cfg)
 
@@ -391,9 +397,9 @@ func waitForSignal(cancel context.CancelFunc, osSig chan os.Signal) {
 	}
 }
 
-func reloadConfigSignal(osSig chan os.Signal, cfg *config.Config) {
+func reloadConfigSignal(osSig chan os.Signal, cfg *config.ConfigManager) {
 	for range osSig {
-		//cfg.Reload()
+		cfg.Reload()
 	}
 }
 
