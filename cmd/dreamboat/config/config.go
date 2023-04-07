@@ -78,12 +78,12 @@ type RelayConfig struct {
 	PublishBlock bool `config:"publish_block"`
 
 	// block publish delay
-	BlockPublishDelay time.Duration `config:"block_publish_delay"`
+	MaxBlockPublishDelay time.Duration `config:"max_block_publish_delay"`
 }
 
 var DefaultRelayConfig = RelayConfig{
-	PublishBlock:      true,
-	BlockPublishDelay: time.Second,
+	PublishBlock:         true,
+	MaxBlockPublishDelay: 500 * time.Millisecond,
 }
 
 type BeaconConfig struct {

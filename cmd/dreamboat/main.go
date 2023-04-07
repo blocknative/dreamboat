@@ -119,7 +119,7 @@ func main() {
 		return
 	}
 
-	beaconCli, err := initBeaconClients(ctx, logger, cfg.Beacon.Addresses, m)
+	beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, m)
 	if err != nil {
 		logger.Fatalf("fail to initialize beacon: %w", err)
 		return
@@ -268,7 +268,7 @@ func main() {
 		TTL:                   TTL,
 		AllowedListedBuilders: allowed,
 		PublishBlock:          cfg.Relay.PublishBlock,
-		BlockPublishDelay:     cfg.Relay.BlockPublishDelay,
+		MaxBlockPublishDelay:  cfg.Relay.MaxBlockPublishDelay,
 	}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 	r.AttachMetrics(m)
 

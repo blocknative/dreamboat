@@ -12,7 +12,6 @@ import (
 	"github.com/blocknative/dreamboat/test/common"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -55,7 +54,7 @@ func registerValidator() error {
 		if err != nil {
 			return err
 		}
-		return errors.WithMessage(fmt.Errorf("invalid return code, expected 200 - received %d", resp.StatusCode), string(body))
+		return fmt.Errorf("invalid return code, expected 200 - received %d - %s", resp.StatusCode, string(body))
 	}
 
 	fmt.Println(resp.Status)

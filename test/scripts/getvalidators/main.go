@@ -2,13 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/blocknative/dreamboat/api"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -33,7 +33,7 @@ func getValidators() error {
 		if err != nil {
 			return err
 		}
-		return errors.WithMessage(fmt.Errorf("invalid return code, expected 200 - received %d", resp.StatusCode), string(body))
+		return fmt.Errorf("invalid return code, expected 200 - received %d - %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
