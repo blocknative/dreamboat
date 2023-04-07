@@ -12,6 +12,9 @@ type Config struct {
 	InternalHttp HTTPConfig `config:"internal_http"` //"0.0.0.0:19550"
 
 	//
+	Api ApiConfig `config:"api"`
+
+	//
 	Relay RelayConfig `config:"relay"`
 
 	//
@@ -22,6 +25,9 @@ type Config struct {
 
 	//
 	Validators ValidatorsConfig `config:"validators"`
+
+	//
+	BlockSimulation BlockSimulationConfig `config:"block_simulation"`
 
 	//
 	Payload PayloadConfig `config:"payload"`
@@ -71,6 +77,19 @@ var DefaultBadgerDBConfig = BadgerDBConfig{
 	TTL: 48 * time.Hour,
 }
 
+type ApiConfig struct {
+	// submission request limit - rate per second
+	SubmissionLimitRate int `config:"submission_limit_rate"`
+
+	// submission request limit - burst value
+	SubmissionLimitBurst int `config:"submission_limit_burst"`
+}
+
+var DefaultApiConfig = ApiConfig{
+	SubmissionLimitRate:  2,
+	SubmissionLimitBurst: 2,
+}
+
 type RelayConfig struct {
 	// name of the network in which relay oparates
 	Network string `config:"network"` // mainnet
@@ -83,6 +102,9 @@ type RelayConfig struct {
 
 	// block publish delay
 	MaxBlockPublishDelay time.Duration `config:"max_block_publish_delay"`
+
+	// comma separated list of allowed builder pubkeys"
+	AllowedBuilders []string `config:"allowed_builders"` // map[[48]byte]struct{}
 }
 
 var DefaultRelayConfig = RelayConfig{
@@ -96,6 +118,25 @@ type BeaconConfig struct {
 }
 
 type BlockSimulationConfig struct {
+	RPC  BlockSimulationRPCConfig  `config:"rpc"`
+	WS   BlockSimulationWSConfig   `config:"ws"`
+	HTTP BlockSimulationHTTPConfig `config:"http"`
+}
+
+type BlockSimulationRPCConfig struct {
+	// block validation rawurl (eg. ipc path)
+	Address string `config:"address"`
+}
+
+type BlockSimulationWSConfig struct {
+	//  block validation endpoint address (comma separated list)
+	Address []string `config:"address"`
+	// retry to other websocket connections on failure"
+	Retry bool `config:"retry"`
+}
+
+type BlockSimulationHTTPConfig struct {
+	Address string `config:"address"`
 }
 
 type ValidatorsConfig struct {
@@ -104,7 +145,7 @@ type ValidatorsConfig struct {
 	// BadgerDB config if sql is not used
 	Badger BadgerDBConfig `config:"badger"`
 	// The size of response queue, should be set to expected number of validators in one request
-	QueueSize uint64 `config:"queue_size"`
+	QueueSize uint `config:"queue_size"`
 	// Number of workers storing validators in parallel
 	StoreWorkersNum uint64 `config:"store_workers"`
 	// Registrations cache size
@@ -114,6 +155,8 @@ type ValidatorsConfig struct {
 }
 
 var DefaultValidatorsConfig = ValidatorsConfig{
+	DB:                     DefaultSQLConfig,
+	Badger:                 DefaultBadgerDBConfig,
 	QueueSize:              100_000,
 	StoreWorkersNum:        400,
 	RegistrationsCacheSize: 600_000,
@@ -139,7 +182,10 @@ type DataAPIConfig struct {
 	Badger BadgerDBConfig `config:"badger"`
 }
 
-var DefaultDataAPIConfig = DataAPIConfig{}
+var DefaultDataAPIConfig = DataAPIConfig{
+	DB:     DefaultSQLConfig,
+	Badger: DefaultBadgerDBConfig,
+}
 
 type PayloadConfig struct {
 	// BadgerDB config if sql is not used
@@ -155,65 +201,10 @@ var DefaultPayloadConfig = PayloadConfig{
 
 /*
 var flags = []cli.Flag{
-	&cli.DurationFlag{
-		Name:    "ttl",
-		Usage:   "ttl of the data",
-		Value:   24 * time.Hour,
-		EnvVars: []string{"BN_RELAY_TTL"},
-	},
 	&cli.Uint64Flag{
 		Name:    "relay-store-queue-size",
 		Usage:   "size of store queue",
 		Value:   100_000,
 		EnvVars: []string{"RELAY_STORE_QUEUE_SIZE"},
 	},
-	&cli.StringFlag{
-		Name:    "relay-dataapi-database-url",
-		Usage:   "address of postgress database for dataapi, if empty - default, badger will be used",
-		Value:   "",
-		EnvVars: []string{"RELAY_DATAAPI_DATABASE_URL"},
-	},
-	&cli.StringFlag{
-		Name:    "relay-allow-listed-builder",
-		Usage:   "comma separated list of allowed builder pubkeys",
-		Value:   "",
-		EnvVars: []string{"RELAY_ALLOW_LISTED_BUILDER"},
-	},
-	&cli.IntFlag{
-		Name:    "relay-submission-limit-rate",
-		Usage:   "submission request limit - rate per second",
-		Value:   2,
-		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_RATE"},
-	},
-	&cli.IntFlag{
-		Name:    "relay-submission-limit-burst",
-		Usage:   "submission request limit - burst",
-		Value:   2,
-		EnvVars: []string{"RELAY_SUBMISSION_LIMIT_BURST"},
-	},
-	&cli.StringFlag{
-		Name:    "block-validation-endpoint-http",
-		Usage:   "http block validation endpoint address",
-		Value:   "",
-		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_HTTP"},
-	},
-	&cli.StringFlag{
-		Name:    "block-validation-endpoint-ws",
-		Usage:   "ws block validation endpoint address (comma separated list)",
-		Value:   "",
-		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_WS"},
-	},
-	&cli.BoolFlag{
-		Name:    "block-validation-ws-retry",
-		Usage:   "retry to other connection on failure",
-		Value:   false,
-		EnvVars: []string{"BLOCK_VALIDATION_WS_RETRY"},
-	},
-	&cli.StringFlag{
-		Name:    "block-validation-endpoint-rpc",
-		Usage:   "rpc block validation rawurl (eg. ipc path)",
-		Value:   "",
-		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
-	},
-}
 */

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -96,7 +95,6 @@ func main() {
 			return
 		}
 	}
-	//TTL := c.Duration("ttl")
 
 	timeDataStoreStart := time.Now()
 	m := metrics.NewMetrics()
@@ -141,7 +139,7 @@ func main() {
 	// SIM Client
 	simFallb := fallback.NewFallback()
 	simFallb.AttachMetrics(m)
-	if simHttpAddr := c.String("block-validation-endpoint-rpc"); simHttpAddr != "" {
+	if simHttpAddr := cfg.BlockSimulation.RPC.Address; simHttpAddr != "" {
 		simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
 		if err := simRPCCli.Dial(ctx); err != nil {
 			logger.WithError(err).Fatalf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
@@ -150,17 +148,17 @@ func main() {
 		simFallb.AddClient(simRPCCli)
 	}
 
-	if simWSAddr := c.String("block-validation-endpoint-ws"); simWSAddr != "" {
+	if len(cfg.BlockSimulation.WS.Address) > 0 {
 		simWSConn := gethws.NewReConn(logger)
-		for _, s := range strings.Split(simWSAddr, ",") {
+		for _, s := range cfg.BlockSimulation.WS.Address {
 			input := make(chan []byte, 1000)
 			go simWSConn.KeepConnection(s, input)
 		}
-		simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, c.Bool("block-validation-ws-retry"), logger)
+		simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, cfg.BlockSimulation.WS.Retry, logger)
 		simFallb.AddClient(simWSCli)
 	}
 
-	if simHttpAddr := c.String("block-validation-endpoint-http"); simHttpAddr != "" {
+	if simHttpAddr := cfg.BlockSimulation.HTTP.Address; simHttpAddr != "" {
 		simHTTPCli := gethhttp.NewClient(simHttpAddr, gethSimNamespace, logger)
 		simFallb.AddClient(simHTTPCli)
 	}
@@ -211,8 +209,7 @@ func main() {
 
 	// lazyload validators cache, it's optional and we don't care if it errors out
 	go preloadValidators(ctx, logger, valDS, validatorCache)
-
-	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
+	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(cfg.Validators.Badger.TTL.Seconds()/2)), cfg.Validators.QueueSize)
 	validatorStoreManager.AttachMetrics(m)
 	if cfg.Validators.StoreWorkersNum > 0 {
 		validatorStoreManager.RunStore(cfg.Validators.StoreWorkersNum)
@@ -236,10 +233,9 @@ func main() {
 	auctioneer := auction.NewAuctioneer()
 
 	var allowed map[[48]byte]struct{}
-	albString := c.String("relay-allow-listed-builder")
-	if albString != "" {
+	if len(cfg.Relay.AllowedBuilders) > 0 {
 		allowed = make(map[[48]byte]struct{})
-		for _, k := range strings.Split(albString, ",") {
+		for _, k := range cfg.Relay.AllowedBuilders {
 			var pk types.PublicKey
 			if err := pk.UnmarshalText([]byte(k)); err != nil {
 				logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
@@ -292,8 +288,9 @@ func main() {
 		SubmitBlock: true,
 	}
 	iApi := inner.NewAPI(ee)
-	limitter := api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed)
-	a := api.NewApi(logger, r, validatorRelay, state, limitter)
+
+	limitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, allowed)
+	a := api.NewApi(logger, ee, r, validatorRelay, state, limitter)
 	a.AttachMetrics(m)
 	logger.With(log.F{
 		"service":     "relay",
@@ -396,14 +393,13 @@ func waitForSignal(cancel context.CancelFunc, osSig chan os.Signal) {
 
 func reloadConfigSignal(osSig chan os.Signal, cfg *config.Config) {
 	for range osSig {
-		cfg.Reload()
+		//cfg.Reload()
 	}
 }
 
 func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs ValidatorStore, ch chan structs.ValidatorCacheEntry) {
 	defer close(ch)
-	err := vs.PopulateAllRegistrations(ctx, ch)
-	if err != nil {
+	if err := vs.PopulateAllRegistrations(ctx, ch); err != nil {
 		l.WithError(err).Warn("Cache population error")
 	}
 }
