@@ -763,6 +763,8 @@ func (ee *EnabledEndpoints) SetBool(key string, val bool) error {
 		ee.GetPayload = val
 	case "submitblock":
 		ee.SubmitBlock = val
+	default:
+		return errors.New("param not found")
 	}
-	return errors.New("param not found")
+	return nil
 }

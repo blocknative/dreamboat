@@ -22,12 +22,11 @@ func NewAPI(cfg APIConfig) *API {
 
 func (a *API) AttachToHandler(m *http.ServeMux) {
 	m.HandleFunc("/services/status", a.getStatus)
-	m.HandleFunc("/services/set_availability", a.setAvailability)
+	m.HandleFunc("/services/endpoints/set_availability", a.setAvailability)
 }
 
 func (a *API) getStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
 	gh, err1 := a.cfg.GetBool("getHeader")
 	gp, err2 := a.cfg.GetBool("getPayload")
 	sb, err3 := a.cfg.GetBool("submitBlock")
