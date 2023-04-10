@@ -247,7 +247,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 
 	if headSlot > 0 {
 		for slot := headSlot + 1; slot < received; slot++ {
-			s.Log.Warnf("missedSlot %d", slot)
+			s.Log.With(log.F{"slot": slot, "event": "missed_slot"}).Warn("missed slot")
 		}
 	}
 
