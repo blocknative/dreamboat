@@ -96,7 +96,7 @@ func (s *Warehouse) handleRequest(ctx context.Context, logger log.Logger, w *wor
 	file, err := w.getOrCreateFile(req)
 	if err != nil {
 		s.m.FailedWrites.WithLabelValues(toString(req.DataType)).Add(1)
-		logger.WithError(err).Error("failed to get/create file: %w", err)
+		logger.WithError(err).Error("failed to get/create file")
 		return
 	}
 
@@ -234,14 +234,15 @@ func openOrCreateFile(filename string) (*os.File, error) {
 
 	// extract the filedir from the file path
 	filedir := filepath.Dir(filename)
-	// check if file exists
 	if _, err := os.Stat(filedir); os.IsNotExist(err) {
-		// create the directory with permission 0755
 		err = os.MkdirAll(filedir, 0755)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory: %w", err)
 		}
-		// create a new file
+	}
+
+	// check if file exists
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		return os.Create(filename)
 	}
 
