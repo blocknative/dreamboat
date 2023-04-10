@@ -341,12 +341,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, ErrLateRequest
 	}
 
-	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
-		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
-	} else {
-		return nil, ErrPayloadAlreadyDelivered
-	}
-
 	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
 	if !ok {
 		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.ProposerIndex())
