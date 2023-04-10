@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -44,6 +43,7 @@ var (
 	ErrWrongPayload            = errors.New("wrong publish payload")
 	ErrFailedToPublish         = errors.New("failed to publish block")
 	ErrLateRequest             = errors.New("request too late")
+	ErrInvalidExecutionPayload = errors.New("invalid execution payload")
 )
 
 type BlockValidationClient interface {
@@ -106,7 +106,7 @@ type RelayConfig struct {
 	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
 	PubKey                     types.PublicKey
 	SecretKey                  *bls.SecretKey
-	MaxBlockPublishDelay       time.Duration
+	GetPayloadResponseDelay    time.Duration
 	GetPayloadRequestTimeLimit time.Duration
 
 	AllowedListedBuilders map[[48]byte]struct{}
@@ -323,10 +323,11 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	defer m.AppendSince(tStart, "getPayload", "all")
 
 	logger := rs.l.With(log.F{
-		"method":       "GetPayload",
-		"slot":         payloadRequest.Slot(),
-		"block_number": payloadRequest.BlockNumber(),
-		"blockHash":    payloadRequest.BlockHash(),
+		"method":        "GetPayload",
+		"slot":          payloadRequest.Slot(),
+		"block_number":  payloadRequest.BlockNumber(),
+		"blockHash":     payloadRequest.BlockHash(),
+		"responseDelay": rs.config.GetPayloadResponseDelay.String(),
 	})
 
 	if len(payloadRequest.Signature()) != 96 {
@@ -383,6 +384,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
+	tValidatePayload := time.Now()
+	if err := validatePayload(payload, payloadRequest); err != nil {
+		logger.WithField("event", "invalid_payload").WithError(err).Warn("error validating payload")
+		return nil, err
+	}
+	m.AppendSince(tValidatePayload, "getPayload", "validatePayload")
+
 	logger = logger.With(log.F{
 		"from_cache":       fromCache,
 		"builder":          payload.BuilderPubkey().String(),
@@ -400,6 +408,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			return nil, ErrFailedToPublish
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
+		// Delay the return of response block publishing
+		time.Sleep(rs.config.GetPayloadResponseDelay)
 	}
 
 	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
@@ -407,10 +417,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	} else {
 		return nil, ErrPayloadAlreadyDelivered
 	}
-
-	// Delay the return of response block publishing
-	randomDelay := time.Duration(rand.Int63n(int64(rs.config.MaxBlockPublishDelay)))
-	time.Sleep(randomDelay)
 
 	rs.runnignAsyncs.Add(1)
 	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
@@ -439,7 +445,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": bep.EpFeeRecipient,
 			"numTx":        len(bep.EpTransactions),
 			"bid":          payload.BidValue(),
-			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
@@ -456,7 +461,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			"feeRecipient": cep.EpFeeRecipient,
 			"numTx":        len(cep.EpTransactions),
 			"bid":          payload.BidValue(),
-			"randomDelay":  randomDelay.String(),
 		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),
@@ -466,6 +470,24 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	logger.Error("unknown fork failure")
 	return nil, errors.New("unknown fork")
 
+}
+
+func validatePayload(expected structs.BlockBidAndTrace, requested structs.SignedBlindedBeaconBlock) error {
+	have, err := expected.ExecutionHeaderHash()
+	if err != nil {
+		return fmt.Errorf("failed to read expected header hash: %w", err)
+	}
+
+	got, err := requested.ExecutionHeaderHash()
+	if err != nil {
+		return fmt.Errorf("failed to read requested header hash: %w", err)
+	}
+
+	if have != got {
+		return fmt.Errorf("%w: expected %s, received %s", ErrInvalidExecutionPayload, have, got)
+	}
+
+	return nil
 }
 
 type TimeoutWaitGroup struct {

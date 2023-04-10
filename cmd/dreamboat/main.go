@@ -241,10 +241,10 @@ var flags = []cli.Flag{
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
 	&cli.DurationFlag{
-		Name:    "max-block-publication-delay",
-		Usage:   "Maximum delay between block publication and returning request to validator",
-		Value:   500 * time.Millisecond,
-		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
+		Name:    "getpayload-response-delay",
+		Usage:   "Delay between block publication and returning request to validator",
+		Value:   1 * time.Second,
+		EnvVars: []string{"GETPAYLOAD_RESPONSE_DELAY"},
 	},
 	&cli.DurationFlag{
 		Name:    "getpayload-request-time-limit",
@@ -258,7 +258,7 @@ var flags = []cli.Flag{
 		Value:   16 * time.Second,
 		EnvVars: []string{"BEACON_EVENT_TIMEOUT"},
 	},
-	&cli.DurationFlag{
+	&cli.IntFlag{
 		Name:    "beacon-event-restart",
 		Usage:   "The number of consecutive timeouts allowed before restarting the head event subscription",
 		Value:   3,
@@ -470,7 +470,7 @@ func run() cli.ActionFunc {
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:       domainBuilder,
-			MaxBlockPublishDelay:       c.Duration("max-block-publication-delay"),
+			GetPayloadResponseDelay:    c.Duration("getpayload-response-delay"),
 			GetPayloadRequestTimeLimit: c.Duration("getpayload-request-time-limit"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,

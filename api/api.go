@@ -705,6 +705,8 @@ func unwrapError(err error, defaultMsg string) error {
 		return relay.ErrInvalidRandao
 	} else if errors.Is(err, relay.ErrLateRequest) {
 		return relay.ErrLateRequest
+	} else if errors.Is(err, relay.ErrInvalidExecutionPayload) {
+		return relay.ErrInvalidExecutionPayload
 	} else if errors.Is(err, validators.ErrInvalidSignature) {
 		return validators.ErrInvalidSignature
 	} else if errors.Is(err, validators.ErrUnknownValidator) {
