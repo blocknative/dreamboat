@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -231,11 +232,17 @@ func (w *worker) closeFile(file *os.File) {
 func openOrCreateFile(filename string) (*os.File, error) {
 	var file *os.File
 
+	// extract the filedir from the file path
+	filedir := filepath.Dir(filename)
 	// check if file exists
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		// file doesn't exist, create a new one
+	if _, err := os.Stat(filedir); os.IsNotExist(err) {
+		// create the directory with permission 0755
+		err = os.MkdirAll(filedir, 0755)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create directory: %w", err)
+		}
+		// create a new file
 		return os.Create(filename)
-
 	}
 
 	// file exists, open it for appending
