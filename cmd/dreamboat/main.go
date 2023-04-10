@@ -241,7 +241,7 @@ var flags = []cli.Flag{
 	},
 	&cli.DurationFlag{
 		Name:    "getpayload-response-delay",
-		Usage:   "Maximum delay between block publication and returning request to validator",
+		Usage:   "Delay between block publication and returning request to validator",
 		Value:   1 * time.Second,
 		EnvVars: []string{"GETPAYLOAD_RESPONSE_DELAY"},
 	},
