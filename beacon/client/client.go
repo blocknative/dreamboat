@@ -47,10 +47,10 @@ func NewBeaconClient(l log.Logger, endpoint string, config BeaconConfig) (*beaco
 	bc := &beaconClient{
 		beaconEndpoint: u,
 		log: l.With(log.F{
-			"beaconEndpoint":           endpoint,
-			"beaconEventTimeout":       config.BeaconEventTimeout,
+			"beaconEndpoint":     endpoint,
+			"beaconEventTimeout": config.BeaconEventTimeout.String(),
 			"BeaconEventRestart": config.BeaconEventRestart,
-			"beaconQueryTimeout":       config.BeaconQueryTimeout,
+			"beaconQueryTimeout": config.BeaconQueryTimeout.String(),
 		}),
 		c: config,
 	}

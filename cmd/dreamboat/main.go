@@ -258,7 +258,7 @@ var flags = []cli.Flag{
 		Value:   16 * time.Second,
 		EnvVars: []string{"BEACON_EVENT_TIMEOUT"},
 	},
-	&cli.DurationFlag{
+	&cli.IntFlag{
 		Name:    "beacon-event-restart",
 		Usage:   "The number of consecutive timeouts allowed before restarting the head event subscription",
 		Value:   3,
