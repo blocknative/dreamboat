@@ -383,12 +383,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
-	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
-		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
-	} else {
-		return nil, ErrPayloadAlreadyDelivered
-	}
-
 	logger = logger.With(log.F{
 		"from_cache":       fromCache,
 		"builder":          payload.BuilderPubkey().String(),
@@ -406,6 +400,12 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			return nil, ErrFailedToPublish
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
+	}
+
+	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
+		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
+	} else {
+		return nil, ErrPayloadAlreadyDelivered
 	}
 
 	// Delay the return of response block publishing
