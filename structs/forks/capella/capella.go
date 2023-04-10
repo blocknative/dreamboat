@@ -347,6 +347,13 @@ func (s *SignedBlindedBeaconBlock) Slot() uint64 {
 	return s.SMessage.Slot
 }
 
+func (s *SignedBlindedBeaconBlock) ExecutionHeaderHash() (types.Hash, error) {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return [32]byte{}, nil
+	}
+	return s.SMessage.Body.ExecutionPayloadHeader.HashTreeRoot()
+}
+
 func (s *SignedBlindedBeaconBlock) BlockHash() types.Hash {
 	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
 		return [32]byte{}
@@ -732,6 +739,10 @@ func (bbat *BlockBidAndTrace) BidValue() types.U256Str {
 
 func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 	return &bbat.Payload.CapellaData
+}
+
+func (bbat *BlockBidAndTrace) ExecutionHeaderHash() (types.Hash, error) {
+	return bbat.Bid.CapellaData.CapellaMessage.CapellaHeader.HashTreeRoot()
 }
 
 func (bbat *BlockBidAndTrace) BuilderPubkey() (pub types.PublicKey) {

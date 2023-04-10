@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -44,6 +43,7 @@ var (
 	ErrWrongPayload            = errors.New("wrong publish payload")
 	ErrFailedToPublish         = errors.New("failed to publish block")
 	ErrLateRequest             = errors.New("request too late")
+	ErrInvalidExecutionPayload = errors.New("invalid execution payload")
 )
 
 type BlockValidationClient interface {
@@ -102,13 +102,12 @@ type Beacon interface {
 }
 
 type RelayConfig struct {
-	BuilderSigningDomain         types.Domain
-	ProposerSigningDomain        map[structs.ForkVersion]types.Domain
-	PubKey                       types.PublicKey
-	SecretKey                    *bls.SecretKey
-	GetPayloadResponseDelay      time.Duration
-	GetPayloadPublishRandomDelay time.Duration
-	GetPayloadRequestTimeLimit   time.Duration
+	BuilderSigningDomain       types.Domain
+	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
+	PubKey                     types.PublicKey
+	SecretKey                  *bls.SecretKey
+	GetPayloadResponseDelay    time.Duration
+	GetPayloadRequestTimeLimit time.Duration
 
 	AllowedListedBuilders map[[48]byte]struct{}
 
@@ -342,6 +341,12 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, ErrLateRequest
 	}
 
+	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
+		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
+	} else {
+		return nil, ErrPayloadAlreadyDelivered
+	}
+
 	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
 	if !ok {
 		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.ProposerIndex())
@@ -385,11 +390,12 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 
-	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
-		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
-	} else {
-		return nil, ErrPayloadAlreadyDelivered
+	tValidatePayload := time.Now()
+	if err := validatePayload(payload, payloadRequest); err != nil {
+		logger.WithField("event", "invalid_payload").WithError(err).Warn("error validating payload")
+		return nil, err
 	}
+	m.AppendSince(tValidatePayload, "getPayload", "validatePayload")
 
 	logger = logger.With(log.F{
 		"from_cache":       fromCache,
@@ -398,10 +404,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	})
 
 	if rs.config.PublishBlock {
-		randomPublishDelay := time.Duration(rand.Int63n(int64(rs.config.GetPayloadPublishRandomDelay)))
-		time.Sleep(randomPublishDelay)
-		logger = logger.WithField("randomPublishDelay", randomPublishDelay.String())
-
 		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 		if err != nil {
 			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
@@ -469,6 +471,24 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	logger.Error("unknown fork failure")
 	return nil, errors.New("unknown fork")
 
+}
+
+func validatePayload(expected structs.BlockBidAndTrace, requested structs.SignedBlindedBeaconBlock) error {
+	have, err := expected.ExecutionHeaderHash()
+	if err != nil {
+		return fmt.Errorf("failed to read expected header hash: %w", err)
+	}
+
+	got, err := requested.ExecutionHeaderHash()
+	if err != nil {
+		return fmt.Errorf("failed to read requested header hash: %w", err)
+	}
+
+	if have != got {
+		return fmt.Errorf("%w: expected %s, received %s", ErrInvalidExecutionPayload, have, got)
+	}
+
+	return nil
 }
 
 type TimeoutWaitGroup struct {
