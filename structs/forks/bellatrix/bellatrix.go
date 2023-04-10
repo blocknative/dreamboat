@@ -559,6 +559,9 @@ func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 }
 
 func (bbat *BlockBidAndTrace) ExecutionHeaderHash() (types.Hash, error) {
+	if bbat.Bid.BellatrixData.BellatrixMessage == nil || bbat.Bid.BellatrixData.BellatrixMessage.BellatrixHeader == nil {
+		return [32]byte{}, nil
+	}
 	return bbat.Bid.BellatrixData.BellatrixMessage.BellatrixHeader.HashTreeRoot()
 }
 
