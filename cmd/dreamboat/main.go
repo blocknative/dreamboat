@@ -16,6 +16,7 @@ import (
 	"github.com/blocknative/dreamboat/api"
 	"github.com/blocknative/dreamboat/auction"
 	"github.com/blocknative/dreamboat/beacon"
+	"github.com/blocknative/dreamboat/beacon/client"
 	bcli "github.com/blocknative/dreamboat/beacon/client"
 	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/client/sim/fallback"
@@ -241,10 +242,10 @@ var flags = []cli.Flag{
 		EnvVars: []string{"BLOCK_VALIDATION_ENDPOINT_RPC"},
 	},
 	&cli.DurationFlag{
-		Name:    "max-block-publication-delay",
-		Usage:   "Maximum delay between block publication and returning request to validator",
-		Value:   500 * time.Millisecond,
-		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
+		Name:    "getpayload-response-delay",
+		Usage:   "Delay between block publication and returning request to validator",
+		Value:   1 * time.Second,
+		EnvVars: []string{"GETPAYLOAD_RESPONSE_DELAY"},
 	},
 	&cli.DurationFlag{
 		Name:    "getpayload-request-time-limit",
@@ -276,6 +277,24 @@ var flags = []cli.Flag{
 		Usage:   "Size of the buffer for processing requests",
 		Value:   1_000,
 		EnvVars: []string{"WAREHOUSE_WORKERS"},
+	}
+	&cli.DurationFlag{
+		Name:    "beacon-event-timeout",
+		Usage:   "The maximum time allowed to wait for head events from the beacon, we recommend setting it to 'durationPerSlot * 1.25'",
+		Value:   16 * time.Second,
+		EnvVars: []string{"BEACON_EVENT_TIMEOUT"},
+	},
+	&cli.IntFlag{
+		Name:    "beacon-event-restart",
+		Usage:   "The number of consecutive timeouts allowed before restarting the head event subscription",
+		Value:   3,
+		EnvVars: []string{"BEACON_EVENT_RESTART"},
+	},
+	&cli.DurationFlag{
+		Name:    "beacon-query-timeout",
+		Usage:   "The maximum time allowed to wait for a response from the beacon",
+		Value:   20 * time.Second,
+		EnvVars: []string{"BEACON_QUERY_TIMEOUT"},
 	},
 }
 
@@ -346,7 +365,12 @@ func run() cli.ActionFunc {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
 
-		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m)
+		beaconConfig := bcli.BeaconConfig{
+			BeaconEventTimeout: c.Duration("beacon-event-timeout"),
+			BeaconEventRestart: c.Int("beacon-event-restart"),
+			BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
+		}
+		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
 		}
@@ -496,7 +520,7 @@ func run() cli.ActionFunc {
 
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:       domainBuilder,
-			MaxBlockPublishDelay:       c.Duration("max-block-publication-delay"),
+			GetPayloadResponseDelay:    c.Duration("getpayload-response-delay"),
 			GetPayloadRequestTimeLimit: c.Duration("getpayload-request-time-limit"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
@@ -619,11 +643,11 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c client.BeaconConfig) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
-		client, err := bcli.NewBeaconClient(l, endpoint)
+		client, err := bcli.NewBeaconClient(l, endpoint, c)
 		if err != nil {
 			return nil, err
 		}

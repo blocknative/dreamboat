@@ -197,6 +197,7 @@ type BlockBidAndTrace interface {
 	BuilderPubkey() (pub types.PublicKey)
 
 	ExecutionPayload() ExecutionPayload
+	ExecutionHeaderHash() (types.Hash, error)
 	ToDeliveredTrace(slot uint64) (DeliveredTrace, error)
 }
 
