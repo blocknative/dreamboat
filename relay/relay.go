@@ -408,6 +408,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 			return nil, ErrFailedToPublish
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
+		// Delay the return of response block publishing
+		time.Sleep(rs.config.GetPayloadResponseDelay)
 	}
 
 	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
@@ -415,9 +417,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 	} else {
 		return nil, ErrPayloadAlreadyDelivered
 	}
-
-	// Delay the return of response block publishing
-	time.Sleep(rs.config.GetPayloadResponseDelay)
 
 	rs.runnignAsyncs.Add(1)
 	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
