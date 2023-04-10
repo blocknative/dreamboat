@@ -18,7 +18,7 @@ import (
 
 var (
 	fileIdleTime   = structs.DurationPerSlot
-	filesPruneTick = fileIdleTime + (fileIdleTime / 2) // x 1.5
+	fileIdleTime = fileIdleTime + (fileIdleTime / 2) // x 1.5
 	ErrClosed      = errors.New("closed")
 )
 
