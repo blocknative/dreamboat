@@ -49,7 +49,7 @@ func NewBeaconClient(l log.Logger, endpoint string, config BeaconConfig) (*beaco
 		log: l.With(log.F{
 			"beaconEndpoint":           endpoint,
 			"beaconEventTimeout":       config.BeaconEventTimeout,
-			"beaconConsecutiveTimeout": config.BeaconEventRestart,
+			"BeaconEventRestart": config.BeaconEventRestart,
 			"beaconQueryTimeout":       config.BeaconQueryTimeout,
 		}),
 		c: config,
@@ -196,7 +196,6 @@ func (b *beaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
 	u.Path = "/eth/v1/node/syncing"
 	resp := new(SyncStatusPayload)
 
-	println("SYNC " + b.c.BeaconQueryTimeout.String())
 	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/node/syncing", "GET"))
 	defer t.ObserveDuration()
 
