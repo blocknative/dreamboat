@@ -742,6 +742,9 @@ func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 }
 
 func (bbat *BlockBidAndTrace) ExecutionHeaderHash() (types.Hash, error) {
+	if bbat.Bid.CapellaData.CapellaMessage.CapellaHeader == nil {
+		return [32]byte{}, nil
+	}
 	return bbat.Bid.CapellaData.CapellaMessage.CapellaHeader.HashTreeRoot()
 }
 
