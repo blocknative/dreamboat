@@ -18,7 +18,7 @@ func (s *Warehouse) initMetrics() {
 		Help:      "Number of writes by type of data",
 	}, []string{"type"})
 
-	s.m.Writes = prometheus.NewCounterVec(prometheus.CounterOpts{
+	s.m.FailedWrites = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
 		Subsystem: "warehouse",
 		Name:      "failedWrites",
