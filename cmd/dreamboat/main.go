@@ -597,6 +597,7 @@ func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c c
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
+		println("CONFIG " + c.BeaconQueryTimeout.String())
 		client, err := bcli.NewBeaconClient(l, endpoint, c)
 		if err != nil {
 			return nil, err
