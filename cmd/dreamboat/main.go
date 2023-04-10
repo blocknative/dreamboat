@@ -263,7 +263,7 @@ var flags = []cli.Flag{
 	&cli.StringFlag{
 		Name:    "warehouse-dir",
 		Usage:   "Data directory where the data is stored in the warehouse",
-		Value:   "/data/relay/export",
+		Value:   "/data/relay/warehouse",
 		EnvVars: []string{"WAREHOUSE_DIR"},
 	},
 	&cli.IntFlag{
