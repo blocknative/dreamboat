@@ -277,7 +277,7 @@ var flags = []cli.Flag{
 		Usage:   "Size of the buffer for processing requests",
 		Value:   1_000,
 		EnvVars: []string{"WAREHOUSE_WORKERS"},
-	}
+	},
 	&cli.DurationFlag{
 		Name:    "beacon-event-timeout",
 		Usage:   "The maximum time allowed to wait for head events from the beacon, we recommend setting it to 'durationPerSlot * 1.25'",
