@@ -121,6 +121,8 @@ func (s *Datastore) GetSlotRawPayload(ctx context.Context, key structs.PayloadKe
 			if err != nil {
 				return err
 			}
+			output = append(output, item.KeyCopy(nil))
+			output = append(output, []byte("  "))
 			output = append(output, c)
 			output = append(output, []byte("\n"))
 		}
