@@ -122,7 +122,7 @@ func (s *Datastore) GetSlotRawPayload(ctx context.Context, key structs.PayloadKe
 				return err
 			}
 			output = append(output, c)
-			output = append(output, []byte(`\n`))
+			output = append(output, []byte("\n"))
 		}
 		return nil
 	})
