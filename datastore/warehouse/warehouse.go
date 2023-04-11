@@ -128,7 +128,7 @@ func (s *Warehouse) StoreAsync(ctx context.Context, req StoreRequest) error {
 	// pre-calculate header of the data
 	var header bytes.Buffer
 	header.WriteString("\n")
-	header.WriteString(strconv.Itoa(req.Timestamp.Nanosecond()))
+	header.WriteString(strconv.Itoa(int(req.Timestamp.UnixNano())))
 	header.WriteString(";")
 	header.WriteString(req.Id)
 	header.WriteString(";")
