@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/api"
+	"github.com/blocknative/dreamboat/api/inner"
 	"github.com/blocknative/dreamboat/auction"
 	"github.com/blocknative/dreamboat/beacon"
 	"github.com/blocknative/dreamboat/beacon/client"
@@ -484,7 +485,13 @@ func run() cli.ActionFunc {
 		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
-		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
+		ee := &api.EnabledEndpoints{
+			GetHeader:   true,
+			GetPayload:  true,
+			SubmitBlock: true,
+		}
+		iApi := inner.NewAPI(ee)
+		a := api.NewApi(logger, ee, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",
@@ -499,23 +506,23 @@ func run() cli.ActionFunc {
 
 		logger.Info("beacon manager ready")
 
-		// run internal http server
-		go func(m *metrics.Metrics) (err error) {
-			internalMux := http.NewServeMux()
-			metrics.AttachProfiler(internalMux)
+		internalMux := http.NewServeMux()
+		iApi.AttachToHandler(internalMux)
 
+		// run internal http server
+		go func(m *metrics.Metrics, internalMux *http.ServeMux) (err error) {
+			metrics.AttachProfiler(internalMux)
 			internalMux.Handle("/metrics", m.Handler())
 			logger.Info("internal server listening")
 			internalSrv := http.Server{
 				Addr:    c.String("internalAddr"),
 				Handler: internalMux,
 			}
-
 			if err = internalSrv.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
 			}
 			return err
-		}(m)
+		}(m, internalMux)
 
 		mux := http.NewServeMux()
 		a.AttachToHandler(mux)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
@@ -88,16 +89,19 @@ type API struct {
 	lim RateLimitter
 
 	m *APIMetrics
+
+	enabled *EnabledEndpoints
 }
 
-func NewApi(l log.Logger, r Relay, reg Registrations, st State, lim RateLimitter) (a *API) {
+func NewApi(l log.Logger, enabled *EnabledEndpoints, r Relay, reg Registrations, st State, lim RateLimitter) (a *API) {
 	a = &API{
-		l:   l,
-		r:   r,
-		reg: reg,
-		st:  st,
-		lim: lim,
-		m:   &APIMetrics{}}
+		l:       l,
+		r:       r,
+		reg:     reg,
+		st:      st,
+		lim:     lim,
+		enabled: enabled,
+		m:       &APIMetrics{}}
 	a.initMetrics()
 	return a
 }
@@ -170,8 +174,13 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	if !a.enabled.GetHeader {
+		w.WriteHeader(http.StatusForbidden)
+		a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "get header").Inc()
+		return
+	}
 
+	w.Header().Set("Content-Type", "application/json")
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getHeader"))
 	defer timer.ObserveDuration()
 
@@ -207,6 +216,12 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
+	if !a.enabled.GetPayload {
+		w.WriteHeader(http.StatusForbidden)
+		a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "get header").Inc()
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
@@ -287,6 +302,12 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 
 // builder related handlers
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
+	if !a.enabled.SubmitBlock {
+		w.WriteHeader(http.StatusForbidden)
+		a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "get header").Inc()
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	var l = a.l
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
@@ -716,4 +737,36 @@ func unwrapError(err error, defaultMsg string) error {
 	}
 
 	return errors.New(defaultMsg)
+}
+
+type EnabledEndpoints struct {
+	GetHeader   bool
+	GetPayload  bool
+	SubmitBlock bool
+}
+
+func (ee *EnabledEndpoints) GetBool(key string) (bool, error) {
+	switch strings.ToLower(key) {
+	case "getheader":
+		return ee.GetHeader, nil
+	case "getpayload":
+		return ee.GetPayload, nil
+	case "submitblock":
+		return ee.SubmitBlock, nil
+	}
+	return false, errors.New("param not found")
+}
+
+func (ee *EnabledEndpoints) SetBool(key string, val bool) error {
+	switch strings.ToLower(key) {
+	case "getheader":
+		ee.GetHeader = val
+	case "getpayload":
+		ee.GetPayload = val
+	case "submitblock":
+		ee.SubmitBlock = val
+	default:
+		return errors.New("param not found")
+	}
+	return nil
 }
