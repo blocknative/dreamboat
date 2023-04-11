@@ -2,10 +2,20 @@
 package inner
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/blocknative/dreamboat/structs"
+	"github.com/flashbots/go-boost-utils/types"
 )
+
+type ApiPayload interface {
+	GetSlotRawPayload(ctx context.Context, key structs.PayloadKey) (output [][]byte, err error)
+}
 
 type APIConfig interface {
 	GetBool(key string) (bool, error)
@@ -13,16 +23,24 @@ type APIConfig interface {
 }
 
 type API struct {
-	cfg APIConfig
+	cfg     APIConfig
+	payload ApiPayload
 }
 
-func NewAPI(cfg APIConfig) *API {
-	return &API{cfg: cfg}
+func NewAPI(cfg APIConfig, payload ApiPayload) *API {
+	return &API{
+		cfg:     cfg,
+		payload: payload,
+	}
 }
 
 func (a *API) AttachToHandler(m *http.ServeMux) {
 	m.HandleFunc("/services/status", a.getStatus)
 	m.HandleFunc("/services/endpoints/set_availability", a.setAvailability)
+
+	m.HandleFunc("/submission", a.getSubmission)
+
+	m.HandleFunc("/ ", a.getStatus)
 }
 
 func (a *API) getStatus(w http.ResponseWriter, r *http.Request) {
@@ -84,4 +102,73 @@ type ServiceStatus struct {
 	GetHeader   bool `json:"getHeader"`
 	GetPayload  bool `json:"getPayload"`
 	SubmitBlock bool `json:"submitBlock"`
+}
+
+func (a *API) getSubmission(w http.ResponseWriter, r *http.Request) {
+
+	slot, err := specificSlot(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("wrong slot"))
+		return
+	}
+	bh, err := blockHash(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("wrong blockhash"))
+		return
+	}
+	pk, err := publickKey(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("wrong public key"))
+		return
+	}
+
+	output, err := a.payload.GetSlotRawPayload(r.Context(), structs.PayloadKey{
+		Slot: slot, BlockHash: bh, Proposer: pk,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(fmt.Errorf("error processing request %w", err).Error()))
+		return
+	}
+
+	for _, o := range output {
+		w.Write(o)
+	}
+	return
+}
+
+func specificSlot(r *http.Request) (structs.Slot, error) {
+	if slotStr := r.URL.Query().Get("slot"); slotStr != "" {
+		slot, err := strconv.ParseUint(slotStr, 10, 64)
+		if err != nil {
+			return structs.Slot(0), err
+		}
+		return structs.Slot(slot), nil
+	}
+	return structs.Slot(0), nil
+}
+
+func blockHash(r *http.Request) (types.Hash, error) {
+	if bhStr := r.URL.Query().Get("block_hash"); bhStr != "" {
+		var bh types.Hash
+		if err := bh.UnmarshalText([]byte(bhStr)); err != nil {
+			return bh, err
+		}
+		return bh, nil
+	}
+	return types.Hash{}, nil
+}
+
+func publickKey(r *http.Request) (types.PublicKey, error) {
+	if pkStr := r.URL.Query().Get("proposer_pubkey"); pkStr != "" {
+		var pk types.PublicKey
+		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
+			return pk, err
+		}
+		return pk, nil
+	}
+	return types.PublicKey{}, nil
 }

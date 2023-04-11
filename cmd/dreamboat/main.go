@@ -335,7 +335,7 @@ func run() cli.ActionFunc {
 
 		timeRelayStart := time.Now()
 		state := &beacon.MultiSlotState{}
-		ds, err := datastore.NewDatastore(storage, c.Int("relay-payload-cache-size"))
+		ds, err := datastore.NewDatastore(storage, storage.DB, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
@@ -490,7 +490,7 @@ func run() cli.ActionFunc {
 			GetPayload:  true,
 			SubmitBlock: true,
 		}
-		iApi := inner.NewAPI(ee)
+		iApi := inner.NewAPI(ee, ds)
 		a := api.NewApi(logger, ee, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
