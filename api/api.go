@@ -42,7 +42,8 @@ const (
 )
 
 const (
-	DataLimit = 450
+	DataLimit       = 450
+	ErrorsOnDisable = false
 )
 
 var (
@@ -175,8 +176,13 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 	if !a.enabled.GetHeader {
-		w.WriteHeader(http.StatusForbidden)
-		a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "get header").Inc()
+		if ErrorsOnDisable {
+			w.WriteHeader(http.StatusForbidden)
+			a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "forbiden").Inc()
+		} else {
+			a.m.ApiReqCounter.WithLabelValues("getHeader", "499", "disabled").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("no builder bid"))
+		}
 		return
 	}
 
@@ -303,8 +309,12 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 // builder related handlers
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	if !a.enabled.SubmitBlock {
-		w.WriteHeader(http.StatusForbidden)
-		a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "get header").Inc()
+		if ErrorsOnDisable {
+			w.WriteHeader(http.StatusForbidden)
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "403", "forbidden").Inc()
+		} else {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "499", "disabled").Inc()
+		}
 		return
 	}
 
