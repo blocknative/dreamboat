@@ -38,7 +38,7 @@ type Datastore struct {
 	PayloadCache *lru.Cache[structs.PayloadKey, structs.BlockBidAndTrace]
 }
 
-func NewDatastore(t TTLStorage, payloadCacheSize int) (*Datastore, error) {
+func NewDatastore(t TTLStorage, db DBInter, payloadCacheSize int) (*Datastore, error) {
 	cache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](payloadCacheSize)
 	if err != nil {
 		return nil, err
@@ -47,6 +47,7 @@ func NewDatastore(t TTLStorage, payloadCacheSize int) (*Datastore, error) {
 	return &Datastore{
 		TTLStorage:   t,
 		PayloadCache: cache,
+		DBInter:      db,
 	}, nil
 }
 
@@ -121,6 +122,7 @@ func (s *Datastore) GetSlotRawPayload(ctx context.Context, key structs.PayloadKe
 				return err
 			}
 			output = append(output, c)
+			output = append(output, []byte(`\n`))
 		}
 		return nil
 	})

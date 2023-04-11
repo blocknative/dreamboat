@@ -335,7 +335,7 @@ func run() cli.ActionFunc {
 
 		timeRelayStart := time.Now()
 		state := &beacon.MultiSlotState{}
-		ds, err := datastore.NewDatastore(storage, c.Int("relay-payload-cache-size"))
+		ds, err := datastore.NewDatastore(storage, storage.DB, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
