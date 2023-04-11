@@ -27,8 +27,11 @@ type API struct {
 	payload ApiPayload
 }
 
-func NewAPI(cfg APIConfig) *API {
-	return &API{cfg: cfg}
+func NewAPI(cfg APIConfig, payload ApiPayload) *API {
+	return &API{
+		cfg:     cfg,
+		payload: payload,
+	}
 }
 
 func (a *API) AttachToHandler(m *http.ServeMux) {
