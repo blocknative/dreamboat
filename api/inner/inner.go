@@ -145,7 +145,7 @@ func specificSlot(r *http.Request) (structs.Slot, error) {
 		}
 		return structs.Slot(slot), nil
 	}
-	return structs.Slot(0), ErrParamNotFound
+	return structs.Slot(0), nil
 }
 
 func blockHash(r *http.Request) (types.Hash, error) {
@@ -156,7 +156,7 @@ func blockHash(r *http.Request) (types.Hash, error) {
 		}
 		return bh, nil
 	}
-	return types.Hash{}, ErrParamNotFound
+	return types.Hash{}, nil
 }
 
 func publickKey(r *http.Request) (types.PublicKey, error) {
@@ -167,5 +167,5 @@ func publickKey(r *http.Request) (types.PublicKey, error) {
 		}
 		return pk, nil
 	}
-	return types.PublicKey{}, ErrParamNotFound
+	return types.PublicKey{}, nil
 }
