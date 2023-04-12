@@ -233,7 +233,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	}
 
 	if header.Header.GetParentHash() != parentHash {
-		logger.WithField("expected", parentHash).WithField("got", parentHash).Debug("invalid parentHash")
+		logger.WithField("expected", header.Header.GetParentHash()).WithField("got", parentHash).Debug("invalid parentHash")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
