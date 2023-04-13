@@ -81,10 +81,13 @@ type Manager struct {
 	Config Config
 }
 
-func NewManager(l log.Logger, cgf Config) *Manager {
+func NewManager(l log.Logger, cfg Config) *Manager {
 	return &Manager{
-		Log:    l.WithField("relay-service", "Service"),
-		Config: cgf,
+		Log:    l.With(log.F{
+			"relay-service": "Service",
+			"runPayloadAttributesSubscription": cfg.RunPayloadAttributesSubscription,
+		}),
+		Config: cfg,
 	}
 }
 
@@ -253,6 +256,9 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 			continue
 		}
 
+		// update randao first, so that main loop can know if it's been processed or not
+		state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
+
 		select {
 		case events <- bcli.HeadEvent{Slot: proposalSlot}:
 		default:
@@ -277,9 +283,6 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 		}
 
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(proposalSlot), Root: root})
-
-		// update randao
-		state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
 
 		logger.With(log.F{
 			"epoch":              headSlot.Epoch(),
@@ -343,9 +346,11 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		}(received)
 	}
 
-	if !s.Config.RunPayloadAttributesSubscription {
+	// payload_attributes event was not received
+	if state.Randao(uint64(received)).Slot == 0 {
+		logger.Debug("fetching withdrawals and randao")
 		// query expected withdrawals root
-		go s.updatedExpectedWithdrawals(headSlot, state, client)
+		go s.updateExpectedWithdrawals(headSlot, state, client)
 
 		// update randao
 		randao, err := client.Randao(headSlot)
@@ -366,7 +371,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	return nil
 }
 
-func (m *Manager) updatedExpectedWithdrawals(slot structs.Slot, state State, client BeaconClient) {
+func (m *Manager) updateExpectedWithdrawals(slot structs.Slot, state State, client BeaconClient) {
 	logger := m.Log.WithField("method", "UpdatedExpectedWithdrawals").WithField("slot", slot)
 	current := state.Withdrawals(uint64(slot))
 	latestKnownSlot := current.Slot
