@@ -245,7 +245,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 }
 
 func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state State, client BeaconClient, events chan bcli.HeadEvent) {
-	logger := s.Log.WithField("method", "ProcessNewSlot")
+	logger := s.Log.WithField("method", "RunPayloadAttributesSubscription")
 
 	c := make(chan bcli.PayloadAttributesEvent)
 	client.SubscribeToPayloadAttributesEvents(c)
@@ -359,7 +359,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 
 	// payload_attributes event was not received
 	if !s.Config.RunPayloadAttributesSubscription || state.HeadSlotPayloadAttributes() < uint64(headSlot) {
-		logger.Debug("fetching withdrawals and randao")
+		logger.WithField("slotHeadPayloadAttributes", state.HeadSlotPayloadAttributes()).Debug("fetching withdrawals and randao")
 		// query expected withdrawals root
 		go s.updateExpectedWithdrawals(headSlot, state, client)
 
