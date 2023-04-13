@@ -83,8 +83,8 @@ type Manager struct {
 
 func NewManager(l log.Logger, cfg Config) *Manager {
 	return &Manager{
-		Log:    l.With(log.F{
-			"relay-service": "Service",
+		Log: l.With(log.F{
+			"relay-service":                    "Service",
 			"runPayloadAttributesSubscription": cfg.RunPayloadAttributesSubscription,
 		}),
 		Config: cfg,
@@ -326,6 +326,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	if received <= headSlot {
 		return nil
 	}
+	logger = logger.WithField("headSlot", headSlot)
 
 	if headSlot > 0 {
 		for slot := headSlot + 1; slot < received; slot++ {
