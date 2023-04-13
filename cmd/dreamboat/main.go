@@ -270,6 +270,7 @@ var flags = []cli.Flag{
 		Usage:   "The maximum time allowed to wait for a response from the beacon",
 		Value:   20 * time.Second,
 		EnvVars: []string{"BEACON_QUERY_TIMEOUT"},
+	},
 	&cli.BoolFlag{
 		Name:    "beacon-payload-attributes-subscription",
 		Usage:   "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)",
