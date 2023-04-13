@@ -55,6 +55,9 @@ type State interface {
 	HeadSlot() structs.Slot
 	SetHeadSlot(structs.Slot)
 
+	HeadSlotPayloadAttributes() uint64
+	SetHeadSlotPayloadAttributes(uint64)
+
 	Withdrawals(uint64) structs.WithdrawalsState
 	SetWithdrawals(structs.WithdrawalsState)
 
@@ -249,15 +252,17 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 	for payloadAttributes := range c {
 		logger = logger.WithField("slot", payloadAttributes.Data.ProposalSlot)
 
-		headSlot := state.HeadSlot()
 		proposalSlot := payloadAttributes.Data.ProposalSlot - 1
+		if slot := state.HeadSlotPayloadAttributes(); slot <= proposalSlot {
+			continue
+		}
+		state.SetHeadSlotPayloadAttributes(proposalSlot)
+
+		headSlot := state.HeadSlot()
 
 		if proposalSlot < uint64(headSlot) {
 			continue
 		}
-
-		// update randao first, so that main loop can know if it's been processed or not
-		state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
 
 		select {
 		case events <- bcli.HeadEvent{Slot: proposalSlot}:
@@ -283,6 +288,9 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 		}
 
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(proposalSlot), Root: root})
+
+		// update randao first, so that main loop can know if it's been processed or not
+		state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
 
 		logger.With(log.F{
 			"epoch":              headSlot.Epoch(),
@@ -326,7 +334,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	if received <= headSlot {
 		return nil
 	}
-	logger = logger.WithField("headSlot", headSlot)
+	logger = logger.WithField("slotHead", headSlot)
 
 	if headSlot > 0 {
 		for slot := headSlot + 1; slot < received; slot++ {
@@ -348,7 +356,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	}
 
 	// payload_attributes event was not received
-	if state.Randao(uint64(received)).Slot == 0 {
+	if !s.Config.RunPayloadAttributesSubscription || state.HeadSlotPayloadAttributes() < uint64(headSlot) {
 		logger.Debug("fetching withdrawals and randao")
 		// query expected withdrawals root
 		go s.updateExpectedWithdrawals(headSlot, state, client)

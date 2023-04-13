@@ -308,6 +308,20 @@ func (mr *MockStateMockRecorder) HeadSlot() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadSlot", reflect.TypeOf((*MockState)(nil).HeadSlot))
 }
 
+// HeadSlotPayloadAttributes mocks base method.
+func (m *MockState) HeadSlotPayloadAttributes() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HeadSlotPayloadAttributes")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// HeadSlotPayloadAttributes indicates an expected call of HeadSlotPayloadAttributes.
+func (mr *MockStateMockRecorder) HeadSlotPayloadAttributes() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadSlotPayloadAttributes", reflect.TypeOf((*MockState)(nil).HeadSlotPayloadAttributes))
+}
+
 // KnownValidators mocks base method.
 func (m *MockState) KnownValidators() structs.ValidatorsState {
 	m.ctrl.T.Helper()
@@ -410,6 +424,18 @@ func (m *MockState) SetHeadSlot(arg0 structs.Slot) {
 func (mr *MockStateMockRecorder) SetHeadSlot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeadSlot", reflect.TypeOf((*MockState)(nil).SetHeadSlot), arg0)
+}
+
+// SetHeadSlotPayloadAttributes mocks base method.
+func (m *MockState) SetHeadSlotPayloadAttributes(arg0 uint64) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetHeadSlotPayloadAttributes", arg0)
+}
+
+// SetHeadSlotPayloadAttributes indicates an expected call of SetHeadSlotPayloadAttributes.
+func (mr *MockStateMockRecorder) SetHeadSlotPayloadAttributes(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeadSlotPayloadAttributes", reflect.TypeOf((*MockState)(nil).SetHeadSlotPayloadAttributes), arg0)
 }
 
 // SetKnownValidators mocks base method.
