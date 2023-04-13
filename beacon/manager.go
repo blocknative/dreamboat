@@ -251,7 +251,7 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 	client.SubscribeToPayloadAttributesEvents(c)
 
 	for payloadAttributes := range c {
-		logger = logger.WithField("slot", payloadAttributes.Data.ProposalSlot)
+		logger = logger.WithField("slot", payloadAttributes.Data.ProposalSlot-1)
 
 		proposalSlot := payloadAttributes.Data.ProposalSlot - 1
 		if slot := state.HeadSlotPayloadAttributes(); proposalSlot <= slot {
