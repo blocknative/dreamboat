@@ -180,11 +180,11 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 
 	defer logger.Debug("beacon loop stopped")
 
-	if s.Config.RunPayloadAttributesSubscription {
-		go s.RunPayloadAttributesSubscription(ctx, state, client)
-	}
+	events := make(chan bcli.HeadEvent, NumberOfSlotsInState)
 
-	events := make(chan bcli.HeadEvent)
+	if s.Config.RunPayloadAttributesSubscription {
+		go s.RunPayloadAttributesSubscription(ctx, state, client, events)
+	}
 
 	client.SubscribeToHeadEvents(ctx, events)
 
@@ -237,7 +237,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 	}
 }
 
-func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state State, client BeaconClient) {
+func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state State, client BeaconClient, events chan bcli.HeadEvent) {
 	logger := s.Log.WithField("method", "ProcessNewSlot")
 
 	c := make(chan bcli.PayloadAttributesEvent)
@@ -251,6 +251,11 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 
 		if proposalSlot < uint64(headSlot) {
 			continue
+		}
+
+		select {
+		case events <- bcli.HeadEvent{Slot: proposalSlot}:
+		default:
 		}
 
 		// discard repetitive payload attributes (we receive them once from each beacon node)
