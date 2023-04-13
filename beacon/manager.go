@@ -336,6 +336,9 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	if received <= headSlot {
 		return nil
 	}
+
+	state.SetHeadSlot(received)
+	headSlot = received
 	logger = logger.WithField("slotHead", headSlot)
 
 	if headSlot > 0 {
@@ -343,9 +346,6 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 			s.Log.With(log.F{"slot": slot, "event": "missed_slot"}).Warn("missed slot")
 		}
 	}
-
-	state.SetHeadSlot(received)
-	headSlot = received
 
 	// update proposer duties and known validators in the background
 	if (structs.DurationPerEpoch / 2) < time.Since(state.KnownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
