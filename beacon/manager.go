@@ -229,6 +229,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				logger.With(log.F{
 					"epoch":                     headSlot.Epoch(),
 					"slotHead":                  headSlot,
+					"slotHeadPayloadAttributes": state.HeadSlotPayloadAttributes(),
 					"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
 					"fork":                      state.Fork().Version(headSlot).String(),
 					"numDuties":                 len(duties.ProposerDutiesResponse),
@@ -293,13 +294,14 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 		state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
 
 		logger.With(log.F{
-			"epoch":              headSlot.Epoch(),
-			"slot":               proposalSlot,
-			"slotHead":           headSlot,
-			"slotStartNextEpoch": structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
-			"fork":               state.Fork().Version(headSlot).String(),
-			"randao":             state.Randao(uint64(headSlot)).Randao,
-			"withdrawalsRoot":    state.Withdrawals(uint64(headSlot)).Root.String(),
+			"epoch":                     headSlot.Epoch(),
+			"slot":                      proposalSlot,
+			"slotHead":                  headSlot,
+			"slotHeadPayloadAttributes": state.HeadSlotPayloadAttributes(),
+			"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
+			"fork":                      state.Fork().Version(headSlot).String(),
+			"randao":                    state.Randao(uint64(headSlot)).Randao,
+			"withdrawalsRoot":           state.Withdrawals(uint64(headSlot)).Root.String(),
 		}).Debug("processed payload attributes")
 	}
 }
