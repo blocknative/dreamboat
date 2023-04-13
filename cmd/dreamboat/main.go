@@ -274,7 +274,7 @@ var flags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:    "beacon-payload-attributes-subscription",
 		Usage:   "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)",
-		Value:   false,
+		Value:   true,
 		EnvVars: []string{"BEACON_PAYLOAD_ATTRIBUTES_SUBSCRIPTION"},
 	},
 }
