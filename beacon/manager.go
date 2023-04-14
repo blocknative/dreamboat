@@ -288,9 +288,15 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 			continue
 		}
 
+		if withdrawals := state.Withdrawals(proposalSlot); (root != types.Hash{}) {
+			logger.With(log.F{"old": withdrawals.Root.String(), "new": types.Hash(root).String()}).Warn("replacing withdrawals")
+		}
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(proposalSlot), Root: root})
 
 		// update randao first, so that main loop can know if it's been processed or not
+		if randao := state.Randao(proposalSlot); randao.Randao != "" {
+			logger.With(log.F{"old": randao.Randao, "new": payloadAttributes.Data.PayloadAttributes.PrevRandao}).Warn("replacing randao")
+		}
 		state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
 
 		logger.With(log.F{
