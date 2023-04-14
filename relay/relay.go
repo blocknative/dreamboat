@@ -174,12 +174,10 @@ func (rs *Relay) Close(ctx context.Context) {
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
-func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
+func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc structs.UserContent, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getHeader", "all")
-
-	logger := rs.l.WithField("method", "GetHeader")
 
 	slot, err := request.Slot()
 	if err != nil {
@@ -201,7 +199,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, err
 	}
 
-	logger = logger.With(log.F{
+	logger := rs.l.With(log.F{
+		"method":     "GetHeader",
+		"ip":         uc.IP,
 		"slot":       slot,
 		"parentHash": parentHash,
 		"pubkey":     pk,
@@ -318,12 +318,13 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
+func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc structs.UserContent, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
 	logger := rs.l.With(log.F{
 		"method":        "GetPayload",
+		"ip":            uc.IP,
 		"slot":          payloadRequest.Slot(),
 		"block_number":  payloadRequest.BlockNumber(),
 		"blockHash":     payloadRequest.BlockHash(),

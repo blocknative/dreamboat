@@ -30,12 +30,13 @@ var (
 )
 
 // SubmitBlock Accepts block from trusted builder and stores
-func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr structs.SubmitBlockRequest) error {
+func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc structs.UserContent, sbr structs.SubmitBlockRequest) error {
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "submitBlock", "all")
 	value := sbr.Value()
 	logger := rs.l.With(log.F{
 		"method":         "SubmitBlock",
+		"ip":             uc.IP,
 		"builder":        sbr.BuilderPubkey(),
 		"blockHash":      sbr.BlockHash(),
 		"headSlot":       rs.beaconState.HeadSlot(),
