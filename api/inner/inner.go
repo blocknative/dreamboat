@@ -70,8 +70,8 @@ func (a *API) setAvailability(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	for k, v := range query {
 		if len(v) != 1 {
-			w.Write([]byte(`{"error": "wrong parameter count"}`))
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error": "wrong parameter count"}`))
 			return
 		}
 		var val bool
@@ -80,14 +80,14 @@ func (a *API) setAvailability(w http.ResponseWriter, r *http.Request) {
 			val = true
 		case "false", "0":
 		default:
-			w.Write([]byte(`{"error": "wrong parameter"}`))
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error": "wrong parameter"}`))
 			return
 		}
 
 		if err := a.cfg.SetBool(k, val); err != nil {
-			w.Write([]byte(`{"error": "key not found"}`))
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error": "key not found"}`))
 			return
 		}
 
@@ -105,7 +105,6 @@ type ServiceStatus struct {
 }
 
 func (a *API) getSubmission(w http.ResponseWriter, r *http.Request) {
-
 	slot, err := specificSlot(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
