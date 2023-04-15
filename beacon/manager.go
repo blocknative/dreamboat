@@ -294,10 +294,11 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(proposalSlot), Root: root})
 
 		// update randao first, so that main loop can know if it's been processed or not
-		if randao := state.Randao(proposalSlot); randao.Randao != "" {
-			logger.With(log.F{"old": randao.Randao, "new": payloadAttributes.Data.PayloadAttributes.PrevRandao}).Warn("replacing randao")
+		if randao := state.Randao(proposalSlot); randao.Randao == "" {
+			state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
+		} else if randao.Randao != payloadAttributes.Data.PayloadAttributes.PrevRandao {
+			logger.With(log.F{"current": randao.Randao, "received": payloadAttributes.Data.PayloadAttributes.PrevRandao}).Warn("blocked randao replace")
 		}
-		state.SetRandao(structs.RandaoState{Slot: uint64(proposalSlot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
 
 		logger.With(log.F{
 			"epoch":                     headSlot.Epoch(),
@@ -375,7 +376,11 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 			return fmt.Errorf("fail to update randao: %w", err)
 		}
 
-		state.SetRandao(structs.RandaoState{Slot: uint64(headSlot), Randao: randao})
+		if curRandao := state.Randao(uint64(headSlot)); curRandao.Randao == "" {
+			state.SetRandao(structs.RandaoState{Slot: uint64(headSlot), Randao: randao})
+		} else if curRandao.Randao != randao {
+			logger.With(log.F{"current": curRandao.Randao, "received": randao}).Warn("blocked randao replace")
+		}
 	}
 
 	// update proposer duties
