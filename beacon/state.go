@@ -29,8 +29,17 @@ type MultiSlotState struct {
 func (as *MultiSlotState) HeadSlotPayloadAttributes() uint64 {
 	return as.headSlotPayloadAttributes.Load()
 }
-func (as *MultiSlotState) SetHeadSlotPayloadAttributes(slot uint64) {
-	as.headSlotPayloadAttributes.Store(slot)
+func (as *MultiSlotState) SetHeadSlotPayloadAttributesIfHigher(slot uint64) (uint64, bool) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	headSlot := as.headSlotPayloadAttributes.Load()
+	if slot > headSlot {
+		as.headSlot.Store(slot)
+		return slot, true
+	}
+
+	return headSlot, false
 }
 
 func (as *MultiSlotState) Duties() structs.DutiesState {
