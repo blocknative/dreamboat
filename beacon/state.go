@@ -35,7 +35,7 @@ func (as *MultiSlotState) SetHeadSlotPayloadAttributesIfHigher(slot uint64) (uin
 
 	headSlot := as.headSlotPayloadAttributes.Load()
 	if slot > headSlot {
-		as.headSlot.Store(slot)
+		as.headSlotPayloadAttributes.Store(slot)
 		return slot, true
 	}
 
