@@ -284,26 +284,26 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 			continue
 		}
 
-		// update withdrawals
 		hW := structs.HashWithdrawals{Withdrawals: payloadAttributes.Data.PayloadAttributes.Withdrawals}
 		root, err := hW.HashTreeRoot()
 		if err != nil {
 			logger.WithError(err).Warn("failed to compute withdrawals root")
 			continue
 		}
+		randao := payloadAttributes.Data.PayloadAttributes.PrevRandao
 
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(slot), Root: root})
-		state.SetRandao(structs.RandaoState{Slot: uint64(slot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
+		state.SetRandao(structs.RandaoState{Slot: uint64(slot), Randao: randao})
 
 		logger.With(log.F{
 			"epoch":                     headSlot.Epoch(),
 			"slot":                      slot,
 			"slotHead":                  headSlot,
-			"slotHeadPayloadAttributes": state.HeadSlotPayloadAttributes(),
+			"slotHeadPayloadAttributes": paHeadSlot,
 			"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
 			"fork":                      state.Fork().Version(headSlot).String(),
-			"randao":                    state.Randao(uint64(headSlot)).Randao,
-			"withdrawalsRoot":           state.Withdrawals(uint64(headSlot)).Root.String(),
+			"randao":                    randao,
+			"withdrawalsRoot":           types.Hash(root).String(),
 		}).Debug("processed payload attributes")
 	}
 }
