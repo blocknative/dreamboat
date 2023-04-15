@@ -284,10 +284,6 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 			continue
 		}
 
-		if randao := state.Randao(slot); randao.Randao != "" {
-			logger.With(log.F{"current": randao.Randao, "received": payloadAttributes.Data.PayloadAttributes.PrevRandao}).Warn("blocked payload attributes replace")
-		}
-
 		// update withdrawals
 		hW := structs.HashWithdrawals{Withdrawals: payloadAttributes.Data.PayloadAttributes.Withdrawals}
 		root, err := hW.HashTreeRoot()
@@ -296,12 +292,7 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 			continue
 		}
 
-		if withdrawals := state.Withdrawals(slot); (withdrawals.Root != types.Hash{}) {
-			logger.With(log.F{"old": withdrawals.Root.String(), "new": types.Hash(root).String()}).Warn("replacing withdrawals")
-		}
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(slot), Root: root})
-
-		// update randao first, so that main loop can know if it's been processed or not
 		state.SetRandao(structs.RandaoState{Slot: uint64(slot), Randao: payloadAttributes.Data.PayloadAttributes.PrevRandao})
 
 		logger.With(log.F{
