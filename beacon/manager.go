@@ -239,7 +239,9 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 					"numKnownValidators":        len(validators.KnownValidators),
 					"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
 					"randao":                    state.Randao(uint64(headSlot)).Randao,
+					"randaoPrev":                state.Randao(uint64(headSlot) - 1).Randao,
 					"withdrawalsRoot":           state.Withdrawals(uint64(headSlot)).Root.String(),
+					"withdrawalsRootPrev":       state.Withdrawals(uint64(headSlot) - 1).Root.String(),
 					"processingTimeMs":          time.Since(t).Milliseconds(),
 				}).Debug("processed new slot")
 			}
@@ -303,7 +305,9 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 			"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
 			"fork":                      state.Fork().Version(headSlot).String(),
 			"randao":                    randao,
+			"randaoPrev":                state.Randao(slot - 1).Randao,
 			"withdrawalsRoot":           types.Hash(root).String(),
+			"withdrawalsRootPrev":       state.Withdrawals(slot - 1).Root.String(),
 		}).Debug("processed payload attributes")
 	}
 }
