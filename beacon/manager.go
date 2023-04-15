@@ -296,7 +296,7 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 			continue
 		}
 
-		if withdrawals := state.Withdrawals(slot); (root != types.Hash{}) {
+		if withdrawals := state.Withdrawals(slot); (withdrawals.Root != types.Hash{}) {
 			logger.With(log.F{"old": withdrawals.Root.String(), "new": types.Hash(root).String()}).Warn("replacing withdrawals")
 		}
 		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(slot), Root: root})
