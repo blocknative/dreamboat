@@ -98,7 +98,6 @@ func main() {
 	}
 
 	go reloadConfigSignal(reloadSig, cfg)
-
 	chainCfg := config.NewChainConfig()
 	chainCfg.LoadNetwork(cfg.Relay.Network)
 	if chainCfg.GenesisForkVersion == "" {
@@ -130,16 +129,8 @@ func main() {
 
 	timeRelayStart := time.Now()
 
-	payloadCache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](cfg.Payload.CacheSize)
-	if err != nil {
-		logger.WithError(err).Fatal("failed to initialize payload cache")
-		return
-	}
-
-	ds := datastore.NewDatastore(storage, storage.DB, cfg.Payload.Badger.TTL, payloadCache)
-
 	beaconCli := bcli.NewMultiBeaconClient(logger)
-	if err := initBeaconClients(logger, cfg.Beacon.Addresses, mbc, m); err != nil {
+	if err := initBeaconClients(logger, beaconCli, cfg.Beacon.Addresses, m); err != nil {
 		logger.Fatalf("fail to initialize beacon: %w", err)
 		return
 	}
@@ -275,6 +266,13 @@ func main() {
 		logger.WithError(err).Fatal("error computing capella domain")
 		return
 	}
+
+	payloadCache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](cfg.Payload.CacheSize)
+	if err != nil {
+		logger.WithError(err).Fatal("failed to initialize payload cache")
+		return
+	}
+	ds := datastore.NewDatastore(storage, storage.DB, cfg.Payload.Badger.TTL, payloadCache)
 
 	r := relay.NewRelay(logger, relay.RelayConfig{
 		BuilderSigningDomain: domainBuilder,
@@ -427,16 +425,18 @@ func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs Validat
 }
 
 func initBeaconClients(l log.Logger, mbc *bcli.MultiBeaconClient, endpoints []string, m *metrics.Metrics, c client.BeaconConfig) error {
-
 	for _, endpoint := range endpoints {
 		u, err := url.Parse(endpoint)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		mbc.Add(bcli.NewBeaconClient(l, u, c))
-		//client.AttachMetrics(m)
-
+		bc := bcli.NewBeaconClient(l, u, c)
+		mbc.Add(bc)
+		go bc.SubscribeToHeadEvents(mbc.HeadEventsSubscription())
+		// TODO
+		//if enabled
+		go bc.SubscribeToPayloadAttributesEvents(mbc.PayloadAttributesSubscription())
 	}
 	return nil
 }

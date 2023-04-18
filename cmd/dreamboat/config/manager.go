@@ -23,6 +23,7 @@ func DefaultConfig() Config {
 		InternalHttp: DefaultHTTPConfig,
 		Api:          DefaultApiConfig,
 		Relay:        DefaultRelayConfig,
+		Beacon:       DefaultBeaconConfig,
 		Verify:       DefaultVerifyConfig,
 		Validators:   DefaultValidatorsConfig,
 		Payload:      DefaultPayloadConfig,
@@ -48,4 +49,14 @@ func (cm *ConfigManager) Reload() error {
 
 func (cm *ConfigManager) Load() error {
 	return cm.s.Load(cm.Config)
+}
+
+/*
+func (cm *ConfigManager) Attach() error {
+}*/
+
+type ConfigString string
+
+func (cs *ConfigString) OnConfigChange(newA *ConfigString) {
+	cs = newA
 }

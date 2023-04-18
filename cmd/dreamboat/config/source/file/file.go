@@ -40,7 +40,6 @@ func (s *Source) Load(c *config.Config) (e error) {
 }
 
 func parseIni(r io.Reader, cfg *config.Config) (e error) {
-
 	elem := reflect.ValueOf(cfg).Elem()
 	t := elem.Type()
 
@@ -144,6 +143,7 @@ func parseParam(currentSection *reflect.Value, key, value string) error {
 					log.Println("different value, setting s ", s)
 					el.SetString(s)
 				}
+			case reflect.Array:
 
 			case reflect.Struct:
 				err := parseParam(&el, rest, value)

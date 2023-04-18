@@ -16,7 +16,7 @@ type Config struct {
 	//
 	Relay RelayConfig `config:"relay"`
 
-	//
+	// configuration of beacon nodes
 	Beacon BeaconConfig `config:"beacon"`
 
 	//
@@ -108,6 +108,18 @@ var DefaultRelayConfig = RelayConfig{
 type BeaconConfig struct {
 	// comma separate list of urls to beacon endpoints
 	Addresses []string `config:"addresses"`
+	// should payload attributes be enabled
+	PayloadAttributesSubscription bool `config:"payload_attributes_subscription"`
+	//
+	EventTimeout time.Duration `config:"event_timeout"`
+	//
+	EventRestart int `config:"event_restart"`
+	// timeout of beacon queries
+	QueryTimeout time.Duration `config:"query_timeout"`
+}
+
+var DefaultBeaconConfig = BeaconConfig{
+	PayloadAttributesSubscription: true,
 }
 
 type BlockSimulationConfig struct {

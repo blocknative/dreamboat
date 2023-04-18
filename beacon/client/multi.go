@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/beacon/client BeaconNode
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/beacon/client BeaconClient
 package client
 
 import (
@@ -28,9 +28,6 @@ type BeaconClient interface {
 	Randao(structs.Slot) (string, error)
 	Endpoint() string
 	GetWithdrawals(structs.Slot) (*GetWithdrawalsResponse, error)
-
-	SubscribeToHeadEvents(chan HeadEvent)
-	SubscribeToPayloadAttributesEvents(chan PayloadAttributesEvent)
 }
 
 type MultiBeaconClient struct {
@@ -49,6 +46,8 @@ func NewMultiBeaconClient(l log.Logger) *MultiBeaconClient {
 		payC:  make(chan PayloadAttributesEvent, 10),
 		Log:   l.WithField("service", "multi-beacon client"),
 	}
+	// TODO
+	//client.AttachMetrics(m)
 }
 
 func (b *MultiBeaconClient) HeadEventsSubscription() chan HeadEvent {
@@ -65,8 +64,6 @@ func (b *MultiBeaconClient) Add(bc BeaconClient) {
 
 	// it's map for a reason
 	b.clients[len(b.clients)] = bc
-	go bc.SubscribeToHeadEvents(b.slotC)
-	go bc.SubscribeToPayloadAttributesEvents(b.payC)
 }
 
 func (b *MultiBeaconClient) Remove(toRemove url.URL) error {

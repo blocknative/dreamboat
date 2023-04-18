@@ -28,7 +28,7 @@ type beaconClient struct {
 	beaconEndpoint *url.URL
 	log            log.Logger
 	m              BeaconMetrics
-	c              BeaconConfig
+	c              *BeaconConfig
 }
 
 type BeaconMetrics struct {
@@ -41,8 +41,7 @@ type BeaconConfig struct {
 	BeaconQueryTimeout time.Duration
 }
 
-func NewBeaconClient(l log.Logger, u *url.URL, config BeaconConfig) *beaconClient {
-
+func NewBeaconClient(l log.Logger, u *url.URL, config *BeaconConfig) *beaconClient {
 	bc := &beaconClient{
 		beaconEndpoint: u,
 		log: l.With(log.F{
@@ -55,7 +54,6 @@ func NewBeaconClient(l log.Logger, u *url.URL, config BeaconConfig) *beaconClien
 	}
 
 	bc.initMetrics()
-
 	return bc
 }
 

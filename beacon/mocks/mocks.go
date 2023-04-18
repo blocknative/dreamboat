@@ -174,6 +174,20 @@ func (mr *MockBeaconClientMockRecorder) GetWithdrawals(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWithdrawals", reflect.TypeOf((*MockBeaconClient)(nil).GetWithdrawals), arg0)
 }
 
+// HeadEventsSubscription mocks base method.
+func (m *MockBeaconClient) HeadEventsSubscription() chan client.HeadEvent {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HeadEventsSubscription")
+	ret0, _ := ret[0].(chan client.HeadEvent)
+	return ret0
+}
+
+// HeadEventsSubscription indicates an expected call of HeadEventsSubscription.
+func (mr *MockBeaconClientMockRecorder) HeadEventsSubscription() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadEventsSubscription", reflect.TypeOf((*MockBeaconClient)(nil).HeadEventsSubscription))
+}
+
 // KnownValidators mocks base method.
 func (m *MockBeaconClient) KnownValidators(arg0 structs.Slot) (client.AllValidatorsResponse, error) {
 	m.ctrl.T.Helper()
@@ -202,30 +216,6 @@ func (m *MockBeaconClient) Randao(arg0 structs.Slot) (string, error) {
 func (mr *MockBeaconClientMockRecorder) Randao(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockBeaconClient)(nil).Randao), arg0)
-}
-
-// SubscribeToHeadEvents mocks base method.
-func (m *MockBeaconClient) SubscribeToHeadEvents(arg0 context.Context, arg1 chan client.HeadEvent) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SubscribeToHeadEvents", arg0, arg1)
-}
-
-// SubscribeToHeadEvents indicates an expected call of SubscribeToHeadEvents.
-func (mr *MockBeaconClientMockRecorder) SubscribeToHeadEvents(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToHeadEvents", reflect.TypeOf((*MockBeaconClient)(nil).SubscribeToHeadEvents), arg0, arg1)
-}
-
-// SubscribeToPayloadAttributesEvents mocks base method.
-func (m *MockBeaconClient) SubscribeToPayloadAttributesEvents(arg0 chan client.PayloadAttributesEvent) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SubscribeToPayloadAttributesEvents", arg0)
-}
-
-// SubscribeToPayloadAttributesEvents indicates an expected call of SubscribeToPayloadAttributesEvents.
-func (mr *MockBeaconClientMockRecorder) SubscribeToPayloadAttributesEvents(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToPayloadAttributesEvents", reflect.TypeOf((*MockBeaconClient)(nil).SubscribeToPayloadAttributesEvents), arg0)
 }
 
 // SyncStatus mocks base method.
