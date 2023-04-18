@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	bcli "github.com/blocknative/dreamboat/beacon/client"
@@ -13,10 +12,6 @@ import (
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
-)
-
-const (
-	Version = "0.3.6"
 )
 
 var (
@@ -32,7 +27,7 @@ type ValidatorCache interface {
 }
 
 type BeaconClient interface {
-	SubscribeToHeadEvents(ctx context.Context, slotC chan bcli.HeadEvent)
+	HeadEventsSubscription() chan bcli.HeadEvent
 	GetProposerDuties(structs.Epoch) (*bcli.RegisteredProposersResponse, error)
 	SyncStatus() (*bcli.SyncStatusPayloadData, error)
 	KnownValidators(structs.Slot) (bcli.AllValidatorsResponse, error)
@@ -40,7 +35,6 @@ type BeaconClient interface {
 	GetWithdrawals(structs.Slot) (*bcli.GetWithdrawalsResponse, error)
 	Randao(structs.Slot) (string, error)
 	GetForkSchedule() (*bcli.GetForkScheduleResponse, error)
-	SubscribeToPayloadAttributesEvents(payloadAttrC chan bcli.PayloadAttributesEvent)
 }
 
 type State interface {
@@ -83,8 +77,6 @@ type Config struct {
 type Manager struct {
 	Log    log.Logger
 	Config Config
-
-	mu sync.Mutex
 }
 
 func NewManager(l log.Logger, cfg Config) *Manager {
@@ -125,12 +117,10 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 		return ErrUnkownFork
 	}
 
-	events := make(chan bcli.HeadEvent, 1)
-
 	ctx, cancel := context.WithCancel(ctx) // for stopping subscription after init is done
 	defer cancel()
 
-	client.SubscribeToHeadEvents(ctx, events)
+	events := client.HeadEventsSubscription()
 
 	for {
 		select {
@@ -187,7 +177,6 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State, client BeaconC
 
 func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "RunBeacon")
-
 	defer logger.Debug("beacon loop stopped")
 
 	events := make(chan bcli.HeadEvent, structs.NumberOfSlotsInState)
@@ -250,13 +239,9 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 	}
 }
 
-func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state State, client BeaconClient, events chan bcli.HeadEvent) {
+func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state State, in chan bcli.PayloadAttributesEvent, out chan bcli.HeadEvent) {
 	logger := s.Log.WithField("method", "RunPayloadAttributesSubscription")
-
-	c := make(chan bcli.PayloadAttributesEvent)
-	client.SubscribeToPayloadAttributesEvents(c)
-
-	for payloadAttributes := range c {
+	for payloadAttributes := range in {
 		slot := payloadAttributes.Data.ProposalSlot - 1
 		logger = logger.WithField("slotPayloadAttributes", slot)
 
@@ -273,7 +258,7 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 		}
 
 		select {
-		case events <- bcli.HeadEvent{Slot: slot}:
+		case out <- bcli.HeadEvent{Slot: slot}:
 		default:
 		}
 
@@ -300,7 +285,6 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 
 		logger.With(log.F{
 			"epoch":                     headSlot.Epoch(),
-			"slot":                      slot,
 			"slotHead":                  headSlot,
 			"slotHeadPayloadAttributes": paHeadSlot,
 			"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,

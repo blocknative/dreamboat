@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -137,8 +138,8 @@ func main() {
 
 	ds := datastore.NewDatastore(storage, storage.DB, cfg.Payload.Badger.TTL, payloadCache)
 
-	beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, m)
-	if err != nil {
+	beaconCli := bcli.NewMultiBeaconClient(logger)
+	if err := initBeaconClients(logger, cfg.Beacon.Addresses, mbc, m); err != nil {
 		logger.Fatalf("fail to initialize beacon: %w", err)
 		return
 	}
@@ -282,10 +283,10 @@ func main() {
 			structs.ForkCapella:   capellaBeaconProposer},
 		PubKey:                pk,
 		SecretKey:             sk,
-		RegistrationCacheTTL:  &cfg.Validators.RegistrationsCacheTTL,
+		RegistrationCacheTTL:  cfg.Validators.RegistrationsCacheTTL,
 		AllowedListedBuilders: allowed,
 		PublishBlock:          cfg.Relay.PublishBlock,
-		MaxBlockPublishDelay:  &cfg.Relay.MaxBlockPublishDelay,
+		MaxBlockPublishDelay:  cfg.Relay.MaxBlockPublishDelay,
 	}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 	r.AttachMetrics(m)
 
@@ -294,7 +295,7 @@ func main() {
 		GetPayload:  true,
 		SubmitBlock: true,
 	}
-	iApi := inner.NewAPI(ee)
+	iApi := inner.NewAPI(ee, ds)
 
 	limitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, allowed)
 	a := api.NewApi(logger, ee, r, validatorRelay, state, limitter)
@@ -325,6 +326,10 @@ func main() {
 	}
 
 	go b.Run(ctx, state, beaconCli, validatorStoreManager, validatorCache)
+
+	//if s.Config.RunPayloadAttributesSubscription {
+	go b.RunPayloadAttributesSubscription(ctx, state, beaconCli.PayloadAttributesSubscription(), beaconCli.HeadEventsSubscription())
+	//}
 
 	logger.Info("beacon manager ready")
 
@@ -404,13 +409,6 @@ func reloadConfigSignal(osSig chan os.Signal, cfg *config.ConfigManager) {
 	}
 }
 
-func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs ValidatorStore, ch chan structs.ValidatorCacheEntry) {
-	defer close(ch)
-	if err := vs.PopulateAllRegistrations(ctx, ch); err != nil {
-		l.WithError(err).Warn("Cache population error")
-	}
-}
-
 func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc *lru.Cache[types.PublicKey, structs.ValidatorCacheEntry]) {
 	ch := make(chan structs.ValidatorCacheEntry, 100)
 	go asyncPopulateAllRegistrations(ctx, l, vs, ch)
@@ -421,18 +419,26 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c client.BeaconConfig) (*bcli.MultiBeaconClient, error) {
-	clients := make([]bcli.BeaconNode, 0, len(endpoints))
+func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs ValidatorStore, ch chan structs.ValidatorCacheEntry) {
+	defer close(ch)
+	if err := vs.PopulateAllRegistrations(ctx, ch); err != nil {
+		l.WithError(err).Warn("Cache population error")
+	}
+}
+
+func initBeaconClients(l log.Logger, mbc *bcli.MultiBeaconClient, endpoints []string, m *metrics.Metrics, c client.BeaconConfig) error {
 
 	for _, endpoint := range endpoints {
-		client, err := bcli.NewBeaconClient(l, endpoint, c)
+		u, err := url.Parse(endpoint)
 		if err != nil {
 			return nil, err
 		}
-		client.AttachMetrics(m) // attach metrics
-		clients = append(clients, client)
+
+		mbc.Add(bcli.NewBeaconClient(l, u, c))
+		//client.AttachMetrics(m)
+
 	}
-	return bcli.NewMultiBeaconClient(l, clients), nil
+	return nil
 }
 
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay, relayWh *wh.Warehouse) {

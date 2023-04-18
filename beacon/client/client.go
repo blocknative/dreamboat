@@ -41,13 +41,12 @@ type BeaconConfig struct {
 	BeaconQueryTimeout time.Duration
 }
 
-func NewBeaconClient(l log.Logger, endpoint string, config BeaconConfig) (*beaconClient, error) {
-	u, err := url.Parse(endpoint)
+func NewBeaconClient(l log.Logger, u *url.URL, config BeaconConfig) *beaconClient {
 
 	bc := &beaconClient{
 		beaconEndpoint: u,
 		log: l.With(log.F{
-			"beaconEndpoint":     endpoint,
+			"beaconEndpoint":     u.String(),
 			"beaconEventTimeout": config.BeaconEventTimeout.String(),
 			"BeaconEventRestart": config.BeaconEventRestart,
 			"beaconQueryTimeout": config.BeaconQueryTimeout.String(),
@@ -57,13 +56,13 @@ func NewBeaconClient(l log.Logger, endpoint string, config BeaconConfig) (*beaco
 
 	bc.initMetrics()
 
-	return bc, err
+	return bc
 }
 
-func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
+func (b *beaconClient) SubscribeToHeadEvents(slotC chan HeadEvent) {
 	logger := b.log.WithField("method", "SubscribeToHeadEvents")
 	defer logger.Debug("head events subscription stopped")
-
+	ctx := context.Background()
 	for {
 		loopCtx, cancelLoop := context.WithCancel(ctx)
 		timer := time.NewTimer(b.c.BeaconEventTimeout)
@@ -165,7 +164,7 @@ func (b *beaconClient) manuallyFetchLatestHeader(ctx context.Context, logger log
 // Returns the latest header from the beacon chain
 func (b *beaconClient) queryLatestHeader() (*HeaderRootObject, error) {
 	u := *b.beaconEndpoint
-	u.Path = fmt.Sprintf("/eth/v1/beacon/headers")
+	u.Path = "/eth/v1/beacon/headers"
 	resp := new(HeaderRootObject)
 
 	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/headers", "GET"))

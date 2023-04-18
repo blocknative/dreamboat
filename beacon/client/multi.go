@@ -4,9 +4,9 @@ package client
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/lthibault/log"
@@ -18,8 +18,7 @@ var (
 	ErrFailedToPublish        = errors.New("failed to publish")
 )
 
-type BeaconNode interface {
-	SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent)
+type BeaconClient interface {
 	GetProposerDuties(structs.Epoch) (*RegisteredProposersResponse, error)
 	SyncStatus() (*SyncStatusPayloadData, error)
 	KnownValidators(structs.Slot) (AllValidatorsResponse, error)
@@ -29,43 +28,72 @@ type BeaconNode interface {
 	Randao(structs.Slot) (string, error)
 	Endpoint() string
 	GetWithdrawals(structs.Slot) (*GetWithdrawalsResponse, error)
-	SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesEvent)
+
+	SubscribeToHeadEvents(chan HeadEvent)
+	SubscribeToPayloadAttributesEvents(chan PayloadAttributesEvent)
 }
 
 type MultiBeaconClient struct {
-	Log     log.Logger
-	Clients []BeaconNode
+	Log log.Logger
 
-	bestBeaconIndex atomic.Int64
+	slotC chan HeadEvent
+	payC  chan PayloadAttributesEvent
+
+	clients     map[int]BeaconClient
+	clientsLock sync.RWMutex
 }
 
-func NewMultiBeaconClient(l log.Logger, clients []BeaconNode) *MultiBeaconClient {
-	if l == nil {
-		l = log.New()
+func NewMultiBeaconClient(l log.Logger) *MultiBeaconClient {
+	return &MultiBeaconClient{
+		slotC: make(chan HeadEvent, 10),
+		payC:  make(chan PayloadAttributesEvent, 10),
+		Log:   l.WithField("service", "multi-beacon client"),
 	}
-	return &MultiBeaconClient{Log: l.WithField("subService", "multi-beacon-client"), Clients: clients}
 }
 
-func (b *MultiBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
-	for _, client := range b.Clients {
-		go client.SubscribeToHeadEvents(ctx, slotC)
+func (b *MultiBeaconClient) HeadEventsSubscription() chan HeadEvent {
+	return b.slotC
+}
+
+func (b *MultiBeaconClient) PayloadAttributesSubscription() chan PayloadAttributesEvent {
+	return b.payC
+}
+
+func (b *MultiBeaconClient) Add(bc BeaconClient) {
+	b.clientsLock.Lock()
+	defer b.clientsLock.Unlock()
+
+	// it's map for a reason
+	b.clients[len(b.clients)] = bc
+	go bc.SubscribeToHeadEvents(b.slotC)
+	go bc.SubscribeToPayloadAttributesEvents(b.payC)
+}
+
+func (b *MultiBeaconClient) Remove(toRemove url.URL) error {
+	b.clientsLock.Lock()
+	defer b.clientsLock.Unlock()
+
+	for k, bc := range b.clients {
+		if bc.Endpoint() == toRemove.String() {
+			delete(b.clients, k)
+			return nil
+		}
 	}
+	return nil
 }
 
 func (b *MultiBeaconClient) GetProposerDuties(epoch structs.Epoch) (*RegisteredProposersResponse, error) {
-	// return the first successful beacon node response
-	clients := b.clientsByLastResponse()
+	b.clientsLock.RLock()
+	defer b.clientsLock.RUnlock()
 
-	for i, client := range clients {
-		log := b.Log.WithField("endpoint", client.Endpoint())
-
+	for _, client := range b.clients {
 		duties, err := client.GetProposerDuties(epoch)
 		if err != nil {
-			log.WithError(err).Error("failed to get proposer duties")
+			b.Log.WithField("endpoint", client.Endpoint()).
+				WithError(err).
+				Error("failed to get proposer duties")
 			continue
 		}
-
-		b.bestBeaconIndex.Store(int64(i))
 
 		// Received successful response. Set this index as last successful beacon node
 		return duties, nil
@@ -81,9 +109,9 @@ func (b *MultiBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
 	// Check each beacon-node sync status
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for _, instance := range b.Clients {
+	for _, instance := range b.clients {
 		wg.Add(1)
-		go func(client BeaconNode) {
+		go func(client BeaconClient) {
 			defer wg.Done()
 			log := b.Log.WithField("endpoint", client.Endpoint())
 
@@ -126,10 +154,11 @@ func (b *MultiBeaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
 }
 
 func (b *MultiBeaconClient) KnownValidators(headSlot structs.Slot) (AllValidatorsResponse, error) {
-	// return the first successful beacon node response
-	clients := b.clientsByLastResponse()
+	b.clientsLock.RLock()
+	defer b.clientsLock.RUnlock()
 
-	for i, client := range clients {
+	// return the first successful beacon node response
+	for _, client := range b.clients {
 		log := b.Log.WithField("endpoint", client.Endpoint())
 
 		validators, err := client.KnownValidators(headSlot)
@@ -137,7 +166,6 @@ func (b *MultiBeaconClient) KnownValidators(headSlot structs.Slot) (AllValidator
 			log.WithError(err).Error("failed to fetch validators")
 			continue
 		}
-		b.bestBeaconIndex.Store(int64(i))
 
 		// Received successful response. Set this index as last successful beacon node
 		return validators, nil
@@ -147,8 +175,10 @@ func (b *MultiBeaconClient) KnownValidators(headSlot structs.Slot) (AllValidator
 }
 
 func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err error) {
-	clients := b.clientsByLastResponse()
-	for _, client := range clients {
+	b.clientsLock.RLock()
+	defer b.clientsLock.RUnlock()
+
+	for _, client := range b.clients {
 		if genesisInfo, err = client.Genesis(); err != nil {
 			b.Log.WithError(err).
 				WithField("endpoint", client.Endpoint()).
@@ -163,7 +193,10 @@ func (b *MultiBeaconClient) Genesis() (genesisInfo structs.GenesisInfo, err erro
 }
 
 func (b *MultiBeaconClient) GetWithdrawals(slot structs.Slot) (withdrawalsResp *GetWithdrawalsResponse, err error) {
-	for _, client := range b.clientsByLastResponse() {
+	b.clientsLock.RLock()
+	defer b.clientsLock.RUnlock()
+
+	for _, client := range b.clients {
 		if withdrawalsResp, err = client.GetWithdrawals(slot); err != nil {
 			if strings.Contains(err.Error(), "Withdrawals not enabled before capella") {
 				break
@@ -184,7 +217,10 @@ func (b *MultiBeaconClient) GetWithdrawals(slot structs.Slot) (withdrawalsResp *
 }
 
 func (b *MultiBeaconClient) Randao(slot structs.Slot) (randao string, err error) {
-	for _, client := range b.clientsByLastResponse() {
+	b.clientsLock.RLock()
+	defer b.clientsLock.RUnlock()
+
+	for _, client := range b.clients {
 		if randao, err = client.Randao(slot); err != nil {
 			b.Log.WithError(err).WithField("slot", slot).WithField("endpoint", client.Endpoint()).Warn("failed to get randao")
 			continue
@@ -195,7 +231,10 @@ func (b *MultiBeaconClient) Randao(slot structs.Slot) (randao string, err error)
 }
 
 func (b *MultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
-	for _, client := range b.clientsByLastResponse() {
+	b.clientsLock.RLock()
+	defer b.clientsLock.RUnlock()
+
+	for _, client := range b.clients { // random
 		if spec, err = client.GetForkSchedule(); err != nil {
 			b.Log.WithError(err).
 				WithField("endpoint", client.Endpoint()).
@@ -207,42 +246,33 @@ func (b *MultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, er
 	return spec, err
 }
 
-func (b *MultiBeaconClient) SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesEvent) {
-	for _, instance := range b.Clients {
-		go instance.SubscribeToPayloadAttributesEvents(slotC)
-	}
-}
-
-func (b *MultiBeaconClient) Endpoint() string {
-	if clients := b.clientsByLastResponse(); len(clients) > 0 {
-		return clients[0].Endpoint()
-	}
-	return ""
-}
-
+/*
 // beaconInstancesByLastResponse returns a list of beacon clients that has the client
 // with the last successful response as the first element of the slice
-func (b *MultiBeaconClient) clientsByLastResponse() []BeaconNode {
+func (b *MultiBeaconClient) clientsByLastResponse() []BeaconClient {
 	index := b.bestBeaconIndex.Load()
 	if index == 0 {
 		return b.Clients
 	}
 
-	instances := make([]BeaconNode, len(b.Clients))
+	instances := make([]BeaconClient, len(b.Clients))
 	copy(instances, b.Clients)
 	instances[0], instances[index] = instances[index], instances[0]
 
 	return instances
-}
+}*/
 
 func (b *MultiBeaconClient) PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) (err error) {
 	resp := make(chan error, 20)
 	var i int
-	for _, client := range b.clientsByLastResponse() {
+
+	b.clientsLock.RLock()
+	for _, client := range b.clients {
 		i++
 		c := client
 		go publishAsync(ctx, c, b.Log, block, resp)
 	}
+	b.clientsLock.RUnlock()
 
 	var (
 		defError error
@@ -267,7 +297,7 @@ func (b *MultiBeaconClient) PublishBlock(ctx context.Context, block structs.Sign
 	}
 }
 
-func publishAsync(ctx context.Context, client BeaconNode, l log.Logger, block structs.SignedBeaconBlock, resp chan<- error) {
+func publishAsync(ctx context.Context, client BeaconClient, l log.Logger, block structs.SignedBeaconBlock, resp chan<- error) {
 	err := client.PublishBlock(ctx, block)
 	if err != nil {
 		l.WithError(err).
