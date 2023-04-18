@@ -135,11 +135,7 @@ func main() {
 		return
 	}
 
-	ds, err := datastore.NewDatastore(storage, cfg.Payload.Badger.TTL, payloadCache)
-	if err != nil {
-		logger.Fatalf("fail to create datastore: %w", err)
-		return
-	}
+	ds := datastore.NewDatastore(storage, storage.DB, cfg.Payload.Badger.TTL, payloadCache)
 
 	beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, m)
 	if err != nil {
