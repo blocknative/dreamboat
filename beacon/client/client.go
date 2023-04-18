@@ -35,20 +35,14 @@ type BeaconMetrics struct {
 	Timing *prometheus.HistogramVec
 }
 
-type BeaconConfig struct {
-	BeaconEventTimeout time.Duration
-	BeaconEventRestart int
-	BeaconQueryTimeout time.Duration
-}
-
 func NewBeaconClient(l log.Logger, u *url.URL, config *BeaconConfig) *beaconClient {
 	bc := &beaconClient{
 		beaconEndpoint: u,
 		log: l.With(log.F{
 			"beaconEndpoint":     u.String(),
-			"beaconEventTimeout": config.BeaconEventTimeout.String(),
-			"BeaconEventRestart": config.BeaconEventRestart,
-			"beaconQueryTimeout": config.BeaconQueryTimeout.String(),
+			"beaconEventTimeout": config.EventTimeout.String(),
+			"BeaconEventRestart": config.EventRestart,
+			"beaconQueryTimeout": config.QueryTimeout.String(),
 		}),
 		c: config,
 	}
@@ -63,7 +57,7 @@ func (b *beaconClient) SubscribeToHeadEvents(slotC chan HeadEvent) {
 	ctx := context.Background()
 	for {
 		loopCtx, cancelLoop := context.WithCancel(ctx)
-		timer := time.NewTimer(b.c.BeaconEventTimeout)
+		timer := time.NewTimer(b.c.EventTimeout)
 		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
 
 		lastTimeout := time.Time{} // zeroed value time.Time
@@ -77,9 +71,9 @@ func (b *beaconClient) SubscribeToHeadEvents(slotC chan HeadEvent) {
 				go b.manuallyFetchLatestHeader(ctx, logger, slotC)
 
 				// to prevent disconnection due to multiple timeouts occurring very close in time, the subscription loop is canceled and restarted
-				if time.Since(lastTimeout) <= b.c.BeaconEventTimeout*2 {
+				if time.Since(lastTimeout) <= b.c.EventTimeout*2 {
 					timeoutCounter++
-					if timeoutCounter >= b.c.BeaconEventRestart {
+					if timeoutCounter >= b.c.EventRestart {
 						logger.WithField("timeoutCounter", timeoutCounter).Warn("restarting subcription")
 						cancelLoop()
 						break EventSelect
@@ -89,7 +83,7 @@ func (b *beaconClient) SubscribeToHeadEvents(slotC chan HeadEvent) {
 				}
 
 				lastTimeout = time.Now()
-				timer.Reset(b.c.BeaconEventTimeout)
+				timer.Reset(b.c.EventTimeout)
 			case <-ctx.Done():
 				cancelLoop()
 				return
@@ -111,7 +105,7 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 				return
 			}
 
-			timer.Reset(b.c.BeaconEventTimeout)
+			timer.Reset(b.c.EventTimeout)
 
 			select {
 			case slotC <- head:
@@ -353,7 +347,7 @@ func (b *beaconClient) AttachMetrics(m *metrics.Metrics) {
 }
 
 func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
-	ctx, cancel := context.WithTimeout(context.Background(), b.c.BeaconQueryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.c.QueryTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
@@ -515,4 +509,27 @@ type PayloadAttributes struct {
 	PrevRandao            string                `json:"prev_randao"`
 	SuggestedFeeRecipient string                `json:"suggested_fee_recipient"`
 	Withdrawals           []*structs.Withdrawal `json:"withdrawals"`
+}
+
+type BeaconConfig struct {
+	EventTimeout time.Duration
+	EventRestart int
+	QueryTimeout time.Duration
+}
+
+func (bc *BeaconConfig) OnConfigChange(c structs.OldNew) {
+	switch c.Name {
+	case "EventTimeout":
+		if b, ok := c.New.(time.Duration); ok {
+			bc.EventTimeout = b
+		}
+	case "EventRestart":
+		if b, ok := c.New.(int); ok {
+			bc.EventRestart = b
+		}
+	case "Euery_Timeout":
+		if b, ok := c.New.(time.Duration); ok {
+			bc.QueryTimeout = b
+		}
+	}
 }

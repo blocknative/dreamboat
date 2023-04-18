@@ -17,7 +17,6 @@ import (
 	"github.com/blocknative/dreamboat/api/inner"
 	"github.com/blocknative/dreamboat/auction"
 	"github.com/blocknative/dreamboat/beacon"
-	"github.com/blocknative/dreamboat/beacon/client"
 	bcli "github.com/blocknative/dreamboat/beacon/client"
 	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/client/sim/fallback"
@@ -130,7 +129,9 @@ func main() {
 	timeRelayStart := time.Now()
 
 	beaconCli := bcli.NewMultiBeaconClient(logger)
-	if err := initBeaconClients(logger, beaconCli, cfg.Beacon.Addresses, m); err != nil {
+	bcfg := &bcli.BeaconConfig{}
+	cfg.Beacon.SubscribeForUpdates(bcfg)
+	if err := initBeaconClients(logger, beaconCli, cfg.Beacon.Addresses, m, bcfg); err != nil {
 		logger.Fatalf("fail to initialize beacon: %w", err)
 		return
 	}
@@ -424,7 +425,7 @@ func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs Validat
 	}
 }
 
-func initBeaconClients(l log.Logger, mbc *bcli.MultiBeaconClient, endpoints []string, m *metrics.Metrics, c client.BeaconConfig) error {
+func initBeaconClients(l log.Logger, mbc *bcli.MultiBeaconClient, endpoints []string, m *metrics.Metrics, c *bcli.BeaconConfig) error {
 	for _, endpoint := range endpoints {
 		u, err := url.Parse(endpoint)
 		if err != nil {

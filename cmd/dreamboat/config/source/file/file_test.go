@@ -1,10 +1,13 @@
 package file
 
 import (
+	"encoding/json"
+	"log"
 	"reflect"
 	"testing"
 
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
+	"github.com/blocknative/dreamboat/structs"
 )
 
 func TestSource_Load(t *testing.T) {
@@ -29,15 +32,26 @@ func TestSource_Load(t *testing.T) {
 			s := NewSource(tt.fields.filepath)
 			//c := &config.Config{}
 			c := config.DefaultConfig()
-
-			err := s.Load(&c)
+			ab := &c
+			tc := &TestChange{}
+			ab.Api.SubscribeForUpdates(tc)
+			err := s.Load(ab)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Source.Load() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			a, _ := json.Marshal(c)
+			t.Log("a", string(a))
 			if !reflect.DeepEqual(&c, tt.wantC) {
 				t.Errorf("Source.Load() = %v, want %v", c, tt.wantC)
 			}
 		})
 	}
+}
+
+type TestChange struct {
+}
+
+func (tc *TestChange) OnConfigChange(change structs.OldNew) {
+	log.Println("change structs.OldNew", change)
 }

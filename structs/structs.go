@@ -341,3 +341,9 @@ func (fs ForkState) Version(slot Slot) ForkVersion {
 	}
 	return ForkUnknown
 }
+
+type OldNew struct {
+	Name string
+	Old  any
+	New  any
+}

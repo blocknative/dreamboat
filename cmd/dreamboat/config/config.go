@@ -1,38 +1,40 @@
 package config
 
-import "time"
+import (
+	"time"
+)
 
 type Config struct {
 
 	// http server on which relay serves external connections
-	ExternalHttp HTTPConfig `config:"external_http"`
+	ExternalHttp *HTTPConfig `config:"external_http"`
 
 	// internal port for metrics profiling and management
-	InternalHttp HTTPConfig `config:"internal_http"`
+	InternalHttp *HTTPConfig `config:"internal_http"`
 
 	//
-	Api ApiConfig `config:"api"`
+	Api *ApiConfig `config:"api"`
 
 	//
-	Relay RelayConfig `config:"relay"`
+	Relay *RelayConfig `config:"relay"`
 
 	// configuration of beacon nodes
-	Beacon BeaconConfig `config:"beacon"`
+	Beacon *BeaconConfig `config:"beacon"`
 
 	//
-	Verify VerifyConfig `config:"verify"`
+	Verify *VerifyConfig `config:"verify"`
 
 	//
-	Validators ValidatorsConfig `config:"validators"`
+	Validators *ValidatorsConfig `config:"validators"`
 
 	//
-	BlockSimulation BlockSimulationConfig `config:"block_simulation"`
+	BlockSimulation *BlockSimulationConfig `config:"block_simulation"`
 
 	//
-	Payload PayloadConfig `config:"payload"`
+	Payload *PayloadConfig `config:"payload"`
 
 	//
-	DataAPI DataAPIConfig `config:"dataapi"`
+	DataAPI *DataAPIConfig `config:"dataapi"`
 }
 
 type HTTPConfig struct {
@@ -42,7 +44,7 @@ type HTTPConfig struct {
 	WriteTimeout time.Duration `config:"write_timeout"` //time.Second * 2,
 }
 
-var DefaultHTTPConfig = HTTPConfig{
+var DefaultHTTPConfig = &HTTPConfig{
 	ReadTimeout:  2 * time.Second,
 	WriteTimeout: 2 * time.Second,
 }
@@ -56,7 +58,7 @@ type SQLConfig struct {
 	ConnMaxIdleTime time.Duration `config:"conn_max_idle_time"`
 }
 
-var DefaultSQLConfig = SQLConfig{
+var DefaultSQLConfig = &SQLConfig{
 	MaxOpenConns:    10,
 	MaxIdleConns:    10,
 	ConnMaxIdleTime: 15 * time.Second,
@@ -66,11 +68,13 @@ type BadgerDBConfig struct {
 	TTL time.Duration `config:"ttl"`
 }
 
-var DefaultBadgerDBConfig = BadgerDBConfig{
+var DefaultBadgerDBConfig = &BadgerDBConfig{
 	TTL: 48 * time.Hour,
 }
 
 type ApiConfig struct {
+	Subscriber
+
 	// submission request limit - rate per second
 	SubmissionLimitRate int `config:"submission_limit_rate"`
 
@@ -78,7 +82,7 @@ type ApiConfig struct {
 	SubmissionLimitBurst int `config:"submission_limit_burst"`
 }
 
-var DefaultApiConfig = ApiConfig{
+var DefaultApiConfig = &ApiConfig{
 	SubmissionLimitRate:  2,
 	SubmissionLimitBurst: 2,
 }
@@ -100,12 +104,14 @@ type RelayConfig struct {
 	AllowedBuilders []string `config:"allowed_builders"` // map[[48]byte]struct{}
 }
 
-var DefaultRelayConfig = RelayConfig{
+var DefaultRelayConfig = &RelayConfig{
 	PublishBlock:         true,
 	MaxBlockPublishDelay: 500 * time.Millisecond,
 }
 
 type BeaconConfig struct {
+	Subscriber
+
 	// comma separate list of urls to beacon endpoints
 	Addresses []string `config:"addresses"`
 	// should payload attributes be enabled
@@ -118,7 +124,7 @@ type BeaconConfig struct {
 	QueryTimeout time.Duration `config:"query_timeout"`
 }
 
-var DefaultBeaconConfig = BeaconConfig{
+var DefaultBeaconConfig = &BeaconConfig{
 	PayloadAttributesSubscription: true,
 }
 
@@ -146,7 +152,7 @@ type BlockSimulationHTTPConfig struct {
 
 type ValidatorsConfig struct {
 	// Address of postgress database for validator registrations, if empty - default, badger will be used",
-	DB SQLConfig `config:"db"`
+	DB *SQLConfig `config:"db"`
 	// BadgerDB config if sql is not used
 	Badger BadgerDBConfig `config:"badger"`
 	// The size of response queue, should be set to expected number of validators in one request
@@ -159,9 +165,9 @@ type ValidatorsConfig struct {
 	RegistrationsCacheTTL time.Duration `config:"registrations_cache_ttl"`
 }
 
-var DefaultValidatorsConfig = ValidatorsConfig{
+var DefaultValidatorsConfig = &ValidatorsConfig{
 	DB:                     DefaultSQLConfig,
-	Badger:                 DefaultBadgerDBConfig,
+	Badger:                 *DefaultBadgerDBConfig,
 	QueueSize:              100_000,
 	StoreWorkersNum:        400,
 	RegistrationsCacheSize: 600_000,
@@ -175,7 +181,7 @@ type VerifyConfig struct {
 	QueueSize uint `config:"queue_size"`
 }
 
-var DefaultVerifyConfig = VerifyConfig{
+var DefaultVerifyConfig = &VerifyConfig{
 	WorkersNum: 2000,
 	QueueSize:  100_000,
 }
@@ -187,9 +193,9 @@ type DataAPIConfig struct {
 	Badger BadgerDBConfig `config:"badger"`
 }
 
-var DefaultDataAPIConfig = DataAPIConfig{
-	DB:     DefaultSQLConfig,
-	Badger: DefaultBadgerDBConfig,
+var DefaultDataAPIConfig = &DataAPIConfig{
+	DB:     *DefaultSQLConfig,
+	Badger: *DefaultBadgerDBConfig,
 }
 
 type PayloadConfig struct {
@@ -199,7 +205,7 @@ type PayloadConfig struct {
 	CacheSize int `config:"cache_size"`
 }
 
-var DefaultPayloadConfig = PayloadConfig{
-	Badger:    DefaultBadgerDBConfig,
+var DefaultPayloadConfig = &PayloadConfig{
+	Badger:    *DefaultBadgerDBConfig,
 	CacheSize: 1_000,
 }

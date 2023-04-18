@@ -303,3 +303,9 @@ func publishAsync(ctx context.Context, client BeaconClient, l log.Logger, block 
 	}
 	resp <- err
 }
+
+func (bc *MultiBeaconClient) OnConfigChange(c structs.OldNew) {
+	switch c.Name {
+	case "Addresses":
+	}
+}

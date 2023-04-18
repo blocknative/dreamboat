@@ -32,13 +32,15 @@ func TestBeaconClientState(t *testing.T) {
 	beaconMock.EXPECT().GetProposerDuties(gomock.Any()).Return(&client.RegisteredProposersResponse{Data: []client.RegisteredProposersResponseData{}}, nil).Times(4)
 	beaconMock.EXPECT().SyncStatus().Return(&client.SyncStatusPayloadData{}, nil).Times(1)
 
-	beaconMock.EXPECT().SubscribeToHeadEvents(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
-		func(ctx context.Context, events chan client.HeadEvent) {
-			go func() {
-				events <- client.HeadEvent{Slot: 1}
-			}()
-		},
-	)
+	//beaconMock.EXPECT().HeadEventsSubscription()
+	/*
+		SubscribeToHeadEvents(gomock.Any(), gomock.Any()).Times(1).DoAndReturn(
+			func(ctx context.Context, events chan client.HeadEvent) {
+				go func() {
+					events <- client.HeadEvent{Slot: 1}
+				}()
+			},
+		)*/
 	beaconMock.EXPECT().KnownValidators(gomock.Any()).Return(client.AllValidatorsResponse{Data: []client.ValidatorResponseEntry{}}, nil).Times(1)
 	beaconMock.EXPECT().Genesis().Times(1).Return(structs.GenesisInfo{}, nil)
 	vCache := mocks.NewMockValidatorCache(ctrl)

@@ -1,5 +1,7 @@
 package config
 
+import "github.com/blocknative/dreamboat/structs"
+
 type Source interface {
 	Load(*Config) error
 }
@@ -51,12 +53,24 @@ func (cm *ConfigManager) Load() error {
 	return cm.s.Load(cm.Config)
 }
 
-/*
-func (cm *ConfigManager) Attach() error {
-}*/
+type Listener interface {
+	OnConfigChange(change structs.OldNew)
+}
 
-type ConfigString string
+type Propagator interface {
+	Propagate(change structs.OldNew)
+}
 
-func (cs *ConfigString) OnConfigChange(newA *ConfigString) {
-	cs = newA
+type Subscriber struct {
+	listeners []Listener
+}
+
+func (s *Subscriber) SubscribeForUpdates(l Listener) {
+	s.listeners = append(s.listeners, l)
+}
+
+func (s Subscriber) Propagate(change structs.OldNew) {
+	for _, l := range s.listeners {
+		l.OnConfigChange(change)
+	}
 }

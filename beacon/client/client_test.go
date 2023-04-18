@@ -27,12 +27,10 @@ func TestMultiSubscribeToHeadEvents(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	connected := mocks.NewMockBeaconNode(ctrl)
-	disconnected := mocks.NewMockBeaconNode(ctrl)
+	connected := mocks.NewMockBeaconClient(ctrl)
+	disconnected := mocks.NewMockBeaconClient(ctrl)
 
-	bc := &client.MultiBeaconClient{Log: nullLog, Clients: []client.BeaconNode{connected, disconnected}}
-
-	events := make(chan client.HeadEvent)
+	bc := &client.MultiBeaconClient{Log: nullLog, clients: []client.BeaconNode{connected, disconnected}}
 
 	connected.EXPECT().SubscribeToHeadEvents(ctx, events).Times(1)
 	disconnected.EXPECT().SubscribeToHeadEvents(ctx, events).Times(1)
@@ -50,12 +48,12 @@ func TestMultiGetProposerDuties(t *testing.T) {
 	t.Run("connected beacon first", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mocks.NewMockBeaconNode(ctrl)
-		disconnected := mocks.NewMockBeaconNode(ctrl)
+		connected := mocks.NewMockBeaconClient(ctrl)
+		disconnected := mocks.NewMockBeaconClient(ctrl)
 
-		clients := []client.BeaconNode{connected, disconnected}
+		clients := []client.BeaconClient{connected, disconnected}
 
-		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
+		bc := &client.MultiBeaconClient{Log: nullLog, clients: clients}
 
 		duties := client.RegisteredProposersResponse{}
 
@@ -76,10 +74,10 @@ func TestMultiGetProposerDuties(t *testing.T) {
 	t.Run("disconnected beacon first", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mocks.NewMockBeaconNode(ctrl)
-		disconnected := mocks.NewMockBeaconNode(ctrl)
+		connected := mocks.NewMockBeaconClient(ctrl)
+		disconnected := mocks.NewMockBeaconClient(ctrl)
 
-		clients := []client.BeaconNode{disconnected, connected}
+		clients := []client.BeaconClient{disconnected, connected}
 
 		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
@@ -114,10 +112,10 @@ func TestMultiSyncStatus(t *testing.T) {
 	t.Run("all beacons connected", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mocks.NewMockBeaconNode(ctrl)
-		connected2 := mocks.NewMockBeaconNode(ctrl)
+		connected := mocks.NewMockBeaconClient(ctrl)
+		connected2 := mocks.NewMockBeaconClient(ctrl)
 
-		clients := []client.BeaconNode{connected, connected2}
+		clients := []client.BeaconClient{connected, connected2}
 
 		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
@@ -144,10 +142,10 @@ func TestMultiSyncStatus(t *testing.T) {
 	t.Run("with disconnected beacon", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mocks.NewMockBeaconNode(ctrl)
-		disconnected := mocks.NewMockBeaconNode(ctrl)
+		connected := mocks.NewMockBeaconClient(ctrl)
+		disconnected := mocks.NewMockBeaconClient(ctrl)
 
-		clients := []client.BeaconNode{disconnected, connected}
+		clients := []client.BeaconClient{disconnected, connected}
 
 		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
@@ -206,10 +204,10 @@ func TestMultiKnownValidators(t *testing.T) {
 	t.Run("disconnected beacon first", func(t *testing.T) {
 		t.Parallel()
 
-		connected := mocks.NewMockBeaconNode(ctrl)
-		disconnected := mocks.NewMockBeaconNode(ctrl)
+		connected := mocks.NewMockBeaconClient(ctrl)
+		disconnected := mocks.NewMockBeaconClient(ctrl)
 
-		clients := []client.BeaconNode{disconnected, connected}
+		clients := []client.BeaconClient{disconnected, connected}
 
 		bc := &client.MultiBeaconClient{Log: nullLog, Clients: clients}
 
