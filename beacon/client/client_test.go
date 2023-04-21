@@ -30,7 +30,7 @@ func TestMultiSubscribeToHeadEvents(t *testing.T) {
 	connected := mocks.NewMockBeaconClient(ctrl)
 	disconnected := mocks.NewMockBeaconClient(ctrl)
 
-	bc := &client.MultiBeaconClient{Log: nullLog, clients: []client.BeaconNode{connected, disconnected}}
+	bc := &client.MultiBeaconClient{Log: nullLog, clients: []client.BeaconClient{connected, disconnected}}
 
 	connected.EXPECT().SubscribeToHeadEvents(ctx, events).Times(1)
 	disconnected.EXPECT().SubscribeToHeadEvents(ctx, events).Times(1)

@@ -35,7 +35,7 @@ func TestSource_Load(t *testing.T) {
 			ab := &c
 			tc := &TestChange{}
 			ab.Api.SubscribeForUpdates(tc)
-			err := s.Load(ab)
+			err := s.Load(ab, true)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Source.Load() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -129,6 +129,8 @@ func main() {
 	timeRelayStart := time.Now()
 
 	beaconCli := bcli.NewMultiBeaconClient(logger)
+	cfg.Beacon.SubscribeForUpdates(beaconCli)
+
 	bcfg := &bcli.BeaconConfig{}
 	cfg.Beacon.SubscribeForUpdates(bcfg)
 	if err := initBeaconClients(logger, beaconCli, cfg.Beacon.Addresses, m, bcfg); err != nil {
@@ -232,19 +234,6 @@ func main() {
 
 	auctioneer := auction.NewAuctioneer()
 
-	var allowed map[[48]byte]struct{}
-	if len(cfg.Relay.AllowedBuilders) > 0 {
-		allowed = make(map[[48]byte]struct{})
-		for _, k := range cfg.Relay.AllowedBuilders {
-			var pk types.PublicKey
-			if err := pk.UnmarshalText([]byte(k)); err != nil {
-				logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
-				continue
-			}
-			allowed[pk] = struct{}{}
-		}
-	}
-
 	skBytes, err := hexutil.Decode(cfg.Relay.SecretKey)
 	if err != nil {
 		logger.WithError(err).Fatal("decoding secret key")
@@ -275,6 +264,19 @@ func main() {
 	}
 	ds := datastore.NewDatastore(storage, storage.DB, cfg.Payload.Badger.TTL, payloadCache)
 
+	var allowed map[[48]byte]struct{}
+	if len(cfg.Relay.AllowedBuilders) > 0 {
+		allowed = make(map[[48]byte]struct{})
+		for _, k := range cfg.Relay.AllowedBuilders {
+			var pk types.PublicKey
+			if err := pk.UnmarshalText([]byte(k)); err != nil {
+				logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
+				continue
+			}
+			allowed[pk] = struct{}{}
+		}
+	}
+
 	r := relay.NewRelay(logger, relay.RelayConfig{
 		BuilderSigningDomain: domainBuilder,
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
@@ -297,6 +299,8 @@ func main() {
 	iApi := inner.NewAPI(ee, ds)
 
 	limitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, allowed)
+	cfg.Api.SubscribeForUpdates(limitter)
+
 	a := api.NewApi(logger, ee, r, validatorRelay, state, limitter)
 	a.AttachMetrics(m)
 	logger.With(log.F{

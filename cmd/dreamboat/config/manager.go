@@ -3,7 +3,7 @@ package config
 import "github.com/blocknative/dreamboat/structs"
 
 type Source interface {
-	Load(*Config) error
+	Load(cfg *Config, initial bool) error
 }
 
 type ConfigManager struct {
@@ -42,15 +42,15 @@ func (cm *ConfigManager) Reload() error {
 
 	testC := &Config{}
 	// check file before loading content
-	if err := cm.s.Load(testC); err != nil {
+	if err := cm.s.Load(testC, false); err != nil {
 		return err
 	}
 
-	return cm.s.Load(cm.Config)
+	return cm.s.Load(cm.Config, false)
 }
 
 func (cm *ConfigManager) Load() error {
-	return cm.s.Load(cm.Config)
+	return cm.s.Load(cm.Config, true)
 }
 
 type Listener interface {

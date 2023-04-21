@@ -13,10 +13,11 @@ const LimitterCacheSize = 100
 var ErrTooManyCalls = errors.New("too many calls")
 
 type Limitter struct {
-	AllowedBuilders map[[48]byte]struct{}
-	c               *lru.Cache[[48]byte, *rate.Limiter]
-	RateLimit       rate.Limit
-	Burst           int
+	AllowedBuilders   map[[48]byte]struct{}
+	c                 *lru.Cache[[48]byte, *rate.Limiter]
+	RateLimit         rate.Limit
+	Burst             int
+	LimitterCacheSize int
 }
 
 func NewLimitter(ratel int, burst int, ab map[[48]byte]struct{}) *Limitter {
@@ -48,3 +49,5 @@ func (l *Limitter) Allow(ctx context.Context, pubkey [48]byte) error {
 	return nil
 
 }
+
+//OnConfigChange(change structs.OldNew)
