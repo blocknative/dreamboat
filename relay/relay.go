@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -335,11 +336,18 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		return nil, ErrInvalidSignature
 	}
 
-	slotStart := (rs.beaconState.Genesis().GenesisTime + (payloadRequest.Slot() * 12)) * 1000
-	now := uint64(time.Now().UnixMilli())
-	if msIntoSlot := now - slotStart; msIntoSlot > uint64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
+	slotStart := int64(rs.beaconState.Genesis().GenesisTime+(payloadRequest.Slot()*12)) * 1000
+	now := time.Now().UnixMilli()
+	msIntoSlot := now - slotStart
+	if msIntoSlot > int64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
 		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too late")
 		return nil, ErrLateRequest
+	}
+
+	if msIntoSlot < 0 {
+		delayMillis := (msIntoSlot * -1) + int64(rand.Intn(50)) //nolint:gosec
+		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too early - delaying")
+		time.Sleep(time.Duration(delayMillis) * time.Millisecond)
 	}
 
 	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
