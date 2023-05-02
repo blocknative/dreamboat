@@ -223,13 +223,11 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
 		return
 	}
-	// Reset the request body's read position
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
 
 	switch fork {
 	case structs.ForkCapella:
 		var creq capella.SignedBlindedBeaconBlock
-		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+		if err := json.NewDecoder(bytes.NewReader(b)).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request cappella decode"))
 			return
@@ -313,13 +311,11 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
 		return
 	}
-	// Reset the request body's read position
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
 
 	switch a.st.ForkVersion(a.st.HeadSlot()) {
 	case structs.ForkCapella:
 		var creq capella.SubmitBlockRequest
-		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+		if err := json.NewDecoder(bytes.NewReader(b)).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode"))
 			return

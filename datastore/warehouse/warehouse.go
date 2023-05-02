@@ -18,7 +18,7 @@ import (
 
 var (
 	fileIdleTime   = structs.DurationPerSlot
-	filesPruneTick = fileIdleTime + (fileIdleTime / 2) // x 1.5
+	filesCloseTick = fileIdleTime + (fileIdleTime / 2) // x 1.5
 	ErrClosed      = errors.New("closed")
 )
 
@@ -59,7 +59,7 @@ func (s *Warehouse) Run(ctx context.Context, datadir string, id int) {
 	defer logger.Info("stopped")
 
 	w := newWorker(id, datadir, logger)
-	pruneTicker := time.NewTicker(filesPruneTick)
+	pruneTicker := time.NewTicker(filesCloseTick)
 WorkerLoop:
 	for {
 		select {
