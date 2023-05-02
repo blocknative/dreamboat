@@ -308,6 +308,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			"code":      400,
 			"slot":      req.Slot(),
 			"blockHash": req.BlockHash(),
+			"payload":   string(b),
 		}).WithError(err).Debug("failed getPayload")
 		writeError(w, http.StatusBadRequest, err)
 		return
