@@ -261,7 +261,7 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 
 		paHeadSlot, ok := state.SetHeadSlotPayloadAttributesIfHigher(slot)
 		if !ok {
-			logger.WithField("slotHead", paHeadSlot).Warn("received old payload attributes")
+			logger.WithField("slotHead", paHeadSlot).Debug("received old payload attributes")
 			continue
 		}
 
