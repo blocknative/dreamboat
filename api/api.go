@@ -247,7 +247,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		}
 	case structs.ForkBellatrix:
 		var breq bellatrix.SignedBlindedBeaconBlock
-		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+		if err := json.NewDecoder(bytes.NewReader(b)).Decode(&breq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request bellatrix decode"))
 			return
@@ -340,7 +340,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		}
 	case structs.ForkBellatrix:
 		var breq bellatrix.SubmitBlockRequest
-		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+		if err := json.NewDecoder(bytes.NewReader(b)).Decode(&breq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request bellatrix decode"))
 			return
