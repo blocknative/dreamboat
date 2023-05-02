@@ -365,9 +365,6 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 
 	// payload_attributes event was not received
 	if !s.Config.RunPayloadAttributesSubscription {
-		// query expected withdrawals root
-		go s.updateExpectedWithdrawals(headSlot, state, client)
-
 		// update randao
 		randao, err := client.Randao(headSlot)
 		if err != nil {
@@ -376,6 +373,8 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 
 		if curRandao := state.Randao(uint64(headSlot)); curRandao.Randao == "" {
 			state.SetRandao(structs.RandaoState{Slot: uint64(headSlot), Randao: randao})
+			// query expected withdrawals root
+			go s.updateExpectedWithdrawals(headSlot, state, client)
 		} else if curRandao.Randao != randao {
 			logger.With(log.F{"current": curRandao.Randao, "received": randao}).Warn("blocked randao replace")
 		}
