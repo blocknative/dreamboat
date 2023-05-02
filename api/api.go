@@ -3,10 +3,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -244,12 +246,19 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
 	defer timer.ObserveDuration()
 
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "read body").Inc()
+		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
+		return
+	}
+
 	var req structs.SignedBlindedBeaconBlock
 	fork := a.st.ForkVersion(a.st.HeadSlot())
 	switch fork {
 	case structs.ForkCapella:
 		var creq capella.SignedBlindedBeaconBlock
-		if err := json.NewDecoder(r.Body).Decode(&creq); err != nil {
+		if err := json.NewDecoder(bytes.NewReader(b)).Decode(&creq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request cappella decode"))
 			return
@@ -261,13 +270,14 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 				"code":      400,
 				"slot":      creq.Slot(),
 				"blockHash": creq.BlockHash(),
+				"payload":   string(b),
 			}).Debug("invalid payload")
 			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 			return
 		}
 	case structs.ForkBellatrix:
 		var breq bellatrix.SignedBlindedBeaconBlock
-		if err := json.NewDecoder(r.Body).Decode(&breq); err != nil {
+		if err := json.NewDecoder(bytes.NewReader(b)).Decode(&breq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload decode").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid getPayload request bellatrix decode"))
 			return
@@ -279,6 +289,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 				"code":      400,
 				"slot":      breq.Slot(),
 				"blockHash": breq.BlockHash(),
+				"payload":   string(b),
 			}).Debug("invalid payload")
 			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 			return
