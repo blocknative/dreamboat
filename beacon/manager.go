@@ -257,11 +257,11 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 
 	for payloadAttributes := range c {
 		slot := payloadAttributes.Data.ProposalSlot - 1
-		logger = logger.WithField("slot", slot)
+		logger = logger.WithField("slotPayloadAttributes", slot)
 
 		paHeadSlot, ok := state.SetHeadSlotPayloadAttributesIfHigher(slot)
 		if !ok {
-			logger.WithField("slotHead", paHeadSlot).Debug("received old payload attributes")
+			logger.WithField("slotHeadPayloadAttributes", paHeadSlot).Debug("received old payload attributes")
 			continue
 		}
 
