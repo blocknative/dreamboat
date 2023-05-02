@@ -181,6 +181,11 @@ var flags = []cli.Flag{
 		Value:   true,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
+	&cli.StringSliceFlag{
+		Name:    "beacon-publish",
+		Usage:   "`url` for beacon endpoints that publish blocks",
+		EnvVars: []string{"RELAY_BEACON_PUBLISH"},
+	},
 	&cli.StringFlag{
 		Name:    "relay-validator-database-url",
 		Usage:   "address of postgress database for validator registrations, if empty - default, badger will be used",
@@ -351,9 +356,15 @@ func run() cli.ActionFunc {
 			BeaconEventRestart: c.Int("beacon-event-restart"),
 			BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
 		}
+		
 		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
+		}
+
+		beaconPubCli, err := initBeaconClients(logger, c.StringSlice("beacon-publish"), m, beaconConfig)
+		if err != nil {
+			return fmt.Errorf("fail to initialize publish beacon: %w", err)
 		}
 
 		// SIM Client
@@ -489,7 +500,7 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
+		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 		r.AttachMetrics(m)
 
 		ee := &api.EnabledEndpoints{
