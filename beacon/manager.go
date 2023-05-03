@@ -90,7 +90,7 @@ type Manager struct {
 func NewManager(l log.Logger, cfg Config) *Manager {
 	return &Manager{
 		Log: l.With(log.F{
-			"relay-service":                    "Service",
+			"subService":                    "beacon-manager",
 			"runPayloadAttributesSubscription": cfg.RunPayloadAttributesSubscription,
 		}),
 		Config: cfg,

@@ -340,7 +340,7 @@ func run() cli.ActionFunc {
 		}
 
 		logger.With(log.F{
-			"service":     "datastore",
+			"subService":     "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
 		}).Info("data store initialized")
 
