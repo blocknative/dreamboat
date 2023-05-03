@@ -261,7 +261,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 				"code":      400,
 				"slot":      creq.Slot(),
 				"blockHash": creq.BlockHash(),
-			}).Debug("invalid payload")
+			}).With(req).Debug("invalid payload")
 			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 			return
 		}
@@ -279,7 +279,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 				"code":      400,
 				"slot":      breq.Slot(),
 				"blockHash": breq.BlockHash(),
-			}).Debug("invalid payload")
+			}).With(req).Debug("invalid payload")
 			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 			return
 		}
@@ -297,7 +297,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 			"code":      400,
 			"slot":      req.Slot(),
 			"blockHash": req.BlockHash(),
-		}).WithError(err).Debug("failed getPayload")
+		}).With(req).WithError(err).Debug("failed getPayload")
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}

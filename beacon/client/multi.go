@@ -43,7 +43,7 @@ func NewMultiBeaconClient(l log.Logger, clients []BeaconNode) *MultiBeaconClient
 	if l == nil {
 		l = log.New()
 	}
-	return &MultiBeaconClient{Log: l.WithField("service", "multi-beacon client"), Clients: clients}
+	return &MultiBeaconClient{Log: l.WithField("subService", "multi-beacon-client"), Clients: clients}
 }
 
 func (b *MultiBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
