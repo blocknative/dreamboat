@@ -314,6 +314,31 @@ func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBea
 	return nil
 }
 
+func (b *beaconClient) SubscribeToPayloadAttributesEvents(payloadAttributesC chan PayloadAttributesEvent) {
+	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=payload_attributes", b.beaconEndpoint)
+	log := b.log.WithField("url", eventsURL)
+
+	client := sse.NewClient(eventsURL)
+
+	for {
+		err := client.SubscribeRaw(func(msg *sse.Event) {
+			var data PayloadAttributesEvent
+			err := json.Unmarshal(msg.Data, &data)
+			if err != nil {
+				log.WithError(err).Error("could not unmarshal payload_attributes event")
+			} else {
+				fmt.Printf("%v\n", data)
+				payloadAttributesC <- data
+			}
+		})
+		if err != nil {
+			log.WithError(err).Error("failed to subscribe to payload_attributes events")
+			time.Sleep(1 * time.Second)
+		}
+		b.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
+	}
+}
+
 func (b *beaconClient) Endpoint() string {
 	return b.beaconEndpoint.String()
 }
@@ -473,4 +498,25 @@ type GetForkScheduleResponse struct {
 		CurrentVersion  string `json:"current_version"`
 		Epoch           uint64 `json:"epoch,string"`
 	}
+}
+
+type PayloadAttributesEvent struct {
+	Version string                     `json:"version"`
+	Data    PayloadAttributesEventData `json:"data"`
+}
+
+type PayloadAttributesEventData struct {
+	ProposerIndex     uint64            `json:"proposer_index,string"`
+	ProposalSlot      uint64            `json:"proposal_slot,string"`
+	ParentBlockNumber uint64            `json:"parent_block_number,string"`
+	ParentBlockRoot   string            `json:"parent_block_root"`
+	ParentBlockHash   string            `json:"parent_block_hash"`
+	PayloadAttributes PayloadAttributes `json:"payload_attributes"`
+}
+
+type PayloadAttributes struct {
+	Timestamp             uint64                `json:"timestamp,string"`
+	PrevRandao            string                `json:"prev_randao"`
+	SuggestedFeeRecipient string                `json:"suggested_fee_recipient"`
+	Withdrawals           []*structs.Withdrawal `json:"withdrawals"`
 }

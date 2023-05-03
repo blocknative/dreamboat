@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/api"
+	"github.com/blocknative/dreamboat/api/inner"
 	"github.com/blocknative/dreamboat/auction"
 	"github.com/blocknative/dreamboat/beacon"
 	"github.com/blocknative/dreamboat/beacon/client"
@@ -181,6 +182,11 @@ var flags = []cli.Flag{
 		Value:   true,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
+	&cli.StringSliceFlag{
+		Name:    "beacon-publish",
+		Usage:   "`url` for beacon endpoints that publish blocks",
+		EnvVars: []string{"RELAY_BEACON_PUBLISH"},
+	},
 	&cli.StringFlag{
 		Name:    "relay-validator-database-url",
 		Usage:   "address of postgress database for validator registrations, if empty - default, badger will be used",
@@ -296,6 +302,12 @@ var flags = []cli.Flag{
 		Value:   20 * time.Second,
 		EnvVars: []string{"BEACON_QUERY_TIMEOUT"},
 	},
+	&cli.BoolFlag{
+		Name:    "beacon-payload-attributes-subscription",
+		Usage:   "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)",
+		Value:   true,
+		EnvVars: []string{"BEACON_PAYLOAD_ATTRIBUTES_SUBSCRIPTION"},
+	},
 }
 
 const (
@@ -354,13 +366,13 @@ func run() cli.ActionFunc {
 		}
 
 		logger.With(log.F{
-			"service":     "datastore",
+			"subService":  "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
 		}).Info("data store initialized")
 
 		timeRelayStart := time.Now()
 		state := &beacon.MultiSlotState{}
-		ds, err := datastore.NewDatastore(storage, c.Int("relay-payload-cache-size"))
+		ds, err := datastore.NewDatastore(storage, storage.DB, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to create datastore: %w", err)
 		}
@@ -370,9 +382,15 @@ func run() cli.ActionFunc {
 			BeaconEventRestart: c.Int("beacon-event-restart"),
 			BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
 		}
+
 		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
+		}
+
+		beaconPubCli, err := initBeaconClients(logger, c.StringSlice("beacon-publish"), m, beaconConfig)
+		if err != nil {
+			return fmt.Errorf("fail to initialize publish beacon: %w", err)
 		}
 
 		// SIM Client
@@ -455,8 +473,9 @@ func run() cli.ActionFunc {
 		validatorRelay := validators.NewRegister(logger, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
 		b := beacon.NewManager(logger, beacon.Config{
-			BellatrixForkVersion: cfg.BellatrixForkVersion,
-			CapellaForkVersion:   cfg.CapellaForkVersion,
+			BellatrixForkVersion:             cfg.BellatrixForkVersion,
+			CapellaForkVersion:               cfg.CapellaForkVersion,
+			RunPayloadAttributesSubscription: c.Bool("beacon-payload-attributes-subscription"),
 		})
 
 		auctioneer := auction.NewAuctioneer()
@@ -531,10 +550,16 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh)
+		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh)
 		r.AttachMetrics(m)
 
-		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
+		ee := &api.EnabledEndpoints{
+			GetHeader:   true,
+			GetPayload:  true,
+			SubmitBlock: true,
+		}
+		iApi := inner.NewAPI(ee, ds)
+		a := api.NewApi(logger, ee, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",
@@ -549,23 +574,23 @@ func run() cli.ActionFunc {
 
 		logger.Info("beacon manager ready")
 
-		// run internal http server
-		go func(m *metrics.Metrics) (err error) {
-			internalMux := http.NewServeMux()
-			metrics.AttachProfiler(internalMux)
+		internalMux := http.NewServeMux()
+		iApi.AttachToHandler(internalMux)
 
+		// run internal http server
+		go func(m *metrics.Metrics, internalMux *http.ServeMux) (err error) {
+			metrics.AttachProfiler(internalMux)
 			internalMux.Handle("/metrics", m.Handler())
 			logger.Info("internal server listening")
 			internalSrv := http.Server{
 				Addr:    c.String("internalAddr"),
 				Handler: internalMux,
 			}
-
 			if err = internalSrv.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
 			}
 			return err
-		}(m)
+		}(m, internalMux)
 
 		mux := http.NewServeMux()
 		a.AttachToHandler(mux)

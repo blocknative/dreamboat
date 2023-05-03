@@ -364,6 +364,33 @@ func (b *SignedBlindedBeaconBlock) Raw() []byte {
 	return b.SRaw
 }
 
+func (b *SignedBlindedBeaconBlock) Loggable() map[string]any {
+	logFields := map[string]any{
+		"signature":     b.SSignature.String(),
+		"slot":          b.SMessage.Slot,
+		"proposerIndex": b.SMessage.ProposerIndex,
+		"parentRoot":    b.SMessage.ParentRoot.String(),
+		"stateRoot":     b.SMessage.StateRoot.String(),
+	}
+	if b.SMessage.Body != nil {
+		if b.SMessage.Body.Eth1Data != nil {
+			logFields["blockHash"] = b.SMessage.Body.Eth1Data.BlockHash.String()
+			logFields["depositCount"] = b.SMessage.Body.Eth1Data.DepositCount
+			logFields["depositRoot"] = b.SMessage.Body.Eth1Data.DepositRoot.String()
+		}
+		logFields["randaoReveal"] = b.SMessage.Body.RandaoReveal.String()
+		logFields["graffiti"] = b.SMessage.Body.Graffiti.String()
+		logFields["proposerSlashings"] = b.SMessage.Body.ProposerSlashings
+		logFields["attesterSlashings"] = b.SMessage.Body.AttesterSlashings
+		logFields["deposits"] = b.SMessage.Body.Deposits
+		logFields["voluntaryExits"] = b.SMessage.Body.VoluntaryExits
+		logFields["syncAggregate"] = b.SMessage.Body.SyncAggregate
+		logFields["executionPayloadHeader"] = b.SMessage.Body.ExecutionPayloadHeader
+	}
+
+	return logFields
+}
+
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
 	return s.SSignature
 }

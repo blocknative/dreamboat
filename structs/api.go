@@ -28,3 +28,7 @@ func (hr HeaderRequest) Pubkey() (PubKey, error) {
 	}
 	return pk, nil
 }
+
+type UserContent struct {
+	IP string
+}

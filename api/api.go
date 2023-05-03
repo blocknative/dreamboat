@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
@@ -43,7 +44,8 @@ const (
 )
 
 const (
-	DataLimit = 450
+	DataLimit       = 450
+	ErrorsOnDisable = false
 )
 
 var (
@@ -52,11 +54,11 @@ var (
 
 type Relay interface {
 	// Proposer APIs (builder spec https://github.com/ethereum/builder-specs)
-	GetHeader(context.Context, *structs.MetricGroup, structs.HeaderRequest) (structs.GetHeaderResponse, error)
-	GetPayload(context.Context, *structs.MetricGroup, structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error)
+	GetHeader(context.Context, *structs.MetricGroup, structs.UserContent, structs.HeaderRequest) (structs.GetHeaderResponse, error)
+	GetPayload(context.Context, *structs.MetricGroup, structs.UserContent, structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error)
 
 	// Builder APIs (relay spec https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5)
-	SubmitBlock(context.Context, *structs.MetricGroup, structs.SubmitBlockRequest) error
+	SubmitBlock(context.Context, *structs.MetricGroup, structs.UserContent, structs.SubmitBlockRequest) error
 
 	// Data APIs
 	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
@@ -90,16 +92,19 @@ type API struct {
 	lim RateLimitter
 
 	m *APIMetrics
+
+	enabled *EnabledEndpoints
 }
 
-func NewApi(l log.Logger, r Relay, reg Registrations, st State, lim RateLimitter) (a *API) {
+func NewApi(l log.Logger, enabled *EnabledEndpoints, r Relay, reg Registrations, st State, lim RateLimitter) (a *API) {
 	a = &API{
-		l:   l,
-		r:   r,
-		reg: reg,
-		st:  st,
-		lim: lim,
-		m:   &APIMetrics{}}
+		l:       l,
+		r:       r,
+		reg:     reg,
+		st:      st,
+		lim:     lim,
+		enabled: enabled,
+		m:       &APIMetrics{}}
 	a.initMetrics()
 	return a
 }
@@ -172,22 +177,37 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	if !a.enabled.GetHeader {
+		if ErrorsOnDisable {
+			w.WriteHeader(http.StatusForbidden)
+			a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "forbiden").Inc()
+		} else {
+			a.m.ApiReqCounter.WithLabelValues("getHeader", "499", "disabled").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("no builder bid"))
+		}
+		return
+	}
 
+	w.Header().Set("Content-Type", "application/json")
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getHeader"))
 	defer timer.ObserveDuration()
 
+	uc := structs.UserContent{IP: r.Header.Get("X-Forwarded-For")}
+	var l = a.l.With(log.F{
+		"ip":       uc.IP,
+		"endpoint": "getHeader",
+	})
+
 	req := ParseHeaderRequest(r)
 	m := structs.NewMetricGroup(4)
-	response, err := a.r.GetHeader(r.Context(), m, req)
+	response, err := a.r.GetHeader(r.Context(), m, uc, req)
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "get header unknown"))
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
 		slot, _ := req.Slot()
 		proposer, _ := req.Pubkey()
-		a.l.With(log.F{
+		l.With(log.F{
 			"code":     400,
-			"endpoint": "getHeader",
 			"payload":  req,
 			"slot":     slot,
 			"proposer": proposer,
@@ -199,7 +219,7 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 	m.Observe(a.m.RelayTiming)
 
 	if err = json.NewEncoder(w).Encode(response); err != nil {
-		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
+		l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "500", "response encode").Inc()
 		// we don't write response as encoder already crashed
 		return
@@ -209,7 +229,19 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
+	if !a.enabled.GetPayload {
+		w.WriteHeader(http.StatusForbidden)
+		a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "get header").Inc()
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
+
+	uc := structs.UserContent{IP: r.Header.Get("X-Forwarded-For")}
+	var l = a.l.With(log.F{
+		"ip":       uc.IP,
+		"endpoint": "getPayload",
+	})
 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("getPayload"))
 	defer timer.ObserveDuration()
@@ -236,12 +268,11 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		req = &creq
 		if !creq.Validate() {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload validation").Inc()
-			a.l.With(log.F{
+			l.With(log.F{
 				"code":      400,
-				"endpoint":  "getPayload",
 				"slot":      creq.Slot(),
 				"blockHash": creq.BlockHash(),
-			}).Debug("invalid payload")
+			}).With(req).Debug("invalid payload")
 			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 			return
 		}
@@ -256,12 +287,11 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 		req = &breq
 		if !breq.Validate() {
 			a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "payload validation").Inc()
-			a.l.With(log.F{
+			l.With(log.F{
 				"code":      400,
-				"endpoint":  "getPayload",
 				"slot":      breq.Slot(),
 				"blockHash": breq.BlockHash(),
-			}).Debug("invalid payload")
+			}).With(req).Debug("invalid payload")
 			writeError(w, http.StatusBadRequest, errors.New("invalid payload"))
 			return
 		}
@@ -271,16 +301,15 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m := structs.NewMetricGroup(4)
-	payload, err := a.r.GetPayload(r.Context(), m, req)
+	payload, err := a.r.GetPayload(r.Context(), m, uc, req)
 	if err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "get payload unknown"))
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "get payload").Inc()
-		a.l.With(log.F{
+		l.With(log.F{
 			"code":      400,
-			"endpoint":  "getPayload",
 			"slot":      req.Slot(),
 			"blockHash": req.BlockHash(),
-		}).WithError(err).Debug("failed getPayload")
+		}).With(req).WithError(err).Debug("failed getPayload")
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -288,7 +317,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	m.Observe(a.m.RelayTiming)
 
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		a.l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
+		l.WithError(err).WithField("path", r.URL.Path).Debug("failed to write response")
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "500", "encode response").Inc()
 		// we don't write response as encoder already crashed
 		return
@@ -299,8 +328,20 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 
 // builder related handlers
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
+	if !a.enabled.SubmitBlock {
+		if ErrorsOnDisable {
+			w.WriteHeader(http.StatusForbidden)
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "403", "forbidden").Inc()
+		} else {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "499", "disabled").Inc()
+		}
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	var l = a.l
+	uc := structs.UserContent{IP: r.Header.Get("X-Forwarded-For")}
+	var l = a.l.With(log.F{"ip": uc.IP})
+
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
 	var req structs.SubmitBlockRequest
@@ -322,7 +363,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		}
 		creq.CapellaRaw = b
 		req = &creq
-		l = a.l.With(log.F{
+		l = l.With(log.F{
 			"fork":      "capella",
 			"headSlot":  a.st.HeadSlot(),
 			"slot":      creq.CapellaMessage.Slot,
@@ -382,7 +423,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	a.m.ApiReqElCount.WithLabelValues("submitBlock", "transaction").Observe(float64(req.NumTx()))
 
 	m := structs.NewMetricGroup(4)
-	if err := a.r.SubmitBlock(r.Context(), m, req); err != nil {
+	if err := a.r.SubmitBlock(r.Context(), m, uc, req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))
 		if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
@@ -737,4 +778,36 @@ func unwrapError(err error, defaultMsg string) error {
 	}
 
 	return errors.New(defaultMsg)
+}
+
+type EnabledEndpoints struct {
+	GetHeader   bool
+	GetPayload  bool
+	SubmitBlock bool
+}
+
+func (ee *EnabledEndpoints) GetBool(key string) (bool, error) {
+	switch strings.ToLower(key) {
+	case "getheader":
+		return ee.GetHeader, nil
+	case "getpayload":
+		return ee.GetPayload, nil
+	case "submitblock":
+		return ee.SubmitBlock, nil
+	}
+	return false, errors.New("param not found")
+}
+
+func (ee *EnabledEndpoints) SetBool(key string, val bool) error {
+	switch strings.ToLower(key) {
+	case "getheader":
+		ee.GetHeader = val
+	case "getpayload":
+		ee.GetPayload = val
+	case "submitblock":
+		ee.SubmitBlock = val
+	default:
+		return errors.New("param not found")
+	}
+	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync/atomic"
 	"time"
 
@@ -182,12 +183,10 @@ func (rs *Relay) Close(ctx context.Context) {
 }
 
 // GetHeader is called by a block proposer communicating through mev-boost and returns a bid along with an execution payload header
-func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
+func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc structs.UserContent, request structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getHeader", "all")
-
-	logger := rs.l.WithField("method", "GetHeader")
 
 	slot, err := request.Slot()
 	if err != nil {
@@ -209,7 +208,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 		return nil, err
 	}
 
-	logger = logger.With(log.F{
+	logger := rs.l.With(log.F{
+		"method":     "GetHeader",
+		"ip":         uc.IP,
 		"slot":       slot,
 		"parentHash": parentHash,
 		"pubkey":     pk,
@@ -241,7 +242,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 	}
 
 	if header.Header.GetParentHash() != parentHash {
-		logger.WithField("expected", parentHash).WithField("got", parentHash).Debug("invalid parentHash")
+		logger.WithField("expected", header.Header.GetParentHash()).WithField("got", parentHash).Debug("invalid parentHash")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
@@ -326,12 +327,13 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, request 
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored
-func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
+func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc structs.UserContent, payloadRequest structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "getPayload", "all")
 
 	logger := rs.l.With(log.F{
 		"method":        "GetPayload",
+		"ip":            uc.IP,
 		"slot":          payloadRequest.Slot(),
 		"block_number":  payloadRequest.BlockNumber(),
 		"blockHash":     payloadRequest.BlockHash(),
@@ -342,11 +344,18 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, payload
 		return nil, ErrInvalidSignature
 	}
 
-	slotStart := (rs.beaconState.Genesis().GenesisTime + (payloadRequest.Slot() * 12)) * 1000
-	now := uint64(time.Now().UnixMilli())
-	if msIntoSlot := now - slotStart; msIntoSlot > uint64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
+	slotStart := int64(rs.beaconState.Genesis().GenesisTime+(payloadRequest.Slot()*12)) * 1000
+	now := time.Now().UnixMilli()
+	msIntoSlot := now - slotStart
+	if msIntoSlot > int64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
 		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too late")
 		return nil, ErrLateRequest
+	}
+
+	if msIntoSlot < 0 {
+		delayMillis := (msIntoSlot * -1) + int64(rand.Intn(50)) //nolint:gosec
+		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too early - delaying")
+		time.Sleep(time.Duration(delayMillis) * time.Millisecond)
 	}
 
 	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]

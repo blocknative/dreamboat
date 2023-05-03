@@ -16,12 +16,30 @@ type MultiSlotState struct {
 	mu    sync.Mutex
 	slots [NumberOfSlotsInState]AtomicState
 
-	duties               atomic.Value
-	validatorsUpdateTime atomic.Value
-	headSlot             atomic.Value
-	fork                 atomic.Value
-	knownValidators      atomic.Value
-	genesis              atomic.Value
+	headSlotPayloadAttributes atomic.Uint64
+	duties                    atomic.Value
+	validatorsUpdateTime      atomic.Value
+	headSlot                  atomic.Value
+	fork                      atomic.Value
+	knownValidators           atomic.Value
+	genesis                   atomic.Value
+	parentBlockHash           atomic.Value
+}
+
+func (as *MultiSlotState) HeadSlotPayloadAttributes() uint64 {
+	return as.headSlotPayloadAttributes.Load()
+}
+func (as *MultiSlotState) SetHeadSlotPayloadAttributesIfHigher(slot uint64) (uint64, bool) {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	headSlot := as.headSlotPayloadAttributes.Load()
+	if slot > headSlot {
+		as.headSlotPayloadAttributes.Store(slot)
+		return slot, true
+	}
+
+	return headSlot, false
 }
 
 func (as *MultiSlotState) Duties() structs.DutiesState {
@@ -130,6 +148,18 @@ func (as *MultiSlotState) Fork() structs.ForkState {
 
 func (as *MultiSlotState) SetFork(fork structs.ForkState) {
 	as.fork.Store(fork)
+}
+
+func (as *MultiSlotState) ParentBlockHash() string {
+	if val := as.parentBlockHash.Load(); val != nil {
+		return val.(string)
+	}
+
+	return ""
+}
+
+func (as *MultiSlotState) SetParentBlockHash(blockHash string) {
+	as.parentBlockHash.Store(blockHash)
 }
 
 type AtomicState struct {
