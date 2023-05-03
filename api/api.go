@@ -3,12 +3,10 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
