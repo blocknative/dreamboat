@@ -335,6 +335,27 @@ type SignedBlindedBeaconBlock struct {
 	SSignature types.Signature    `json:"signature" ssz-size:"96"`
 }
 
+func (b *SignedBlindedBeaconBlock) Loggable() map[string]any {
+	return map[string]any{
+		"signature":              b.SSignature.String(),
+		"slot":                   b.SMessage.Slot,
+		"proposerIndex":          b.SMessage.ProposerIndex,
+		"parentRoot":             b.SMessage.ParentRoot.String(),
+		"stateRoot":              b.SMessage.StateRoot.String(),
+		"randaoReveal":           b.SMessage.Body.RandaoReveal.String(),
+		"blockHash":              b.SMessage.Body.Eth1Data.BlockHash.String(),
+		"depositCount":           b.SMessage.Body.Eth1Data.DepositCount,
+		"depositRoot":            b.SMessage.Body.Eth1Data.DepositRoot.String(),
+		"graffiti":               b.SMessage.Body.Graffiti.String(),
+		"proposerSlashings":      b.SMessage.Body.ProposerSlashings,
+		"attesterSlashings":      b.SMessage.Body.AttesterSlashings,
+		"deposits":               b.SMessage.Body.Deposits,
+		"voluntaryExits":         b.SMessage.Body.VoluntaryExits,
+		"syncAggregate":          b.SMessage.Body.SyncAggregate,
+		"executionPayloadHeader": b.SMessage.Body.ExecutionPayloadHeader,
+	}
+}
+
 func (b *SignedBlindedBeaconBlock) Validate() bool {
 	return b.SMessage.Body != nil && b.SMessage.Body.ExecutionPayloadHeader != nil
 }
