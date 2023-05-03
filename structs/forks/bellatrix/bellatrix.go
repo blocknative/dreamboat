@@ -355,24 +355,30 @@ type SignedBlindedBeaconBlock struct {
 }
 
 func (b *SignedBlindedBeaconBlock) Loggable() map[string]any {
-	return map[string]any{
-		"signature":              b.SSignature.String(),
-		"slot":                   b.SMessage.Slot,
-		"proposerIndex":          b.SMessage.ProposerIndex,
-		"parentRoot":             b.SMessage.ParentRoot.String(),
-		"stateRoot":              b.SMessage.StateRoot.String(),
-		"randaoReveal":           b.SMessage.Body.RandaoReveal.String(),
-		"blockHash":              b.SMessage.Body.Eth1Data.BlockHash.String(),
-		"depositCount":           b.SMessage.Body.Eth1Data.DepositCount,
-		"depositRoot":            b.SMessage.Body.Eth1Data.DepositRoot.String(),
-		"graffiti":               b.SMessage.Body.Graffiti.String(),
-		"proposerSlashings":      b.SMessage.Body.ProposerSlashings,
-		"attesterSlashings":      b.SMessage.Body.AttesterSlashings,
-		"deposits":               b.SMessage.Body.Deposits,
-		"voluntaryExits":         b.SMessage.Body.VoluntaryExits,
-		"syncAggregate":          b.SMessage.Body.SyncAggregate,
-		"executionPayloadHeader": b.SMessage.Body.ExecutionPayloadHeader,
+	logFields := map[string]any{
+		"signature":     b.SSignature.String(),
+		"slot":          b.SMessage.Slot,
+		"proposerIndex": b.SMessage.ProposerIndex,
+		"parentRoot":    b.SMessage.ParentRoot.String(),
+		"stateRoot":     b.SMessage.StateRoot.String(),
 	}
+	if b.SMessage.Body != nil {
+		if b.SMessage.Body.Eth1Data != nil {
+			logFields["blockHash"] = b.SMessage.Body.Eth1Data.BlockHash.String()
+			logFields["depositCount"] = b.SMessage.Body.Eth1Data.DepositCount
+			logFields["depositRoot"] = b.SMessage.Body.Eth1Data.DepositRoot.String()
+		}
+		logFields["randaoReveal"] = b.SMessage.Body.RandaoReveal.String()
+		logFields["graffiti"] = b.SMessage.Body.Graffiti.String()
+		logFields["proposerSlashings"] = b.SMessage.Body.ProposerSlashings
+		logFields["attesterSlashings"] = b.SMessage.Body.AttesterSlashings
+		logFields["deposits"] = b.SMessage.Body.Deposits
+		logFields["voluntaryExits"] = b.SMessage.Body.VoluntaryExits
+		logFields["syncAggregate"] = b.SMessage.Body.SyncAggregate
+		logFields["executionPayloadHeader"] = b.SMessage.Body.ExecutionPayloadHeader
+	}
+
+	return logFields
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
