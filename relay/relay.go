@@ -95,7 +95,7 @@ type Datastore interface {
 
 type Auctioneer interface {
 	AddBlock(block *structs.CompleteBlockstruct) bool
-	MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool)
+	MaxProfitBlock(slot structs.Slot, parentHash types.Hash) (*structs.CompleteBlockstruct, bool)
 }
 
 type Beacon interface {
@@ -211,7 +211,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 	logger.Info("header requested")
 	tGet := time.Now()
 
-	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
+	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot, parentHash)
 	if !ok {
 		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
 		return nil, ErrNoBuilderBid
