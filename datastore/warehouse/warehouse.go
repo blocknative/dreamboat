@@ -167,11 +167,6 @@ func writeToFile(file *os.File, req StoreRequest) error {
 		return fmt.Errorf("failed to flush writer: %w", err)
 	}
 
-	// Flush any remaining data from the encoder and writer
-	if err := encoder.Close(); err != nil {
-		return fmt.Errorf("failed to close encoder: %w", err)
-	}
-
 	return nil
 }
 
