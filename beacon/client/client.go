@@ -103,7 +103,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 
 func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, timer *time.Timer, slotC chan<- HeadEvent) {
 	logger.Debug("subscription loop started")
-	defer logger.Warn("subscription loop exited")
+	defer logger.Debug("subscription loop exited")
 
 	for {
 		client := sse.NewClient(fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String()))
