@@ -1,7 +1,6 @@
 package warehouse
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
@@ -9,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/blocknative/dreamboat/structs"
@@ -126,13 +124,7 @@ func (s *Warehouse) Close(ctx context.Context) {
 
 func (s *Warehouse) StoreAsync(ctx context.Context, req StoreRequest) error {
 	// pre-calculate header of the data
-	var header bytes.Buffer
-	header.WriteString("\n")
-	header.WriteString(strconv.Itoa(int(req.Timestamp.UnixNano())))
-	header.WriteString(";")
-	header.WriteString(req.Id)
-	header.WriteString(";")
-	req.header = header.Bytes()
+	req.header = []byte(fmt.Sprintf("\n%d;%s;", req.Timestamp.UnixNano(), req.Id))
 
 	select {
 	case s.requests <- req:
