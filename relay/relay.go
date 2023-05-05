@@ -412,11 +412,17 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
 			return nil, ErrWrongPayload
 		}
-		if err = rs.beacon.PublishBlock(ctx, beaconBlock); err != nil {
+		if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
 			logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node")
-			return nil, ErrFailedToPublish
+			time.Sleep(500 * time.Millisecond)
+			// retry - after possible reorg
+			if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
+				logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node (retry)")
+				return nil, ErrFailedToPublish
+			}
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
+
 		// Delay the return of response block publishing
 		time.Sleep(rs.config.GetPayloadResponseDelay)
 	}
