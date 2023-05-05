@@ -95,14 +95,14 @@ func (s *Warehouse) handleRequest(ctx context.Context, logger log.Logger, w *wor
 
 	file, err := w.getOrCreateFile(req)
 	if err != nil {
-		s.m.FailedWrites.WithLabelValues(toString(req.DataType)).Add(1)
+		s.m.FailedWrites.WithLabelValues(req.DataType).Add(1)
 		logger.WithError(err).Error("failed to get/create file")
 		return
 	}
 
 	err = writeToFile(file, req)
 	if err != nil {
-		s.m.FailedWrites.WithLabelValues(toString(req.DataType)).Add(1)
+		s.m.FailedWrites.WithLabelValues(req.DataType).Add(1)
 		logger.WithError(err).Error("failed to write")
 
 		file.Write([]byte("\n"))
@@ -111,7 +111,7 @@ func (s *Warehouse) handleRequest(ctx context.Context, logger log.Logger, w *wor
 		return
 	}
 
-	s.m.Writes.WithLabelValues(toString(req.DataType)).Add(1)
+	s.m.Writes.WithLabelValues(req.DataType).Add(1)
 }
 
 func (s *Warehouse) Close(ctx context.Context) {
@@ -184,7 +184,7 @@ func newWorker(id int, datadir string, logger log.Logger) *worker {
 
 func (w *worker) getOrCreateFile(req StoreRequest) (*os.File, error) {
 	// get
-	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, toString(req.DataType), req.Slot, w.id)
+	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, req.DataType, req.Slot, w.id)
 	if fileWithTs, ok := w.files[filename]; ok {
 		fileWithTs.ts = time.Now()
 		return fileWithTs.File, nil
@@ -236,15 +236,10 @@ func openOrCreateFile(filename string) (*os.File, error) {
 		}
 	}
 
-	// check if file exists
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return os.Create(filename)
-	}
-
-	// file exists, open it for appending
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
+	// open or create file
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
 
 	return file, nil

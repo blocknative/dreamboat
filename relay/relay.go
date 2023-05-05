@@ -500,7 +500,7 @@ func (rs *Relay) storeGetPayloadRequest(logger log.Logger, m *structs.MetricGrou
 	tStoreWarehouse := time.Now()
 
 	req := wh.StoreRequest{
-		DataType:  wh.GetPayloadRequest,
+		DataType:  "GetPayloadRequest",
 		Data:      payloadRequest.Raw(),
 		Slot:      payloadRequest.Slot(),
 		Id:        payloadRequest.BlockHash().String(),

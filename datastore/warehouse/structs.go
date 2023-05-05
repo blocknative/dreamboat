@@ -10,26 +10,8 @@ var (
 	ErrUnknownType = errors.New("unknown data type")
 )
 
-type DataType uint8
-
-const (
-	GetPayloadRequest DataType = iota
-	SubmitBlockRequest
-)
-
-func toString(data DataType) string {
-	switch data {
-	case GetPayloadRequest:
-		return "GetPayloadRequest"
-	case SubmitBlockRequest:
-		return "SubmitBlockRequest"
-	default:
-		return "unknown"
-	}
-}
-
 type StoreRequest struct {
-	DataType  DataType
+	DataType  string
 	Data      []byte
 	Slot      uint64
 	Id        string
@@ -42,7 +24,7 @@ func (req StoreRequest) Loggable() map[string]any {
 	return map[string]any{
 		"id":        req.Id,
 		"timestamp": req.Timestamp,
-		"dataType":  toString(req.DataType),
+		"dataType":  req.DataType,
 		"slot":      req.Slot,
 	}
 }
