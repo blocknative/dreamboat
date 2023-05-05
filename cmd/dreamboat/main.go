@@ -24,6 +24,7 @@ import (
 	"github.com/blocknative/dreamboat/client/sim/transport/gethhttp"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethrpc"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethws"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
 
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
@@ -258,6 +259,31 @@ var flags = []cli.Flag{
 		Value:   4 * time.Second,
 		EnvVars: []string{"GETPAYLOAD_REQUEST_TIME_LIMIT"},
 	},
+	// warehouse flags
+	&cli.BoolFlag{
+		Name:    "warehouse",
+		Usage:   "Enable warehouse storage of data",
+		Value:   true,
+		EnvVars: []string{"WAREHOUSE"},
+	},
+	&cli.StringFlag{
+		Name:    "warehouse-dir",
+		Usage:   "Data directory where the data is stored in the warehouse",
+		Value:   "/data/relay/warehouse",
+		EnvVars: []string{"WAREHOUSE_DIR"},
+	},
+	&cli.IntFlag{
+		Name:    "warehouse-workers",
+		Usage:   "Number of workers for storing data in warehouse, if 0, then data is not exported",
+		Value:   32,
+		EnvVars: []string{"WAREHOUSE_WORKERS"},
+	},
+	&cli.IntFlag{
+		Name:    "warehouse-buffer",
+		Usage:   "Size of the buffer for processing requests",
+		Value:   1_000,
+		EnvVars: []string{"WAREHOUSE_WORKERS"},
+	},
 	&cli.DurationFlag{
 		Name:    "beacon-event-timeout",
 		Usage:   "The maximum time allowed to wait for head events from the beacon, we recommend setting it to 'durationPerSlot * 1.25'",
@@ -340,7 +366,7 @@ func run() cli.ActionFunc {
 		}
 
 		logger.With(log.F{
-			"subService":     "datastore",
+			"subService":  "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
 		}).Info("data store initialized")
 
@@ -356,7 +382,7 @@ func run() cli.ActionFunc {
 			BeaconEventRestart: c.Int("beacon-event-restart"),
 			BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
 		}
-		
+
 		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
@@ -487,6 +513,30 @@ func run() cli.ActionFunc {
 			return err
 		}
 
+		var relayWh *wh.Warehouse
+		if c.Bool("warehouse") {
+			warehouse := wh.NewWarehouse(logger, c.Int("warehouse-buffer"))
+
+			datadir := c.String("warehouse-dir")
+			if err := os.MkdirAll(datadir, 0755); err != nil {
+				return fmt.Errorf("failed to create datadir: %w", err)
+			}
+
+			if err := warehouse.RunParallel(c.Context, datadir, c.Int("warehouse-workers")); err != nil {
+				return fmt.Errorf("failed to run data exporter: %w", err)
+			}
+
+			warehouse.AttachMetrics(m)
+
+			logger.With(log.F{
+				"service": "warehouseer",
+				"datadir": c.String("warehouse-dir"),
+				"workers": c.Int("warehouse-workers"),
+			}).Info("initialized")
+
+			relayWh = warehouse
+		}
+
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:       domainBuilder,
 			GetPayloadResponseDelay:    c.Duration("getpayload-response-delay"),
@@ -500,7 +550,7 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
+		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh)
 		r.AttachMetrics(m)
 
 		ee := &api.EnabledEndpoints{
@@ -575,7 +625,7 @@ func run() cli.ActionFunc {
 		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		finish := make(chan struct{})
-		go closemanager(ctx, finish, validatorStoreManager, r)
+		go closemanager(ctx, finish, validatorStoreManager, r, relayWh)
 
 		select {
 		case <-finish:
@@ -632,9 +682,10 @@ func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c c
 	return bcli.NewMultiBeaconClient(l, clients), nil
 }
 
-func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay) {
+func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay, relayWh *wh.Warehouse) {
 	regMgr.Close(ctx)
 	r.Close(ctx)
+	relayWh.Close(ctx)
 	finish <- struct{}{}
 }
 

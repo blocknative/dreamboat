@@ -13,6 +13,7 @@ import (
 
 // BuilderSubmitBlockRequest spec: https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6
 type SubmitBlockRequest struct {
+	BellatrixRaw              []byte           `json:"-"`
 	BellatrixSignature        types.Signature  `json:"signature" ssz-size:"96"`
 	BellatrixMessage          types.BidTrace   `json:"message"`
 	BellatrixExecutionPayload ExecutionPayload `json:"execution_payload"`
@@ -23,6 +24,10 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.BellatrixMessage.Slot != 0 &&
 		b.BellatrixExecutionPayload.EpBlockNumber > 0 &&
 		b.BellatrixExecutionPayload.EpTimestamp > 0
+}
+
+func (b *SubmitBlockRequest) Raw() []byte {
+	return b.BellatrixRaw
 }
 
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
@@ -350,8 +355,13 @@ func (ep *ExecutionPayload) Transactions() []hexutil.Bytes {
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
+	SRaw       []byte                   `json:"-"`
 	SMessage   types.BlindedBeaconBlock `json:"message"`
 	SSignature types.Signature          `json:"signature" ssz-size:"96"`
+}
+
+func (b *SignedBlindedBeaconBlock) Raw() []byte {
+	return b.SRaw
 }
 
 func (b *SignedBlindedBeaconBlock) Loggable() map[string]any {

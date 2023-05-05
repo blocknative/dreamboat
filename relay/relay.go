@@ -15,6 +15,7 @@ import (
 
 	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -102,6 +103,10 @@ type Beacon interface {
 	PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) error
 }
 
+type Warehouse interface {
+	StoreAsync(ctx context.Context, req wh.StoreRequest) error
+}
+
 type RelayConfig struct {
 	BuilderSigningDomain       types.Domain
 	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
@@ -137,15 +142,17 @@ type Relay struct {
 	beacon      Beacon
 	beaconState State
 
+	wh Warehouse
+
 	lastDeliveredSlot *atomic.Uint64
 
 	m RelayMetrics
 
-	runnignAsyncs *TimeoutWaitGroup
+	runnignAsyncs *structs.TimeoutWaitGroup
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse) *Relay {
 	rs := &Relay{
 		d:                 d,
 		das:               das,
@@ -157,9 +164,10 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		cache:             cache,
 		vstore:            vstore,
 		beacon:            beacon,
+		wh:                wh,
 		beaconState:       beaconState,
 		lastDeliveredSlot: &atomic.Uint64{},
-		runnignAsyncs:     NewTimeoutWaitGroup(),
+		runnignAsyncs:     structs.NewTimeoutWaitGroup(),
 	}
 	rs.initMetrics()
 	return rs
@@ -406,6 +414,25 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		"processingTimeMs": time.Since(tStart).Milliseconds(),
 	})
 
+	var (
+		storeRequest = rs.wh != nil
+		storeTrace   = false
+	)
+	defer func() {
+		go func() {
+			rs.runnignAsyncs.Add(1)
+			defer rs.runnignAsyncs.Done()
+
+			if storeRequest {
+				rs.storeGetPayloadRequest(logger, m, tStart, payloadRequest)
+			}
+
+			if storeTrace {
+				rs.storeTraceDelivered(logger, payloadRequest.Slot(), payload)
+			}
+		}()
+	}()
+
 	if rs.config.PublishBlock {
 		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 		if err != nil {
@@ -421,25 +448,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		time.Sleep(rs.config.GetPayloadResponseDelay)
 	}
 
+	storeTrace = true // everything was correct, so flag to store the trace
+
 	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
 		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
 	} else {
 		return nil, ErrPayloadAlreadyDelivered
 	}
-
-	rs.runnignAsyncs.Add(1)
-	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
-		defer wg.Done()
-		trace, err := payload.ToDeliveredTrace(slot)
-		if err != nil {
-			l.WithField("event", "wrong_evidence_payload").WithError(err).Error("failed to generate delivered payload")
-			return
-		}
-
-		if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
-			l.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
-		}
-	}(rs.runnignAsyncs, logger, rs, payloadRequest.Slot())
 
 	exp := payload.ExecutionPayload()
 	switch forkv {
@@ -481,6 +496,26 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 
 }
 
+func (rs *Relay) storeGetPayloadRequest(logger log.Logger, m *structs.MetricGroup, ts time.Time, payloadRequest structs.SignedBlindedBeaconBlock) {
+	tStoreWarehouse := time.Now()
+
+	req := wh.StoreRequest{
+		DataType:  "GetPayloadRequest",
+		Data:      payloadRequest.Raw(),
+		Slot:      payloadRequest.Slot(),
+		Id:        payloadRequest.BlockHash().String(),
+		Timestamp: ts,
+	}
+
+	if err := rs.wh.StoreAsync(context.Background(), req); err != nil {
+		logger.WithError(err).Warn("failed to store in warehouse")
+		return
+	}
+
+	m.AppendSince(tStoreWarehouse, "getPayload", "storeWarehouse")
+	logger.Debug("stored in warehouse")
+}
+
 func validatePayload(expected structs.BlockBidAndTrace, requested structs.SignedBlindedBeaconBlock) error {
 	have, err := expected.ExecutionHeaderHash()
 	if err != nil {
@@ -499,30 +534,15 @@ func validatePayload(expected structs.BlockBidAndTrace, requested structs.Signed
 	return nil
 }
 
-type TimeoutWaitGroup struct {
-	running int64
-	done    chan struct{}
-}
-
-func NewTimeoutWaitGroup() *TimeoutWaitGroup {
-	return &TimeoutWaitGroup{done: make(chan struct{})}
-}
-
-func (wg *TimeoutWaitGroup) Add(i int64) {
-	select {
-	case <-wg.done:
+func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload structs.BlockBidAndTrace) {
+	trace, err := payload.ToDeliveredTrace(slot)
+	if err != nil {
+		logger.WithField("event", "wrong_evidence_payload").WithError(err).Error("failed to generate delivered payload")
 		return
-	default:
 	}
-	atomic.AddInt64(&wg.running, i)
-}
 
-func (wg *TimeoutWaitGroup) Done() {
-	if atomic.AddInt64(&wg.running, -1) == 0 {
-		close(wg.done)
+	if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
+		logger.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
+		return
 	}
-}
-
-func (wg *TimeoutWaitGroup) C() <-chan struct{} {
-	return wg.done
 }

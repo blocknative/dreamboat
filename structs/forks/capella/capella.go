@@ -14,6 +14,7 @@ import (
 )
 
 type SubmitBlockRequest struct {
+	CapellaRaw              []byte           `json:"-"`
 	CapellaMessage          types.BidTrace   `json:"message"`
 	CapellaExecutionPayload ExecutionPayload `json:"execution_payload"`
 	CapellaSignature        types.Signature  `json:"signature" ssz-size:"96"`
@@ -24,6 +25,10 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.CapellaMessage.Slot != 0 &&
 		b.CapellaExecutionPayload.EpBlockNumber > 0 &&
 		b.CapellaExecutionPayload.EpTimestamp > 0
+}
+
+func (b *SubmitBlockRequest) Raw() []byte {
+	return b.CapellaRaw
 }
 
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
@@ -331,6 +336,7 @@ func (s *SignedBuilderBid) GetTree() (*ssz.Node, error) {
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
+	SRaw       []byte             `json:"-"`
 	SMessage   BlindedBeaconBlock `json:"message"`
 	SSignature types.Signature    `json:"signature" ssz-size:"96"`
 }
@@ -364,6 +370,10 @@ func (b *SignedBlindedBeaconBlock) Loggable() map[string]any {
 
 func (b *SignedBlindedBeaconBlock) Validate() bool {
 	return b.SMessage.Body != nil && b.SMessage.Body.ExecutionPayloadHeader != nil
+}
+
+func (b *SignedBlindedBeaconBlock) Raw() []byte {
+	return b.SRaw
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {

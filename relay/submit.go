@@ -98,6 +98,25 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 		return err
 	}
 
+	// TODO
+	// if rs.wh != nil {
+	// 	tStoreWarehouse := time.Now()
+	// 	req := wh.StoreRequest{
+	// 		DataType:  wh.SubmitBlockRequest,
+	// 		Data:      sbr.Raw(),
+	// 		Slot:      sbr.Slot(),
+	// 		Id:        sbr.BlockHash().String(),
+	// 		Timestamp: tStart,
+	// 	}
+	// 	if err := rs.wh.StoreAsync(context.Background(), req); err != nil {
+	// 		logger.WithError(err).Warn("failed to store in warehouse")
+	// 		// we should not return error because it's already been stored for delivery
+	// 	} else {
+	// 		m.AppendSince(tStoreWarehouse, "submitBlock", "storeWarehouse")
+	// 		logger.Debug("stored in warehouse")
+	// 	}
+	// }
+
 	processingTime := time.Since(tStart)
 	// subtract the retry waiting times
 	if wRetried {
@@ -228,7 +247,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
 	rs.runnignAsyncs.Add(1)
-	go func(wg *TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
+	go func(wg *structs.TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
 		defer wg.Done()
 		if err = rs.das.PutBuilderBlockSubmission(context.Background(), trace, newMax); err != nil {
 			rs.l.WithField("trace", trace).WithError(err).Error("error storing block builder submission")
