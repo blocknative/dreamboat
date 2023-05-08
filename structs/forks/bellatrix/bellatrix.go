@@ -13,6 +13,7 @@ import (
 
 // BuilderSubmitBlockRequest spec: https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#fa719683d4ae4a57bc3bf60e138b0dc6
 type SubmitBlockRequest struct {
+	BellatrixRaw              []byte           `json:"-"`
 	BellatrixSignature        types.Signature  `json:"signature" ssz-size:"96"`
 	BellatrixMessage          types.BidTrace   `json:"message"`
 	BellatrixExecutionPayload ExecutionPayload `json:"execution_payload"`
@@ -23,6 +24,10 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.BellatrixMessage.Slot != 0 &&
 		b.BellatrixExecutionPayload.EpBlockNumber > 0 &&
 		b.BellatrixExecutionPayload.EpTimestamp > 0
+}
+
+func (b *SubmitBlockRequest) Raw() []byte {
+	return b.BellatrixRaw
 }
 
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
@@ -350,8 +355,40 @@ func (ep *ExecutionPayload) Transactions() []hexutil.Bytes {
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
+	SRaw       []byte                   `json:"-"`
 	SMessage   types.BlindedBeaconBlock `json:"message"`
 	SSignature types.Signature          `json:"signature" ssz-size:"96"`
+}
+
+func (b *SignedBlindedBeaconBlock) Raw() []byte {
+	return b.SRaw
+}
+
+func (b *SignedBlindedBeaconBlock) Loggable() map[string]any {
+	logFields := map[string]any{
+		"signature":     b.SSignature.String(),
+		"slot":          b.SMessage.Slot,
+		"proposerIndex": b.SMessage.ProposerIndex,
+		"parentRoot":    b.SMessage.ParentRoot.String(),
+		"stateRoot":     b.SMessage.StateRoot.String(),
+	}
+	if b.SMessage.Body != nil {
+		if b.SMessage.Body.Eth1Data != nil {
+			logFields["blockHash"] = b.SMessage.Body.Eth1Data.BlockHash.String()
+			logFields["depositCount"] = b.SMessage.Body.Eth1Data.DepositCount
+			logFields["depositRoot"] = b.SMessage.Body.Eth1Data.DepositRoot.String()
+		}
+		logFields["randaoReveal"] = b.SMessage.Body.RandaoReveal.String()
+		logFields["graffiti"] = b.SMessage.Body.Graffiti.String()
+		logFields["proposerSlashings"] = b.SMessage.Body.ProposerSlashings
+		logFields["attesterSlashings"] = b.SMessage.Body.AttesterSlashings
+		logFields["deposits"] = b.SMessage.Body.Deposits
+		logFields["voluntaryExits"] = b.SMessage.Body.VoluntaryExits
+		logFields["syncAggregate"] = b.SMessage.Body.SyncAggregate
+		logFields["executionPayloadHeader"] = b.SMessage.Body.ExecutionPayloadHeader
+	}
+
+	return logFields
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
@@ -360,6 +397,13 @@ func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
 
 func (s *SignedBlindedBeaconBlock) Slot() uint64 {
 	return s.SMessage.Slot
+}
+
+func (s *SignedBlindedBeaconBlock) ExecutionHeaderHash() (types.Hash, error) {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return [32]byte{}, nil
+	}
+	return s.SMessage.Body.ExecutionPayloadHeader.HashTreeRoot()
 }
 
 func (s *SignedBlindedBeaconBlock) BlockHash() types.Hash {
@@ -556,6 +600,13 @@ func (bbat *BlockBidAndTrace) Proposer() types.PublicKey {
 
 func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 	return &bbat.Payload.BellatrixData
+}
+
+func (bbat *BlockBidAndTrace) ExecutionHeaderHash() (types.Hash, error) {
+	if bbat.Bid.BellatrixData.BellatrixMessage == nil || bbat.Bid.BellatrixData.BellatrixMessage.BellatrixHeader == nil {
+		return [32]byte{}, nil
+	}
+	return bbat.Bid.BellatrixData.BellatrixMessage.BellatrixHeader.HashTreeRoot()
 }
 
 func (bbat *BlockBidAndTrace) BuilderPubkey() (pub types.PublicKey) {

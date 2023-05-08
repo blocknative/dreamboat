@@ -19,6 +19,11 @@ import (
 
 var (
 	logger = log.New(log.WithWriter(io.Discard))
+	ee     = api.EnabledEndpoints{
+		GetHeader:   true,
+		GetPayload:  true,
+		SubmitBlock: true,
+	}
 )
 
 func TestServerRouting(t *testing.T) {
@@ -30,7 +35,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("Status", func(t *testing.T) {
 		t.Parallel()
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -45,7 +50,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 		register := mock_relay.NewMockRegistrations(ctrl)
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, register, nil, nil)
+		server := api.NewApi(logger, &ee, service, register, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -63,7 +68,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -71,7 +76,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).
+			GetHeader(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -81,7 +86,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -89,7 +94,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayload(gomock.Any(), gomock.Any(), gomock.Any()).
+			GetPayload(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -100,7 +105,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelay(ctrl)
 
-		server := api.NewApi(logger, service, nil, nil, api.NewLimitter(1, 1, nil))
+		server := api.NewApi(logger, &ee, service, nil, nil, api.NewLimitter(1, 1, nil))
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -108,7 +113,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any()).
+			SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -118,7 +123,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 		register := mock_relay.NewMockRegistrations(ctrl)
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -136,7 +141,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -157,7 +162,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -180,7 +185,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -202,7 +207,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -224,7 +229,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -246,7 +251,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -267,7 +272,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -291,7 +296,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -313,7 +318,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -335,7 +340,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -357,7 +362,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -392,15 +397,15 @@ func BenchmarkAPISequential(b *testing.B) {
 	service := mock_relay.NewMockRelay(ctrl)
 	register := mock_relay.NewMockRegistrations(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
-	server := api.NewApi(logger, service, register, nil, api.NewLimitter(1, 1, nil))
+	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil))
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 
-	service.EXPECT().GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	service.EXPECT().GetPayload(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().GetHeader(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().GetPayload(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	register.EXPECT().GetValidators(gomock.Any()).AnyTimes()
 	register.EXPECT().RegisterValidator(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	service.EXPECT().SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	w := httptest.NewRecorder()
 
@@ -423,15 +428,15 @@ func BenchmarkAPIParallel(b *testing.B) {
 
 	register := mock_relay.NewMockRegistrations(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
-	server := api.NewApi(logger, service, register, nil, api.NewLimitter(1, 1, nil))
+	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil))
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 
-	service.EXPECT().GetHeader(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	service.EXPECT().GetPayload(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().GetHeader(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().GetPayload(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	register.EXPECT().GetValidators(gomock.Any()).AnyTimes()
 	register.EXPECT().RegisterValidator(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	service.EXPECT().SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	service.EXPECT().SubmitBlock(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	randReqs := make([]*http.Request, 0)
 	ws := make([]*httptest.ResponseRecorder, 0)

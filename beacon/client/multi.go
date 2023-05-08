@@ -29,6 +29,7 @@ type BeaconNode interface {
 	Randao(structs.Slot) (string, error)
 	Endpoint() string
 	GetWithdrawals(structs.Slot) (*GetWithdrawalsResponse, error)
+	SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesEvent)
 }
 
 type MultiBeaconClient struct {
@@ -42,7 +43,7 @@ func NewMultiBeaconClient(l log.Logger, clients []BeaconNode) *MultiBeaconClient
 	if l == nil {
 		l = log.New()
 	}
-	return &MultiBeaconClient{Log: l.WithField("service", "multi-beacon client"), Clients: clients}
+	return &MultiBeaconClient{Log: l.WithField("subService", "multi-beacon-client"), Clients: clients}
 }
 
 func (b *MultiBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
@@ -208,6 +209,12 @@ func (b *MultiBeaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, er
 	}
 
 	return spec, err
+}
+
+func (b *MultiBeaconClient) SubscribeToPayloadAttributesEvents(slotC chan PayloadAttributesEvent) {
+	for _, instance := range b.Clients {
+		go instance.SubscribeToPayloadAttributesEvents(slotC)
+	}
 }
 
 func (b *MultiBeaconClient) Endpoint() string {

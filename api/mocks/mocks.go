@@ -52,33 +52,33 @@ func (mr *MockRelayMockRecorder) GetBlockReceived(arg0, arg1 interface{}) *gomoc
 }
 
 // GetHeader mocks base method.
-func (m *MockRelay) GetHeader(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.HeaderRequest) (structs.GetHeaderResponse, error) {
+func (m *MockRelay) GetHeader(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.UserContent, arg3 structs.HeaderRequest) (structs.GetHeaderResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetHeader", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(structs.GetHeaderResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetHeader indicates an expected call of GetHeader.
-func (mr *MockRelayMockRecorder) GetHeader(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) GetHeader(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockRelay)(nil).GetHeader), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeader", reflect.TypeOf((*MockRelay)(nil).GetHeader), arg0, arg1, arg2, arg3)
 }
 
 // GetPayload mocks base method.
-func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
+func (m *MockRelay) GetPayload(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.UserContent, arg3 structs.SignedBlindedBeaconBlock) (structs.GetPayloadResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(structs.GetPayloadResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPayload indicates an expected call of GetPayload.
-func (mr *MockRelayMockRecorder) GetPayload(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) GetPayload(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockRelay)(nil).GetPayload), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayload", reflect.TypeOf((*MockRelay)(nil).GetPayload), arg0, arg1, arg2, arg3)
 }
 
 // GetPayloadDelivered mocks base method.
@@ -97,17 +97,17 @@ func (mr *MockRelayMockRecorder) GetPayloadDelivered(arg0, arg1 interface{}) *go
 }
 
 // SubmitBlock mocks base method.
-func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.SubmitBlockRequest) error {
+func (m *MockRelay) SubmitBlock(arg0 context.Context, arg1 *structs.MetricGroup, arg2 structs.UserContent, arg3 structs.SubmitBlockRequest) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SubmitBlock", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SubmitBlock indicates an expected call of SubmitBlock.
-func (mr *MockRelayMockRecorder) SubmitBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) SubmitBlock(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBlock", reflect.TypeOf((*MockRelay)(nil).SubmitBlock), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitBlock", reflect.TypeOf((*MockRelay)(nil).SubmitBlock), arg0, arg1, arg2, arg3)
 }
 
 // MockRegistrations is a mock of Registrations interface.

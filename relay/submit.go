@@ -30,12 +30,13 @@ var (
 )
 
 // SubmitBlock Accepts block from trusted builder and stores
-func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr structs.SubmitBlockRequest) error {
+func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc structs.UserContent, sbr structs.SubmitBlockRequest) error {
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "submitBlock", "all")
 	value := sbr.Value()
 	logger := rs.l.With(log.F{
 		"method":         "SubmitBlock",
+		"ip":             uc.IP,
 		"builder":        sbr.BuilderPubkey(),
 		"blockHash":      sbr.BlockHash(),
 		"headSlot":       rs.beaconState.HeadSlot(),
@@ -96,6 +97,25 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, sbr st
 	if err != nil {
 		return err
 	}
+
+	// TODO
+	// if rs.wh != nil {
+	// 	tStoreWarehouse := time.Now()
+	// 	req := wh.StoreRequest{
+	// 		DataType:  wh.SubmitBlockRequest,
+	// 		Data:      sbr.Raw(),
+	// 		Slot:      sbr.Slot(),
+	// 		Id:        sbr.BlockHash().String(),
+	// 		Timestamp: tStart,
+	// 	}
+	// 	if err := rs.wh.StoreAsync(context.Background(), req); err != nil {
+	// 		logger.WithError(err).Warn("failed to store in warehouse")
+	// 		// we should not return error because it's already been stored for delivery
+	// 	} else {
+	// 		m.AppendSince(tStoreWarehouse, "submitBlock", "storeWarehouse")
+	// 		logger.Debug("stored in warehouse")
+	// 	}
+	// }
 
 	processingTime := time.Since(tStart)
 	// subtract the retry waiting times
@@ -227,7 +247,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
 	rs.runnignAsyncs.Add(1)
-	go func(wg *TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
+	go func(wg *structs.TimeoutWaitGroup, trace structs.BidTraceWithTimestamp, newMax bool) {
 		defer wg.Done()
 		if err = rs.das.PutBuilderBlockSubmission(context.Background(), trace, newMax); err != nil {
 			rs.l.WithField("trace", trace).WithError(err).Error("error storing block builder submission")
@@ -261,10 +281,12 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
 		randao := beaconState.Randao(sbr.Slot() - 1)
 		if randao.Randao == "" {
-			return true, fmt.Errorf("randao for slot %d not found", sbr.Slot())
+			prev, next := beaconState.Randao(sbr.Slot() - 2), beaconState.Randao(sbr.Slot())
+			return true, fmt.Errorf("randao for slot %d not found. Previous: %s and Next:%s", sbr.Slot(),  prev.Randao, next.Randao)
 		}
 		if randao.Randao != sbr.Random().String() {
-			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao.Randao)
+			prev, next := beaconState.Randao(sbr.Slot() - 2), beaconState.Randao(sbr.Slot())
+			return true, fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next:%s", ErrInvalidRandao, sbr.Random().String(), randao.Randao, prev.Randao, next.Randao)
 		}
 		return true, nil
 	}
@@ -298,7 +320,8 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		retried = true
 		withdrawalState = state.Withdrawals(submitBlockRequest.Slot() - 1)
 		if withdrawalState.Slot == 0 {
-			return root, retried, fmt.Errorf("withdrawals for slot %d not found", submitBlockRequest.Slot())
+			prev, next := state.Withdrawals(submitBlockRequest.Slot() - 2), state.Withdrawals(submitBlockRequest.Slot())
+			return root, retried, fmt.Errorf("withdrawals for slot %d not found. Previous: %s and Next: %s", submitBlockRequest.Slot(), prev.Root.String(), next.Root.String())
 		}
 	}
 
@@ -311,7 +334,8 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 
 	root = types.Root(withdrawalsRoot)
 	if withdrawalState.Root != withdrawalsRoot {
-		err = fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
+		prev, next := state.Withdrawals(submitBlockRequest.Slot() - 2), state.Withdrawals(submitBlockRequest.Slot())
+		err = fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next: %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String(), prev.Root.String(), next.Root.String())
 	}
 
 	return root, retried, err

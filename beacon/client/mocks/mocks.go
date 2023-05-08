@@ -166,6 +166,18 @@ func (mr *MockBeaconNodeMockRecorder) SubscribeToHeadEvents(arg0, arg1 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToHeadEvents", reflect.TypeOf((*MockBeaconNode)(nil).SubscribeToHeadEvents), arg0, arg1)
 }
 
+// SubscribeToPayloadAttributesEvents mocks base method.
+func (m *MockBeaconNode) SubscribeToPayloadAttributesEvents(arg0 chan client.PayloadAttributesEvent) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SubscribeToPayloadAttributesEvents", arg0)
+}
+
+// SubscribeToPayloadAttributesEvents indicates an expected call of SubscribeToPayloadAttributesEvents.
+func (mr *MockBeaconNodeMockRecorder) SubscribeToPayloadAttributesEvents(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeToPayloadAttributesEvents", reflect.TypeOf((*MockBeaconNode)(nil).SubscribeToPayloadAttributesEvents), arg0)
+}
+
 // SyncStatus mocks base method.
 func (m *MockBeaconNode) SyncStatus() (*client.SyncStatusPayloadData, error) {
 	m.ctrl.T.Helper()

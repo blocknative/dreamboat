@@ -7,6 +7,7 @@ import (
 )
 
 type SubmitBlockRequest interface {
+	Raw() []byte
 	Slot() uint64
 	BlockHash() types.Hash
 	ParentHash() types.Hash
@@ -52,6 +53,7 @@ type GetPayloadResponse interface {
 }
 
 type SignedBlindedBeaconBlock interface {
+	Raw() []byte
 	Slot() uint64
 	BlockHash() types.Hash
 	BlockNumber() uint64
@@ -62,6 +64,10 @@ type SignedBlindedBeaconBlock interface {
 
 	ToBeaconBlock(executionPayload ExecutionPayload) (SignedBeaconBlock, error)
 	ToPayloadKey(pk types.PublicKey) (PayloadKey, error)
+
+	ExecutionHeaderHash() (types.Hash, error)
+
+	Loggable() map[string]any
 }
 
 // BuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993

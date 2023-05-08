@@ -18,11 +18,6 @@ import (
 	"github.com/r3labs/sse/v2"
 )
 
-const (
-	BeaconEventTimeout = structs.DurationPerSlot + (structs.DurationPerSlot / 4)
-	BeaconQueryTimeout = 20 * time.Second
-)
-
 var (
 	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
 	ErrNodesUnavailable  = errors.New("beacon nodes are unavailable")
@@ -33,18 +28,31 @@ type beaconClient struct {
 	beaconEndpoint *url.URL
 	log            log.Logger
 	m              BeaconMetrics
+	c              BeaconConfig
 }
 
 type BeaconMetrics struct {
 	Timing *prometheus.HistogramVec
 }
 
-func NewBeaconClient(l log.Logger, endpoint string) (*beaconClient, error) {
+type BeaconConfig struct {
+	BeaconEventTimeout time.Duration
+	BeaconEventRestart int
+	BeaconQueryTimeout time.Duration
+}
+
+func NewBeaconClient(l log.Logger, endpoint string, config BeaconConfig) (*beaconClient, error) {
 	u, err := url.Parse(endpoint)
 
 	bc := &beaconClient{
 		beaconEndpoint: u,
-		log:            l.WithField("beaconEndpoint", endpoint),
+		log: l.With(log.F{
+			"beaconEndpoint":     endpoint,
+			"beaconEventTimeout": config.BeaconEventTimeout.String(),
+			"BeaconEventRestart": config.BeaconEventRestart,
+			"beaconQueryTimeout": config.BeaconQueryTimeout.String(),
+		}),
+		c: config,
 	}
 
 	bc.initMetrics()
@@ -58,10 +66,11 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 
 	for {
 		loopCtx, cancelLoop := context.WithCancel(ctx)
-		timer := time.NewTimer(BeaconEventTimeout)
+		timer := time.NewTimer(b.c.BeaconEventTimeout)
 		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
 
 		lastTimeout := time.Time{} // zeroed value time.Time
+		timeoutCounter := 0
 	EventSelect:
 		for {
 			select {
@@ -71,14 +80,19 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 				go b.manuallyFetchLatestHeader(ctx, logger, slotC)
 
 				// to prevent disconnection due to multiple timeouts occurring very close in time, the subscription loop is canceled and restarted
-				if time.Since(lastTimeout) <= BeaconEventTimeout*2 {
-					logger.Warn("consecutive timed out head events subscription, restarting subcription")
-					cancelLoop()
-					break EventSelect
+				if time.Since(lastTimeout) <= b.c.BeaconEventTimeout*2 {
+					timeoutCounter++
+					if timeoutCounter >= b.c.BeaconEventRestart {
+						logger.WithField("timeoutCounter", timeoutCounter).Warn("restarting subcription")
+						cancelLoop()
+						break EventSelect
+					}
+				} else {
+					timeoutCounter = 0
 				}
-				lastTimeout = time.Now()
-				timer.Reset(BeaconEventTimeout)
 
+				lastTimeout = time.Now()
+				timer.Reset(b.c.BeaconEventTimeout)
 			case <-ctx.Done():
 				cancelLoop()
 				return
@@ -89,7 +103,7 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 
 func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, timer *time.Timer, slotC chan<- HeadEvent) {
 	logger.Debug("subscription loop started")
-	defer logger.Warn("subscription loop exited")
+	defer logger.Debug("subscription loop exited")
 
 	for {
 		client := sse.NewClient(fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String()))
@@ -100,7 +114,7 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 				return
 			}
 
-			timer.Reset(BeaconEventTimeout)
+			timer.Reset(b.c.BeaconEventTimeout)
 
 			select {
 			case slotC <- head:
@@ -300,6 +314,31 @@ func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBea
 	return nil
 }
 
+func (b *beaconClient) SubscribeToPayloadAttributesEvents(payloadAttributesC chan PayloadAttributesEvent) {
+	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=payload_attributes", b.beaconEndpoint)
+	log := b.log.WithField("url", eventsURL)
+
+	client := sse.NewClient(eventsURL)
+
+	for {
+		err := client.SubscribeRaw(func(msg *sse.Event) {
+			var data PayloadAttributesEvent
+			err := json.Unmarshal(msg.Data, &data)
+			if err != nil {
+				log.WithError(err).Error("could not unmarshal payload_attributes event")
+			} else {
+				fmt.Printf("%v\n", data)
+				payloadAttributesC <- data
+			}
+		})
+		if err != nil {
+			log.WithError(err).Error("failed to subscribe to payload_attributes events")
+			time.Sleep(1 * time.Second)
+		}
+		b.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
+	}
+}
+
 func (b *beaconClient) Endpoint() string {
 	return b.beaconEndpoint.String()
 }
@@ -318,7 +357,7 @@ func (b *beaconClient) AttachMetrics(m *metrics.Metrics) {
 }
 
 func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
-	ctx, cancel := context.WithTimeout(context.Background(), BeaconQueryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.c.BeaconQueryTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
@@ -459,4 +498,25 @@ type GetForkScheduleResponse struct {
 		CurrentVersion  string `json:"current_version"`
 		Epoch           uint64 `json:"epoch,string"`
 	}
+}
+
+type PayloadAttributesEvent struct {
+	Version string                     `json:"version"`
+	Data    PayloadAttributesEventData `json:"data"`
+}
+
+type PayloadAttributesEventData struct {
+	ProposerIndex     uint64            `json:"proposer_index,string"`
+	ProposalSlot      uint64            `json:"proposal_slot,string"`
+	ParentBlockNumber uint64            `json:"parent_block_number,string"`
+	ParentBlockRoot   string            `json:"parent_block_root"`
+	ParentBlockHash   string            `json:"parent_block_hash"`
+	PayloadAttributes PayloadAttributes `json:"payload_attributes"`
+}
+
+type PayloadAttributes struct {
+	Timestamp             uint64                `json:"timestamp,string"`
+	PrevRandao            string                `json:"prev_randao"`
+	SuggestedFeeRecipient string                `json:"suggested_fee_recipient"`
+	Withdrawals           []*structs.Withdrawal `json:"withdrawals"`
 }

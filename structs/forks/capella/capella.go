@@ -14,6 +14,7 @@ import (
 )
 
 type SubmitBlockRequest struct {
+	CapellaRaw              []byte           `json:"-"`
 	CapellaMessage          types.BidTrace   `json:"message"`
 	CapellaExecutionPayload ExecutionPayload `json:"execution_payload"`
 	CapellaSignature        types.Signature  `json:"signature" ssz-size:"96"`
@@ -24,6 +25,10 @@ func (b *SubmitBlockRequest) Validate() bool {
 		b.CapellaMessage.Slot != 0 &&
 		b.CapellaExecutionPayload.EpBlockNumber > 0 &&
 		b.CapellaExecutionPayload.EpTimestamp > 0
+}
+
+func (b *SubmitBlockRequest) Raw() []byte {
+	return b.CapellaRaw
 }
 
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
@@ -331,12 +336,44 @@ func (s *SignedBuilderBid) GetTree() (*ssz.Node, error) {
 
 // SignedBlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L83
 type SignedBlindedBeaconBlock struct {
+	SRaw       []byte             `json:"-"`
 	SMessage   BlindedBeaconBlock `json:"message"`
 	SSignature types.Signature    `json:"signature" ssz-size:"96"`
 }
 
+func (b *SignedBlindedBeaconBlock) Loggable() map[string]any {
+	logFields := map[string]any{
+		"signature":     b.SSignature.String(),
+		"slot":          b.SMessage.Slot,
+		"proposerIndex": b.SMessage.ProposerIndex,
+		"parentRoot":    b.SMessage.ParentRoot.String(),
+		"stateRoot":     b.SMessage.StateRoot.String(),
+	}
+	if b.SMessage.Body != nil {
+		if b.SMessage.Body.Eth1Data != nil {
+			logFields["blockHash"] = b.SMessage.Body.Eth1Data.BlockHash.String()
+			logFields["depositCount"] = b.SMessage.Body.Eth1Data.DepositCount
+			logFields["depositRoot"] = b.SMessage.Body.Eth1Data.DepositRoot.String()
+		}
+		logFields["randaoReveal"] = b.SMessage.Body.RandaoReveal.String()
+		logFields["graffiti"] = b.SMessage.Body.Graffiti.String()
+		logFields["proposerSlashings"] = b.SMessage.Body.ProposerSlashings
+		logFields["attesterSlashings"] = b.SMessage.Body.AttesterSlashings
+		logFields["deposits"] = b.SMessage.Body.Deposits
+		logFields["voluntaryExits"] = b.SMessage.Body.VoluntaryExits
+		logFields["syncAggregate"] = b.SMessage.Body.SyncAggregate
+		logFields["executionPayloadHeader"] = b.SMessage.Body.ExecutionPayloadHeader
+	}
+
+	return logFields
+}
+
 func (b *SignedBlindedBeaconBlock) Validate() bool {
 	return b.SMessage.Body != nil && b.SMessage.Body.ExecutionPayloadHeader != nil
+}
+
+func (b *SignedBlindedBeaconBlock) Raw() []byte {
+	return b.SRaw
 }
 
 func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
@@ -345,6 +382,13 @@ func (s *SignedBlindedBeaconBlock) Signature() types.Signature {
 
 func (s *SignedBlindedBeaconBlock) Slot() uint64 {
 	return s.SMessage.Slot
+}
+
+func (s *SignedBlindedBeaconBlock) ExecutionHeaderHash() (types.Hash, error) {
+	if s.SMessage.Body == nil || s.SMessage.Body.ExecutionPayloadHeader == nil {
+		return [32]byte{}, nil
+	}
+	return s.SMessage.Body.ExecutionPayloadHeader.HashTreeRoot()
 }
 
 func (s *SignedBlindedBeaconBlock) BlockHash() types.Hash {
@@ -739,6 +783,13 @@ func (bbat *BlockBidAndTrace) Proposer() types.PublicKey {
 
 func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
 	return &bbat.Payload.CapellaData
+}
+
+func (bbat *BlockBidAndTrace) ExecutionHeaderHash() (types.Hash, error) {
+	if bbat.Bid.CapellaData.CapellaMessage.CapellaHeader == nil {
+		return [32]byte{}, nil
+	}
+	return bbat.Bid.CapellaData.CapellaMessage.CapellaHeader.HashTreeRoot()
 }
 
 func (bbat *BlockBidAndTrace) BuilderPubkey() (pub types.PublicKey) {

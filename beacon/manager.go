@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	bcli "github.com/blocknative/dreamboat/beacon/client"
@@ -39,6 +40,7 @@ type BeaconClient interface {
 	GetWithdrawals(structs.Slot) (*bcli.GetWithdrawalsResponse, error)
 	Randao(structs.Slot) (string, error)
 	GetForkSchedule() (*bcli.GetForkScheduleResponse, error)
+	SubscribeToPayloadAttributesEvents(payloadAttrC chan bcli.PayloadAttributesEvent)
 }
 
 type State interface {
@@ -54,6 +56,9 @@ type State interface {
 	HeadSlot() structs.Slot
 	SetHeadSlot(structs.Slot)
 
+	HeadSlotPayloadAttributes() uint64
+	SetHeadSlotPayloadAttributesIfHigher(uint64) (uint64, bool)
+
 	Withdrawals(uint64) structs.WithdrawalsState
 	SetWithdrawals(structs.WithdrawalsState)
 
@@ -62,23 +67,33 @@ type State interface {
 
 	Fork() structs.ForkState
 	SetFork(structs.ForkState)
+
+	ParentBlockHash() string
+	SetParentBlockHash(string)
 }
 
 type Config struct {
 	AltairForkVersion    string
 	BellatrixForkVersion string
 	CapellaForkVersion   string
+
+	RunPayloadAttributesSubscription bool
 }
 
 type Manager struct {
 	Log    log.Logger
 	Config Config
+
+	mu sync.Mutex
 }
 
-func NewManager(l log.Logger, cgf Config) *Manager {
+func NewManager(l log.Logger, cfg Config) *Manager {
 	return &Manager{
-		Log:    l.WithField("relay-service", "Service"),
-		Config: cgf,
+		Log: l.With(log.F{
+			"subService":                    "beacon-manager",
+			"runPayloadAttributesSubscription": cfg.RunPayloadAttributesSubscription,
+		}),
+		Config: cfg,
 	}
 }
 
@@ -174,7 +189,11 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 
 	defer logger.Debug("beacon loop stopped")
 
-	events := make(chan bcli.HeadEvent)
+	events := make(chan bcli.HeadEvent, NumberOfSlotsInState)
+
+	if s.Config.RunPayloadAttributesSubscription {
+		go s.RunPayloadAttributesSubscription(ctx, state, client, events)
+	}
 
 	client.SubscribeToHeadEvents(ctx, events)
 
@@ -198,19 +217,98 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 			validators := state.KnownValidators()
 			duties := state.Duties()
 
-			logger.With(log.F{
-				"epoch":                     headSlot.Epoch(),
-				"slotHead":                  headSlot,
-				"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
-				"numDuties":                 len(duties.ProposerDutiesResponse),
-				"numKnownValidators":        len(validators.KnownValidators),
-				"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
-				"randao":                    state.Randao(uint64(headSlot)).Randao,
-				"processingTimeMs":          time.Since(t).Milliseconds(),
-				"withdrawalsRoot":           state.Withdrawals(uint64(headSlot)).Root.String(),
-				"fork":                      state.Fork().Version(headSlot).String(),
-			}).Debug("processed new slot")
+			if s.Config.RunPayloadAttributesSubscription {
+				logger.With(log.F{
+					"epoch":                     headSlot.Epoch(),
+					"slotHead":                  headSlot,
+					"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
+					"numDuties":                 len(duties.ProposerDutiesResponse),
+					"numKnownValidators":        len(validators.KnownValidators),
+					"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
+					"processingTimeMs":          time.Since(t).Milliseconds(),
+					"fork":                      state.Fork().Version(headSlot).String(),
+				}).Debug("processed new slot")
+			} else {
+				logger.With(log.F{
+					"epoch":                     headSlot.Epoch(),
+					"slotHead":                  headSlot,
+					"slotHeadPayloadAttributes": state.HeadSlotPayloadAttributes(),
+					"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
+					"fork":                      state.Fork().Version(headSlot).String(),
+					"numDuties":                 len(duties.ProposerDutiesResponse),
+					"numKnownValidators":        len(validators.KnownValidators),
+					"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
+					"randao":                    state.Randao(uint64(headSlot)).Randao,
+					"randaoPrev":                state.Randao(uint64(headSlot) - 1).Randao,
+					"withdrawalsRoot":           state.Withdrawals(uint64(headSlot)).Root.String(),
+					"withdrawalsRootPrev":       state.Withdrawals(uint64(headSlot) - 1).Root.String(),
+					"processingTimeMs":          time.Since(t).Milliseconds(),
+				}).Debug("processed new slot")
+			}
 		}
+	}
+}
+
+func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state State, client BeaconClient, events chan bcli.HeadEvent) {
+	logger := s.Log.WithField("method", "RunPayloadAttributesSubscription")
+
+	c := make(chan bcli.PayloadAttributesEvent)
+	client.SubscribeToPayloadAttributesEvents(c)
+
+	for payloadAttributes := range c {
+		slot := payloadAttributes.Data.ProposalSlot - 1
+		logger = logger.WithField("slotPayloadAttributes", slot)
+
+		paHeadSlot, ok := state.SetHeadSlotPayloadAttributesIfHigher(slot)
+		if !ok {
+			logger.WithField("slotHeadPayloadAttributes", paHeadSlot).Debug("received old payload attributes")
+			continue
+		}
+
+		headSlot := state.HeadSlot()
+
+		if slot <= uint64(headSlot)-NumberOfSlotsInState {
+			continue
+		}
+
+		select {
+		case events <- bcli.HeadEvent{Slot: slot}:
+		default:
+		}
+
+		// discard repetitive payload attributes (we receive them once from each beacon node)
+		latestParentBlockHash := state.ParentBlockHash()
+		if latestParentBlockHash == payloadAttributes.Data.ParentBlockHash {
+			continue
+		}
+
+		if fork := state.Fork().Version(structs.Slot(slot)); fork == structs.ForkAltair || fork == structs.ForkBellatrix {
+			continue
+		}
+
+		hW := structs.HashWithdrawals{Withdrawals: payloadAttributes.Data.PayloadAttributes.Withdrawals}
+		root, err := hW.HashTreeRoot()
+		if err != nil {
+			logger.WithError(err).Warn("failed to compute withdrawals root")
+			continue
+		}
+		randao := payloadAttributes.Data.PayloadAttributes.PrevRandao
+
+		state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(slot), Root: root})
+		state.SetRandao(structs.RandaoState{Slot: uint64(slot), Randao: randao})
+
+		logger.With(log.F{
+			"epoch":                     headSlot.Epoch(),
+			"slot":                      slot,
+			"slotHead":                  headSlot,
+			"slotHeadPayloadAttributes": paHeadSlot,
+			"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
+			"fork":                      state.Fork().Version(headSlot).String(),
+			"randao":                    randao,
+			"randaoPrev":                state.Randao(slot - 1).Randao,
+			"withdrawalsRoot":           types.Hash(root).String(),
+			"withdrawalsRootPrev":       state.Withdrawals(slot - 1).Root.String(),
+		}).Debug("processed payload attributes")
 	}
 }
 
@@ -247,12 +345,13 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 
 	if headSlot > 0 {
 		for slot := headSlot + 1; slot < received; slot++ {
-			s.Log.Warnf("missedSlot %d", slot)
+			logger.With(log.F{"slot": slot, "event": "missed_slot"}).Warn("missed slot")
 		}
 	}
 
 	state.SetHeadSlot(received)
 	headSlot = received
+	logger = logger.WithField("slotHead", headSlot)
 
 	// update proposer duties and known validators in the background
 	if (structs.DurationPerEpoch / 2) < time.Since(state.KnownValidatorsUpdateTime()) { // only update every half DurationPerEpoch
@@ -264,27 +363,34 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		}(received)
 	}
 
-	// query expected withdrawals root
-	go s.updatedExpectedWithdrawals(headSlot, state, client)
+	// payload_attributes event was not received
+	if !s.Config.RunPayloadAttributesSubscription {
+		// update randao
+		randao, err := client.Randao(headSlot)
+		if err != nil {
+			return fmt.Errorf("fail to update randao: %w", err)
+		}
 
+		if curRandao := state.Randao(uint64(headSlot)); curRandao.Randao == "" {
+			state.SetRandao(structs.RandaoState{Slot: uint64(headSlot), Randao: randao})
+			// query expected withdrawals root
+			go s.updateExpectedWithdrawals(headSlot, state, client)
+		} else if curRandao.Randao != randao {
+			logger.With(log.F{"current": curRandao.Randao, "received": randao}).Warn("blocked randao replace")
+		}
+	}
+
+	// update proposer duties
 	entries, err := s.getProposerDuties(ctx, client, headSlot)
 	if err != nil {
 		return err
 	}
 	s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
 
-	// update randao
-	randao, err := client.Randao(headSlot)
-	if err != nil {
-		return fmt.Errorf("fail to update randao: %w", err)
-	}
-
-	state.SetRandao(structs.RandaoState{Slot: uint64(headSlot), Randao: randao})
-
 	return nil
 }
 
-func (m *Manager) updatedExpectedWithdrawals(slot structs.Slot, state State, client BeaconClient) {
+func (m *Manager) updateExpectedWithdrawals(slot structs.Slot, state State, client BeaconClient) {
 	logger := m.Log.WithField("method", "UpdatedExpectedWithdrawals").WithField("slot", slot)
 	current := state.Withdrawals(uint64(slot))
 	latestKnownSlot := current.Slot

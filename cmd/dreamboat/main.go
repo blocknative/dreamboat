@@ -14,14 +14,17 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/api"
+	"github.com/blocknative/dreamboat/api/inner"
 	"github.com/blocknative/dreamboat/auction"
 	"github.com/blocknative/dreamboat/beacon"
+	"github.com/blocknative/dreamboat/beacon/client"
 	bcli "github.com/blocknative/dreamboat/beacon/client"
 	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/client/sim/fallback"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethhttp"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethrpc"
 	"github.com/blocknative/dreamboat/client/sim/transport/gethws"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/stream"
 	"github.com/go-redis/redis/v8"
@@ -186,6 +189,11 @@ var flags = []cli.Flag{
 		Value:   true,
 		EnvVars: []string{"RELAY_PUBLISH_BLOCK"},
 	},
+	&cli.StringSliceFlag{
+		Name:    "beacon-publish",
+		Usage:   "`url` for beacon endpoints that publish blocks",
+		EnvVars: []string{"RELAY_BEACON_PUBLISH"},
+	},
 	&cli.StringFlag{
 		Name:    "relay-validator-database-url",
 		Usage:   "address of postgress database for validator registrations, if empty - default, badger will be used",
@@ -295,16 +303,65 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_DISTRIBUTION_REDIS_URI"},
 	},
 	&cli.DurationFlag{
-		Name:    "max-block-publication-delay",
-		Usage:   "Maximum delay between block publication and returning request to validator",
-		Value:   500 * time.Millisecond,
-		EnvVars: []string{"BLOCK_PUBLICATION_DELAY"},
+		Name:    "getpayload-response-delay",
+		Usage:   "Delay between block publication and returning request to validator",
+		Value:   1 * time.Second,
+		EnvVars: []string{"GETPAYLOAD_RESPONSE_DELAY"},
 	},
 	&cli.DurationFlag{
 		Name:    "getpayload-request-time-limit",
 		Usage:   "Time allowed for GetPayload requests since the slot started",
 		Value:   4 * time.Second,
 		EnvVars: []string{"GETPAYLOAD_REQUEST_TIME_LIMIT"},
+	},
+	// warehouse flags
+	&cli.BoolFlag{
+		Name:    "warehouse",
+		Usage:   "Enable warehouse storage of data",
+		Value:   true,
+		EnvVars: []string{"WAREHOUSE"},
+	},
+	&cli.StringFlag{
+		Name:    "warehouse-dir",
+		Usage:   "Data directory where the data is stored in the warehouse",
+		Value:   "/data/relay/warehouse",
+		EnvVars: []string{"WAREHOUSE_DIR"},
+	},
+	&cli.IntFlag{
+		Name:    "warehouse-workers",
+		Usage:   "Number of workers for storing data in warehouse, if 0, then data is not exported",
+		Value:   32,
+		EnvVars: []string{"WAREHOUSE_WORKERS"},
+	},
+	&cli.IntFlag{
+		Name:    "warehouse-buffer",
+		Usage:   "Size of the buffer for processing requests",
+		Value:   1_000,
+		EnvVars: []string{"WAREHOUSE_WORKERS"},
+	},
+	&cli.DurationFlag{
+		Name:    "beacon-event-timeout",
+		Usage:   "The maximum time allowed to wait for head events from the beacon, we recommend setting it to 'durationPerSlot * 1.25'",
+		Value:   16 * time.Second,
+		EnvVars: []string{"BEACON_EVENT_TIMEOUT"},
+	},
+	&cli.IntFlag{
+		Name:    "beacon-event-restart",
+		Usage:   "The number of consecutive timeouts allowed before restarting the head event subscription",
+		Value:   5,
+		EnvVars: []string{"BEACON_EVENT_RESTART"},
+	},
+	&cli.DurationFlag{
+		Name:    "beacon-query-timeout",
+		Usage:   "The maximum time allowed to wait for a response from the beacon",
+		Value:   20 * time.Second,
+		EnvVars: []string{"BEACON_QUERY_TIMEOUT"},
+	},
+	&cli.BoolFlag{
+		Name:    "beacon-payload-attributes-subscription",
+		Usage:   "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)",
+		Value:   true,
+		EnvVars: []string{"BEACON_PAYLOAD_ATTRIBUTES_SUBSCRIPTION"},
 	},
 }
 
@@ -379,13 +436,13 @@ func run() cli.ActionFunc {
 		}
 
 		logger.With(log.F{
-			"service":     "datastore",
+			"subService":  "datastore",
 			"startTimeMs": time.Since(timeDataStoreStart).Milliseconds(),
 		}).Info("data store initialized")
 
 		timeRelayStart := time.Now()
 		state := &beacon.MultiSlotState{}
-		ds, err := datastore.NewDatastore(storage, c.Int("relay-payload-cache-size"))
+		ds, err := datastore.NewDatastore(storage, storage.DB, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("failed to create datastore: %w", err)
 		}
@@ -400,9 +457,20 @@ func run() cli.ActionFunc {
 			}
 		}
 
-		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m)
+		beaconConfig := bcli.BeaconConfig{
+			BeaconEventTimeout: c.Duration("beacon-event-timeout"),
+			BeaconEventRestart: c.Int("beacon-event-restart"),
+			BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
+		}
+
+		beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
 		if err != nil {
 			return fmt.Errorf("fail to initialize beacon: %w", err)
+		}
+
+		beaconPubCli, err := initBeaconClients(logger, c.StringSlice("beacon-publish"), m, beaconConfig)
+		if err != nil {
+			return fmt.Errorf("fail to initialize publish beacon: %w", err)
 		}
 
 		// SIM Client
@@ -493,8 +561,9 @@ func run() cli.ActionFunc {
 		validatorRelay := validators.NewRegister(logger, domainBuilder, state, verificator, validatorStoreManager)
 		validatorRelay.AttachMetrics(m)
 		b := beacon.NewManager(logger, beacon.Config{
-			BellatrixForkVersion: cfg.BellatrixForkVersion,
-			CapellaForkVersion:   cfg.CapellaForkVersion,
+			BellatrixForkVersion:             cfg.BellatrixForkVersion,
+			CapellaForkVersion:               cfg.CapellaForkVersion,
+			RunPayloadAttributesSubscription: c.Bool("beacon-payload-attributes-subscription"),
 		})
 
 		auctioneer := auction.NewAuctioneer()
@@ -532,9 +601,33 @@ func run() cli.ActionFunc {
 			return err
 		}
 
+		var relayWh *wh.Warehouse
+		if c.Bool("warehouse") {
+			warehouse := wh.NewWarehouse(logger, c.Int("warehouse-buffer"))
+
+			datadir := c.String("warehouse-dir")
+			if err := os.MkdirAll(datadir, 0755); err != nil {
+				return fmt.Errorf("failed to create datadir: %w", err)
+			}
+
+			if err := warehouse.RunParallel(c.Context, datadir, c.Int("warehouse-workers")); err != nil {
+				return fmt.Errorf("failed to run data exporter: %w", err)
+			}
+
+			warehouse.AttachMetrics(m)
+
+			logger.With(log.F{
+				"service": "warehouseer",
+				"datadir": c.String("warehouse-dir"),
+				"workers": c.Int("warehouse-workers"),
+			}).Info("initialized")
+
+			relayWh = warehouse
+		}
+
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:       domainBuilder,
-			MaxBlockPublishDelay:       c.Duration("max-block-publication-delay"),
+			GetPayloadResponseDelay:    c.Duration("getpayload-response-delay"),
 			GetPayloadRequestTimeLimit: c.Duration("getpayload-request-time-limit"),
 			ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 				structs.ForkBellatrix: bellatrixBeaconProposer,
@@ -545,10 +638,16 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, streamer)
+		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 		r.AttachMetrics(m)
 
-		a := api.NewApi(logger, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
+		ee := &api.EnabledEndpoints{
+			GetHeader:   true,
+			GetPayload:  true,
+			SubmitBlock: true,
+		}
+		iApi := inner.NewAPI(ee, ds)
+		a := api.NewApi(logger, ee, r, validatorRelay, state, api.NewLimitter(c.Int("relay-submission-limit-rate"), c.Int("relay-submission-limit-burst"), allowed))
 		a.AttachMetrics(m)
 		logger.With(log.F{
 			"service":     "relay",
@@ -563,23 +662,23 @@ func run() cli.ActionFunc {
 
 		logger.Info("beacon manager ready")
 
-		// run internal http server
-		go func(m *metrics.Metrics) (err error) {
-			internalMux := http.NewServeMux()
-			metrics.AttachProfiler(internalMux)
+		internalMux := http.NewServeMux()
+		iApi.AttachToHandler(internalMux)
 
+		// run internal http server
+		go func(m *metrics.Metrics, internalMux *http.ServeMux) (err error) {
+			metrics.AttachProfiler(internalMux)
 			internalMux.Handle("/metrics", m.Handler())
 			logger.Info("internal server listening")
 			internalSrv := http.Server{
 				Addr:    c.String("internalAddr"),
 				Handler: internalMux,
 			}
-
 			if err = internalSrv.ListenAndServe(); err == http.ErrServerClosed {
 				err = nil
 			}
 			return err
-		}(m)
+		}(m, internalMux)
 
 		mux := http.NewServeMux()
 		a.AttachToHandler(mux)
@@ -614,7 +713,7 @@ func run() cli.ActionFunc {
 		ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout)
 		defer closeC()
 		finish := make(chan struct{})
-		go closemanager(ctx, finish, validatorStoreManager, r)
+		go closemanager(ctx, finish, validatorStoreManager, r, relayWh)
 
 		select {
 		case <-finish:
@@ -657,11 +756,11 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c client.BeaconConfig) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
-		client, err := bcli.NewBeaconClient(l, endpoint)
+		client, err := bcli.NewBeaconClient(l, endpoint, c)
 		if err != nil {
 			return nil, err
 		}
@@ -671,9 +770,10 @@ func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics) (*b
 	return bcli.NewMultiBeaconClient(l, clients), nil
 }
 
-func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay) {
+func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay, relayWh *wh.Warehouse) {
 	regMgr.Close(ctx)
 	r.Close(ctx)
+	relayWh.Close(ctx)
 	finish <- struct{}{}
 }
 
