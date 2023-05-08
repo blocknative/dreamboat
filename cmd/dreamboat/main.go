@@ -295,7 +295,7 @@ func main() {
 		}
 	}
 
-	r := relay.NewRelay(logger, relay.RelayConfig{
+	rcfg := &relay.RelayConfig{
 		BuilderSigningDomain: domainBuilder,
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 			structs.ForkBellatrix: bellatrixBeaconProposer,
@@ -306,7 +306,9 @@ func main() {
 		AllowedListedBuilders: allowed,
 		PublishBlock:          cfg.Relay.PublishBlock,
 		MaxBlockPublishDelay:  cfg.Relay.MaxBlockPublishDelay,
-	}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
+	}
+	cfg.Relay.SubscribeForUpdates(rcfg)
+	r := relay.NewRelay(logger, rcfg, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
 	r.AttachMetrics(m)
 
 	ee := &api.EnabledEndpoints{

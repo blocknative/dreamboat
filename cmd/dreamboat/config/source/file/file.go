@@ -45,7 +45,10 @@ func parseIni(r io.Reader, cfg *config.Config, initial bool) (e error) {
 	elem := reflect.ValueOf(cfg).Elem()
 	t := elem.Type()
 
-	var currentSection *reflect.Value
+	var (
+		currentSection *reflect.Value
+		sRoot          config.Propagator
+	)
 
 	s := bufio.NewScanner(r)
 	for s.Scan() {
@@ -69,6 +72,13 @@ func parseIni(r io.Reader, cfg *config.Config, initial bool) (e error) {
 				if name, ok := f.Tag.Lookup("config"); ok && name == tag {
 					a := elem.FieldByName(f.Name)
 					currentSection = &a
+					/*
+						for j := 0; j < currentSection.NumMethod(); j++ {
+							m := t.Method(j)
+							if m.Name == "Propagate" {
+								sRoot = currentSection.Interface().(config.Propagator)
+							}
+						}*/
 					continue
 				}
 			}
@@ -85,21 +95,15 @@ func parseIni(r io.Reader, cfg *config.Config, initial bool) (e error) {
 				return errors.New("malformed config")
 			}
 
-			if currentSection.Kind() == reflect.UnsafePointer {
-				if err := parseParam(currentSection, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
-					return err
-				}
-				continue
-			}
-
 			if currentSection.Kind() == reflect.Ptr {
 				if !currentSection.IsNil() {
 					a := currentSection.Elem()
-					if err := parseParam(&a, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
+
+					if err := parseParam(&a, sRoot, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
 						return err
 					}
 				} else {
-					if err := parseParam(currentSection, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
+					if err := parseParam(currentSection, sRoot, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
 						return err
 					}
 				}
@@ -108,7 +112,7 @@ func parseIni(r io.Reader, cfg *config.Config, initial bool) (e error) {
 
 			if currentSection.Kind() == reflect.Struct {
 				a := currentSection.Elem()
-				if err := parseParam(&a, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
+				if err := parseParam(&a, sRoot, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
 					return err
 				}
 				continue
@@ -129,11 +133,11 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 	key, rest, _ := strings.Cut(key, ".")
 
 	sRoot := subscribtionRoot
-
-	if currentSection.Kind() == reflect.Ptr {
-		a := currentSection.Elem()
-		currentSection = &a
-	}
+	/*
+		if currentSection.Kind() == reflect.Ptr {
+			a := currentSection.Elem()
+			currentSection = &a
+		}*/
 	t := currentSection.Type()
 	for j := 0; j < t.NumMethod(); j++ {
 		m := t.Method(j)
@@ -188,17 +192,18 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 					return err
 				}
 				if el.Bool() != b {
-					log.Println("different value, setting b ", b)
-
-					if !initial && !inArr(params, "allow_dynamic") {
-						return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
-					}
-					if sRoot != nil {
-						sRoot.Propagate(structs.OldNew{
-							Name: f.Name,
-							New:  b,
-							Old:  el.Bool(),
-						})
+					if !initial {
+						log.Println("different value, setting bool ", b)
+						if !inArr(params, "allow_dynamic") {
+							return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
+						}
+						if sRoot != nil {
+							sRoot.Propagate(structs.OldNew{
+								Name: f.Name,
+								New:  b,
+								Old:  el.Bool(),
+							})
+						}
 					}
 					el.SetBool(b)
 				}
@@ -208,17 +213,20 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 					return err
 				}
 				if el.Uint() != uintP {
-					log.Println("different value, setting ui ", uintP)
+					if !initial {
+						log.Println("different value, setting ui ", uintP)
 
-					if !initial && !inArr(params, "allow_dynamic") {
-						return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
-					}
-					if sRoot != nil {
-						sRoot.Propagate(structs.OldNew{
-							Name: f.Name,
-							New:  uintP,
-							Old:  el.Uint(),
-						})
+						if !inArr(params, "allow_dynamic") {
+							return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
+						}
+
+						if sRoot != nil {
+							sRoot.Propagate(structs.OldNew{
+								Name: f.Name,
+								New:  uintP,
+								Old:  el.Uint(),
+							})
+						}
 					}
 					el.SetUint(uintP)
 				}
@@ -228,17 +236,19 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 					return err
 				}
 				if el.Int() != intP {
-					log.Println("different value, setting i ", intP)
+					if !initial {
+						if !inArr(params, "allow_dynamic") {
+							return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
+						}
 
-					if !initial && !inArr(params, "allow_dynamic") {
-						return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
-					}
-					if sRoot != nil {
-						sRoot.Propagate(structs.OldNew{
-							Name: f.Name,
-							New:  intP,
-							Old:  el.Int(),
-						})
+						log.Println("different value, setting i ", intP)
+						if sRoot != nil {
+							sRoot.Propagate(structs.OldNew{
+								Name: f.Name,
+								New:  intP,
+								Old:  el.Int(),
+							})
+						}
 					}
 					el.SetInt(intP)
 				}
@@ -248,17 +258,19 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 					return err
 				}
 				if el.String() != s {
-					log.Println("different value, setting s ", s)
+					if !initial {
+						if !inArr(params, "allow_dynamic") {
+							return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
+						}
 
-					if !initial && !inArr(params, "allow_dynamic") {
-						return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
-					}
-					if sRoot != nil {
-						sRoot.Propagate(structs.OldNew{
-							Name: f.Name,
-							New:  s,
-							Old:  el.String(),
-						})
+						log.Println("different value, setting s ", s)
+						if sRoot != nil {
+							sRoot.Propagate(structs.OldNew{
+								Name: f.Name,
+								New:  s,
+								Old:  el.String(),
+							})
+						}
 					}
 					el.SetString(s)
 				}
@@ -269,17 +281,22 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 					if err != nil {
 						return err
 					}
-					if !reflect.DeepEqual(s, el) {
-						if !initial && !inArr(params, "allow_dynamic") {
-							return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
+
+					a := el.Interface().([]string)
+					if !reflect.DeepEqual(s, a) {
+						if !initial {
+							if !inArr(params, "allow_dynamic") {
+								return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
+							}
+							if sRoot != nil {
+								sRoot.Propagate(structs.OldNew{
+									Name: f.Name,
+									New:  s,
+									Old:  el,
+								})
+							}
 						}
-						if sRoot != nil {
-							sRoot.Propagate(structs.OldNew{
-								Name: f.Name,
-								New:  s,
-								Old:  el,
-							})
-						}
+						el.Set(reflect.ValueOf(s))
 					}
 				default:
 					log.Panic("unsupported slice type: ", f.Type.Elem().Kind())

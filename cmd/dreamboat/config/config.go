@@ -93,6 +93,8 @@ var DefaultRelayConfig = &RelayConfig{
 }
 
 type RelayConfig struct {
+	Subscriber
+
 	// name of the network in which relay oparates
 	Network string `config:"network"` // mainnet
 

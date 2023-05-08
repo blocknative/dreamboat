@@ -174,7 +174,7 @@ type Relay struct {
 	l log.Logger
 
 	ver    Verifier
-	config RelayConfig
+	config *RelayConfig
 
 	cache  ValidatorCache
 	vstore ValidatorStore
