@@ -129,7 +129,7 @@ type RelayConfig struct {
 	GetPayloadResponseDelay time.Duration
 	MaxBlockPublishDelay    time.Duration
 	RegistrationCacheTTL    time.Duration
-	////
+
 	GetPayloadRequestTimeLimit time.Duration
 	PublishBlock               bool
 
@@ -142,32 +142,17 @@ func (rc *RelayConfig) OnConfigChange(c structs.OldNew) {
 	switch c.Name {
 	case "AllowedBuilders":
 		if keys, ok := c.New.([]string); ok {
-			if rc.AllowedListedBuilders == nil {
-				rc.AllowedListedBuilders = make(map[[48]byte]struct{})
-			}
-			newKeys := make(map[string]types.PublicKey)
+			newKeys := make(map[[48]byte]struct{})
 			for _, key := range keys {
 				var pk types.PublicKey
-				if err := pk.UnmarshalText([]byte(k)); err != nil {
+				if err := pk.UnmarshalText([]byte(key)); err != nil {
 					//logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
 					continue
 				}
-				newKeys[key] = 
+				newKeys[pk] = struct{}{}
 			}
-			for k, v := range rc.AllowedListedBuilders {
-				var pk types.PublicKey
-				if err := pk.UnmarshalText([]byte(k)); err != nil {
-					logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
-					continue
-				}
-				allowed[pk] = struct{}{}
-			}
+			rc.AllowedListedBuilders = newKeys
 		}
-		//if b, ok := c.New.(time.Duration); ok {
-		//	bc.EventTimeout = b
-		//}
-		// comma separated list of allowed builder pubkeys"
-		//AllowedBuilders []string `config:"allowed_builders"` // map[[48]byte]struct{}
 	case "PublishBlock":
 		if b, ok := c.New.(bool); ok {
 			rc.PublishBlock = b

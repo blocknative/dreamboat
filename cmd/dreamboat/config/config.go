@@ -37,6 +37,11 @@ type Config struct {
 	DataAPI *DataAPIConfig `config:"dataapi"`
 }
 
+var DefaultHTTPConfig = &HTTPConfig{
+	ReadTimeout:  2 * time.Second,
+	WriteTimeout: 2 * time.Second,
+}
+
 type HTTPConfig struct {
 	// address (ip+port) on which http should be served
 	Address      string        `config:"address"`
@@ -44,9 +49,10 @@ type HTTPConfig struct {
 	WriteTimeout time.Duration `config:"write_timeout"` //time.Second * 2,
 }
 
-var DefaultHTTPConfig = &HTTPConfig{
-	ReadTimeout:  2 * time.Second,
-	WriteTimeout: 2 * time.Second,
+var DefaultSQLConfig = &SQLConfig{
+	MaxOpenConns:    10,
+	MaxIdleConns:    10,
+	ConnMaxIdleTime: 15 * time.Second,
 }
 
 type SQLConfig struct {
@@ -58,18 +64,17 @@ type SQLConfig struct {
 	ConnMaxIdleTime time.Duration `config:"conn_max_idle_time"`
 }
 
-var DefaultSQLConfig = &SQLConfig{
-	MaxOpenConns:    10,
-	MaxIdleConns:    10,
-	ConnMaxIdleTime: 15 * time.Second,
+var DefaultBadgerDBConfig = &BadgerDBConfig{
+	TTL: 48 * time.Hour,
 }
 
 type BadgerDBConfig struct {
 	TTL time.Duration `config:"ttl"`
 }
 
-var DefaultBadgerDBConfig = &BadgerDBConfig{
-	TTL: 48 * time.Hour,
+var DefaultApiConfig = &ApiConfig{
+	SubmissionLimitRate:  2,
+	SubmissionLimitBurst: 2,
 }
 
 type ApiConfig struct {
@@ -82,9 +87,9 @@ type ApiConfig struct {
 	SubmissionLimitBurst int `config:"submission_limit_burst"`
 }
 
-var DefaultApiConfig = &ApiConfig{
-	SubmissionLimitRate:  2,
-	SubmissionLimitBurst: 2,
+var DefaultRelayConfig = &RelayConfig{
+	PublishBlock:         true,
+	MaxBlockPublishDelay: 500 * time.Millisecond,
 }
 
 type RelayConfig struct {
@@ -101,12 +106,11 @@ type RelayConfig struct {
 	MaxBlockPublishDelay time.Duration `config:"max_block_publish_delay"`
 
 	// comma separated list of allowed builder pubkeys"
-	AllowedBuilders []string `config:"allowed_builders"` // map[[48]byte]struct{}
+	AllowedBuilders []string `config:"allowed_builders,allow_dynamic"` // map[[48]byte]struct{}
 }
 
-var DefaultRelayConfig = &RelayConfig{
-	PublishBlock:         true,
-	MaxBlockPublishDelay: 500 * time.Millisecond,
+var DefaultBeaconConfig = &BeaconConfig{
+	PayloadAttributesSubscription: true,
 }
 
 type BeaconConfig struct {
@@ -124,9 +128,7 @@ type BeaconConfig struct {
 	QueryTimeout time.Duration `config:"query_timeout"`
 }
 
-var DefaultBeaconConfig = &BeaconConfig{
-	PayloadAttributesSubscription: true,
-}
+var DefaultBlockSimulation = &BlockSimulationConfig{}
 
 type BlockSimulationConfig struct {
 	RPC  BlockSimulationRPCConfig  `config:"rpc"`

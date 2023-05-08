@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"math"
 	"net/http"
 	"net/url"
@@ -137,6 +136,25 @@ func main() {
 		logger.Fatalf("fail to initialize beacon: %w", err)
 		return
 	}
+	/*
+
+	   beaconConfig := bcli.BeaconConfig{
+	   		BeaconEventTimeout: c.Duration("beacon-event-timeout"),
+	   		BeaconEventRestart: c.Int("beacon-event-restart"),
+	   		BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
+	   	}
+
+	   	beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
+	   	if err != nil {
+	   		return fmt.Errorf("fail to initialize beacon: %w", err)
+	   	}
+
+	   	beaconPubCli, err := initBeaconClients(logger, c.StringSlice("beacon-publish"), m, beaconConfig)
+	   	if err != nil {
+	   		return fmt.Errorf("fail to initialize publish beacon: %w", err)
+	   	}
+
+	*/
 
 	// SIM Client
 	simFallb := fallback.NewFallback()
@@ -312,22 +330,6 @@ func main() {
 		logger.Fatalf("failed to init beacon manager: %w", err)
 	}
 
-	beaconConfig := bcli.BeaconConfig{
-		BeaconEventTimeout: c.Duration("beacon-event-timeout"),
-		BeaconEventRestart: c.Int("beacon-event-restart"),
-		BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
-	}
-
-	beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
-	if err != nil {
-		return fmt.Errorf("fail to initialize beacon: %w", err)
-	}
-
-	beaconPubCli, err := initBeaconClients(logger, c.StringSlice("beacon-publish"), m, beaconConfig)
-	if err != nil {
-		return fmt.Errorf("fail to initialize publish beacon: %w", err)
-	}
-
 	go b.Run(ctx, state, beaconCli, validatorStoreManager, validatorCache)
 
 	//if s.Config.RunPayloadAttributesSubscription {
@@ -357,20 +359,18 @@ func main() {
 
 	mux := http.NewServeMux()
 	a.AttachToHandler(mux)
-
-	var srv http.Server
+	srv := &http.Server{
+		Addr:           cfg.ExternalHttp.Address,
+		ReadTimeout:    cfg.ExternalHttp.ReadTimeout,
+		WriteTimeout:   cfg.ExternalHttp.WriteTimeout,
+		IdleTimeout:    time.Second * 2,
+		Handler:        mux,
+		MaxHeaderBytes: 4096,
+	}
 	// run the http server
-	go func(srv http.Server) (err error) {
-		svr := http.Server{
-			Addr:           cfg.ExternalHttp.Address,
-			ReadTimeout:    cfg.ExternalHttp.ReadTimeout,
-			WriteTimeout:   cfg.ExternalHttp.WriteTimeout,
-			IdleTimeout:    time.Second * 2,
-			Handler:        mux,
-			MaxHeaderBytes: 4096,
-		}
+	go func(srv *http.Server) (err error) {
 		logger.Info("http server listening")
-		if err = svr.ListenAndServe(); err == http.ErrServerClosed {
+		if err = srv.ListenAndServe(); err == http.ErrServerClosed {
 			err = nil
 		}
 		logger.Info("http server finished")
@@ -381,8 +381,9 @@ func main() {
 	err = srv.Shutdown(ctx)
 	logger.Info("Shutdown returned ", err)
 
-	ctx, closeC = context.WithTimeout(context.Background(), shutdownTimeout)
+	ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer closeC()
+	finish := make(chan struct{})
 	go closemanager(ctx, finish, validatorStoreManager, r)
 
 	select {

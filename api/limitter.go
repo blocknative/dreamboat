@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 
+	"github.com/blocknative/dreamboat/structs"
+	"github.com/flashbots/go-boost-utils/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/time/rate"
 )
 
-const LimitterCacheSize = 100
+const LimitterCacheSize = 400
 
 var ErrTooManyCalls = errors.New("too many calls")
 
@@ -50,4 +52,21 @@ func (l *Limitter) Allow(ctx context.Context, pubkey [48]byte) error {
 
 }
 
-//OnConfigChange(change structs.OldNew)
+func (l *Limitter) OnConfigChange(c structs.OldNew) {
+	switch c.Name {
+	case "AllowedBuilders":
+		if keys, ok := c.New.([]string); ok {
+			newKeys := make(map[[48]byte]struct{})
+			for _, key := range keys {
+				var pk types.PublicKey
+				if err := pk.UnmarshalText([]byte(key)); err != nil {
+					//logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
+					continue
+				}
+				newKeys[pk] = struct{}{}
+			}
+
+			//rc.AllowedListedBuilders = newKeys
+		}
+	}
+}

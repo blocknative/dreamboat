@@ -80,10 +80,41 @@ func parseIni(r io.Reader, cfg *config.Config, initial bool) (e error) {
 			if !found {
 				return errors.New("parse failure")
 			}
-			el := currentSection.Elem()
-			if err := parseParam(&el, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
-				return err
+
+			if currentSection == nil {
+				return errors.New("malformed config")
 			}
+
+			if currentSection.Kind() == reflect.UnsafePointer {
+				if err := parseParam(currentSection, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
+					return err
+				}
+				continue
+			}
+
+			if currentSection.Kind() == reflect.Ptr {
+				if !currentSection.IsNil() {
+					a := currentSection.Elem()
+					if err := parseParam(&a, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
+						return err
+					}
+				} else {
+					if err := parseParam(currentSection, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+
+			if currentSection.Kind() == reflect.Struct {
+				a := currentSection.Elem()
+				if err := parseParam(&a, nil, strings.TrimSpace(key), strings.TrimSpace(value), initial); err != nil {
+					return err
+				}
+				continue
+			}
+
+			return errors.New("malformed config")
 		}
 	}
 
@@ -98,6 +129,11 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 	key, rest, _ := strings.Cut(key, ".")
 
 	sRoot := subscribtionRoot
+
+	if currentSection.Kind() == reflect.Ptr {
+		a := currentSection.Elem()
+		currentSection = &a
+	}
 	t := currentSection.Type()
 	for j := 0; j < t.NumMethod(); j++ {
 		m := t.Method(j)
@@ -227,13 +263,13 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 					el.SetString(s)
 				}
 			case reflect.Slice:
-				switch reflect.SliceOf(f.Type).Kind() {
+				switch f.Type.Elem().Kind() {
 				case reflect.String:
 					s, err := paramParseStringSlice(v)
 					if err != nil {
 						return err
 					}
-					if reflect.DeepEqual(s, el) {
+					if !reflect.DeepEqual(s, el) {
 						if !initial && !inArr(params, "allow_dynamic") {
 							return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
 						}
@@ -246,7 +282,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 						}
 					}
 				default:
-					log.Panic("unsupported slice type: ", reflect.SliceOf(f.Type))
+					log.Panic("unsupported slice type: ", f.Type.Elem().Kind())
 				}
 			case reflect.Struct:
 				err := parseParam(&el, sRoot, rest, value, initial)
