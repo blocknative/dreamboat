@@ -416,22 +416,22 @@ func run() cli.ActionFunc {
 			err      error
 		)
 
+		badgerDs, err = trBadger.Open(c.String("datadir"))
+		if err != nil {
+			logger.WithError(err).Error("failed to initialize datastore")
+			return err
+		}
+		if err = trBadger.InitDatastoreMetrics(m); err != nil {
+			logger.WithError(err).Error("failed to initialize datastore metrics")
+			return err
+		}
+
 		if c.Bool("relay-distribution") {
 			redisClient := redis.NewClient(&redis.Options{
 				Addr: c.String("relay-distribution-redis-uri"),
 			})
 			storage = &dsRedis.RedisDatastore{Redis: redisClient}
 		} else {
-			badgerDs, err = trBadger.Open(c.String("datadir"))
-			if err != nil {
-				logger.WithError(err).Error("failed to initialize datastore")
-				return err
-			}
-			if err = trBadger.InitDatastoreMetrics(m); err != nil {
-				logger.WithError(err).Error("failed to initialize datastore metrics")
-				return err
-			}
-
 			storage = badgerDs
 		}
 
@@ -442,7 +442,7 @@ func run() cli.ActionFunc {
 
 		timeRelayStart := time.Now()
 		state := &beacon.MultiSlotState{}
-		ds, err := datastore.NewDatastore(storage, storage.DB, c.Int("relay-payload-cache-size"))
+		ds, err := datastore.NewDatastore(storage, badgerDs.DB, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("failed to create datastore: %w", err)
 		}
@@ -638,7 +638,7 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh, streamer)
+		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 		r.AttachMetrics(m)
 
 		ee := &api.EnabledEndpoints{
