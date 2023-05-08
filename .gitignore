@@ -26,3 +26,7 @@ cmd/scratch/*
 # profiling
 *.prof
 *.svg
+
+.data
+/dreamboat
+/migration-postgres
