@@ -2,6 +2,7 @@ package validators
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,7 +34,7 @@ type StoreReq struct {
 
 type StoreManager struct {
 	RegistrationCache ValidatorCache
-	writeTTL          time.Duration
+	writeTTLSeconds   int
 
 	store ValidatorStore
 
@@ -51,7 +52,7 @@ func NewStoreManager(l log.Logger, cache ValidatorCache, store ValidatorStore, w
 	rm := &StoreManager{
 		l:                 l,
 		store:             store,
-		writeTTL:          writeTTL,
+		writeTTLSeconds:   int(writeTTL.Seconds()),
 		RegistrationCache: cache,
 		StoreCh:           make(chan StoreReq, storeSize),
 	}
@@ -82,7 +83,7 @@ func (rm *StoreManager) Check(rvg *types.RegisterValidatorRequestMessage) bool {
 		return false
 	}
 
-	if time.Since(v.Time).Seconds() > (rm.writeTTL.Seconds() - (rm.writeTTL.Seconds() * 5 / 100)) {
+	if time.Since(v.Time).Seconds() > float64(rm.writeTTLSeconds+rand.Intn(rm.writeTTLSeconds)-(rm.writeTTLSeconds*5/100)) {
 		return false
 	}
 
