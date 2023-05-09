@@ -33,8 +33,8 @@ type StoreReq struct {
 }
 
 type StoreManager struct {
-	RegistrationCache       ValidatorCache
-	storeTTLHalftimeSeconds int
+	RegistrationCache ValidatorCache
+	writeTTLSeconds   int
 
 	store ValidatorStore
 
@@ -48,13 +48,13 @@ type StoreManager struct {
 	m StoreManagerMetrics
 }
 
-func NewStoreManager(l log.Logger, cache ValidatorCache, store ValidatorStore, storeTTLHalftimeSeconds int, storeSize uint) *StoreManager {
+func NewStoreManager(l log.Logger, cache ValidatorCache, store ValidatorStore, writeTTL time.Duration, storeSize uint) *StoreManager {
 	rm := &StoreManager{
-		l:                       l,
-		store:                   store,
-		storeTTLHalftimeSeconds: storeTTLHalftimeSeconds,
-		RegistrationCache:       cache,
-		StoreCh:                 make(chan StoreReq, storeSize),
+		l:                 l,
+		store:             store,
+		writeTTLSeconds:   int(writeTTL.Seconds()),
+		RegistrationCache: cache,
+		StoreCh:           make(chan StoreReq, storeSize),
 	}
 	rm.initMetrics()
 	return rm
@@ -83,7 +83,7 @@ func (rm *StoreManager) Check(rvg *types.RegisterValidatorRequestMessage) bool {
 		return false
 	}
 
-	if time.Since(v.Time).Seconds() > float64(rm.storeTTLHalftimeSeconds+rand.Intn(rm.storeTTLHalftimeSeconds)-(rm.storeTTLHalftimeSeconds*5/100)) {
+	if time.Since(v.Time).Seconds() > float64(rm.writeTTLSeconds+rand.Intn(rm.writeTTLSeconds)-(rm.writeTTLSeconds*5/100)) {
 		return false
 	}
 

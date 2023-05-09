@@ -12,8 +12,8 @@ import (
 	"github.com/lthibault/log"
 
 	"github.com/blocknative/dreamboat/beacon"
-	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
