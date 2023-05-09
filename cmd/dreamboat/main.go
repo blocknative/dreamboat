@@ -170,16 +170,16 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
 	},
 	&cli.DurationFlag{
-		Name:    "relay-registrations-cache-write-ttl",
-		Usage:   "registrations cache ttl for writing",
-		Value:   12 * time.Hour,
-		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_TTL"},
-	},
-	&cli.DurationFlag{
 		Name:    "relay-registrations-cache-read-ttl",
 		Usage:   "registrations cache ttl for reading",
 		Value:   time.Hour,
 		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_READ_TTL"},
+	},
+	&cli.DurationFlag{
+		Name:    "relay-registrations-cache-write-ttl",
+		Usage:   "registrations cache ttl for writing",
+		Value:   12 * time.Hour,
+		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_WRITE_TTL"},
 	},
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
