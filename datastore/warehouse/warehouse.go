@@ -31,7 +31,11 @@ type Warehouse struct {
 }
 
 func NewWarehouse(logger log.Logger, bufSize int) *Warehouse {
-	wh := &Warehouse{logger: logger.WithField("service", "warehouse"), requests: make(chan StoreRequest, bufSize), runningWorkers: structs.NewTimeoutWaitGroup()} // channel must be unbuffered, for not accepting requests that will not be handled
+	wh := &Warehouse{
+		logger:         logger.WithField("subService", "warehouse"),
+		requests:       make(chan StoreRequest, bufSize),
+		cleanShutdown:  make(chan struct{}, 0),
+		runningWorkers: structs.NewTimeoutWaitGroup()}
 	wh.initMetrics()
 	return wh
 }
@@ -176,7 +180,7 @@ func newWorker(id int, datadir string, logger log.Logger) *worker {
 
 func (w *worker) getOrCreateFile(req StoreRequest) (*os.File, error) {
 	// get
-	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, req.DataType, req.Slot, w.id)
+	filename := fmt.Sprintf("%s/%s/%d_%d.csv", w.datadir, req.DataType, req.Slot, w.id)
 	if fileWithTs, ok := w.files[filename]; ok {
 		fileWithTs.ts = time.Now()
 		return fileWithTs.File, nil

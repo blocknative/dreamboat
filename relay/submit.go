@@ -13,6 +13,7 @@ import (
 
 	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -98,24 +99,23 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 		return err
 	}
 
-	// TODO
-	// if rs.wh != nil {
-	// 	tStoreWarehouse := time.Now()
-	// 	req := wh.StoreRequest{
-	// 		DataType:  wh.SubmitBlockRequest,
-	// 		Data:      sbr.Raw(),
-	// 		Slot:      sbr.Slot(),
-	// 		Id:        sbr.BlockHash().String(),
-	// 		Timestamp: tStart,
-	// 	}
-	// 	if err := rs.wh.StoreAsync(context.Background(), req); err != nil {
-	// 		logger.WithError(err).Warn("failed to store in warehouse")
-	// 		// we should not return error because it's already been stored for delivery
-	// 	} else {
-	// 		m.AppendSince(tStoreWarehouse, "submitBlock", "storeWarehouse")
-	// 		logger.Debug("stored in warehouse")
-	// 	}
-	// }
+	if rs.wh != nil {
+		tStoreWarehouse := time.Now()
+		req := wh.StoreRequest{
+			DataType:  "SubmitBlockRequest",
+			Data:      sbr.Raw(),
+			Slot:      sbr.Slot(),
+			Id:        sbr.BlockHash().String(),
+			Timestamp: tStart,
+		}
+		if err := rs.wh.StoreAsync(context.Background(), req); err != nil {
+			logger.WithError(err).Warn("failed to store in warehouse")
+			// we should not return error because it's already been stored for delivery
+		} else {
+			m.AppendSince(tStoreWarehouse, "submitBlock", "storeWarehouse")
+			logger.Debug("stored in warehouse")
+		}
+	}
 
 	processingTime := time.Since(tStart)
 	// subtract the retry waiting times
@@ -281,11 +281,11 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
 		randao := beaconState.Randao(sbr.Slot() - 1)
 		if randao.Randao == "" {
-			prev, next := beaconState.Randao(sbr.Slot() - 2), beaconState.Randao(sbr.Slot())
-			return true, fmt.Errorf("randao for slot %d not found. Previous: %s and Next:%s", sbr.Slot(),  prev.Randao, next.Randao)
+			prev, next := beaconState.Randao(sbr.Slot()-2), beaconState.Randao(sbr.Slot())
+			return true, fmt.Errorf("randao for slot %d not found. Previous: %s and Next:%s", sbr.Slot(), prev.Randao, next.Randao)
 		}
 		if randao.Randao != sbr.Random().String() {
-			prev, next := beaconState.Randao(sbr.Slot() - 2), beaconState.Randao(sbr.Slot())
+			prev, next := beaconState.Randao(sbr.Slot()-2), beaconState.Randao(sbr.Slot())
 			return true, fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next:%s", ErrInvalidRandao, sbr.Random().String(), randao.Randao, prev.Randao, next.Randao)
 		}
 		return true, nil
@@ -320,7 +320,7 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		retried = true
 		withdrawalState = state.Withdrawals(submitBlockRequest.Slot() - 1)
 		if withdrawalState.Slot == 0 {
-			prev, next := state.Withdrawals(submitBlockRequest.Slot() - 2), state.Withdrawals(submitBlockRequest.Slot())
+			prev, next := state.Withdrawals(submitBlockRequest.Slot()-2), state.Withdrawals(submitBlockRequest.Slot())
 			return root, retried, fmt.Errorf("withdrawals for slot %d not found. Previous: %s and Next: %s", submitBlockRequest.Slot(), prev.Root.String(), next.Root.String())
 		}
 	}
@@ -334,7 +334,7 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 
 	root = types.Root(withdrawalsRoot)
 	if withdrawalState.Root != withdrawalsRoot {
-		prev, next := state.Withdrawals(submitBlockRequest.Slot() - 2), state.Withdrawals(submitBlockRequest.Slot())
+		prev, next := state.Withdrawals(submitBlockRequest.Slot()-2), state.Withdrawals(submitBlockRequest.Slot())
 		err = fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next: %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String(), prev.Root.String(), next.Root.String())
 	}
 

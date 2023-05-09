@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -178,10 +177,16 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
 	},
 	&cli.DurationFlag{
-		Name:    "relay-registrations-cache-ttl",
-		Usage:   "registrations cache ttl",
+		Name:    "relay-registrations-cache-read-ttl",
+		Usage:   "registrations cache ttl for reading",
 		Value:   time.Hour,
-		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_TTL"},
+		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_READ_TTL"},
+	},
+	&cli.DurationFlag{
+		Name:    "relay-registrations-cache-write-ttl",
+		Usage:   "registrations cache ttl for writing",
+		Value:   12 * time.Hour,
+		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_WRITE_TTL"},
 	},
 	&cli.BoolFlag{
 		Name:    "relay-publish-block",
@@ -547,7 +552,7 @@ func run() cli.ActionFunc {
 		// lazyload validators cache, it's optional and we don't care if it errors out
 		go preloadValidators(c.Context, logger, valDS, validatorCache)
 
-		validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(TTL.Seconds()/2)), c.Uint("relay-store-queue-size"))
+		validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, c.Duration("relay-registrations-cache-write-ttl"), c.Uint("relay-store-queue-size"))
 		validatorStoreManager.AttachMetrics(m)
 		if c.Uint("relay-workers-store-validator") > 0 {
 			validatorStoreManager.RunStore(c.Uint("relay-workers-store-validator"))
@@ -634,7 +639,7 @@ func run() cli.ActionFunc {
 				structs.ForkCapella:   capellaBeaconProposer},
 			PubKey:                pk,
 			SecretKey:             sk,
-			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-ttl"),
+			RegistrationCacheTTL:  c.Duration("relay-registrations-cache-read-ttl"),
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
