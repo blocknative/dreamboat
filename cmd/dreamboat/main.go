@@ -276,7 +276,7 @@ var flags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:    "relay-distribution-publish-submissions",
 		Usage:   "publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published",
-		Value:   false,
+		Value:   true,
 		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_SUBMISSIONS"},
 	},
 	&cli.DurationFlag{
