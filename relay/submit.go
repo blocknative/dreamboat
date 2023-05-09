@@ -202,7 +202,9 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 	if v, ok := rs.cache.Get(pubkey); ok {
 		if int(time.Since(v.Time)) > rand.Intn(int(rs.config.RegistrationCacheTTL))+int(rs.config.RegistrationCacheTTL) {
 			rs.cache.Remove(pubkey)
-		} else if v.Entry.Message.FeeRecipient == proposerFeeRecipient {
+		}
+
+		if v.Entry.Message.FeeRecipient == proposerFeeRecipient {
 			return v.Entry.Message.GasLimit, nil
 		}
 	}
