@@ -102,7 +102,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 	if rs.wh != nil {
 		tStoreWarehouse := time.Now()
 		req := wh.StoreRequest{
-			DataType:  "	",
+			DataType:  "SubmitBlockRequest",
 			Data:      sbr.Raw(),
 			Slot:      sbr.Slot(),
 			Id:        sbr.BlockHash().String(),
