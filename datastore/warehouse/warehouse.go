@@ -32,7 +32,7 @@ type Warehouse struct {
 
 func NewWarehouse(logger log.Logger, bufSize int) *Warehouse {
 	wh := &Warehouse{
-		logger:         logger.WithField("service", "warehouse"),
+		logger:         logger.WithField("subService", "warehouse"),
 		requests:       make(chan StoreRequest, bufSize),
 		cleanShutdown:  make(chan struct{}, 0),
 		runningWorkers: structs.NewTimeoutWaitGroup()}
