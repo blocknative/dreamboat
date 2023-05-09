@@ -12,8 +12,8 @@ import (
 	"github.com/lthibault/log"
 
 	"github.com/blocknative/dreamboat/beacon"
-	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -202,9 +202,7 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 	if v, ok := rs.cache.Get(pubkey); ok {
 		if int(time.Since(v.Time)) > rand.Intn(int(rs.config.RegistrationCacheTTL))+int(rs.config.RegistrationCacheTTL) {
 			rs.cache.Remove(pubkey)
-		}
-
-		if v.Entry.Message.FeeRecipient == proposerFeeRecipient {
+		} else if v.Entry.Message.FeeRecipient == proposerFeeRecipient {
 			return v.Entry.Message.GasLimit, nil
 		}
 	}
