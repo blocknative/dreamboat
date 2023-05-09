@@ -31,7 +31,11 @@ type Warehouse struct {
 }
 
 func NewWarehouse(logger log.Logger, bufSize int) *Warehouse {
-	wh := &Warehouse{logger: logger.WithField("service", "warehouse"), requests: make(chan StoreRequest, bufSize), runningWorkers: structs.NewTimeoutWaitGroup()} // channel must be unbuffered, for not accepting requests that will not be handled
+	wh := &Warehouse{
+		logger:         logger.WithField("service", "warehouse"),
+		requests:       make(chan StoreRequest, bufSize),
+		cleanShutdown:  make(chan struct{}, 0),
+		runningWorkers: structs.NewTimeoutWaitGroup()}
 	wh.initMetrics()
 	return wh
 }
