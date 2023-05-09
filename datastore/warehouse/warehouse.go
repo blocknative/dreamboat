@@ -176,7 +176,7 @@ func newWorker(id int, datadir string, logger log.Logger) *worker {
 
 func (w *worker) getOrCreateFile(req StoreRequest) (*os.File, error) {
 	// get
-	filename := fmt.Sprintf("%s/%s/output_%d_%d.json", w.datadir, req.DataType, req.Slot, w.id)
+	filename := fmt.Sprintf("%s/%s/output_%d_%d.txt", w.datadir, req.DataType, req.Slot, w.id)
 	if fileWithTs, ok := w.files[filename]; ok {
 		fileWithTs.ts = time.Now()
 		return fileWithTs.File, nil
