@@ -279,28 +279,34 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_WORKERS"},
 	},
 	&cli.BoolFlag{
-		Name:    "relay-distribution-publish-submissions",
+		Name:    "relay-distribution-stream-submissions",
 		Usage:   "publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published",
 		Value:   true,
-		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_SUBMISSIONS"},
+		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_SUBMISSIONS"},
 	},
 	&cli.DurationFlag{
-		Name:    "relay-distribution-ttl",
+		Name:    "relay-distribution-stream-ttl",
 		Usage:   "TTL of the data that is distributed",
 		Value:   time.Minute,
 		EnvVars: []string{"RELAY_DISTRIBUTION_TTL"},
 	},
 	&cli.StringFlag{
-		Name:    "relay-distribution-pubsub-topic",
+		Name:    "relay-distribution-stream-topic",
 		Usage:   "Pubsub topic for streaming payloads",
 		Value:   "relay/payload",
 		EnvVars: []string{"RELAY_DISTRIBUTION_PUBSUB_TOPIC"},
 	},
 	&cli.IntFlag{
-		Name:    "relay-distribution-publish-queue",
+		Name:    "relay-distribution-stream-queue",
 		Usage:   "Pubsub publish queue size",
 		Value:   100,
-		EnvVars: []string{"RELAY_DISTRIBUTION_PUBLISH_QUEUE"},
+		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_QUEUE"},
+	},
+	&cli.IntFlag{
+		Name:    "relay-distribution-stream-cache-size",
+		Usage:   "relay distribution stream cache size, to deduplicate streaming items",
+		Value:   1_000,
+		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
 	},
 	&cli.StringFlag{
 		Name:    "relay-distribution-redis-uri",
@@ -622,6 +628,10 @@ func run() cli.ActionFunc {
 			relayWh = warehouse
 		}
 
+		streamCache, err := lru.New[structs.PayloadKey, struct{}](c.Int("relay-distribution-stream-cache-size"))
+		if err != nil {
+			return fmt.Errorf("fail to initialize stream cache: %w", err)
+		}
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:       domainBuilder,
 			GetPayloadResponseDelay:    c.Duration("getpayload-response-delay"),
@@ -635,7 +645,7 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
-		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh, streamer)
+		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh, streamer, streamCache)
 		r.AttachMetrics(m)
 
 		ee := &api.EnabledEndpoints{
@@ -862,9 +872,9 @@ func initStreamer(c *cli.Context, redisClient *redis.Client, ds stream.Datastore
 	streamConfig := stream.StreamConfig{
 		Logger:          l,
 		ID:              id,
-		TTL:             c.Duration("relay-distribution-ttl"),
-		PubsubTopic:     c.String("relay-distribution-pubsub-topic"),
-		StreamQueueSize: c.Int("relay-distribution-publish-queue"),
+		TTL:             c.Duration("relay-distribution-stream-ttl"),
+		PubsubTopic:     c.String("relay-distribution-stream-topic"),
+		StreamQueueSize: c.Int("relay-distribution-stream-queue"),
 	}
 
 	redisStreamer := stream.NewClient(pubsub, streamConfig)

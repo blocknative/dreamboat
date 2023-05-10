@@ -11,6 +11,7 @@ import (
 
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 
 	"github.com/blocknative/dreamboat/beacon"
@@ -146,7 +147,8 @@ type Relay struct {
 	cache  ValidatorCache
 	vstore ValidatorStore
 
-	s Streamer
+	s  Streamer
+	sc *lru.Cache[structs.PayloadKey, struct{}]
 
 	bvc BlockValidationClient
 
@@ -163,7 +165,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer, sc *lru.Cache[structs.PayloadKey, struct{}]) *Relay {
 	rs := &Relay{
 		d:                 d,
 		das:               das,
@@ -172,6 +174,7 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		bvc:               bvc,
 		ver:               ver,
 		s:                 s,
+		sc:                sc,
 		config:            config,
 		cache:             cache,
 		vstore:            vstore,
@@ -250,10 +253,11 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 
 	m.AppendSince(tGet, "getHeader", "get")
 
-	if err := rs.d.CacheBlock(ctx, structs.PayloadKey{
+	key := structs.PayloadKey{
 		BlockHash: maxProfitBlock.Header.Trace.BlockHash,
 		Slot:      structs.Slot(maxProfitBlock.Header.Trace.Slot),
-		Proposer:  maxProfitBlock.Header.Trace.ProposerPubkey}, maxProfitBlock); err != nil {
+		Proposer:  maxProfitBlock.Header.Trace.ProposerPubkey}
+	if err := rs.d.CacheBlock(ctx, key, maxProfitBlock); err != nil {
 		logger.Warnf("fail to cache block: %s", err.Error())
 	}
 	logger.Debug("payload cached")
@@ -300,7 +304,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 		}
 
 		if rs.config.Distributed {
-			go rs.streamCacheBlock(maxProfitBlock.Payload)
+			go rs.streamCacheBlock(logger, key, maxProfitBlock.Payload)
 		}
 
 		logger.With(log.F{
@@ -335,7 +339,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 		}
 
 		if rs.config.Distributed {
-			go rs.streamCacheBlock(maxProfitBlock.Payload)
+			go rs.streamCacheBlock(logger, key, maxProfitBlock.Payload)
 		}
 
 		logger.With(log.F{
@@ -357,13 +361,19 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 
 }
 
-func (rs *Relay) streamCacheBlock(block structs.BlockBidAndTrace) {
+func (rs *Relay) streamCacheBlock(logger log.Logger, key structs.PayloadKey, block structs.BlockBidAndTrace) {
 	ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
 	defer cancel()
+
+	if rs.sc.Contains(key) {
+		logger.Debug("already streamed, skipping")
+		return
+	}
 
 	if err := rs.s.PublishCacheBlock(ctx, block); err != nil {
 		rs.l.WithError(err).Warn("failed to stream cache block: %w", err)
 	}
+	rs.sc.Add(key, struct{}{})
 }
 
 // GetPayload is called by a block proposer communicating through mev-boost and reveals execution payload of given signed beacon block if stored

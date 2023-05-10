@@ -4,7 +4,9 @@ package stream
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -13,6 +15,31 @@ import (
 
 	"github.com/blocknative/dreamboat/structs"
 )
+
+type ForkVersionFormat uint64
+
+const (
+	Unknown ForkVersionFormat = iota
+	AltairJson
+	BellatrixJson
+	CapellaJson
+)
+
+var (
+	ErrDecodeVarint = errors.New("error decoding varint value")
+)
+
+func toJsonFormat(fork structs.ForkVersion) ForkVersionFormat {
+	switch fork {
+	case structs.ForkAltair:
+		return AltairJson
+	case structs.ForkBellatrix:
+		return BellatrixJson
+	case structs.ForkCapella:
+		return CapellaJson
+	}
+	return Unknown
+}
 
 type Pubsub interface {
 	Publish(context.Context, string, []byte) error
@@ -139,29 +166,31 @@ func (s *Client) RunSlotDeliveredSubscriber(ctx context.Context, slots chan []by
 
 func (s *Client) RunPublisherParallel(ctx context.Context, num uint) {
 	for i := uint(0); i < num; i++ {
-		go s.RunPublisher(ctx)
+		go s.RunStorePublisher(ctx)
+		go s.RunCachePublisher(ctx)
 	}
 }
 
-func (s *Client) RunPublisher(ctx context.Context) error {
+func (s *Client) RunCachePublisher(ctx context.Context) error {
 	for {
 		select {
 		case req := <-s.cacheRequests:
 			s.encodeAndPublish(ctx, req, true)
-			continue
-		default:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
+	}
+}
 
+func (s *Client) RunStorePublisher(ctx context.Context) error {
+	for {
 		select {
-		case req := <-s.cacheRequests:
-			s.encodeAndPublish(ctx, req, true)
 		case req := <-s.storeRequests:
 			s.encodeAndPublish(ctx, req, false)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
-
 }
 
 func (s *Client) PublishBlockSubmission(ctx context.Context, block structs.BlockBidAndTrace) error {
@@ -241,27 +270,39 @@ func (s *Client) encode(block structs.BlockBidAndTrace, isCache bool) ([]byte, e
 		return nil, err
 	}
 
-	return append(rawBlock, byte(s.st.ForkVersion(structs.Slot(block.Slot())))), nil
+	// encode the varint with a variable size
+	forkFormat := toJsonFormat(s.st.ForkVersion(structs.Slot(block.Slot())))
+	varintBytes := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(varintBytes, uint64(forkFormat))
+	varintBytes = varintBytes[:n]
+
+	// append the varint
+	return append(varintBytes, rawBlock...), nil
 }
 
 func (s *Client) decode(b []byte) (StreamBlock, error) {
-	fork := structs.ForkVersion(b[len(b)-1])
-	b = b[:len(b)-1]
+	varint, n := binary.Uvarint(b)
+	if n <= 0 {
+		return nil, ErrDecodeVarint
+	}
 
-	switch fork {
-	case structs.ForkCapella:
+	b = b[n:]
+	forkFormat := ForkVersionFormat(varint)
+
+	switch forkFormat {
+	case CapellaJson:
 		var creq CapellaStreamBlock
 		if err := json.Unmarshal(b, &creq); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal capella block: %w", err)
 		}
 		return &creq, nil
-	case structs.ForkBellatrix:
+	case BellatrixJson:
 		var breq BellatrixStreamBlock
 		if err := json.Unmarshal(b, &breq); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal capella block: %w", err)
 		}
 		return &breq, nil
 	default:
-		return nil, fmt.Errorf("invalid fork version: %d", fork)
+		return nil, fmt.Errorf("invalid fork version format: %d", forkFormat)
 	}
 }
