@@ -538,14 +538,6 @@ func run() cli.ActionFunc {
 			daDS = daPostgres.NewDatastore(valPG, 0)
 			defer valPG.Close()
 		} else { // by default use badger
-			if badgerDs == nil {
-				badgerDs, err = trBadger.Open(c.String("datadir"))
-				if err != nil {
-					logger.WithError(err).Error("failed to initialize datastore")
-					return err
-				}
-			}
-
 			daDS = daBadger.NewDatastore(storage, badgerDs.DB, TTL)
 		}
 
