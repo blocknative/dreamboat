@@ -880,8 +880,6 @@ func initStreamer(c *cli.Context, redisClient *redis.Client, ds stream.Datastore
 	redisStreamer := stream.NewClient(pubsub, streamConfig)
 	redisStreamer.AttachMetrics(m)
 
-	redisStreamer.RunPublisherParallel(c.Context, c.Uint("relay-distribution-stream-workers"))
-
 	if err := redisStreamer.RunSubscriberParallel(c.Context, ds, c.Uint("relay-distribution-stream-workers")); err != nil {
 		return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
 	}
