@@ -621,8 +621,8 @@ func run() cli.ActionFunc {
 
 			logger.With(log.F{
 				"subService": "warehouse",
-				"datadir": c.String("warehouse-dir"),
-				"workers": c.Int("warehouse-workers"),
+				"datadir":    c.String("warehouse-dir"),
+				"workers":    c.Int("warehouse-workers"),
 			}).Info("initialized")
 
 			relayWh = warehouse
@@ -645,6 +645,8 @@ func run() cli.ActionFunc {
 			TTL:                   TTL,
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
+			Distributed:           c.Bool("relay-distribution"),
+			StreamSubmissions:     c.Bool("relay-distribution-stream-submissions"),
 		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh, streamer, streamCache)
 		r.AttachMetrics(m)
 
