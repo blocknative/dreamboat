@@ -460,9 +460,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	m.AppendSince(tValidatePayload, "getPayload", "validatePayload")
 
 	logger = logger.With(log.F{
-		"from_cache":       fromCache,
-		"builder":          payload.BuilderPubkey().String(),
-		"processingTimeMs": time.Since(tStart).Milliseconds(),
+		"from_cache": fromCache,
+		"builder":    payload.BuilderPubkey().String(),
 	})
 
 	var (
@@ -520,22 +519,22 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	rs.m.PayloadCacheHitCount.WithLabelValues(strconv.FormatBool(fromCache)).Add(1)
 
 	logger = logger.With(log.F{
-		"slot":             payloadRequest.Slot(),
-		"from_cache":       fromCache,
-		"processingTimeMs": time.Since(tStart).Milliseconds(),
+		"slot":       payloadRequest.Slot(),
+		"from_cache": fromCache,
 	})
 	switch forkv {
 	case structs.ForkBellatrix:
 		bep := exp.(*bellatrix.ExecutionPayload)
 		logger.With(log.F{
-			"fork":         "bellatrix",
-			"event":        "payload_sent",
-			"blockHash":    bep.EpBlockHash,
-			"blockNumber":  bep.EpBlockNumber,
-			"stateRoot":    bep.EpStateRoot,
-			"feeRecipient": bep.EpFeeRecipient,
-			"numTx":        len(bep.EpTransactions),
-			"bid":          payload.BidValue(),
+			"fork":             "bellatrix",
+			"event":            "payload_sent",
+			"blockHash":        bep.EpBlockHash,
+			"blockNumber":      bep.EpBlockNumber,
+			"stateRoot":        bep.EpStateRoot,
+			"feeRecipient":     bep.EpFeeRecipient,
+			"numTx":            len(bep.EpTransactions),
+			"bid":              payload.BidValue(),
+			"processingTimeMs": time.Since(tStart).Milliseconds(),
 		}).Info("payload sent")
 		return &bellatrix.GetPayloadResponse{
 			BellatrixVersion: types.VersionString("bellatrix"),
@@ -544,14 +543,15 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	case structs.ForkCapella:
 		cep := exp.(*capella.ExecutionPayload)
 		logger.With(log.F{
-			"fork":         "capella",
-			"event":        "payload_sent",
-			"blockHash":    cep.EpBlockHash,
-			"blockNumber":  cep.EpBlockNumber,
-			"stateRoot":    cep.EpStateRoot,
-			"feeRecipient": cep.EpFeeRecipient,
-			"numTx":        len(cep.EpTransactions),
-			"bid":          payload.BidValue(),
+			"fork":             "capella",
+			"event":            "payload_sent",
+			"blockHash":        cep.EpBlockHash,
+			"blockNumber":      cep.EpBlockNumber,
+			"stateRoot":        cep.EpStateRoot,
+			"feeRecipient":     cep.EpFeeRecipient,
+			"numTx":            len(cep.EpTransactions),
+			"bid":              payload.BidValue(),
+			"processingTimeMs": time.Since(tStart).Milliseconds(),
 		}).Info("payload sent")
 		return &capella.GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),
