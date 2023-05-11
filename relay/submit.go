@@ -113,7 +113,6 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 			// we should not return error because it's already been stored for delivery
 		} else {
 			m.AppendSince(tStoreWarehouse, "submitBlock", "storeWarehouse")
-			logger.Debug("stored in warehouse")
 		}
 	}
 
