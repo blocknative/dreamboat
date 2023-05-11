@@ -52,6 +52,6 @@ func TestSource_Load(t *testing.T) {
 type TestChange struct {
 }
 
-func (tc *TestChange) OnConfigChange(change structs.OldNew) {
+func (tc *TestChange) OnConfigChange(change structs.OldNew) error {
 	log.Println("change structs.OldNew", change)
 }

@@ -52,7 +52,7 @@ func (l *Limitter) Allow(ctx context.Context, pubkey [48]byte) error {
 
 }
 
-func (l *Limitter) OnConfigChange(c structs.OldNew) {
+func (l *Limitter) OnConfigChange(c structs.OldNew) error {
 	switch c.Name {
 	case "AllowedBuilders":
 		if keys, ok := c.New.([]string); ok {

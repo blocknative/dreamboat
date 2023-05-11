@@ -517,7 +517,7 @@ type BeaconConfig struct {
 	QueryTimeout time.Duration
 }
 
-func (bc *BeaconConfig) OnConfigChange(c structs.OldNew) {
+func (bc *BeaconConfig) OnConfigChange(c structs.OldNew) error {
 	switch c.Name {
 	case "EventTimeout":
 		if b, ok := c.New.(time.Duration); ok {
@@ -532,4 +532,5 @@ func (bc *BeaconConfig) OnConfigChange(c structs.OldNew) {
 			bc.QueryTimeout = b
 		}
 	}
+	return nil
 }

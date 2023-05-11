@@ -56,7 +56,7 @@ func (cm *ConfigManager) Load() error {
 }
 
 type Listener interface {
-	OnConfigChange(change structs.OldNew)
+	OnConfigChange(change structs.OldNew) error
 }
 
 type Propagator interface {

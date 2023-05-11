@@ -138,7 +138,7 @@ type RelayConfig struct {
 	Distributed, StreamSubmissions bool
 }
 
-func (rc *RelayConfig) OnConfigChange(c structs.OldNew) {
+func (rc *RelayConfig) OnConfigChange(c structs.OldNew) error {
 	switch c.Name {
 	case "AllowedBuilders":
 		if keys, ok := c.New.([]string); ok {
