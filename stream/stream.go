@@ -45,7 +45,7 @@ type State interface {
 }
 
 type StreamBlock interface {
-	Block() structs.BlockBidAndTrace
+	BlockBidAndTrace() structs.BlockBidAndTrace
 	CompleteBlock() (structs.CompleteBlockstruct, error)
 	IsCache() bool
 	Source() string
@@ -185,11 +185,11 @@ func (s *Client) cachePayload(ctx context.Context, ds Datastore, sBlock StreamBl
 	if err != nil {
 		return fmt.Errorf("failed to generate CompleteBlock from StreamBlock: %w", err)
 	}
-	return ds.CacheBlock(ctx, payloadToKey(sBlock.Block()), &cbs)
+	return ds.CacheBlock(ctx, payloadToKey(sBlock.BlockBidAndTrace()), &cbs)
 }
 
 func (s *Client) storePayload(ctx context.Context, ds Datastore, sBlock StreamBlock) error {
-	return ds.PutPayload(ctx, payloadToKey(sBlock.Block()), sBlock.Block(), s.Config.TTL)
+	return ds.PutPayload(ctx, payloadToKey(sBlock.BlockBidAndTrace()), sBlock.BlockBidAndTrace(), s.Config.TTL)
 }
 
 func payloadToKey(bbt structs.BlockBidAndTrace) structs.PayloadKey {
@@ -201,7 +201,7 @@ func payloadToKey(bbt structs.BlockBidAndTrace) structs.PayloadKey {
 }
 
 func (s *Client) encode(block structs.BlockBidAndTrace, isCache bool) ([]byte, error) {
-	gBlock := GenericStreamBlock{BlockBidAndTrace: block, IsBlockCache: isCache, StreamSource: s.Config.ID}
+	gBlock := GenericStreamBlock{Block: block, IsBlockCache: isCache, StreamSource: s.Config.ID}
 	rawBlock, err := json.Marshal(gBlock)
 	if err != nil {
 		return nil, err

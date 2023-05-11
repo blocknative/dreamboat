@@ -11,19 +11,19 @@ import (
 )
 
 type GenericStreamBlock struct {
-	structs.BlockBidAndTrace
+	Block        structs.BlockBidAndTrace
 	IsBlockCache bool
 	StreamSource string
 }
 
 type CapellaStreamBlock struct {
-	capella.BlockBidAndTrace
+	Block        capella.BlockBidAndTrace
 	IsBlockCache bool
 	StreamSource string
 }
 
-func (b CapellaStreamBlock) Block() structs.BlockBidAndTrace {
-	return &b.BlockBidAndTrace
+func (b CapellaStreamBlock) BlockBidAndTrace() structs.BlockBidAndTrace {
+	return &b.Block
 }
 
 func (b CapellaStreamBlock) IsCache() bool {
@@ -37,9 +37,9 @@ func (b CapellaStreamBlock) Source() string {
 func (b CapellaStreamBlock) CompleteBlock() (structs.CompleteBlockstruct, error) {
 	var cbs structs.CompleteBlockstruct
 
-	cbs.Payload = &b.BlockBidAndTrace
+	cbs.Payload = &b.Block
 
-	header, err := bellatrix.PayloadToPayloadHeader(b.ExecutionPayload())
+	header, err := bellatrix.PayloadToPayloadHeader(b.Block.ExecutionPayload())
 	if err != nil {
 		return structs.CompleteBlockstruct{}, fmt.Errorf("failed to create header: %w", err)
 	}
@@ -48,18 +48,18 @@ func (b CapellaStreamBlock) CompleteBlock() (structs.CompleteBlockstruct, error)
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
-					Slot:                 b.Trace.Message.Slot,
-					ParentHash:           b.Trace.Message.ParentHash,
-					BlockHash:            b.Trace.Message.BlockHash,
-					BuilderPubkey:        b.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       b.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: b.Trace.Message.ProposerFeeRecipient,
-					Value:                b.Trace.Message.Value,
-					GasLimit:             b.Trace.Message.GasLimit,
-					GasUsed:              b.Trace.Message.GasUsed,
+					Slot:                 b.Block.Trace.Message.Slot,
+					ParentHash:           b.Block.Trace.Message.ParentHash,
+					BlockHash:            b.Block.Trace.Message.BlockHash,
+					BuilderPubkey:        b.Block.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       b.Block.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: b.Block.Trace.Message.ProposerFeeRecipient,
+					Value:                b.Block.Trace.Message.Value,
+					GasLimit:             b.Block.Trace.Message.GasLimit,
+					GasUsed:              b.Block.Trace.Message.GasUsed,
 				},
-				BlockNumber: b.Payload.CapellaData.BlockNumber(),
-				NumTx:       uint64(len(b.Payload.CapellaData.Transactions())),
+				BlockNumber: b.Block.Payload.CapellaData.BlockNumber(),
+				NumTx:       uint64(len(b.Block.Payload.CapellaData.Transactions())),
 			},
 			Timestamp:   uint64(time.Now().UnixMilli() / 1_000),
 			TimestampMs: uint64(time.Now().UnixMilli()),
@@ -71,19 +71,19 @@ func (b CapellaStreamBlock) CompleteBlock() (structs.CompleteBlockstruct, error)
 
 func (b CapellaStreamBlock) Loggable() map[string]any {
 	return map[string]any{
-		"slot":      b.Trace.Message.Slot,
-		"blockHash": b.Trace.Message.BlockHash,
+		"slot":      b.Block.Trace.Message.Slot,
+		"blockHash": b.Block.Trace.Message.BlockHash,
 	}
 }
 
 type BellatrixStreamBlock struct {
-	bellatrix.BlockBidAndTrace
+	Block        bellatrix.BlockBidAndTrace
 	IsBlockCache bool
 	StreamSource string
 }
 
-func (b BellatrixStreamBlock) Block() structs.BlockBidAndTrace {
-	return &b.BlockBidAndTrace
+func (b BellatrixStreamBlock) BlockBidAndTrace() structs.BlockBidAndTrace {
+	return &b.Block
 }
 
 func (b BellatrixStreamBlock) IsCache() bool {
@@ -97,9 +97,9 @@ func (b BellatrixStreamBlock) Source() string {
 func (b BellatrixStreamBlock) CompleteBlock() (structs.CompleteBlockstruct, error) {
 	var cbs structs.CompleteBlockstruct
 
-	cbs.Payload = &b.BlockBidAndTrace
+	cbs.Payload = &b.Block
 
-	header, err := bellatrix.PayloadToPayloadHeader(b.ExecutionPayload())
+	header, err := bellatrix.PayloadToPayloadHeader(b.Block.ExecutionPayload())
 	if err != nil {
 		return structs.CompleteBlockstruct{}, fmt.Errorf("failed to create header: %w", err)
 	}
@@ -108,18 +108,18 @@ func (b BellatrixStreamBlock) CompleteBlock() (structs.CompleteBlockstruct, erro
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
-					Slot:                 b.Trace.Message.Slot,
-					ParentHash:           b.Trace.Message.ParentHash,
-					BlockHash:            b.Trace.Message.BlockHash,
-					BuilderPubkey:        b.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       b.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: b.Trace.Message.ProposerFeeRecipient,
-					Value:                b.Trace.Message.Value,
-					GasLimit:             b.Trace.Message.GasLimit,
-					GasUsed:              b.Trace.Message.GasUsed,
+					Slot:                 b.Block.Trace.Message.Slot,
+					ParentHash:           b.Block.Trace.Message.ParentHash,
+					BlockHash:            b.Block.Trace.Message.BlockHash,
+					BuilderPubkey:        b.Block.Trace.Message.BuilderPubkey,
+					ProposerPubkey:       b.Block.Trace.Message.ProposerPubkey,
+					ProposerFeeRecipient: b.Block.Trace.Message.ProposerFeeRecipient,
+					Value:                b.Block.Trace.Message.Value,
+					GasLimit:             b.Block.Trace.Message.GasLimit,
+					GasUsed:              b.Block.Trace.Message.GasUsed,
 				},
-				BlockNumber: b.Payload.BellatrixData.BlockNumber(),
-				NumTx:       uint64(len(b.Payload.BellatrixData.Transactions())),
+				BlockNumber: b.Block.Payload.BellatrixData.BlockNumber(),
+				NumTx:       uint64(len(b.Block.Payload.BellatrixData.Transactions())),
 			},
 			Timestamp:   uint64(time.Now().UnixMilli() / 1_000),
 			TimestampMs: uint64(time.Now().UnixMilli()),
@@ -131,8 +131,8 @@ func (b BellatrixStreamBlock) CompleteBlock() (structs.CompleteBlockstruct, erro
 
 func (b BellatrixStreamBlock) Loggable() map[string]any {
 	return map[string]any{
-		"slot":      b.Trace.Message.Slot,
-		"blockHash": b.Trace.Message.BlockHash,
+		"slot":      b.Block.Trace.Message.Slot,
+		"blockHash": b.Block.Trace.Message.BlockHash,
 	}
 }
 
