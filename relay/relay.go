@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -509,6 +510,8 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	exp := payload.ExecutionPayload()
 
 	go rs.streamDeliveredSlot(key.Slot)
+
+	rs.m.PayloadCacheHitCount.WithLabelValues(strconv.FormatBool(fromCache)).Add(1)
 
 	logger = logger.With(log.F{
 		"slot":             payloadRequest.Slot(),

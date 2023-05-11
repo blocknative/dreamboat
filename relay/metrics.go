@@ -6,7 +6,8 @@ import (
 )
 
 type RelayMetrics struct {
-	MissHeaderCount *prometheus.CounterVec
+	MissHeaderCount      *prometheus.CounterVec
+	PayloadCacheHitCount *prometheus.CounterVec
 }
 
 func (r *Relay) initMetrics() {
@@ -16,8 +17,15 @@ func (r *Relay) initMetrics() {
 		Name:      "missHeader",
 		Help:      "Number of missed headers by reason (oldSlot, noSubmission)",
 	}, []string{"reason"})
+	r.m.PayloadCacheHitCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "payloadCacheHit",
+		Help:      "Number of payload cache hits or failures (true, false)",
+	}, []string{"hit"})
 }
 
 func (r *Relay) AttachMetrics(m *metrics.Metrics) {
 	m.Register(r.m.MissHeaderCount)
+	m.Register(r.m.PayloadCacheHitCount)
 }
