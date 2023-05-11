@@ -347,7 +347,6 @@ func (rs *Relay) streamBlockSubmission(block structs.BlockBidAndTrace) {
 	if err := rs.s.PublishBlockSubmission(ctx, block); err != nil {
 		rs.l.WithError(err).Warn("failed to stream block submission: %w", err)
 	}
-	rs.l.Debug("streamed block submission")
 }
 
 func SubmissionToKey(submission *types.BuilderSubmitBlockRequest) structs.PayloadKey {
