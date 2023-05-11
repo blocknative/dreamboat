@@ -70,9 +70,10 @@ type Client struct {
 	st State
 }
 
-func NewClient(ps Pubsub, cfg StreamConfig) *Client {
+func NewClient(ps Pubsub, st State, cfg StreamConfig) *Client {
 	s := Client{
 		Pubsub:                ps,
+		st:                    st,
 		cacheRequests:         make(chan structs.BlockBidAndTrace, cfg.StreamQueueSize),
 		storeRequests:         make(chan structs.BlockBidAndTrace, cfg.StreamQueueSize),
 		slotDeliveredRequests: make(chan structs.Slot, cfg.StreamQueueSize),

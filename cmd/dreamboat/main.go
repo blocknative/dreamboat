@@ -462,7 +462,7 @@ func run() cli.ActionFunc {
 			redisClient := redis.NewClient(&redis.Options{
 				Addr: c.String("relay-distribution-redis-uri"),
 			})
-			streamer, err = initStreamer(c, redisClient, ds, logger, m)
+			streamer, err = initStreamer(c, redisClient, ds, logger, m, state)
 			if err != nil {
 				return fmt.Errorf("fail to create streamer: %w", err)
 			}
@@ -861,7 +861,7 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-func initStreamer(c *cli.Context, redisClient *redis.Client, ds stream.Datastore, l log.Logger, m *metrics.Metrics) (relay.Streamer, error) {
+func initStreamer(c *cli.Context, redisClient *redis.Client, ds stream.Datastore, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
 	timeStreamStart := time.Now()
 
 	pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: l}
@@ -879,7 +879,7 @@ func initStreamer(c *cli.Context, redisClient *redis.Client, ds stream.Datastore
 		StreamQueueSize: c.Int("relay-distribution-stream-queue"),
 	}
 
-	redisStreamer := stream.NewClient(pubsub, streamConfig)
+	redisStreamer := stream.NewClient(pubsub, st, streamConfig)
 	redisStreamer.AttachMetrics(m)
 
 	if err := redisStreamer.RunSubscriberParallel(c.Context, ds, c.Uint("relay-distribution-stream-workers")); err != nil {
