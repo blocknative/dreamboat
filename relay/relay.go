@@ -580,7 +580,6 @@ func (rs *Relay) storeGetPayloadRequest(logger log.Logger, m *structs.MetricGrou
 	}
 
 	m.AppendSince(tStoreWarehouse, "getPayload", "storeWarehouse")
-	logger.Debug("stored in warehouse")
 }
 
 func validatePayload(expected structs.BlockBidAndTrace, requested structs.SignedBlindedBeaconBlock) error {
