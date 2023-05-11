@@ -119,7 +119,7 @@ func (s *Client) RunBlockSubscriber(ctx context.Context, ds Datastore, blocks ch
 		} else {
 			s.m.StreamRecvCounter.WithLabelValues("store").Inc()
 			if err := s.storePayload(ctx, ds, sBlock); err != nil {
-				s.Logger.WithError(err).With(sBlock).Warn("failed to store payload: %s")
+				s.Logger.WithError(err).With(sBlock).Warn("failed to store payload")
 			}
 		}
 	}

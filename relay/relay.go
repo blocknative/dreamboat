@@ -485,6 +485,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	}()
 
 	if rs.config.PublishBlock {
+		tPublish := time.Now()
 		beaconBlock, err := payloadRequest.ToBeaconBlock(payload.ExecutionPayload())
 		if err != nil {
 			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
@@ -495,12 +496,16 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			return nil, ErrFailedToPublish
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
+		m.AppendSince(tPublish, "getPayload", "publish")
 		// Delay the return of response block publishing
+		tPublishDelay := time.Now()
 		time.Sleep(rs.config.GetPayloadResponseDelay)
+		m.AppendSince(tPublishDelay, "getPayload", "publishDelay")
 	}
 
 	storeTrace = true // everything was correct, so flag to store the trace
 
+	tDelivered := time.Now()
 	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
 		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
 	} else {
@@ -510,6 +515,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	exp := payload.ExecutionPayload()
 
 	go rs.streamDeliveredSlot(key.Slot)
+	m.AppendSince(tDelivered, "getPayload", "deliveredSlot")
 
 	rs.m.PayloadCacheHitCount.WithLabelValues(strconv.FormatBool(fromCache)).Add(1)
 
