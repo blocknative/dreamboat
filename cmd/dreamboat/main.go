@@ -620,7 +620,7 @@ func run() cli.ActionFunc {
 			warehouse.AttachMetrics(m)
 
 			logger.With(log.F{
-				"service": "warehouseer",
+				"subService": "warehouse",
 				"datadir": c.String("warehouse-dir"),
 				"workers": c.Int("warehouse-workers"),
 			}).Info("initialized")
