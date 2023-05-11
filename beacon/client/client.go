@@ -327,7 +327,6 @@ func (b *beaconClient) SubscribeToPayloadAttributesEvents(payloadAttributesC cha
 			if err != nil {
 				log.WithError(err).Error("could not unmarshal payload_attributes event")
 			} else {
-				fmt.Printf("%v\n", data)
 				payloadAttributesC <- data
 			}
 		})
