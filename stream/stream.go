@@ -16,30 +16,10 @@ import (
 	"github.com/blocknative/dreamboat/structs"
 )
 
-type ForkVersionFormat uint64
-
-const (
-	Unknown ForkVersionFormat = iota
-	AltairJson
-	BellatrixJson
-	CapellaJson
-)
-
 var (
-	ErrDecodeVarint = errors.New("error decoding varint value")
+	blockSuffix     = "/blocks"
+	deliveredSuffix = "/delivered"
 )
-
-func toJsonFormat(fork structs.ForkVersion) ForkVersionFormat {
-	switch fork {
-	case structs.ForkAltair:
-		return AltairJson
-	case structs.ForkBellatrix:
-		return BellatrixJson
-	case structs.ForkCapella:
-		return CapellaJson
-	}
-	return Unknown
-}
 
 type Pubsub interface {
 	Publish(context.Context, string, []byte) error
@@ -107,8 +87,8 @@ func NewClient(ps Pubsub, cfg StreamConfig) *Client {
 }
 
 func (s *Client) RunSubscriberParallel(ctx context.Context, ds Datastore, num uint) error {
-	blocks := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+"/blocks")
-	delivered := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+"/delivered")
+	blocks := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+blockSuffix)
+	delivered := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+deliveredSuffix)
 
 	for i := uint(0); i < num; i++ {
 		go s.RunBlockSubscriber(ctx, ds, blocks)
@@ -192,7 +172,7 @@ func (s *Client) encodeAndPublish(ctx context.Context, block structs.BlockBidAnd
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "publish"))
 	defer timer2.ObserveDuration()
 
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic, b); err != nil {
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+blockSuffix, b); err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
 
@@ -261,4 +241,29 @@ func (s *Client) decode(b []byte) (StreamBlock, error) {
 	default:
 		return nil, fmt.Errorf("invalid fork version format: %d", forkFormat)
 	}
+}
+
+type ForkVersionFormat uint64
+
+const (
+	Unknown ForkVersionFormat = iota
+	AltairJson
+	BellatrixJson
+	CapellaJson
+)
+
+var (
+	ErrDecodeVarint = errors.New("error decoding varint value")
+)
+
+func toJsonFormat(fork structs.ForkVersion) ForkVersionFormat {
+	switch fork {
+	case structs.ForkAltair:
+		return AltairJson
+	case structs.ForkBellatrix:
+		return BellatrixJson
+	case structs.ForkCapella:
+		return CapellaJson
+	}
+	return Unknown
 }
