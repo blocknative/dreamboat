@@ -237,6 +237,10 @@ func (b *BuilderBid) Pubkey() types.PublicKey {
 	return b.CapellaPubkey
 }
 
+func (b *BuilderBid) Header() structs.ExecutionPayloadHeader {
+	return b.CapellaHeader
+}
+
 // HashTreeRoot ssz hashes the BuilderBid object
 func (b *BuilderBid) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
@@ -267,6 +271,12 @@ func (b *BuilderBid) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 // GetTree ssz hashes the BuilderBid object
 func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(b)
+}
+
+type BuilderBidExtended struct {
+	BuilderBid BuilderBid
+	Proposer   types.PublicKey
+	Slot       uint64
 }
 
 // ExecutionPayload represents an execution layer payload.

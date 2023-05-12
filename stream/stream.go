@@ -14,11 +14,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/blocknative/dreamboat/structs"
+	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
+	"github.com/blocknative/dreamboat/structs/forks/capella"
 )
 
 var (
-	blockSuffix     = "/blocks"
-	deliveredSuffix = "/delivered"
+	headerTopic        = "/block/header"
+	cacheTopic         = "/block/cache"
+	slotDeliveredTopic = "/slot/delivered"
 )
 
 type Pubsub interface {
@@ -44,21 +47,15 @@ type State interface {
 	HeadSlot() structs.Slot
 }
 
-type StreamBlock interface {
-	BlockBidAndTrace() structs.BlockBidAndTrace
-	CompleteBlock() (structs.CompleteBlockstruct, error)
-	IsCache() bool
-	Source() string
-
-	Loggable() map[string]any
-}
-
 type Client struct {
 	Pubsub Pubsub
 
-	cacheRequests         chan structs.BlockBidAndTrace
-	storeRequests         chan structs.BlockBidAndTrace
-	slotDeliveredRequests chan structs.Slot
+	headerIn         chan []byte
+	builderBidOut    chan structs.BuilderBidExtended
+	builderBidIn     chan []byte
+	cacheOut         chan structs.BlockBidAndTrace
+	slotDeliveredIn  chan []byte
+	slotDeliveredOut chan uint64
 
 	Config StreamConfig
 	Logger log.Logger
@@ -72,14 +69,11 @@ type Client struct {
 
 func NewClient(ps Pubsub, st State, cfg StreamConfig) *Client {
 	s := Client{
-		Pubsub:                ps,
-		st:                    st,
-		cacheRequests:         make(chan structs.BlockBidAndTrace, cfg.StreamQueueSize),
-		storeRequests:         make(chan structs.BlockBidAndTrace, cfg.StreamQueueSize),
-		slotDeliveredRequests: make(chan structs.Slot, cfg.StreamQueueSize),
-		slotDelivered:         make(chan structs.Slot, cfg.StreamQueueSize),
-		Config:                cfg,
-		Logger:                cfg.Logger.WithField("relay-service", "stream").WithField("type", "redis"),
+		Pubsub: ps,
+		st:     st,
+		// TODO
+		Config: cfg,
+		Logger: cfg.Logger.WithField("relay-service", "stream").WithField("type", "redis"),
 	}
 
 	s.initMetrics()
@@ -88,139 +82,205 @@ func NewClient(ps Pubsub, st State, cfg StreamConfig) *Client {
 }
 
 func (s *Client) RunSubscriberParallel(ctx context.Context, ds Datastore, num uint) error {
-	blocks := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+blockSuffix)
-	delivered := s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+deliveredSuffix)
+	s.builderBidIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+cacheTopic)
+	s.headerIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+headerTopic)
+	s.slotDeliveredIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+slotDeliveredTopic)
 
 	for i := uint(0); i < num; i++ {
-		go s.RunBlockSubscriber(ctx, ds, blocks)
+		go s.RunCacheSubscriber(ctx)
+		go s.RunBuilderBidSubscriber(ctx)
 	}
 
-	go s.RunSlotDeliveredSubscriber(ctx, delivered)
+	go s.RunSlotDeliveredSubscriber(ctx)
 
 	return nil
 }
 
-func (s *Client) RunBlockSubscriber(ctx context.Context, ds Datastore, blocks chan []byte) error {
-	for rawSBlock := range blocks {
-		sBlock, err := s.decode(rawSBlock)
-		if err != nil {
-			s.Logger.Warnf("fail to decode stream block: %s", err.Error())
-		}
+func (s *Client) BlockCache() <-chan structs.BlockBidAndTrace {
+	return s.cacheOut
+}
 
-		if sBlock.Source() == s.Config.ID {
+func (s *Client) RunCacheSubscriber(ctx context.Context) error {
+	l := s.Logger.WithField("method", "runCacheSubscriber")
+	var bbt structs.BlockBidAndTrace
+
+	for raw := range s.builderBidIn {
+		sData, forkFormat, err := s.decode(raw)
+		if err != nil {
+			l.WithError(err).Warn("failed to decode cache wrapper")
 			continue
 		}
 
-		if sBlock.IsCache() {
-			s.m.StreamRecvCounter.WithLabelValues("cache").Inc()
-			if err := s.cachePayload(ctx, ds, sBlock); err != nil {
-				s.Logger.WithError(err).With(sBlock).Warn("failed to cache payload")
-			}
-		} else {
-			s.m.StreamRecvCounter.WithLabelValues("store").Inc()
-			if err := s.storePayload(ctx, ds, sBlock); err != nil {
-				s.Logger.WithError(err).With(sBlock).Warn("failed to store payload")
-			}
-		}
-	}
-
-	return ctx.Err()
-}
-
-func (s *Client) RunSlotDeliveredSubscriber(ctx context.Context, slots chan []byte) error {
-	slotDelivered := SlotDelivered{}
-
-	for rawSlot := range slots {
-		if err := json.Unmarshal(rawSlot, &slotDelivered); err != nil {
-			s.Logger.Warnf("fail to decode stream slot delivered: %s", err.Error())
+		if sData.Meta().Source == s.Config.ID {
+			continue
 		}
 
+		switch forkFormat {
+		case BellatrixJson:
+			var bbbt bellatrix.BlockBidAndTrace
+			if err := json.Unmarshal(sData.Data(), &bbbt); err != nil {
+				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode cache")
+				continue
+			}
+			bbt = &bbbt
+		case CapellaJson:
+			var cbbt capella.BlockBidAndTrace
+			if err := json.Unmarshal(sData.Data(), &cbbt); err != nil {
+				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode cache")
+				continue
+			}
+			bbt = &cbbt
+		default:
+			l.WithField("forkFormat", forkFormat).Warn("unkown cache forkFormat")
+			continue
+		}
+
+		s.m.StreamRecvCounter.WithLabelValues("cache").Inc()
 		select {
-		case s.slotDelivered <- structs.Slot(slotDelivered.Slot):
+		case s.cacheOut <- bbt:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
-
 	return ctx.Err()
 }
 
-func (s *Client) PublishBlockSubmission(ctx context.Context, block structs.BlockBidAndTrace) error {
-	return s.encodeAndPublish(ctx, block, false)
+func (s *Client) BuilderBid() <-chan structs.BuilderBidExtended {
+	return s.builderBidOut
 }
 
-func (s *Client) PublishCacheBlock(ctx context.Context, block structs.BlockBidAndTrace) error {
-	return s.encodeAndPublish(ctx, block, true)
+func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
+	l := s.Logger.WithField("method", "runBuilderBidSubscriber")
+	var bb structs.BuilderBidExtended
+
+	for raw := range s.builderBidIn {
+		sData, forkFormat, err := s.decode(raw)
+		if err != nil {
+			l.WithError(err).Warn("failed to decode builder bid  wrapper")
+			continue
+		}
+
+		if sData.Meta().Source == s.Config.ID {
+			continue
+		}
+
+		switch forkFormat {
+		case BellatrixJson:
+			var bbb bellatrix.BuilderBidExtended
+			if err := json.Unmarshal(sData.Data(), &bbb); err != nil {
+				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid ")
+				continue
+			}
+			bb.BuilderBid = &bbb.BuilderBid
+			bb.Proposer = bbb.Proposer
+		case CapellaJson:
+			var cbb capella.BuilderBidExtended
+			if err := json.Unmarshal(sData.Data(), &cbb); err != nil {
+				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid ")
+				continue
+			}
+			bb.BuilderBid = &cbb.BuilderBid
+			bb.Proposer = cbb.Proposer
+		default:
+			l.WithField("forkFormat", forkFormat).Warn("unkown builder bid  forkFormat")
+			continue
+		}
+
+		s.m.StreamRecvCounter.WithLabelValues("header").Inc()
+		select {
+		case s.builderBidOut <- bb:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return ctx.Err()
 }
 
-func (s *Client) PublishSlotDelivered(ctx context.Context, slot structs.Slot) error {
+func (s *Client) RunSlotDeliveredSubscriber(ctx context.Context) error {
 	return nil // TODO
 }
 
-func (s *Client) SlotDeliveredChan() <-chan structs.Slot {
-	return s.slotDelivered
-}
+func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidExtended) error {
+	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "all"))
 
-func (s *Client) encodeAndPublish(ctx context.Context, block structs.BlockBidAndTrace, isCache bool) error {
-	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "encode"))
-	b, err := s.encode(block, isCache)
+	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "encode"))
+	forkFormat := toJsonFormat(s.st.ForkVersion(structs.Slot(bid.Slot)))
+	b, err := s.encode(bid, forkFormat)
 	if err != nil {
 		timer1.ObserveDuration()
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
 	timer1.ObserveDuration()
 
-	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("encodeAndPublish", "publish"))
-	defer timer2.ObserveDuration()
-
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+blockSuffix, b); err != nil {
+	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "publish"))
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+headerTopic, b); err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
+	timer2.ObserveDuration()
 
+	timer0.ObserveDuration()
 	return nil
 }
 
-func (s *Client) cachePayload(ctx context.Context, ds Datastore, sBlock StreamBlock) error {
-	cbs, err := sBlock.CompleteBlock()
+func (s *Client) PublishCacheBlock(ctx context.Context, block structs.BlockBidAndTrace) error {
+	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "all"))
+
+	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "encode"))
+	forkFormat := toJsonFormat(s.st.ForkVersion(structs.Slot(block.Slot())))
+	b, err := s.encode(block, forkFormat)
 	if err != nil {
-		return fmt.Errorf("failed to generate CompleteBlock from StreamBlock: %w", err)
+		timer1.ObserveDuration()
+		return fmt.Errorf("fail to encode cache block: %w", err)
 	}
-	return ds.CacheBlock(ctx, payloadToKey(sBlock.BlockBidAndTrace()), &cbs)
-}
+	timer1.ObserveDuration()
 
-func (s *Client) storePayload(ctx context.Context, ds Datastore, sBlock StreamBlock) error {
-	return ds.PutPayload(ctx, payloadToKey(sBlock.BlockBidAndTrace()), sBlock.BlockBidAndTrace(), s.Config.TTL)
-}
-
-func payloadToKey(bbt structs.BlockBidAndTrace) structs.PayloadKey {
-	return structs.PayloadKey{
-		BlockHash: bbt.ExecutionPayload().BlockHash(),
-		Proposer:  bbt.Proposer(),
-		Slot:      structs.Slot(bbt.Slot()),
+	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "publish"))
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+cacheTopic, b); err != nil {
+		return fmt.Errorf("fail to publish cache block: %w", err)
 	}
+	timer2.ObserveDuration()
+
+	timer0.ObserveDuration()
+	return nil
 }
 
-func (s *Client) encode(block structs.BlockBidAndTrace, isCache bool) ([]byte, error) {
-	gBlock := GenericStreamBlock{Block: block, IsBlockCache: isCache, StreamSource: s.Config.ID}
-	rawBlock, err := json.Marshal(gBlock)
+func (s *Client) PublishSlotDelivered(ctx context.Context, slot structs.Slot) error {
+	return nil // TODO
+}
+
+func (s *Client) encode(data any, fvf ForkVersionFormat) ([]byte, error) {
+	rawData, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
 
+	item := JsonItem{
+		StreamData: rawData,
+		StreamMeta: Metadata{Source: s.Config.ID},
+	}
+
+	rawItem, err := json.Marshal(item)
+	if err != nil {
+		return nil, err
+	}
 	// encode the varint with a variable size
-	forkFormat := toJsonFormat(s.st.ForkVersion(structs.Slot(block.Slot())))
 	varintBytes := make([]byte, binary.MaxVarintLen64)
-	n := binary.PutUvarint(varintBytes, uint64(forkFormat))
+	n := binary.PutUvarint(varintBytes, uint64(fvf))
 	varintBytes = varintBytes[:n]
 
 	// append the varint
-	return append(varintBytes, rawBlock...), nil
+	return append(varintBytes, rawItem...), nil
 }
 
-func (s *Client) decode(b []byte) (StreamBlock, error) {
+type StreamData interface {
+	Data() []byte
+	Meta() Metadata
+}
+
+func (s *Client) decode(b []byte) (StreamData, ForkVersionFormat, error) {
 	varint, n := binary.Uvarint(b)
 	if n <= 0 {
-		return nil, ErrDecodeVarint
+		return nil, 0, ErrDecodeVarint
 	}
 
 	b = b[n:]
@@ -228,20 +288,14 @@ func (s *Client) decode(b []byte) (StreamBlock, error) {
 
 	switch forkFormat {
 	case CapellaJson:
-		var creq CapellaStreamBlock
-		if err := json.Unmarshal(b, &creq); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal capella block: %w", err)
-		}
-		return &creq, nil
 	case BellatrixJson:
-		var breq BellatrixStreamBlock
-		if err := json.Unmarshal(b, &breq); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal capella block: %w", err)
+		var jsonReq JsonItem
+		if err := json.Unmarshal(b, &jsonReq); err != nil {
+			return nil, forkFormat, fmt.Errorf("failed to unmarshal json stream data: %w", err)
 		}
-		return &breq, nil
-	default:
-		return nil, fmt.Errorf("invalid fork version format: %d", forkFormat)
+		return &jsonReq, forkFormat, nil
 	}
+	return nil, forkFormat, fmt.Errorf("invalid fork version format: %d", forkFormat)
 }
 
 type ForkVersionFormat uint64
