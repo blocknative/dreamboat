@@ -193,11 +193,18 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, vcache ValidatorC
 	return rs
 }
 
-func (rs *Relay) RunSlotDeliveredSubscriber(ctx context.Context) error {
+func (rs *Relay) RunSubscribersParallel(ctx context.Context, num uint) {
+	for i := uint(0); i < num; i++ {
+		go rs.runSubscriberBlockCache(ctx)
+		go rs.runSubscriberBid(ctx)
+	}
+}
+
+func (rs *Relay) runSlotDeliveredSubscriber(ctx context.Context) error {
 	return nil // TODO
 }
 
-func (rs *Relay) RunSubscriberBlockCache(ctx context.Context) error {
+func (rs *Relay) runSubscriberBlockCache(ctx context.Context) error {
 	for {
 		select {
 		case cache := <-rs.s.BlockCache():
@@ -213,7 +220,7 @@ func (rs *Relay) RunSubscriberBlockCache(ctx context.Context) error {
 	}
 }
 
-func (rs *Relay) RunSubscriberBlockHeader(ctx context.Context) error {
+func (rs *Relay) runSubscriberBid(ctx context.Context) error {
 	for {
 		select {
 		case bid := <-rs.s.BuilderBid():

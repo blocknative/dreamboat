@@ -184,11 +184,11 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 			bb.BuilderBid = &cbb.BuilderBid
 			bb.Proposer = cbb.Proposer
 		default:
-			l.WithField("forkFormat", forkFormat).Warn("unkown builder bid  forkFormat")
+			l.WithField("forkFormat", forkFormat).Warn("unkown builder bid forkFormat")
 			continue
 		}
 
-		s.m.StreamRecvCounter.WithLabelValues("header").Inc()
+		s.m.StreamRecvCounter.WithLabelValues("bid").Inc()
 		select {
 		case s.builderBidOut <- bb:
 		case <-ctx.Done():
