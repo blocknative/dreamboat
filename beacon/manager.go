@@ -90,8 +90,9 @@ type Manager struct {
 func NewManager(l log.Logger, cfg Config) *Manager {
 	return &Manager{
 		Log: l.With(log.F{
-			"subService":                    "beacon-manager",
+			"subService":                       "beacon-manager",
 			"runPayloadAttributesSubscription": cfg.RunPayloadAttributesSubscription,
+			"numberOfSlotsInState":             structs.NumberOfSlotsInState,
 		}),
 		Config: cfg,
 	}
@@ -189,7 +190,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 
 	defer logger.Debug("beacon loop stopped")
 
-	events := make(chan bcli.HeadEvent, NumberOfSlotsInState)
+	events := make(chan bcli.HeadEvent, structs.NumberOfSlotsInState)
 
 	if s.Config.RunPayloadAttributesSubscription {
 		go s.RunPayloadAttributesSubscription(ctx, state, client, events)
@@ -267,7 +268,7 @@ func (s *Manager) RunPayloadAttributesSubscription(ctx context.Context, state St
 
 		headSlot := state.HeadSlot()
 
-		if slot <= uint64(headSlot)-NumberOfSlotsInState {
+		if slot <= uint64(headSlot)-structs.NumberOfSlotsInState {
 			continue
 		}
 

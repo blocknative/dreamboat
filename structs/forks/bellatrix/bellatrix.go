@@ -233,6 +233,10 @@ func (b *BuilderBid) Pubkey() types.PublicKey {
 	return b.BellatrixPubkey
 }
 
+func (b *BuilderBid) Header() structs.ExecutionPayloadHeader {
+	return b.BellatrixHeader
+}
+
 // HashTreeRoot ssz hashes the BuilderBid object
 func (b *BuilderBid) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
@@ -260,6 +264,12 @@ func (b *BuilderBid) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 // GetTree ssz hashes the BuilderBid object
 func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(b)
+}
+
+type BuilderBidExtended struct {
+	BuilderBid BuilderBid
+	Proposer   types.PublicKey
+	Slot       uint64
 }
 
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
