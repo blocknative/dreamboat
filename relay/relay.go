@@ -309,8 +309,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 	}
 
 	fork := rs.beaconState.ForkVersion(slot)
-	go func() {
-		if !rs.pc.Contains(key) {
+	if _, ok := rs.pc.Get(key); !ok { // Get instead of Contains, to refersh cache LRU
+		rs.m.CacheHitCount.WithLabelValues("getHeader","false").Add(1)
+		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
 			defer cancel()
 
@@ -331,9 +332,10 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 				logger.Debug("streamed")
 			}
 			return
-		}
-		logger.Debug("block already cached")
-	}()
+		}()
+	} else {
+		rs.m.CacheHitCount.WithLabelValues("getHeader","true").Add(1)
+	}
 
 	if fork == structs.ForkBellatrix {
 		h, ok := header.(*bellatrix.ExecutionPayloadHeader)
@@ -544,7 +546,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	// TODO: stream delivered
 	m.AppendSince(tDelivered, "getPayload", "deliveredSlot")
 
-	rs.m.PayloadCacheHitCount.WithLabelValues(strconv.FormatBool(fromCache)).Add(1)
+	rs.m.CacheHitCount.WithLabelValues("getPayload",strconv.FormatBool(fromCache)).Add(1)
 
 	logger = logger.With(log.F{
 		"slot":       payloadRequest.Slot(),

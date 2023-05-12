@@ -626,6 +626,7 @@ func run() cli.ActionFunc {
 		if err != nil {
 			return fmt.Errorf("fail to initialize stream cache: %w", err)
 		}
+
 		r := relay.NewRelay(logger, relay.RelayConfig{
 			BuilderSigningDomain:       domainBuilder,
 			GetPayloadResponseDelay:    c.Duration("getpayload-response-delay"),
