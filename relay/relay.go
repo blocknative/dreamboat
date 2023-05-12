@@ -275,9 +275,9 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 	m.AppendSince(tGet, "getHeader", "get")
 
 	key := structs.PayloadKey{
-		// TODO: BlockHash: maxProfit.BuilderBid.,
-		Slot:     structs.Slot(maxProfit.Slot),
-		Proposer: maxProfit.Proposer}
+		BlockHash: maxProfit.BuilderBid.Header().GetBlockHash(),
+		Slot:      structs.Slot(maxProfit.Slot),
+		Proposer:  maxProfit.Proposer}
 
 	header := maxProfit.BuilderBid.Header()
 	if header == nil {
