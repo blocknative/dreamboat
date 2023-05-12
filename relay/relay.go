@@ -107,7 +107,7 @@ type Streamer interface {
 }
 
 type Auctioneer interface {
-	AddBlock(bid structs.BuilderBidExtended) bool
+	AddBlock(bid structs.BuilderBidExtended) (newMax bool)
 	MaxProfitBlock(slot structs.Slot) (structs.BuilderBidExtended, bool)
 }
 
@@ -285,11 +285,11 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 	m.AppendSince(tGet, "getHeader", "get")
 
 	key := structs.PayloadKey{
-		BlockHash: maxProfit.BuilderBid.Header().GetBlockHash(),
-		Slot:      structs.Slot(maxProfit.Slot),
-		Proposer:  maxProfit.Proposer}
+		BlockHash: maxProfit.BuilderBid().Header().GetBlockHash(),
+		Slot:      structs.Slot(maxProfit.Slot()),
+		Proposer:  maxProfit.Proposer()}
 
-	header := maxProfit.BuilderBid.Header()
+	header := maxProfit.BuilderBid().Header()
 	if header == nil {
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
@@ -301,13 +301,13 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 		return nil, ErrNoBuilderBid
 	}
 
-	if maxProfit.Proposer != pk.PublicKey {
+	if maxProfit.Proposer() != pk.PublicKey {
 		logger.WithField("expected", maxProfit.Proposer).WithField("got", pk.PublicKey).Debug("invalid pubkey")
 		rs.m.MissHeaderCount.WithLabelValues("badHeader").Add(1)
 		return nil, ErrNoBuilderBid
 	}
 
-	value := maxProfit.BuilderBid.Value()
+	value := maxProfit.BuilderBid().Value()
 	if zero := types.IntToU256(0); value.Cmp(&zero) == 0 {
 		rs.m.MissHeaderCount.WithLabelValues("zeroBid").Add(1)
 		return nil, ErrZeroBid

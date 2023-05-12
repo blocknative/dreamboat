@@ -267,9 +267,21 @@ func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 }
 
 type BuilderBidExtended struct {
-	BuilderBid BuilderBid
-	Proposer   types.PublicKey
-	Slot       uint64
+	BellatrixBuilderBid BuilderBid      `json:"bid"`
+	BellatrixProposer   types.PublicKey `json:"proposer"`
+	BellatrixSlot       uint64          `json:"slot"`
+}
+
+func (b BuilderBidExtended) BuilderBid() structs.BuilderBid {
+	return &b.BellatrixBuilderBid
+}
+
+func (b BuilderBidExtended) Proposer() types.PublicKey {
+	return b.BellatrixProposer
+}
+
+func (b BuilderBidExtended) Slot() uint64 {
+	return b.BellatrixSlot
 }
 
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
