@@ -174,6 +174,7 @@ type Relay struct {
 // NewRelay relay service
 func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
 	rs := &Relay{
+		pc:                pcache,
 		d:                 d,
 		das:               das,
 		a:                 a,
