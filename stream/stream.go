@@ -67,11 +67,11 @@ func NewClient(ps Pubsub, st State, cfg StreamConfig) *Client {
 		Pubsub: ps,
 		st:     st,
 
-		builderBidIn:     make(chan []byte),
+		builderBidIn:     make(chan []byte, cfg.StreamQueueSize),
 		builderBidOut:    make(chan structs.BuilderBidExtended, cfg.StreamQueueSize),
-		cacheIn:          make(chan []byte),
+		cacheIn:          make(chan []byte, cfg.StreamQueueSize),
 		cacheOut:         make(chan structs.BlockBidAndTrace, cfg.StreamQueueSize),
-		slotDeliveredIn:  make(chan []byte),
+		slotDeliveredIn:  make(chan []byte, cfg.StreamQueueSize),
 		slotDeliveredOut: make(chan uint64, cfg.StreamQueueSize),
 
 		Config: cfg,
