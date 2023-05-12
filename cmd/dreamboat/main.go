@@ -415,7 +415,7 @@ func run() cli.ActionFunc {
 		}
 
 		TTL := c.Duration("ttl")
-		logger := logger(c)
+		logger := logger(c).WithField("distributed", c.Bool("relay-distribution"))
 
 		timeDataStoreStart := time.Now()
 		m := metrics.NewMetrics()
