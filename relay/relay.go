@@ -88,11 +88,16 @@ type DataAPIStore interface {
 	GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
 }
 
-type Datastore interface {
-	CacheBlock(ctx context.Context, key structs.PayloadKey, block *structs.CompleteBlockstruct) error
+type PayloadCache interface {
+	ContainsOrAdd(structs.PayloadKey, structs.BlockBidAndTrace) (ok, evicted bool)
+	Contains(structs.PayloadKey) (ok bool)
+	Add(structs.PayloadKey, structs.BlockBidAndTrace) (evicted bool)
+	Get(structs.PayloadKey) (structs.BlockBidAndTrace, bool)
+}
 
+type Datastore interface {
 	PutPayload(context.Context, structs.PayloadKey, structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockBidAndTrace, bool, error)
+	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockBidAndTrace, error)
 }
 
 type Streamer interface {
@@ -137,7 +142,7 @@ type RelayConfig struct {
 
 type Relay struct {
 	d   Datastore
-	dc  *lru.Cache[structs.PayloadKey, structs.BlockBidAndTrace]
+	pc  PayloadCache
 	das DataAPIStore
 
 	a Auctioneer
@@ -167,7 +172,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer, sc *lru.Cache[structs.PayloadKey, struct{}]) *Relay {
+func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
 	rs := &Relay{
 		d:                 d,
 		das:               das,
@@ -176,9 +181,8 @@ func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCa
 		bvc:               bvc,
 		ver:               ver,
 		s:                 s,
-		sc:                sc,
 		config:            config,
-		cache:             cache,
+		cache:             vcache,
 		vstore:            vstore,
 		beacon:            beacon,
 		wh:                wh,
@@ -203,7 +207,7 @@ func (rs *Relay) RunSubscriberBlockCache(ctx context.Context) error {
 				Proposer:  cache.Proposer(),
 				Slot:      structs.Slot(cache.Slot()),
 			}
-			rs.dc.ContainsOrAdd(key, cache)
+			rs.pc.ContainsOrAdd(key, cache)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -305,16 +309,16 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 
 	fork := rs.beaconState.ForkVersion(slot)
 	go func() {
-		if !rs.dc.Contains(key) {
+		if !rs.pc.Contains(key) {
 			ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
 			defer cancel()
 
-			bbt, _, err := rs.d.GetPayload(ctx, fork, key)
+			bbt, err := rs.d.GetPayload(ctx, fork, key)
 			if err != nil {
 				logger.WithError(err).Warn("failed to cache block")
 				return
 			}
-			rs.dc.Add(key, bbt)
+			rs.pc.Add(key, bbt)
 			if err := rs.s.PublishBlockCache(ctx, bbt); err != nil {
 				logger.WithError(err).Warn("failed to stream cache block")
 				return
@@ -460,10 +464,13 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		return nil, ErrNoPayloadFound
 	}
 
-	payload, fromCache, err := rs.d.GetPayload(ctx, forkv, key)
-	if err != nil || payload == nil {
-		logger.WithField("event", "storage_error").WithError(err).Warn("error getting payload")
-		return nil, ErrNoPayloadFound
+	payload, fromCache := rs.pc.Get(key)
+	if !fromCache {
+		payload, err = rs.d.GetPayload(ctx, forkv, key)
+		if err != nil || payload == nil {
+			logger.WithField("event", "storage_error").WithError(err).Warn("error getting payload")
+			return nil, ErrNoPayloadFound
+		}
 	}
 	m.AppendSince(tGet, "getPayload", "get")
 

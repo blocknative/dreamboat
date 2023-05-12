@@ -453,7 +453,7 @@ func run() cli.ActionFunc {
 
 		timeRelayStart := time.Now()
 		state := &beacon.MultiSlotState{}
-		ds, err := datastore.NewDatastore(storage, badgerDs.DB, c.Int("relay-payload-cache-size"))
+		ds := datastore.NewDatastore(storage, badgerDs.DB, c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("failed to create datastore: %w", err)
 		}
@@ -628,7 +628,7 @@ func run() cli.ActionFunc {
 			relayWh = warehouse
 		}
 
-		streamCache, err := lru.New[structs.PayloadKey, struct{}](c.Int("relay-distribution-stream-cache-size"))
+		payloadCache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](c.Int("relay-distribution-stream-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to initialize stream cache: %w", err)
 		}
@@ -647,7 +647,7 @@ func run() cli.ActionFunc {
 			PublishBlock:          c.Bool("relay-publish-block"),
 			Distributed:           c.Bool("relay-distribution"),
 			StreamSubmissions:     c.Bool("relay-distribution-stream-submissions"),
-		}, beaconPubCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh, streamer, streamCache)
+		}, beaconPubCli, validatorCache, valDS, verificator, state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 		r.AttachMetrics(m)
 
 		ee := &api.EnabledEndpoints{
