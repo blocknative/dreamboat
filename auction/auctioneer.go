@@ -27,7 +27,7 @@ func NewAuctioneer() *Auctioneer {
 }
 
 func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {
-	auction := a.auctions[bid.Slot%3]
+	auction := a.auctions[bid.Slot%structs.NumberOfSlotsInState]
 
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
@@ -72,7 +72,7 @@ func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {
 }
 
 func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (structs.BuilderBidExtended, bool) {
-	auction := a.auctions[slot%3]
+	auction := a.auctions[slot%structs.NumberOfSlotsInState]
 
 	auction.mu.RLock()
 	defer auction.mu.RUnlock()
