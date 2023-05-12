@@ -205,6 +205,12 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"RELAY_VALIDATOR_DATABASE_URL"},
 	},
+	&cli.BoolFlag{ // TODO: Remove
+		Name:    "relay-fast-boot",
+		Usage:   "speed up booting up of relay, adding temporary inconsistency on the builder_blocks_received endpoint",
+		Value:   false,
+		EnvVars: []string{"RELAY_FAST_BOOT"},
+	},
 	&cli.StringFlag{
 		Name:    "relay-dataapi-database-url",
 		Usage:   "address of postgress database for dataapi, if empty - default, badger will be used",
