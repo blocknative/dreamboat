@@ -106,7 +106,7 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 	l := s.Logger.WithField("method", "runCacheSubscriber")
 	var bbt structs.BlockBidAndTrace
 
-	for raw := range s.builderBidIn {
+	for raw := range s.cacheIn {
 		sData, forkFormat, err := s.decode(raw)
 		if err != nil {
 			l.WithError(err).Warn("failed to decode cache wrapper")
