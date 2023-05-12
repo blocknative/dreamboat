@@ -302,7 +302,6 @@ func (eph *ExecutionPayloadHeader) GetBlockNumber() uint64 {
 	return eph.BlockNumber
 }
 
-
 // ExecutionPayload https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/beacon-chain.md#executionpayload
 type ExecutionPayload struct {
 	EpParentHash    types.Hash      `json:"parent_hash" ssz-size:"32"`

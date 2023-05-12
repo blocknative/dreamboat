@@ -36,7 +36,7 @@ type Datastore struct {
 	DBInter
 }
 
-func NewDatastore(t TTLStorage, db DBInter, payloadCacheSize int) *Datastore {
+func NewDatastore(t TTLStorage, db DBInter) *Datastore {
 	return &Datastore{
 		TTLStorage: t,
 		DBInter:    db,

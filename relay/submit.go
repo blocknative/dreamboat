@@ -11,7 +11,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
-	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
@@ -310,7 +309,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 	}
 
 	maxSlot := beaconState.HeadSlot() + 1
-	minSlot := maxSlot - (beacon.NumberOfSlotsInState - 1)
+	minSlot := maxSlot - (structs.NumberOfSlotsInState - 1)
 	if slot := structs.Slot(sbr.Slot()); slot > maxSlot || slot < minSlot {
 		return false, fmt.Errorf("%w: got %d, expected slot in range [%d-%d]", ErrInvalidSlot, sbr.Slot(), minSlot, maxSlot)
 	}

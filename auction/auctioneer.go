@@ -8,7 +8,7 @@ import (
 )
 
 type Auctioneer struct {
-	auctions [3]*Auction
+	auctions [structs.NumberOfSlotsInState]*Auction
 }
 
 type Auction struct {
@@ -18,13 +18,12 @@ type Auction struct {
 }
 
 func NewAuctioneer() *Auctioneer {
-	return &Auctioneer{
-		auctions: [3]*Auction{
-			{latestBlockByBuilder: make(map[types.PublicKey]structs.BuilderBidExtended)}, // slot - 1
-			{latestBlockByBuilder: make(map[types.PublicKey]structs.BuilderBidExtended)}, // slot
-			{latestBlockByBuilder: make(map[types.PublicKey]structs.BuilderBidExtended)}, // slot + 1
-		},
+	a := &Auctioneer{}
+	for i := 0; i < structs.NumberOfSlotsInState; i++ {
+		a.auctions[i] = &Auction{latestBlockByBuilder: make(map[types.PublicKey]structs.BuilderBidExtended)}
 	}
+
+	return a
 }
 
 func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {

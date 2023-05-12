@@ -15,7 +15,6 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 
-	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
@@ -90,7 +89,6 @@ type DataAPIStore interface {
 
 type PayloadCache interface {
 	ContainsOrAdd(structs.PayloadKey, structs.BlockBidAndTrace) (ok, evicted bool)
-	Contains(structs.PayloadKey) (ok bool)
 	Add(structs.PayloadKey, structs.BlockBidAndTrace) (evicted bool)
 	Get(structs.PayloadKey) (structs.BlockBidAndTrace, bool)
 }
@@ -245,7 +243,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 		return nil, err
 	}
 
-	if slot < (rs.beaconState.HeadSlot()+1)-(beacon.NumberOfSlotsInState-1) {
+	if slot < (rs.beaconState.HeadSlot()+1)-(structs.NumberOfSlotsInState-1) {
 		rs.m.MissHeaderCount.WithLabelValues("oldSlot").Add(1)
 		return nil, ErrOldSlot
 	}
@@ -310,7 +308,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 
 	fork := rs.beaconState.ForkVersion(slot)
 	if _, ok := rs.pc.Get(key); !ok { // Get instead of Contains, to refersh cache LRU
-		rs.m.CacheHitCount.WithLabelValues("getHeader","false").Add(1)
+		rs.m.CacheHitCount.WithLabelValues("getHeader", "false").Add(1)
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
 			defer cancel()
@@ -334,7 +332,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 			return
 		}()
 	} else {
-		rs.m.CacheHitCount.WithLabelValues("getHeader","true").Add(1)
+		rs.m.CacheHitCount.WithLabelValues("getHeader", "true").Add(1)
 	}
 
 	if fork == structs.ForkBellatrix {
@@ -546,7 +544,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	// TODO: stream delivered
 	m.AppendSince(tDelivered, "getPayload", "deliveredSlot")
 
-	rs.m.CacheHitCount.WithLabelValues("getPayload",strconv.FormatBool(fromCache)).Add(1)
+	rs.m.CacheHitCount.WithLabelValues("getPayload", strconv.FormatBool(fromCache)).Add(1)
 
 	logger = logger.With(log.F{
 		"slot":       payloadRequest.Slot(),

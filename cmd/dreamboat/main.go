@@ -296,12 +296,6 @@ var flags = []cli.Flag{
 		Value:   100,
 		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_QUEUE"},
 	},
-	&cli.IntFlag{
-		Name:    "relay-distribution-stream-cache-size",
-		Usage:   "relay distribution stream cache size, to deduplicate streaming items",
-		Value:   1_000,
-		EnvVars: []string{"RELAY_REGISTRATIONS_CACHE_SIZE"},
-	},
 	&cli.StringFlag{
 		Name:    "relay-distribution-redis-uri",
 		Usage:   "Redis URI",
@@ -447,7 +441,7 @@ func run() cli.ActionFunc {
 
 		timeRelayStart := time.Now()
 		state := &beacon.MultiSlotState{}
-		ds := datastore.NewDatastore(storage, badgerDs.DB, c.Int("relay-payload-cache-size"))
+		ds := datastore.NewDatastore(storage, badgerDs.DB)
 		if err != nil {
 			return fmt.Errorf("failed to create datastore: %w", err)
 		}
@@ -622,7 +616,7 @@ func run() cli.ActionFunc {
 			relayWh = warehouse
 		}
 
-		payloadCache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](c.Int("relay-distribution-stream-cache-size"))
+		payloadCache, err := structs.NewMultiSlotPayloadCache(c.Int("relay-payload-cache-size"))
 		if err != nil {
 			return fmt.Errorf("fail to initialize stream cache: %w", err)
 		}

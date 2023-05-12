@@ -8,13 +8,11 @@ import (
 	"github.com/blocknative/dreamboat/structs"
 )
 
-const (
-	NumberOfSlotsInState = 2
-)
+
 
 type MultiSlotState struct {
 	mu    sync.Mutex
-	slots [NumberOfSlotsInState]AtomicState
+	slots [structs.NumberOfSlotsInState]AtomicState
 
 	headSlotPayloadAttributes atomic.Uint64
 	duties                    atomic.Value
@@ -103,7 +101,7 @@ func (as *MultiSlotState) Withdrawals(slot uint64) structs.WithdrawalsState {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if ws := as.slots[slot%NumberOfSlotsInState].Withdrawals(); uint64(ws.Slot) == slot {
+	if ws := as.slots[slot%structs.NumberOfSlotsInState].Withdrawals(); uint64(ws.Slot) == slot {
 		return ws
 	}
 
@@ -114,14 +112,14 @@ func (as *MultiSlotState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	as.slots[withdrawals.Slot%NumberOfSlotsInState].SetWithdrawals(withdrawals)
+	as.slots[withdrawals.Slot%structs.NumberOfSlotsInState].SetWithdrawals(withdrawals)
 }
 
 func (as *MultiSlotState) Randao(slot uint64) structs.RandaoState {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if randao := as.slots[slot%NumberOfSlotsInState].Randao(); randao.Slot == slot {
+	if randao := as.slots[slot%structs.NumberOfSlotsInState].Randao(); randao.Slot == slot {
 		return randao
 	}
 	return structs.RandaoState{}
@@ -131,7 +129,7 @@ func (as *MultiSlotState) SetRandao(randao structs.RandaoState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	as.slots[randao.Slot%NumberOfSlotsInState].SetRandao(randao)
+	as.slots[randao.Slot%structs.NumberOfSlotsInState].SetRandao(randao)
 }
 
 func (as *MultiSlotState) ForkVersion(slot structs.Slot) structs.ForkVersion {
