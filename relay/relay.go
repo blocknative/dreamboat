@@ -213,6 +213,10 @@ func (rs *Relay) runSubscriberBlockCache(ctx context.Context) error {
 				Proposer:  cache.Proposer(),
 				Slot:      structs.Slot(cache.Slot()),
 			}
+			rs.l.
+				WithField("slot", cache.Slot()).
+				WithField("value", cache.BidValue()).
+				Debug("received stream block cache")
 			rs.pc.ContainsOrAdd(key, cache)
 		case <-ctx.Done():
 			return ctx.Err()
@@ -224,6 +228,10 @@ func (rs *Relay) runSubscriberBid(ctx context.Context) error {
 	for {
 		select {
 		case bid := <-rs.s.BuilderBid():
+			rs.l.
+				WithField("slot", bid.Slot()).
+				WithField("value", bid.BuilderBid().Value()).
+				Debug("received stream bid")
 			rs.a.AddBlock(bid)
 		case <-ctx.Done():
 			return ctx.Err()
