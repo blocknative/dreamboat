@@ -268,34 +268,34 @@ func (rs *Relay) bidExtended(sbr structs.SubmitBlockRequest, header structs.Exec
 	if fork == structs.ForkBellatrix {
 		header, ok := header.(*bellatrix.ExecutionPayloadHeader)
 		if !ok {
-			return structs.BuilderBidExtended{}, errors.New("failed to cast header to bellatrix")
+			return nil, errors.New("failed to cast header to bellatrix")
 		}
-		return structs.BuilderBidExtended{
-			BuilderBid: &bellatrix.BuilderBid{
+		return bellatrix.BuilderBidExtended{
+			BellatrixBuilderBid: bellatrix.BuilderBid{
 				BellatrixHeader: header,
 				BellatrixValue:  sbr.Value(),
 				BellatrixPubkey: sbr.BuilderPubkey(),
 			},
-			Proposer: sbr.ProposerPubkey(),
-			Slot:     sbr.Slot(),
+			BellatrixProposer: sbr.ProposerPubkey(),
+			BellatrixSlot:     sbr.Slot(),
 		}, nil
 	} else if fork == structs.ForkCapella {
 		header, ok := header.(*capella.ExecutionPayloadHeader)
 		if !ok {
-			return structs.BuilderBidExtended{}, errors.New("failed to cast header to capella")
+			return nil, errors.New("failed to cast header to capella")
 		}
-		return structs.BuilderBidExtended{
-			BuilderBid: &capella.BuilderBid{
+		return capella.BuilderBidExtended{
+			CapellaBuilderBid: capella.BuilderBid{
 				CapellaHeader: header,
 				CapellaValue:  sbr.Value(),
 				CapellaPubkey: sbr.BuilderPubkey(),
 			},
-			Proposer: sbr.ProposerPubkey(),
-			Slot:     sbr.Slot(),
+			CapellaProposer: sbr.ProposerPubkey(),
+			CapellaSlot:     sbr.Slot(),
 		}, nil
 	}
 
-	return structs.BuilderBidExtended{}, fmt.Errorf("unkown fork: %d", fork)
+	return nil, fmt.Errorf("unkown fork: %d", fork)
 }
 
 // returns a bool and an error, the bool indicates whether the block verification retried before succeeding

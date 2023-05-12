@@ -173,16 +173,14 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid ")
 				continue
 			}
-			bb.BuilderBid = &bbb.BuilderBid
-			bb.Proposer = bbb.Proposer
+			bb = &bbb
 		case CapellaJson:
 			var cbb capella.BuilderBidExtended
 			if err := json.Unmarshal(sData.Data(), &cbb); err != nil {
 				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid ")
 				continue
 			}
-			bb.BuilderBid = &cbb.BuilderBid
-			bb.Proposer = cbb.Proposer
+			bb = &cbb
 		default:
 			l.WithField("forkFormat", forkFormat).Warn("unkown builder bid forkFormat")
 			continue
@@ -206,7 +204,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "encode"))
-	forkFormat := toJsonFormat(s.st.ForkVersion(structs.Slot(bid.Slot)))
+	forkFormat := toJsonFormat(s.st.ForkVersion(structs.Slot(bid.Slot())))
 	b, err := s.encode(bid, forkFormat)
 	if err != nil {
 		timer1.ObserveDuration()

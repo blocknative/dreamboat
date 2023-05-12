@@ -274,9 +274,21 @@ func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 }
 
 type BuilderBidExtended struct {
-	BuilderBid BuilderBid      `json:"jsonrpc"`
-	Proposer   types.PublicKey `json:"jsonrpc"`
-	Slot       uint64          `json:"jsonrpc"`
+	CapellaBuilderBid BuilderBid      `json:"bid"`
+	CapellaProposer   types.PublicKey `json:"proposer"`
+	CapellaSlot       uint64          `json:"slot"`
+}
+
+func (b BuilderBidExtended) BuilderBid() structs.BuilderBid {
+	return &b.CapellaBuilderBid
+}
+
+func (b BuilderBidExtended) Proposer() types.PublicKey {
+	return b.CapellaProposer
+}
+
+func (b BuilderBidExtended) Slot() uint64 {
+	return b.CapellaSlot
 }
 
 // ExecutionPayload represents an execution layer payload.
