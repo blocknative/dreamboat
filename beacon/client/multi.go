@@ -308,4 +308,5 @@ func (bc *MultiBeaconClient) OnConfigChange(c structs.OldNew) error {
 	switch c.Name {
 	case "Addresses":
 	}
+	return nil
 }

@@ -15,8 +15,8 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 
-	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
+	rpctypes "github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -163,6 +163,7 @@ func (rc *RelayConfig) OnConfigChange(c structs.OldNew) error {
 			rc.MaxBlockPublishDelay = b
 		}
 	}
+	return nil
 }
 
 type Relay struct {

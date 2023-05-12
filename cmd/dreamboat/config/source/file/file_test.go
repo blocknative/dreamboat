@@ -54,4 +54,5 @@ type TestChange struct {
 
 func (tc *TestChange) OnConfigChange(change structs.OldNew) error {
 	log.Println("change structs.OldNew", change)
+	return nil
 }

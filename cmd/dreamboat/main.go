@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"math"
 	"net/http"
 	"net/url"
@@ -18,15 +19,12 @@ import (
 	"github.com/blocknative/dreamboat/beacon"
 	bcli "github.com/blocknative/dreamboat/beacon/client"
 	"github.com/blocknative/dreamboat/blstools"
-	"github.com/blocknative/dreamboat/client/sim/fallback"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethhttp"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethrpc"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethws"
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
 	fileS "github.com/blocknative/dreamboat/cmd/dreamboat/config/source/file"
 	"github.com/blocknative/dreamboat/datastore"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/relay"
+	"github.com/blocknative/dreamboat/sim/client/fallback"
 	"github.com/blocknative/dreamboat/stream"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/validators"
@@ -55,8 +53,7 @@ import (
 )
 
 const (
-	shutdownTimeout  = 15 * time.Second
-	gethSimNamespace = "flashbots"
+	shutdownTimeout = 15 * time.Second
 )
 
 var (
@@ -130,7 +127,11 @@ func main() {
 	beaconCli := bcli.NewMultiBeaconClient(logger)
 	cfg.Beacon.SubscribeForUpdates(beaconCli)
 
-	bcfg := &bcli.BeaconConfig{}
+	bcfg := &bcli.BeaconConfig{
+		EventTimeout: cfg.Beacon.EventTimeout,
+		EventRestart: cfg.Beacon.EventRestart,
+		QueryTimeout: cfg.Beacon.QueryTimeout,
+	}
 	cfg.Beacon.SubscribeForUpdates(bcfg)
 	if err := initBeaconClients(logger, beaconCli, cfg.Beacon.Addresses, m, bcfg); err != nil {
 		logger.Fatalf("fail to initialize beacon: %w", err)
@@ -143,7 +144,6 @@ func main() {
 	   		BeaconEventRestart: c.Int("beacon-event-restart"),
 	   		BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
 	   	}
-
 	   	beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
 	   	if err != nil {
 	   		return fmt.Errorf("fail to initialize beacon: %w", err)
@@ -159,29 +159,32 @@ func main() {
 	// SIM Client
 	simFallb := fallback.NewFallback()
 	simFallb.AttachMetrics(m)
-	if simHttpAddr := cfg.BlockSimulation.RPC.Address; simHttpAddr != "" {
-		simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
-		if err := simRPCCli.Dial(ctx); err != nil {
-			logger.WithError(err).Fatalf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
-			return
-		}
-		simFallb.AddClient(simRPCCli)
-	}
+	/*
 
-	if len(cfg.BlockSimulation.WS.Address) > 0 {
-		simWSConn := gethws.NewReConn(logger)
-		for _, s := range cfg.BlockSimulation.WS.Address {
-			input := make(chan []byte, 1000)
-			go simWSConn.KeepConnection(s, input)
+		if simHttpAddr := cfg.BlockSimulation.RPC.Address; simHttpAddr != "" {
+			simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
+			if err := simRPCCli.Dial(ctx); err != nil {
+				logger.WithError(err).Fatalf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
+				return
+			}
+			simFallb.AddClient(simRPCCli)
 		}
-		simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, cfg.BlockSimulation.WS.Retry, logger)
-		simFallb.AddClient(simWSCli)
-	}
 
-	if simHttpAddr := cfg.BlockSimulation.HTTP.Address; simHttpAddr != "" {
-		simHTTPCli := gethhttp.NewClient(simHttpAddr, gethSimNamespace, logger)
-		simFallb.AddClient(simHTTPCli)
-	}
+		if len(cfg.BlockSimulation.WS.Address) > 0 {
+			simWSConn := gethws.NewReConn(logger)
+			for _, s := range cfg.BlockSimulation.WS.Address {
+				input := make(chan []byte, 1000)
+				go simWSConn.KeepConnection(s, input)
+			}
+			simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, cfg.BlockSimulation.WS.Retry, logger)
+			simFallb.AddClient(simWSCli)
+		}
+
+		if simHttpAddr := cfg.BlockSimulation.HTTP.Address; simHttpAddr != "" {
+			simHTTPCli := gethhttp.NewClient(simHttpAddr, gethSimNamespace, logger)
+			simFallb.AddClient(simHTTPCli)
+		}
+	*/
 
 	verificator := verify.NewVerificationManager(logger, cfg.Verify.QueueSize)
 	verificator.RunVerify(cfg.Verify.QueueSize)

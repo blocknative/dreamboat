@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/flashbots/go-boost-utils/types"
@@ -10,7 +11,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const LimitterCacheSize = 400
+const LimitterCacheSize = 1000
 
 var ErrTooManyCalls = errors.New("too many calls")
 
@@ -52,21 +53,30 @@ func (l *Limitter) Allow(ctx context.Context, pubkey [48]byte) error {
 
 }
 
-func (l *Limitter) OnConfigChange(c structs.OldNew) error {
+func (l *Limitter) OnConfigChange(c structs.OldNew) (err error) {
 	switch c.Name {
+	case "SubmissionLimitRate":
+		if i, ok := c.New.(int); ok {
+			l.RateLimit = rate.Limit(i)
+			l.c.Purge()
+		}
+	case "SubmissionLimitBurst":
+		if i, ok := c.New.(int); ok {
+			l.Burst = i
+			l.c.Purge()
+		}
 	case "AllowedBuilders":
 		if keys, ok := c.New.([]string); ok {
 			newKeys := make(map[[48]byte]struct{})
 			for _, key := range keys {
 				var pk types.PublicKey
-				if err := pk.UnmarshalText([]byte(key)); err != nil {
-					//logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
-					continue
+				if err = pk.UnmarshalText([]byte(key)); err != nil {
+					return fmt.Errorf("ALLOWED BUILDER NOT ADDED - wrong public key: %s  - %w", key, err)
 				}
 				newKeys[pk] = struct{}{}
 			}
-
-			//rc.AllowedListedBuilders = newKeys
+			l.AllowedBuilders = newKeys
 		}
 	}
+	return nil
 }

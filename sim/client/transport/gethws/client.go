@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/blocknative/dreamboat/client"
-	"github.com/blocknative/dreamboat/client/sim/types"
+	"github.com/blocknative/dreamboat/sim/client"
+	"github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/lthibault/log"
 )
 

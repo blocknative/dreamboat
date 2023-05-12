@@ -80,11 +80,14 @@ var DefaultApiConfig = &ApiConfig{
 type ApiConfig struct {
 	Subscriber
 
+	// comma separated list of allowed builder pubkeys"
+	AllowedBuilders []string `config:"allowed_builders,allow_dynamic"` // map[[48]byte]struct{}
+
 	// submission request limit - rate per second
-	SubmissionLimitRate int `config:"submission_limit_rate"`
+	SubmissionLimitRate int `config:"submission_limit_rate,allow_dynamic"`
 
 	// submission request limit - burst value
-	SubmissionLimitBurst int `config:"submission_limit_burst"`
+	SubmissionLimitBurst int `config:"submission_limit_burst,allow_dynamic"`
 }
 
 var DefaultRelayConfig = &RelayConfig{
@@ -105,7 +108,7 @@ type RelayConfig struct {
 	PublishBlock bool `config:"publish_block"`
 
 	// block publish delay
-	MaxBlockPublishDelay time.Duration `config:"max_block_publish_delay"`
+	MaxBlockPublishDelay time.Duration `config:"max_block_publish_delay,allow_dynamic"`
 
 	// comma separated list of allowed builder pubkeys"
 	AllowedBuilders []string `config:"allowed_builders,allow_dynamic"` // map[[48]byte]struct{}
@@ -119,13 +122,17 @@ type BeaconConfig struct {
 	Subscriber
 
 	// comma separate list of urls to beacon endpoints
-	Addresses []string `config:"addresses"`
+	Addresses []string `config:"addresses,allow_dynamic"`
+
 	// should payload attributes be enabled
-	PayloadAttributesSubscription bool `config:"payload_attributes_subscription"`
+	PayloadAttributesSubscription bool `config:"payload_attributes_subscription,allow_dynamic"`
+
 	//
 	EventTimeout time.Duration `config:"event_timeout"`
+
 	//
 	EventRestart int `config:"event_restart"`
+
 	// timeout of beacon queries
 	QueryTimeout time.Duration `config:"query_timeout"`
 }
@@ -144,13 +151,15 @@ type BlockSimulationRPCConfig struct {
 }
 
 type BlockSimulationWSConfig struct {
+	Subscriber
 	//  block validation endpoint address (comma separated list)
-	Address []string `config:"address"`
+	Address []string `config:"address,allow_dynamic"`
 	// retry to other websocket connections on failure"
 	Retry bool `config:"retry"`
 }
 
 type BlockSimulationHTTPConfig struct {
+	Subscriber
 	Address string `config:"address"`
 }
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/blocknative/dreamboat/client"
-	"github.com/blocknative/dreamboat/client/sim/types"
+	"github.com/blocknative/dreamboat/sim/client"
+	"github.com/blocknative/dreamboat/sim/client/types"
 )
 
 type Client interface {
