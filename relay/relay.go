@@ -319,12 +319,17 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 				logger.WithError(err).Warn("failed to cache block")
 				return
 			}
+
 			rs.pc.Add(key, bbt)
-			if err := rs.s.PublishBlockCache(ctx, bbt); err != nil {
-				logger.WithError(err).Warn("failed to stream cache block")
-				return
+			logger.Debug("cached")
+
+			if rs.config.Distributed {
+				if err := rs.s.PublishBlockCache(ctx, bbt); err != nil {
+					logger.WithError(err).Warn("failed to stream cache block")
+					return
+				}
+				logger.Debug("streamed")
 			}
-			logger.Debug("cached and streamed block")
 			return
 		}
 		logger.Debug("block already cached")
