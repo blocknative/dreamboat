@@ -645,7 +645,9 @@ func run() cli.ActionFunc {
 		}, beaconPubCli, validatorCache, valDS, verificator, state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 		r.AttachMetrics(m)
 
-		r.RunSubscribersParallel(c.Context, c.Uint("relay-distribution-stream-workers"))
+		if c.Bool("relay-distribution"){
+			r.RunSubscribersParallel(c.Context, c.Uint("relay-distribution-stream-workers"))
+		}
 
 		ee := &api.EnabledEndpoints{
 			GetHeader:   true,
