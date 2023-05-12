@@ -289,8 +289,9 @@ func (s *Client) decode(b []byte) (StreamData, ForkVersionFormat, error) {
 	forkFormat := ForkVersionFormat(varint)
 
 	switch forkFormat {
-	case CapellaJson:
 	case BellatrixJson:
+		fallthrough
+	case CapellaJson:
 		var jsonReq JsonItem
 		if err := json.Unmarshal(b, &jsonReq); err != nil {
 			return nil, forkFormat, fmt.Errorf("failed to unmarshal json stream data: %w", err)
