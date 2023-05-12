@@ -224,6 +224,9 @@ func (rs *Relay) runSubscriberBid(ctx context.Context) error {
 	for {
 		select {
 		case bid := <-rs.s.BuilderBid():
+			rs.l.
+				WithField("blockHash", bid.BuilderBid.Header().GetBlockHash()).
+				WithField("value", bid.BuilderBid.Value()).Debug("received new bid from stream")
 			rs.a.AddBlock(bid)
 		case <-ctx.Done():
 			return ctx.Err()
