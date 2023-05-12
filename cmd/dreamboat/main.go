@@ -211,12 +211,6 @@ var flags = []cli.Flag{
 		Value:   "",
 		EnvVars: []string{"RELAY_DATAAPI_DATABASE_URL"},
 	},
-	&cli.BoolFlag{ // TODO: Remove
-		Name:    "relay-fast-boot",
-		Usage:   "speed up booting up of relay, adding temporary inconsistency on the builder_blocks_received endpoint",
-		Value:   false,
-		EnvVars: []string{"RELAY_FAST_BOOT"},
-	},
 	&cli.StringFlag{
 		Name:    "relay-allow-listed-builder",
 		Usage:   "comma separated list of allowed builder pubkeys",
