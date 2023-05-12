@@ -293,7 +293,7 @@ var flags = []cli.Flag{
 	&cli.StringFlag{
 		Name:    "relay-distribution-stream-topic",
 		Usage:   "Pubsub topic for streaming payloads",
-		Value:   "relay/payload",
+		Value:   "relay",
 		EnvVars: []string{"RELAY_DISTRIBUTION_PUBSUB_TOPIC"},
 	},
 	&cli.IntFlag{
@@ -462,7 +462,7 @@ func run() cli.ActionFunc {
 			redisClient := redis.NewClient(&redis.Options{
 				Addr: c.String("relay-distribution-redis-uri"),
 			})
-			streamer, err = initStreamer(c, redisClient, ds, logger, m, state)
+			streamer, err = initStreamer(c, redisClient, logger, m, state)
 			if err != nil {
 				return fmt.Errorf("fail to create streamer: %w", err)
 			}
@@ -861,7 +861,7 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-func initStreamer(c *cli.Context, redisClient *redis.Client, ds stream.Datastore, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
+func initStreamer(c *cli.Context, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
 	timeStreamStart := time.Now()
 
 	pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: l}
@@ -882,13 +882,10 @@ func initStreamer(c *cli.Context, redisClient *redis.Client, ds stream.Datastore
 	redisStreamer := stream.NewClient(pubsub, st, streamConfig)
 	redisStreamer.AttachMetrics(m)
 
-	if err := redisStreamer.RunSubscriberParallel(c.Context, ds, c.Uint("relay-distribution-stream-workers")); err != nil {
+	if err := redisStreamer.RunSubscriberParallel(c.Context, c.Uint("relay-distribution-stream-workers")); err != nil {
 		return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
 	}
 
-	if err := redisStreamer.RunSubscriberParallel(c.Context, ds, c.Uint("relay-distribution-stream-workers")); err != nil {
-		return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
-	}
 	l.With(log.F{
 		"relay-service": "stream-subscriber",
 		"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),

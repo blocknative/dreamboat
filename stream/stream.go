@@ -19,19 +19,14 @@ import (
 )
 
 var (
-	headerTopic        = "/block/header"
-	cacheTopic         = "/block/cache"
-	slotDeliveredTopic = "/slot/delivered"
+	HeaderTopic        = "/block/header"
+	BidTopic           = "/block/bid"
+	SlotDeliveredTopic = "/slot/delivered"
 )
 
 type Pubsub interface {
 	Publish(context.Context, string, []byte) error
 	Subscribe(context.Context, string) chan []byte
-}
-
-type Datastore interface {
-	PutPayload(context.Context, structs.PayloadKey, structs.BlockBidAndTrace, time.Duration) error
-	CacheBlock(context.Context, structs.PayloadKey, *structs.CompleteBlockstruct) error
 }
 
 type StreamConfig struct {
@@ -81,10 +76,10 @@ func NewClient(ps Pubsub, st State, cfg StreamConfig) *Client {
 	return &s
 }
 
-func (s *Client) RunSubscriberParallel(ctx context.Context, ds Datastore, num uint) error {
-	s.builderBidIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+cacheTopic)
-	s.headerIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+headerTopic)
-	s.slotDeliveredIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+slotDeliveredTopic)
+func (s *Client) RunSubscriberParallel(ctx context.Context, num uint) error {
+	s.builderBidIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+BidTopic)
+	s.headerIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+HeaderTopic)
+	s.slotDeliveredIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+SlotDeliveredTopic)
 
 	for i := uint(0); i < num; i++ {
 		go s.RunCacheSubscriber(ctx)
@@ -213,7 +208,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	timer1.ObserveDuration()
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "publish"))
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+headerTopic, b); err != nil {
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+HeaderTopic, b); err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
 	timer2.ObserveDuration()
@@ -222,7 +217,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	return nil
 }
 
-func (s *Client) PublishCacheBlock(ctx context.Context, block structs.BlockBidAndTrace) error {
+func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockBidAndTrace) error {
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "encode"))
@@ -235,7 +230,7 @@ func (s *Client) PublishCacheBlock(ctx context.Context, block structs.BlockBidAn
 	timer1.ObserveDuration()
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "publish"))
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+cacheTopic, b); err != nil {
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+BidTopic, b); err != nil {
 		return fmt.Errorf("fail to publish cache block: %w", err)
 	}
 	timer2.ObserveDuration()
