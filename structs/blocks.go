@@ -80,9 +80,9 @@ type BuilderBid interface {
 }
 
 type BuilderBidExtended struct {
-	BuilderBid BuilderBid
-	Proposer   types.PublicKey
-	Slot       uint64
+	BuilderBid BuilderBid      `json:"bid"`
+	Proposer   types.PublicKey `json:"proposer"`
+	Slot       uint64          `json:"slot"`
 }
 
 // SignedBuilderBid https://github.com/ethereum/builder-specs/pull/2/files#diff-b37cbf48e8754483e30e7caaadc5defc8c3c6e1aaf3273ee188d787b7c75d993

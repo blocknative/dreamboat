@@ -267,9 +267,9 @@ func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 }
 
 type BuilderBidExtended struct {
-	BuilderBid BuilderBid
-	Proposer   types.PublicKey
-	Slot       uint64
+	BuilderBid BuilderBid `json:"jsonrpc"`
+	Proposer   types.PublicKey `json:"jsonrpc"`
+	Slot       uint64 `json:"jsonrpc"`
 }
 
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
