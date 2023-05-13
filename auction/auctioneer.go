@@ -36,7 +36,7 @@ func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {
 	auction.latestBlockByBuilder[bid.BuilderBid().Pubkey()] = bid
 
 	// always set new value and bigger slot
-	if auction.maxProfit.BuilderBid() == nil || auction.maxProfit.Slot() < bid.Slot() {
+	if auction.maxProfit == nil || auction.maxProfit.Slot() < bid.Slot() {
 		auction.maxProfit = bid
 		return true
 	}
@@ -77,7 +77,7 @@ func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (structs.BuilderBidExtend
 	auction.mu.RLock()
 	defer auction.mu.RUnlock()
 
-	if auction.maxProfit.BuilderBid() != nil && structs.Slot(auction.maxProfit.Slot()) == slot {
+	if auction.maxProfit != nil && structs.Slot(auction.maxProfit.Slot()) == slot {
 		return auction.maxProfit, true
 	}
 
