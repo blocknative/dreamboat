@@ -276,7 +276,7 @@ func publishAsync(ctx context.Context, client BeaconNode, l log.Logger, block st
 	if err != nil {
 		l.WithError(err).
 			WithField("endpoint", client.Endpoint()).
-			Warn("failed to publish block to beacon")
+			Debug("failed to publish block to beacon")
 	}
 	resp <- err
 }
