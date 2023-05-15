@@ -303,9 +303,14 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_QUEUE"},
 	},
 	&cli.StringFlag{
-		Name:    "relay-distribution-redis-uri",
-		Usage:   "Redis URI",
-		EnvVars: []string{"RELAY_DISTRIBUTION_REDIS_URI"},
+		Name:    "relay-storage-redis-uri",
+		Usage:   "Redis Storage URI",
+		EnvVars: []string{"RELAY_STORAGE_REDIS_URI"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-pubsub-redis-uri",
+		Usage:   "Redis Pub/Sub URI",
+		EnvVars: []string{"RELAY_PUBSUB_REDIS_URI"},
 	},
 	&cli.DurationFlag{
 		Name:    "getpayload-response-delay",
@@ -433,7 +438,7 @@ func run() cli.ActionFunc {
 
 		if c.Bool("relay-distribution") {
 			redisClient := redis.NewClient(&redis.Options{
-				Addr: c.String("relay-distribution-redis-uri"),
+				Addr: c.String("relay-storage-redis-uri"),
 			})
 			storage = &dsRedis.RedisDatastore{Redis: redisClient}
 		} else {
@@ -454,7 +459,7 @@ func run() cli.ActionFunc {
 
 		if c.Bool("relay-distribution") {
 			redisClient := redis.NewClient(&redis.Options{
-				Addr: c.String("relay-distribution-redis-uri"),
+				Addr: c.String("relay-pubsub-redis-uri"),
 			})
 			streamer, err = initStreamer(c, redisClient, logger, m, state)
 			if err != nil {
