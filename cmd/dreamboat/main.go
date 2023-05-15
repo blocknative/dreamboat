@@ -303,9 +303,14 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_QUEUE"},
 	},
 	&cli.StringFlag{
-		Name:    "relay-storage-redis-uri",
-		Usage:   "Redis Storage URI",
-		EnvVars: []string{"RELAY_STORAGE_REDIS_URI"},
+		Name:    "relay-storage-read-redis-uri",
+		Usage:   "Redis Storage URI for read replica",
+		EnvVars: []string{"RELAY_STORAGE_READ_REDIS_URI"},
+	},
+	&cli.StringFlag{
+		Name:    "relay-storage-write-redis-uri",
+		Usage:   "Redis Storage URI for Write replica",
+		EnvVars: []string{"RELAY_STORAGE_WRITE_REDIS_URI"},
 	},
 	&cli.StringFlag{
 		Name:    "relay-pubsub-redis-uri",
@@ -437,10 +442,13 @@ func run() cli.ActionFunc {
 		}
 
 		if c.Bool("relay-distribution") {
-			redisClient := redis.NewClient(&redis.Options{
-				Addr: c.String("relay-storage-redis-uri"),
+			readClient := redis.NewClient(&redis.Options{
+				Addr: c.String("relay-storage-read-redis-uri"),
 			})
-			storage = &dsRedis.RedisDatastore{Redis: redisClient}
+			writeClient := redis.NewClient(&redis.Options{
+				Addr: c.String("relay-storage-write-redis-uri"),
+			})
+			storage = &dsRedis.RedisDatastore{Read: readClient, Write: writeClient}
 		} else {
 			storage = badgerDs
 		}
@@ -650,7 +658,7 @@ func run() cli.ActionFunc {
 		}, beaconPubCli, validatorCache, valDS, verificator, state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 		r.AttachMetrics(m)
 
-		if c.Bool("relay-distribution"){
+		if c.Bool("relay-distribution") {
 			r.RunSubscribersParallel(c.Context, c.Uint("relay-distribution-stream-workers"))
 		}
 
