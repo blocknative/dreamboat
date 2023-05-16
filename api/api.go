@@ -425,7 +425,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	m := structs.NewMetricGroup(4)
 	if err := a.r.SubmitBlock(r.Context(), m, uc, req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))
-		if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
+		if errors.Is(err, relay.ErrPayloadDiffBlockHash) || errors.Is(err, relay.ErrHigherSlotDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
@@ -727,8 +727,10 @@ type jsonError struct {
 func unwrapError(err error, defaultMsg string) error {
 	if errors.Is(err, relay.ErrUnknownValue) {
 		return relay.ErrUnknownValue
-	} else if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
-		return relay.ErrPayloadAlreadyDelivered
+	} else if errors.Is(err, relay.ErrPayloadDiffBlockHash) {
+		return relay.ErrPayloadDiffBlockHash
+	} else if errors.Is(err, relay.ErrHigherSlotDelivered) {
+		return relay.ErrHigherSlotDelivered
 	} else if errors.Is(err, relay.ErrNoPayloadFound) {
 		return relay.ErrNoPayloadFound
 	} else if errors.Is(err, relay.ErrMissingRequest) {

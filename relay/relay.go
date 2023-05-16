@@ -24,7 +24,8 @@ import (
 
 var (
 	ErrUnknownValue            = errors.New("value is unknown")
-	ErrPayloadAlreadyDelivered = errors.New("slot payload already delivered")
+	ErrPayloadDiffBlockHash    = errors.New("slot payload already delivered with different blockHash")
+	ErrHigherSlotDelivered     = errors.New("slot already delivered with higher slot")
 	ErrNoPayloadFound          = errors.New("no payload found")
 	ErrMissingRequest          = errors.New("req is nil")
 	ErrMissingSecretKey        = errors.New("secret key is nil")
@@ -144,7 +145,7 @@ type Relay struct {
 
 	wh Warehouse
 
-	lastDeliveredSlot *atomic.Uint64
+	lastDelivered atomic.Value
 
 	m RelayMetrics
 
@@ -154,21 +155,21 @@ type Relay struct {
 // NewRelay relay service
 func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, cache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse) *Relay {
 	rs := &Relay{
-		d:                 d,
-		das:               das,
-		a:                 a,
-		l:                 l,
-		bvc:               bvc,
-		ver:               ver,
-		config:            config,
-		cache:             cache,
-		vstore:            vstore,
-		beacon:            beacon,
-		wh:                wh,
-		beaconState:       beaconState,
-		lastDeliveredSlot: &atomic.Uint64{},
-		runnignAsyncs:     structs.NewTimeoutWaitGroup(),
+		d:             d,
+		das:           das,
+		a:             a,
+		l:             l,
+		bvc:           bvc,
+		ver:           ver,
+		config:        config,
+		cache:         cache,
+		vstore:        vstore,
+		beacon:        beacon,
+		wh:            wh,
+		beaconState:   beaconState,
+		runnignAsyncs: structs.NewTimeoutWaitGroup(),
 	}
+	rs.lastDelivered.Store(lastDelivered{})
 	rs.initMetrics()
 	return rs
 }
@@ -450,10 +451,14 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 
 	storeTrace = true // everything was correct, so flag to store the trace
 
-	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
-		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
+	if lastDelivery := rs.lastDelivered.Load().(lastDelivered); lastDelivery.slot < payloadRequest.Slot() {
+		rs.lastDelivered.Store(payloadRequest.Slot())
+	} else if lastDelivery.slot == payloadRequest.Slot() && lastDelivery.blockHash != payloadRequest.BlockHash() {
+		return nil, ErrPayloadDiffBlockHash
+	} else if lastDelivery.slot > payloadRequest.Slot() {
+		return nil, ErrHigherSlotDelivered
 	} else {
-		return nil, ErrPayloadAlreadyDelivered
+		rs.m.RetryCount.WithLabelValues("getPayload").Add(1)
 	}
 
 	exp := payload.ExecutionPayload()
@@ -544,4 +549,9 @@ func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload str
 		logger.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		return
 	}
+}
+
+type lastDelivered struct {
+	slot      uint64
+	blockHash types.Hash
 }
