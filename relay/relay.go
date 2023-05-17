@@ -108,7 +108,7 @@ type Streamer interface {
 
 type Auctioneer interface {
 	AddBlock(bid structs.BuilderBidExtended) (newMax bool)
-	MaxProfitBlock(slot structs.Slot) (structs.BuilderBidExtended, bool)
+	MaxProfitBlock(slot structs.Slot, parentHash types.Hash) (structs.BuilderBidExtended, bool)
 }
 
 type Beacon interface {
@@ -276,7 +276,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 	logger.Info("header requested")
 	tGet := time.Now()
 
-	maxProfit, ok := rs.a.MaxProfitBlock(slot)
+	maxProfit, ok := rs.a.MaxProfitBlock(slot, parentHash)
 	if !ok {
 		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
 		return nil, ErrNoBuilderBid
@@ -525,7 +525,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
 			return nil, ErrWrongPayload
 		}
-		if err = rs.beacon.PublishBlock(ctx, beaconBlock); err != nil {
+		if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
 			logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node")
 			return nil, ErrFailedToPublish
 		}

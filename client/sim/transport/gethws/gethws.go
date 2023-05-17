@@ -122,7 +122,7 @@ func (conn *Conn) rpcDecoder(ctx context.Context, in <-chan []byte) {
 			if r.Error != nil && r.Error.Message != "" { // log if we don't return to people
 				conn.l.With(log.F{
 					"response": r,
-				}).Warn("error in async call")
+				}).Info("error in async call") // use info lvl to decreace importance
 			}
 			continue
 		}
@@ -131,7 +131,7 @@ func (conn *Conn) rpcDecoder(ctx context.Context, in <-chan []byte) {
 		case <-ctx.Done():
 			conn.l.With(log.F{
 				"response": r,
-			}).Warn("context closed")
+			}).Info("context closed") // use info lvl to decreace importance
 		case ch <- r:
 		default:
 			conn.l.With(log.F{
