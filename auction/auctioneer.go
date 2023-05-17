@@ -13,17 +13,26 @@ type Auctioneer struct {
 
 type Auction struct {
 	mu                   sync.RWMutex
-	maxProfit            structs.BuilderBidExtended
-	latestBlockByBuilder map[types.PublicKey]structs.BuilderBidExtended
+	maxProfit            map[types.Hash]structs.BuilderBidExtended
+	latestBlockByBuilder map[LatestKey]structs.BuilderBidExtended
+}
+
+type LatestKey struct {
+	Pk         types.PublicKey
+	ParentHash types.Hash
 }
 
 func NewAuctioneer() *Auctioneer {
 	a := &Auctioneer{}
 	for i := 0; i < structs.NumberOfSlotsInState; i++ {
-		a.auctions[i] = &Auction{latestBlockByBuilder: make(map[types.PublicKey]structs.BuilderBidExtended)}
+		a.auctions[i] = &Auction{
+			latestBlockByBuilder: make(map[LatestKey]structs.BuilderBidExtended),
+			maxProfit:            make(map[types.Hash]structs.BuilderBidExtended),
+		}
 	}
 
 	return a
+
 }
 
 func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {
@@ -32,53 +41,64 @@ func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
 
+	bbid := bid.BuilderBid()
+	parent := bbid.Header().GetParentHash()
+
 	//auction.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
-	auction.latestBlockByBuilder[bid.BuilderBid().Pubkey()] = bid
+	//auction.latestBlockByBuilder[bid.BuilderBid().Pubkey()] = bid
+	auction.latestBlockByBuilder[LatestKey{ParentHash: parent, Pk: bbid.Pubkey()}] = bid
+	mp, ok := auction.maxProfit[parent]
 
 	// always set new value and bigger slot
-	if auction.maxProfit == nil || auction.maxProfit.Slot() < bid.Slot() {
-		auction.maxProfit = bid
+	if !ok || mp.Slot() < bid.Slot() {
+		auction.maxProfit[parent] = bid
 		return true
 	}
 
 	// always discard submissions lower than latest slot
-	if auction.maxProfit.Slot() > bid.Slot() {
+	if mp.Slot() > bid.Slot() {
 		return false
 	}
 
 	// accept bigger bid
+	maxBidValue := mp.BuilderBid().Value()
 	bidValue := bid.BuilderBid().Value()
-	maxBidValue := auction.maxProfit.BuilderBid().Value()
 	if maxBidValue.Cmp(&bidValue) <= 0 {
-		auction.maxProfit = bid
+		auction.maxProfit[parent] = bid
 		return true
 	}
 
 	// reassign biggest for resubmission from the same builder with lower bid
-	if auction.maxProfit.BuilderBid().Pubkey() == bid.BuilderBid().Pubkey() &&
+	if mp.BuilderBid().Pubkey() == bbid.Pubkey() &&
 		maxBidValue.Cmp(&bidValue) > 0 {
-		auction.maxProfit = bid
+		auction.maxProfit[parent] = bid
 		for _, b := range auction.latestBlockByBuilder {
-			maxBidValue := auction.maxProfit.BuilderBid().Value()
-			bidValue := b.BuilderBid().Value()
-			if auction.maxProfit.Slot() == b.Slot() && // Only check the current slot
-				maxBidValue.Cmp(&bidValue) <= 0 {
-				auction.maxProfit = b
+			if mp.Slot() == b.Slot() { // Only check the current slot
+				mp, ok := auction.maxProfit[parent]
+				if !ok {
+					continue
+				}
+				bidValue := b.BuilderBid().Value()
+				maxBidValue = mp.BuilderBid().Value()
+				if maxBidValue.Cmp(&bidValue) <= 0 {
+					auction.maxProfit[parent] = b
+				}
 			}
 		}
 	}
-
-	return bid == auction.maxProfit
+	return bid == mp
 }
 
-func (a *Auctioneer) MaxProfitBlock(slot structs.Slot) (structs.BuilderBidExtended, bool) {
+func (a *Auctioneer) MaxProfitBlock(slot structs.Slot, parentHash types.Hash) (structs.BuilderBidExtended, bool) {
 	auction := a.auctions[slot%structs.NumberOfSlotsInState]
 
 	auction.mu.RLock()
 	defer auction.mu.RUnlock()
 
-	if auction.maxProfit != nil && structs.Slot(auction.maxProfit.Slot()) == slot {
-		return auction.maxProfit, true
+	if auction.maxProfit != nil {
+		if mp, ok := auction.maxProfit[parentHash]; ok && structs.Slot(mp.Slot()) == slot {
+			return mp, true
+		}
 	}
 
 	return nil, false
