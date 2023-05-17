@@ -379,7 +379,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			if err := creq.UnmarshalSSZ(b); err != nil {
 				// Fallback to JSON.
 				if jsonErr := json.NewDecoder(bytes.NewReader(b)).Decode(&creq); jsonErr != nil {
-					l.Warnf("failed to decode ssz: %w", err)
+					l.Debugf("failed to decode ssz: %w", err)
 					a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode ssz").Inc()
 					writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode ssz"))
 					return
