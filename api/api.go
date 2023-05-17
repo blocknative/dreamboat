@@ -377,9 +377,14 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Type") == "application/octet-stream" {
 			l = l.WithField("requestContentType", "ssz")
 			if err := creq.UnmarshalSSZ(b); err != nil {
-				a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode ssz").Inc()
-				writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode ssz"))
-				return
+				// Fallback to JSON.
+				if jsonErr := json.NewDecoder(bytes.NewReader(b)).Decode(&creq); jsonErr != nil {
+					l.Warnf("failed to decode ssz: %w", err)
+					a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode ssz").Inc()
+					writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode ssz"))
+					return
+				}
+				l = l.WithField("requestContentType", "json")
 			}
 		} else {
 			l = l.WithField("requestContentType", "json")
