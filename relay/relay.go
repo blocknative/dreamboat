@@ -452,7 +452,7 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	storeTrace = true // everything was correct, so flag to store the trace
 
 	if lastDelivery := rs.lastDelivered.Load().(lastDelivered); lastDelivery.slot < payloadRequest.Slot() {
-		rs.lastDelivered.Store(payloadRequest.Slot())
+		rs.lastDelivered.Store(lastDelivered{slot:payloadRequest.Slot(), blockHash: payloadRequest.BlockHash()})
 	} else if lastDelivery.slot == payloadRequest.Slot() && lastDelivery.blockHash != payloadRequest.BlockHash() {
 		return nil, ErrPayloadDiffBlockHash
 	} else if lastDelivery.slot > payloadRequest.Slot() {
