@@ -342,7 +342,8 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	uc := structs.UserContent{IP: r.Header.Get("X-Forwarded-For")}
-	isGzip := r.Header.Get("Content-Encoding") == "gzip"
+	
+	isGzip := strings.ToLower(r.Header.Get("Content-Encoding")) == "gzip"
 	var l = a.l.With(log.F{"ip": uc.IP, "gzip": isGzip})
 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
@@ -374,7 +375,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	switch a.st.ForkVersion(a.st.HeadSlot()) {
 	case structs.ForkCapella:
 		var creq capella.SubmitBlockRequest
-		if r.Header.Get("Content-Type") == "application/octet-stream" {
+		if strings.ToLower(r.Header.Get("Content-Type")) == "application/octet-stream" {
 			l = l.WithField("requestContentType", "ssz")
 			if err := creq.UnmarshalSSZ(b); err != nil {
 				l.Debugf("failed to decode ssz: %w", err)
