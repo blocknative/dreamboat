@@ -452,13 +452,14 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	storeTrace = true // everything was correct, so flag to store the trace
 
 	if lastDelivery := rs.lastDelivered.Load().(lastDelivered); lastDelivery.slot < payloadRequest.Slot() {
-		rs.lastDelivered.Store(lastDelivered{slot:payloadRequest.Slot(), blockHash: payloadRequest.BlockHash()})
+		rs.lastDelivered.Store(lastDelivered{slot: payloadRequest.Slot(), blockHash: payloadRequest.BlockHash()})
 	} else if lastDelivery.slot == payloadRequest.Slot() && lastDelivery.blockHash != payloadRequest.BlockHash() {
 		return nil, ErrPayloadDiffBlockHash
+	} else if lastDelivery.slot == payloadRequest.Slot() && lastDelivery.blockHash == payloadRequest.BlockHash() {
+		// Allow retries for the current slot with the same hash for the sake of distributed validators (DVT).
+		rs.m.RetryCount.WithLabelValues("getPayload").Add(1)
 	} else if lastDelivery.slot > payloadRequest.Slot() {
 		return nil, ErrHigherSlotDelivered
-	} else {
-		rs.m.RetryCount.WithLabelValues("getPayload").Add(1)
 	}
 
 	exp := payload.ExecutionPayload()
