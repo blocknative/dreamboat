@@ -238,9 +238,3 @@ func openOrCreateFile(filename string) (*os.File, error) {
 
 	return file, nil
 }
-
-type Encoding uint8
-
-const (
-	Base64GzipJson Encoding = iota
-)
