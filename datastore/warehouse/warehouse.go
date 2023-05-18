@@ -128,7 +128,7 @@ func (s *Warehouse) Close(ctx context.Context) {
 
 func (s *Warehouse) StoreAsync(ctx context.Context, req StoreRequest) error {
 	// pre-calculate header of the data
-	req.header = []byte(fmt.Sprintf("\n%d;%s;base64+gzip+json", req.Timestamp.UnixNano(), req.Id))
+	req.header = []byte(fmt.Sprintf("\n%d;%s;base64+gzip+json;", req.Timestamp.UnixNano(), req.Id))
 
 	select {
 	case s.requests <- req:
