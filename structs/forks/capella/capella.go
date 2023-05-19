@@ -78,7 +78,6 @@ func (s *SubmitBlockRequest) SizeSSZ() (size int) {
 	return
 }
 
-
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
 	return b.CapellaMessage.BlockHash
 }
@@ -289,6 +288,96 @@ func (b *BuilderBid) Header() structs.ExecutionPayloadHeader {
 	return b.CapellaHeader
 }
 
+// MarshalSSZ ssz marshals the BuilderBid object
+func (b *BuilderBid) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BuilderBid object to a target array
+func (b *BuilderBid) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(84)
+
+	// Offset (0) 'Header'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.CapellaHeader == nil {
+		b.CapellaHeader = new(ExecutionPayloadHeader)
+	}
+	offset += b.CapellaHeader.SizeSSZ()
+
+	// Field (1) 'Value'
+	for i := 0; i < 32; i++ {
+		dst = append(dst, b.CapellaValue[31-i])
+	}
+
+	// Field (2) 'Pubkey'
+	dst = append(dst, b.CapellaPubkey[:]...)
+
+	// Field (0) 'Header'
+	if dst, err = b.CapellaHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BuilderBid object
+func (b *BuilderBid) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 84 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Header'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 < 84 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Value'
+	value := make([]byte, 32)
+	for i := 0; i < 32; i++ {
+		value[i] = buf[35-i]
+	}
+
+	b.CapellaValue.FromSlice(value)
+
+	// Field (2) 'Pubkey'
+	copy(b.CapellaPubkey[:], buf[36:84])
+
+	// Field (0) 'Header'
+	{
+		buf = tail[o0:]
+		if b.CapellaHeader == nil {
+			b.CapellaHeader = new(ExecutionPayloadHeader)
+		}
+		if err = b.CapellaHeader.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderBid object
+func (b *BuilderBid) SizeSSZ() (size int) {
+	size = 84
+
+	// Field (0) 'Header'
+	if b.CapellaHeader == nil {
+		b.CapellaHeader = new(ExecutionPayloadHeader)
+	}
+	size += b.CapellaHeader.SizeSSZ()
+
+	return
+}
+
 // HashTreeRoot ssz hashes the BuilderBid object
 func (b *BuilderBid) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
@@ -325,6 +414,106 @@ type BuilderBidExtended struct {
 	CapellaBuilderBid BuilderBid      `json:"bid"`
 	CapellaProposer   types.PublicKey `json:"proposer"`
 	CapellaSlot       uint64          `json:"slot"`
+}
+
+// MarshalSSZ ssz marshals the BuilderBid object
+func (b *BuilderBidExtended) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BuilderBid object to a target array
+func (b *BuilderBidExtended) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(60)
+
+	// Offset (0) 'BuilderBid'
+	dst = ssz.WriteOffset(dst, offset)
+
+	// Field (1) 'Proposer'
+	dst = append(dst, b.CapellaProposer[:]...)
+
+	// Field (2) 'Slot'
+	dst = ssz.MarshalUint64(dst, b.CapellaSlot)
+
+	// Field (0) 'BuilderBid'
+	if dst, err = b.CapellaBuilderBid.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BuilderBid object
+func (b *BuilderBidExtended) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 60 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'BuilderBid'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	if o0 < 60 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'Proposer'
+	copy(b.CapellaProposer[:], buf[4:52])
+
+	b.CapellaSlot = ssz.UnmarshallUint64(buf[52:60])
+	// Field (0) 'Header'
+	{
+		buf = tail[o0:]
+		if err = b.CapellaBuilderBid.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BuilderBid object
+func (b *BuilderBidExtended) SizeSSZ() (size int) {
+	size = 60
+
+	// Field (0) 'BuilderBid'
+	size += b.CapellaBuilderBid.SizeSSZ()
+
+	return
+}
+
+// HashTreeRoot ssz hashes the BuilderBid object
+func (b *BuilderBidExtended) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(b)
+}
+
+// HashTreeRootWith ssz hashes the BuilderBid object with a hasher
+func (b *BuilderBidExtended) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'BuilderBid'
+	if err = b.CapellaBuilderBid.HashTreeRootWith(hh); err != nil {
+		return
+	}
+
+	// Field (1) 'Proposer'
+	hh.PutBytes(b.CapellaProposer[:])
+
+	// Field (2) 'Slot'
+	hh.PutUint64(b.CapellaSlot)
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the SignedBuilderBid object
+func (s *BuilderBidExtended) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(s)
 }
 
 func (b BuilderBidExtended) BuilderBid() structs.BuilderBid {
@@ -484,7 +673,6 @@ func (e *ExecutionPayload) SizeSSZ() (size int) {
 
 	return
 }
-
 
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
 type GetHeaderResponse struct {

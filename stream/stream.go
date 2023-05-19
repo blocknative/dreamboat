@@ -170,14 +170,21 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 		case BellatrixJson:
 			var bbb bellatrix.BuilderBidExtended
 			if err := json.Unmarshal(sData.Data(), &bbb); err != nil {
-				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid ")
+				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid")
 				continue
 			}
 			bb = &bbb
 		case CapellaJson:
 			var cbb capella.BuilderBidExtended
 			if err := json.Unmarshal(sData.Data(), &cbb); err != nil {
-				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid ")
+				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid")
+				continue
+			}
+			bb = &cbb
+		case CapellaSSZ:
+			var cbb capella.BuilderBidExtended
+			if err := cbb.UnmarshalSSZ(sData.Data()); err != nil {
+				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid")
 				continue
 			}
 			bb = &cbb
@@ -204,7 +211,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "encode"))
-	forkFormat := toJsonFormat(s.st.ForkVersion(structs.Slot(bid.Slot())))
+	forkFormat := toBidFormat(s.st.ForkVersion(structs.Slot(bid.Slot())))
 	b, err := s.encode(bid, forkFormat)
 	if err != nil {
 		timer1.ObserveDuration()
@@ -226,7 +233,7 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockBidAn
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "encode"))
-	forkFormat := toJsonFormat(s.st.ForkVersion(structs.Slot(block.Slot())))
+	forkFormat := toBlockCacheFormat(s.st.ForkVersion(structs.Slot(block.Slot())))
 	b, err := s.encode(block, forkFormat)
 	if err != nil {
 		timer1.ObserveDuration()
@@ -249,9 +256,25 @@ func (s *Client) PublishSlotDelivered(ctx context.Context, slot structs.Slot) er
 }
 
 func (s *Client) encode(data any, fvf ForkVersionFormat) ([]byte, error) {
-	rawData, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
+	var (
+		rawData []byte
+		err     error
+	)
+
+	if fvf == CapellaSSZ {
+		enc, ok := data.(EncoderSSZ)
+		if !ok {
+			return nil, errors.New("capella ssz unable to cast to SSZ encoder")
+		}
+		rawData, err = enc.MarshalSSZ()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		rawData, err = json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	item := JsonItem{
@@ -306,13 +329,14 @@ const (
 	AltairJson
 	BellatrixJson
 	CapellaJson
+	CapellaSSZ
 )
 
 var (
 	ErrDecodeVarint = errors.New("error decoding varint value")
 )
 
-func toJsonFormat(fork structs.ForkVersion) ForkVersionFormat {
+func toBidFormat(fork structs.ForkVersion) ForkVersionFormat {
 	switch fork {
 	case structs.ForkAltair:
 		return AltairJson
@@ -322,4 +346,20 @@ func toJsonFormat(fork structs.ForkVersion) ForkVersionFormat {
 		return CapellaJson
 	}
 	return Unknown
+}
+
+func toBlockCacheFormat(fork structs.ForkVersion) ForkVersionFormat {
+	switch fork {
+	case structs.ForkAltair:
+		return AltairJson
+	case structs.ForkBellatrix:
+		return BellatrixJson
+	case structs.ForkCapella:
+		return CapellaSSZ
+	}
+	return Unknown
+}
+
+type EncoderSSZ interface {
+	MarshalSSZ() ([]byte, error)
 }
