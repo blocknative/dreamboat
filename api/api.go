@@ -342,9 +342,9 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	uc := structs.UserContent{IP: r.Header.Get("X-Forwarded-For")}
-	
-	isGzip := strings.ToLower(r.Header.Get("Content-Encoding")) == "gzip"
-	var l = a.l.With(log.F{"ip": uc.IP, "gzip": isGzip})
+
+	encoding := strings.ToLower(r.Header.Get("Content-Encoding"))
+	var l = a.l.With(log.F{"ip": uc.IP, "contentEncoding": encoding})
 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
@@ -355,7 +355,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		err    error
 	)
 
-	if isGzip {
+	if encoding == "gzip" {
 		reader, err = gzip.NewReader(r.Body)
 		if err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "gzip reader").Inc()
