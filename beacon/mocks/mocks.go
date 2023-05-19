@@ -426,16 +426,19 @@ func (mr *MockStateMockRecorder) SetHeadSlot(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeadSlot", reflect.TypeOf((*MockState)(nil).SetHeadSlot), arg0)
 }
 
-// SetHeadSlotPayloadAttributes mocks base method.
-func (m *MockState) SetHeadSlotPayloadAttributes(arg0 uint64) {
+// SetHeadSlotPayloadAttributesIfHigher mocks base method.
+func (m *MockState) SetHeadSlotPayloadAttributesIfHigher(arg0 uint64) (uint64, bool) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetHeadSlotPayloadAttributes", arg0)
+	ret := m.ctrl.Call(m, "SetHeadSlotPayloadAttributesIfHigher", arg0)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
 }
 
-// SetHeadSlotPayloadAttributes indicates an expected call of SetHeadSlotPayloadAttributes.
-func (mr *MockStateMockRecorder) SetHeadSlotPayloadAttributes(arg0 interface{}) *gomock.Call {
+// SetHeadSlotPayloadAttributesIfHigher indicates an expected call of SetHeadSlotPayloadAttributesIfHigher.
+func (mr *MockStateMockRecorder) SetHeadSlotPayloadAttributesIfHigher(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeadSlotPayloadAttributes", reflect.TypeOf((*MockState)(nil).SetHeadSlotPayloadAttributes), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeadSlotPayloadAttributesIfHigher", reflect.TypeOf((*MockState)(nil).SetHeadSlotPayloadAttributesIfHigher), arg0)
 }
 
 // SetKnownValidators mocks base method.

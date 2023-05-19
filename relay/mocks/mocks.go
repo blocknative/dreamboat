@@ -477,18 +477,18 @@ func (mr *MockAuctioneerMockRecorder) AddBlock(arg0 interface{}) *gomock.Call {
 }
 
 // MaxProfitBlock mocks base method.
-func (m *MockAuctioneer) MaxProfitBlock(arg0 structs.Slot) (*structs.CompleteBlockstruct, bool) {
+func (m *MockAuctioneer) MaxProfitBlock(arg0 structs.Slot, arg1 types0.Hash) (*structs.CompleteBlockstruct, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MaxProfitBlock", arg0)
+	ret := m.ctrl.Call(m, "MaxProfitBlock", arg0, arg1)
 	ret0, _ := ret[0].(*structs.CompleteBlockstruct)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
 // MaxProfitBlock indicates an expected call of MaxProfitBlock.
-func (mr *MockAuctioneerMockRecorder) MaxProfitBlock(arg0 interface{}) *gomock.Call {
+func (mr *MockAuctioneerMockRecorder) MaxProfitBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxProfitBlock", reflect.TypeOf((*MockAuctioneer)(nil).MaxProfitBlock), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxProfitBlock", reflect.TypeOf((*MockAuctioneer)(nil).MaxProfitBlock), arg0, arg1)
 }
 
 // MockVerifier is a mock of Verifier interface.

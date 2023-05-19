@@ -97,7 +97,7 @@ type Datastore interface {
 
 type Auctioneer interface {
 	AddBlock(block *structs.CompleteBlockstruct) bool
-	MaxProfitBlock(slot structs.Slot) (*structs.CompleteBlockstruct, bool)
+	MaxProfitBlock(slot structs.Slot, parentHash types.Hash) (*structs.CompleteBlockstruct, bool)
 }
 
 type Beacon interface {
@@ -220,7 +220,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 	logger.Info("header requested")
 	tGet := time.Now()
 
-	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot)
+	maxProfitBlock, ok := rs.a.MaxProfitBlock(slot, parentHash)
 	if !ok {
 		rs.m.MissHeaderCount.WithLabelValues("noSubmission").Add(1)
 		return nil, ErrNoBuilderBid
@@ -440,11 +440,17 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
 			return nil, ErrWrongPayload
 		}
-		if err = rs.beacon.PublishBlock(ctx, beaconBlock); err != nil {
+		if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
 			logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node")
-			return nil, ErrFailedToPublish
+			time.Sleep(500 * time.Millisecond)
+			// retry - after possible reorg
+			if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
+				logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node (retry)")
+				return nil, ErrFailedToPublish
+			}
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
+
 		// Delay the return of response block publishing
 		time.Sleep(rs.config.GetPayloadResponseDelay)
 	}
