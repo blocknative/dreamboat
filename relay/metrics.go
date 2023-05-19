@@ -8,6 +8,7 @@ import (
 type RelayMetrics struct {
 	MissHeaderCount *prometheus.CounterVec
 	CacheHitCount   *prometheus.CounterVec
+	RetryCount      *prometheus.CounterVec
 }
 
 func (r *Relay) initMetrics() {
@@ -23,9 +24,17 @@ func (r *Relay) initMetrics() {
 		Name:      "cacheHit",
 		Help:      "Number of cache hits/failures per function",
 	}, []string{"function", "hit"})
+
+	r.m.RetryCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "dreamboat",
+		Subsystem: "relayprocess",
+		Name:      "retry",
+		Help:      "Number of retries/duplicate requests by endpoint (getPayload, getHeader)",
+	}, []string{"endpoint"})
 }
 
 func (r *Relay) AttachMetrics(m *metrics.Metrics) {
 	m.Register(r.m.MissHeaderCount)
 	m.Register(r.m.CacheHitCount)
+	m.Register(r.m.RetryCount)
 }

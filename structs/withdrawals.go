@@ -65,6 +65,35 @@ type Withdrawal struct {
 	Amount         uint64        `json:"amount,string"`
 }
 
+// UnmarshalSSZ ssz unmarshals the Withdrawal object
+func (w *Withdrawal) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 44 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Index'
+	w.Index = uint64(ssz.UnmarshallUint64(buf[0:8]))
+
+	// Field (1) 'ValidatorIndex'
+	w.ValidatorIndex = uint64(ssz.UnmarshallUint64(buf[8:16]))
+
+	// Field (2) 'Address'
+	copy(w.Address[:], buf[16:36])
+
+	// Field (3) 'Amount'
+	w.Amount = uint64(ssz.UnmarshallUint64(buf[36:44]))
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the Withdrawal object
+func (w *Withdrawal) SizeSSZ() (size int) {
+	size = 44
+	return
+}
+
 // HashTreeRoot ssz hashes the Withdrawal object
 func (w *Withdrawal) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(w)

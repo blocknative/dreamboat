@@ -25,7 +25,8 @@ import (
 
 var (
 	ErrUnknownValue            = errors.New("value is unknown")
-	ErrPayloadAlreadyDelivered = errors.New("slot payload already delivered")
+	ErrPayloadDiffBlockHash    = errors.New("slot payload already delivered with different blockHash")
+	ErrHigherSlotDelivered     = errors.New("slot already delivered with higher slot")
 	ErrNoPayloadFound          = errors.New("no payload found")
 	ErrMissingRequest          = errors.New("req is nil")
 	ErrMissingSecretKey        = errors.New("secret key is nil")
@@ -162,7 +163,7 @@ type Relay struct {
 
 	wh Warehouse
 
-	lastDeliveredSlot *atomic.Uint64
+	lastDelivered atomic.Value
 
 	m RelayMetrics
 
@@ -172,23 +173,23 @@ type Relay struct {
 // NewRelay relay service
 func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
 	rs := &Relay{
-		pc:                pcache,
-		d:                 d,
-		das:               das,
-		a:                 a,
-		l:                 l,
-		bvc:               bvc,
-		ver:               ver,
-		s:                 s,
-		config:            config,
-		cache:             vcache,
-		vstore:            vstore,
-		beacon:            beacon,
-		wh:                wh,
-		beaconState:       beaconState,
-		lastDeliveredSlot: &atomic.Uint64{},
-		runnignAsyncs:     structs.NewTimeoutWaitGroup(),
+		pc:            pcache,
+		d:             d,
+		das:           das,
+		a:             a,
+		l:             l,
+		bvc:           bvc,
+		ver:           ver,
+		s:             s,
+		config:        config,
+		cache:         vcache,
+		vstore:        vstore,
+		beacon:        beacon,
+		wh:            wh,
+		beaconState:   beaconState,
+		runnignAsyncs: structs.NewTimeoutWaitGroup(),
 	}
+	rs.lastDelivered.Store(lastDelivered{})
 	rs.initMetrics()
 	return rs
 }
@@ -527,7 +528,12 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		}
 		if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
 			logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node")
-			return nil, ErrFailedToPublish
+			time.Sleep(500 * time.Millisecond)
+			// retry - after possible reorg
+			if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
+				logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node (retry)")
+				return nil, ErrFailedToPublish
+			}
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
 		m.AppendSince(tPublish, "getPayload", "publish")
@@ -540,10 +546,15 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	storeTrace = true // everything was correct, so flag to store the trace
 
 	tDelivered := time.Now()
-	if rs.lastDeliveredSlot.Load() < payloadRequest.Slot() {
-		rs.lastDeliveredSlot.Store(payloadRequest.Slot())
-	} else {
-		return nil, ErrPayloadAlreadyDelivered
+	if lastDelivery := rs.lastDelivered.Load().(lastDelivered); lastDelivery.slot < payloadRequest.Slot() {
+		rs.lastDelivered.Store(lastDelivered{slot: payloadRequest.Slot(), blockHash: payloadRequest.BlockHash()})
+	} else if lastDelivery.slot == payloadRequest.Slot() && lastDelivery.blockHash != payloadRequest.BlockHash() {
+		return nil, ErrPayloadDiffBlockHash
+	} else if lastDelivery.slot == payloadRequest.Slot() && lastDelivery.blockHash == payloadRequest.BlockHash() {
+		// Allow retries for the current slot with the same hash for the sake of distributed validators (DVT).
+		rs.m.RetryCount.WithLabelValues("getPayload").Add(1)
+	} else if lastDelivery.slot > payloadRequest.Slot() {
+		return nil, ErrHigherSlotDelivered
 	}
 
 	exp := payload.ExecutionPayload()
@@ -651,4 +662,9 @@ func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload str
 type TimeoutWaitGroup struct {
 	running int64
 	done    chan struct{}
+}
+
+type lastDelivered struct {
+	slot      uint64
+	blockHash types.Hash
 }

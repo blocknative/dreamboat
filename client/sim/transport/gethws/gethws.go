@@ -179,7 +179,6 @@ func (conn *Conn) writeHandler() {
 				conn.l.Warn("ws timed out")
 				return
 			}
-
 			if err := conn.c.WriteMessage(websocket.TextMessage, []byte(`{"jsonrpc": "2.0", "id": 1, "method": "net_version"}`)); err != nil {
 				conn.l.WithError(err).Warn("error writing from ws")
 				return

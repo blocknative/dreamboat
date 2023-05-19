@@ -4,10 +4,12 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -340,13 +342,30 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	uc := structs.UserContent{IP: r.Header.Get("X-Forwarded-For")}
-	var l = a.l.With(log.F{"ip": uc.IP})
+
+	encoding := strings.ToLower(r.Header.Get("Content-Encoding"))
+	var l = a.l.With(log.F{"ip": uc.IP, "contentEncoding": encoding})
 
 	timer := prometheus.NewTimer(a.m.ApiReqTiming.WithLabelValues("submitBlock"))
 	defer timer.ObserveDuration()
-	var req structs.SubmitBlockRequest
 
-	b, err := ioutil.ReadAll(r.Body)
+	var (
+		req    structs.SubmitBlockRequest
+		reader io.Reader = r.Body
+		err    error
+	)
+
+	if encoding == "gzip" {
+		reader, err = gzip.NewReader(r.Body)
+		if err != nil {
+			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "gzip reader").Inc()
+			writeError(w, http.StatusBadRequest, errors.New("invalid gzipped submitblock request decode"))
+			return
+		}
+	}
+
+	reader = io.LimitReader(reader, 10*1024*1024) // 10 MB
+	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "read body").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
@@ -356,11 +375,23 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	switch a.st.ForkVersion(a.st.HeadSlot()) {
 	case structs.ForkCapella:
 		var creq capella.SubmitBlockRequest
-		if err := json.NewDecoder(bytes.NewReader(b)).Decode(&creq); err != nil {
-			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
-			writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode"))
-			return
+		if strings.ToLower(r.Header.Get("Content-Type")) == "application/octet-stream" {
+			l = l.WithField("requestContentType", "ssz")
+			if err := creq.UnmarshalSSZ(b); err != nil {
+				l.Debugf("failed to decode ssz: %w", err)
+				a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode ssz").Inc()
+				writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode ssz"))
+				return
+			}
+		} else {
+			l = l.WithField("requestContentType", "json")
+			if err := json.NewDecoder(bytes.NewReader(b)).Decode(&creq); err != nil {
+				a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
+				writeError(w, http.StatusBadRequest, errors.New("invalid submitblock request capella decode"))
+				return
+			}
 		}
+
 		creq.CapellaRaw = b
 		req = &creq
 		l = l.With(log.F{
@@ -380,6 +411,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case structs.ForkBellatrix:
+		l = l.WithField("requestContentType", "json")
 		var breq bellatrix.SubmitBlockRequest
 		if err := json.NewDecoder(bytes.NewReader(b)).Decode(&breq); err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload decode").Inc()
@@ -388,7 +420,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		}
 		breq.BellatrixRaw = b
 		req = &breq
-		l = a.l.With(log.F{
+		l = l.With(log.F{
 			"fork":      "bellatrix",
 			"slot":      breq.BellatrixMessage.Slot,
 			"blockHash": breq.BellatrixMessage.BlockHash,
@@ -425,7 +457,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	m := structs.NewMetricGroup(4)
 	if err := a.r.SubmitBlock(r.Context(), m, uc, req); err != nil {
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "submit block unknown"))
-		if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
+		if errors.Is(err, relay.ErrPayloadDiffBlockHash) || errors.Is(err, relay.ErrHigherSlotDelivered) {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload already delivered").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "block submission").Inc()
@@ -727,8 +759,10 @@ type jsonError struct {
 func unwrapError(err error, defaultMsg string) error {
 	if errors.Is(err, relay.ErrUnknownValue) {
 		return relay.ErrUnknownValue
-	} else if errors.Is(err, relay.ErrPayloadAlreadyDelivered) {
-		return relay.ErrPayloadAlreadyDelivered
+	} else if errors.Is(err, relay.ErrPayloadDiffBlockHash) {
+		return relay.ErrPayloadDiffBlockHash
+	} else if errors.Is(err, relay.ErrHigherSlotDelivered) {
+		return relay.ErrHigherSlotDelivered
 	} else if errors.Is(err, relay.ErrNoPayloadFound) {
 		return relay.ErrNoPayloadFound
 	} else if errors.Is(err, relay.ErrMissingRequest) {

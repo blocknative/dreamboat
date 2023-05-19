@@ -37,12 +37,12 @@ func NewAuctioneer() *Auctioneer {
 
 func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {
 	auction := a.auctions[bid.Slot()%structs.NumberOfSlotsInState]
+	parent := bid.BuilderBid().Header().GetParentHash()
+	bbid := bid.BuilderBid()
 
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
 
-	bbid := bid.BuilderBid()
-	parent := bbid.Header().GetParentHash()
 
 	//auction.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
 	//auction.latestBlockByBuilder[bid.BuilderBid().Pubkey()] = bid

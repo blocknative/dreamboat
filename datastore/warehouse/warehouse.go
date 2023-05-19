@@ -128,7 +128,7 @@ func (s *Warehouse) Close(ctx context.Context) {
 
 func (s *Warehouse) StoreAsync(ctx context.Context, req StoreRequest) error {
 	// pre-calculate header of the data
-	req.header = []byte(fmt.Sprintf("\n%d;%s;", req.Timestamp.UnixNano(), req.Id))
+	req.header = []byte(fmt.Sprintf("\n%d;%s;base64+gzip+json;", req.Timestamp.UnixNano(), req.Id))
 
 	select {
 	case s.requests <- req:
@@ -211,9 +211,7 @@ func (w *worker) closeAllFiles() {
 }
 
 func (w *worker) closeFile(file *os.File) {
-	if _, ok := w.files[file.Name()]; ok {
-		delete(w.files, file.Name())
-	}
+	delete(w.files, file.Name())
 
 	if err := file.Close(); err != nil {
 		w.logger.WithError(err).WithField("filename", file.Name()).Error("failed to close file")

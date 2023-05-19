@@ -31,6 +31,54 @@ func (b *SubmitBlockRequest) Raw() []byte {
 	return b.CapellaRaw
 }
 
+// UnmarshalSSZ ssz unmarshals the SubmitBlockRequest object
+func (s *SubmitBlockRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 336 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1 uint64
+
+	if err = s.CapellaMessage.UnmarshalSSZ(buf[0:236]); err != nil {
+		return err
+	}
+
+	// Offset (1) 'ExecutionPayload'
+	if o1 = ssz.ReadOffset(buf[236:240]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	if o1 < 336 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (2) 'Signature'
+	copy(s.CapellaSignature[:], buf[240:336])
+
+	// Field (1) 'ExecutionPayload'
+	{
+		buf = tail[o1:]
+		if err = s.CapellaExecutionPayload.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SubmitBlockRequest object
+func (s *SubmitBlockRequest) SizeSSZ() (size int) {
+	size = 336
+
+	// Field (1) 'ExecutionPayload'
+	size += s.CapellaExecutionPayload.SizeSSZ()
+
+	return
+}
+
+
 func (b *SubmitBlockRequest) TraceBlockHash() types.Hash {
 	return b.CapellaMessage.BlockHash
 }
@@ -296,6 +344,147 @@ type ExecutionPayload struct {
 	bellatrix.ExecutionPayload
 	EpWithdrawals structs.Withdrawals `json:"withdrawals" ssz-max:"16"`
 }
+
+// UnmarshalSSZ ssz unmarshals the ExecutionPayload object
+func (e *ExecutionPayload) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 512 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o10, o13, o14 uint64
+
+	// Field (0) 'ParentHash'
+	copy(e.EpParentHash[:], buf[0:32])
+
+	// Field (1) 'FeeRecipient'
+	copy(e.EpFeeRecipient[:], buf[32:52])
+
+	// Field (2) 'StateRoot'
+	copy(e.EpStateRoot[:], buf[52:84])
+
+	// Field (3) 'ReceiptsRoot'
+	copy(e.EpReceiptsRoot[:], buf[84:116])
+
+	// Field (4) 'LogsBloom'
+	copy(e.EpLogsBloom[:], buf[116:372])
+
+	// Field (5) 'PrevRandao'
+	copy(e.EpRandom[:], buf[372:404])
+
+	// Field (6) 'BlockNumber'
+	e.EpBlockNumber = ssz.UnmarshallUint64(buf[404:412])
+
+	// Field (7) 'GasLimit'
+	e.EpGasLimit = ssz.UnmarshallUint64(buf[412:420])
+
+	// Field (8) 'GasUsed'
+	e.EpGasUsed = ssz.UnmarshallUint64(buf[420:428])
+
+	// Field (9) 'Timestamp'
+	e.EpTimestamp = ssz.UnmarshallUint64(buf[428:436])
+
+	// Offset (10) 'ExtraData'
+	if o10 = ssz.ReadOffset(buf[436:440]); o10 > size {
+		return ssz.ErrOffset
+	}
+
+	if o10 < 512 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (11) 'BaseFeePerGas'
+	copy(e.EpBaseFeePerGas[:], buf[440:472])
+
+	// Field (12) 'BlockHash'
+	copy(e.EpBlockHash[:], buf[472:504])
+
+	// Offset (13) 'Transactions'
+	if o13 = ssz.ReadOffset(buf[504:508]); o13 > size || o10 > o13 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (14) 'Withdrawals'
+	if o14 = ssz.ReadOffset(buf[508:512]); o14 > size || o13 > o14 {
+		return ssz.ErrOffset
+	}
+
+	// Field (10) 'ExtraData'
+	{
+		buf = tail[o10:o13]
+		if len(buf) > 32 {
+			return ssz.ErrBytesLength
+		}
+		if cap(e.EpExtraData) == 0 {
+			e.EpExtraData = make([]byte, 0, len(buf))
+		}
+		e.EpExtraData = append(e.EpExtraData, buf...)
+	}
+
+	// Field (13) 'Transactions'
+	{
+		buf = tail[o13:o14]
+		num, err := ssz.DecodeDynamicLength(buf, 1048576)
+		if err != nil {
+			return err
+		}
+		e.EpTransactions = make([]hexutil.Bytes, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 1073741824 {
+				return ssz.ErrBytesLength
+			}
+			if cap(e.EpTransactions[indx]) == 0 {
+				e.EpTransactions[indx] = make([]byte, 0, len(buf))
+			}
+			e.EpTransactions[indx] = append(e.EpTransactions[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Field (14) 'Withdrawals'
+	{
+		buf = tail[o14:]
+		num, err := ssz.DivideInt2(len(buf), 44, 16)
+		if err != nil {
+			return err
+		}
+		e.EpWithdrawals = make(structs.Withdrawals, num)
+		for ii := 0; ii < num; ii++ {
+			if e.EpWithdrawals[ii] == nil {
+				e.EpWithdrawals[ii] = new(structs.Withdrawal)
+			}
+			if err = e.EpWithdrawals[ii].UnmarshalSSZ(buf[ii*44 : (ii+1)*44]); err != nil {
+				return err
+			}
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayload object
+func (e *ExecutionPayload) SizeSSZ() (size int) {
+	size = 512
+
+	// Field (10) 'ExtraData'
+	size += len(e.EpExtraData)
+
+	// Field (13) 'Transactions'
+	for ii := 0; ii < len(e.EpTransactions); ii++ {
+		size += 4
+		size += len(e.EpTransactions[ii])
+	}
+
+	// Field (14) 'Withdrawals'
+	size += len(e.EpWithdrawals) * 44
+
+	return
+}
+
 
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
 type GetHeaderResponse struct {
