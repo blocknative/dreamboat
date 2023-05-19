@@ -65,6 +65,32 @@ type Withdrawal struct {
 	Amount         uint64        `json:"amount,string"`
 }
 
+func (w *Withdrawal) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, 0)
+	buf, err := w.MarshalSSZTo(buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+// MarshalSSZTo ssz marshals the Withdrawal object to a target array
+func (w *Withdrawal) MarshalSSZTo(buf []byte) ([]byte, error) {
+	// Field (0) 'Index'
+	buf = ssz.MarshalUint64(buf, w.Index)
+
+	// Field (1) 'ValidatorIndex'
+	buf = ssz.MarshalUint64(buf, w.ValidatorIndex)
+
+	// Field (2) 'Address'
+	buf = append(buf, w.Address[:]...)
+
+	// Field (3) 'Amount'
+	buf = ssz.MarshalUint64(buf, w.Amount)
+
+	return buf, nil
+}
+
 // UnmarshalSSZ ssz unmarshals the Withdrawal object
 func (w *Withdrawal) UnmarshalSSZ(buf []byte) error {
 	var err error
