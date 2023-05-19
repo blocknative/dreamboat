@@ -19,7 +19,7 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-func TestSubmitBlockRequestSSZ(t *testing.T) {
+func TestEncodeDecode_SubmitBlockRequestSSZ(t *testing.T) {
 	req, err := validSubmitBlockRequest()
 	require.NoError(t, err)
 
@@ -30,6 +30,7 @@ func TestSubmitBlockRequestSSZ(t *testing.T) {
 	err = creq.UnmarshalSSZ(b)
 	require.NoError(t, err)
 
+	// Validate trace fields.
 	require.EqualValues(t, req.Capella.Message.Slot, creq.CapellaMessage.Slot)
 	require.EqualValues(t, req.Capella.Message.ParentHash, creq.CapellaMessage.ParentHash)
 	require.EqualValues(t, req.Capella.Message.BlockHash, creq.CapellaMessage.BlockHash)
@@ -40,7 +41,10 @@ func TestSubmitBlockRequestSSZ(t *testing.T) {
 	require.EqualValues(t, req.Capella.Message.GasUsed, creq.CapellaMessage.GasUsed)
 	require.True(t, req.Capella.Message.Value.ToBig().Cmp(creq.CapellaMessage.Value.BigInt()) == 0)
 
+	// Validate signature.
 	require.EqualValues(t, req.Capella.Signature, creq.CapellaSignature)
+
+	// Validate exeuction payload fields.
 	require.EqualValues(t, req.Capella.ExecutionPayload.ParentHash, creq.CapellaExecutionPayload.EpParentHash)
 	require.EqualValues(t, req.Capella.ExecutionPayload.FeeRecipient, creq.CapellaExecutionPayload.EpFeeRecipient)
 	require.EqualValues(t, req.Capella.ExecutionPayload.StateRoot, creq.CapellaExecutionPayload.EpStateRoot)
@@ -57,7 +61,6 @@ func TestSubmitBlockRequestSSZ(t *testing.T) {
 	for i, tx := range req.Capella.ExecutionPayload.Transactions {
 		require.EqualValues(t, tx, creq.CapellaExecutionPayload.EpTransactions[i])
 	}
-
 	for i, wd := range req.Capella.ExecutionPayload.Withdrawals {
 		require.EqualValues(t, wd, creq.CapellaExecutionPayload.EpWithdrawals[i])
 	}
