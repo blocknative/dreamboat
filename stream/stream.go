@@ -343,7 +343,7 @@ func toBidFormat(fork structs.ForkVersion) ForkVersionFormat {
 	case structs.ForkBellatrix:
 		return BellatrixJson
 	case structs.ForkCapella:
-		return CapellaJson
+		return CapellaSSZ
 	}
 	return Unknown
 }
@@ -355,7 +355,7 @@ func toBlockCacheFormat(fork structs.ForkVersion) ForkVersionFormat {
 	case structs.ForkBellatrix:
 		return BellatrixJson
 	case structs.ForkCapella:
-		return CapellaSSZ
+		return CapellaJson
 	}
 	return Unknown
 }
