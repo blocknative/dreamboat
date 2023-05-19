@@ -1310,22 +1310,56 @@ func (bte *BlockAndTraceExtended) MarshalSSZTo(buf []byte) ([]byte, error) {
 	buf = append(buf, bte.CapellaExecutionHeaderHash[:]...)
 
 	// Field (2) 'CapellaTrace'
-	traceOffset := payloadOffset + bte.CapellaPayload.SizeSSZ()
-	buf = ssz.WriteOffset(buf, traceOffset)
-
-	// Field (0) 'CapellaPayload'
-	buf, err := bte.CapellaPayload.MarshalSSZTo(buf)
-	if err != nil {
-		return buf, fmt.Errorf("failed to marshal payload: %w", err)
-	}
-
-	// Field (2) 'CapellaTrace'
-	buf, err = bte.CapellaTrace.MarshalSSZTo(buf)
+	buf, err := bte.CapellaTrace.MarshalSSZTo(buf)
 	if err != nil {
 		return buf, fmt.Errorf("failed to marshal trace: %w", err)
 	}
 
+	// Field (0) 'CapellaPayload'
+	buf, err = bte.CapellaPayload.MarshalSSZTo(buf)
+	if err != nil {
+		return buf, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
 	return buf, nil
+}
+
+func (bte *BlockAndTraceExtended) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 368 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var payloadOffset uint64
+
+	// Offset (0) 'CapellaPayload'
+	if payloadOffset = ssz.ReadOffset(buf[0:4]); payloadOffset > size {
+		return ssz.ErrOffset
+	}
+
+	if payloadOffset < 368 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Field (1) 'CapellaExecutionHeaderHash'
+	copy(bte.CapellaExecutionHeaderHash[:], buf[4:36])
+
+	// Offset (2) 'CapellaTrace'
+	if err = bte.CapellaTrace.Message.UnmarshalSSZ(buf[36:368]); err != nil {
+		return fmt.Errorf("failed to unmarshal trace message: %w", err)
+	}
+
+	// Field (0) 'CapellaPayload'
+	{
+		buf = tail[payloadOffset:]
+		if err = bte.CapellaPayload.UnmarshalSSZ(buf); err != nil {
+			return fmt.Errorf("failed to unmarshal payload data: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (bbat *BlockAndTraceExtended) BidValue() types.U256Str {
@@ -1385,7 +1419,7 @@ func (gpr *GetPayloadResponse) SizeSSZ() (size int) {
 	size = 4 + len(gpr.CapellaVersion)
 
 	// Field (1) 'CapellaData'
-	size += 4 + gpr.SizeSSZ()
+	size += 4 + gpr.CapellaData.SizeSSZ()
 
 	return
 }
@@ -1414,6 +1448,41 @@ func (gpr *GetPayloadResponse) MarshalSSZTo(buf []byte) ([]byte, error) {
 
 	// Field (1) 'CapellaData'
 	return gpr.CapellaData.MarshalSSZTo(buf)
+}
+
+func (gpr *GetPayloadResponse) UnmarshalSSZ(buf []byte) error {
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	var versionOffset, dataOffset uint64
+
+	// Offset (0) 'CapellaVersion'
+	if versionOffset = ssz.ReadOffset(buf[0:4]); versionOffset > size {
+		return ssz.ErrOffset
+	}
+
+	if versionOffset < 8 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'CapellaData'
+	if dataOffset = ssz.ReadOffset(buf[4:8]); dataOffset > size || versionOffset > dataOffset {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'CapellaVersion'
+	gpr.CapellaVersion = types.VersionString(buf[versionOffset:])
+
+	// Field (1) 'CapellaData'
+	{
+		if err := gpr.CapellaData.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *GetPayloadResponse) Data() structs.ExecutionPayload {
@@ -1732,9 +1801,24 @@ func (sbt *SignedBidTrace) MarshalSSZTo(buf []byte) ([]byte, error) {
 	buf = append(buf, sbt.Signature[:]...)
 
 	// Field (1) 'Message'
-	messageOffset := 32 + 4
-	buf = ssz.WriteOffset(buf, messageOffset)
 	return sbt.Message.MarshalSSZTo(buf)
+}
+
+func (sbt *SignedBidTrace) UnmarshalSSZ(buf []byte) error {
+	size := uint64(len(buf))
+	if size < 332 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Signature'
+	copy(sbt.Signature[:], buf[:96])
+
+	// Field (1) 'Message'
+	if err := sbt.Message.UnmarshalSSZ(buf[96:332]); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type BidTrace struct {
@@ -1788,4 +1872,40 @@ func (bt *BidTrace) MarshalSSZTo(buf []byte) ([]byte, error) {
 	buf = append(buf, bt.Value[:]...)
 
 	return buf, nil
+}
+
+func (bt *BidTrace) UnmarshalSSZ(buf []byte) error {
+	size := uint64(len(buf))
+	if size < 236 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Slot'
+	bt.Slot = ssz.UnmarshallUint64(buf[:8])
+
+	// Field (1) 'ParentHash'
+	copy(bt.ParentHash[:], buf[8:40])
+
+	// Field (2) 'BlockHash'
+	copy(bt.BlockHash[:], buf[40:72])
+
+	// Field (3) 'BuilderPubkey'
+	copy(bt.BuilderPubkey[:], buf[72:120])
+
+	// Field (4) 'ProposerPubkey'
+	copy(bt.ProposerPubkey[:], buf[120:168])
+
+	// Field (5) 'ProposerFeeRecipient'
+	copy(bt.ProposerFeeRecipient[:], buf[168:188])
+
+	// Field (6) 'GasLimit'
+	bt.GasLimit = ssz.UnmarshallUint64(buf[188:196])
+
+	// Field (7) 'GasUsed'
+	bt.GasUsed = ssz.UnmarshallUint64(buf[196:204])
+
+	// Field (8) 'Value'
+	copy(bt.Value[:], buf[204:236])
+
+	return nil
 }
