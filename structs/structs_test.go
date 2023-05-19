@@ -1,6 +1,7 @@
 package structs_test
 
 import (
+	crand "crypto/rand"
 	"math/rand"
 	"testing"
 
@@ -108,33 +109,33 @@ func randomTransactions(size int) []bellatrix.Transaction {
 	txs := make([]bellatrix.Transaction, 0, size)
 	for i := 0; i < size; i++ {
 		tx := make([]byte, 300)
-		rand.Read(tx)
+		crand.Read(tx)
 		txs = append(txs, tx)
 	}
 	return txs
 }
 
 func random32Bytes() (b [32]byte) {
-	rand.Read(b[:])
+	crand.Read(b[:])
 	return b
 }
 
 func random48Bytes() (b [48]byte) {
-	rand.Read(b[:])
+	crand.Read(b[:])
 	return b
 }
 
 func random96Bytes() (b [96]byte) {
-	rand.Read(b[:])
+	crand.Read(b[:])
 	return b
 }
 
 func random20Bytes() (b [20]byte) {
-	rand.Read(b[:])
+	crand.Read(b[:])
 	return b
 }
 
 func random256Bytes() (b [256]byte) {
-	rand.Read(b[:])
+	crand.Read(b[:])
 	return b
 }
