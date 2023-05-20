@@ -1399,7 +1399,7 @@ func (bte *BlockAndTraceExtended) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BlockAndTraceExtended object to a target array
 func (bte *BlockAndTraceExtended) MarshalSSZTo(buf []byte) ([]byte, error) {
 	// Field (0) 'CapellaPayload'
-	payloadOffset := 4 + 32 + 4
+	payloadOffset := 4 + 32 + 332
 	buf = ssz.WriteOffset(buf, payloadOffset)
 
 	// Field (1) 'CapellaExecutionHeaderHash'
@@ -1531,23 +1531,18 @@ func (gpr *GetPayloadResponse) SizeSSZ() (size int) {
 }
 
 func (gpr *GetPayloadResponse) MarshalSSZ() ([]byte, error) {
-	buf := make([]byte, 0)
-	buf, err := gpr.MarshalSSZTo(buf)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
+	return ssz.MarshalSSZ(gpr)
 }
 
 // MarshalSSZTo ssz marshals the GetPayloadResponse object to a target array
 func (gpr *GetPayloadResponse) MarshalSSZTo(buf []byte) ([]byte, error) {
 	// Field (0) 'CapellaVersion'
 	versionOffset := 4 + 4
-	ssz.WriteOffset(buf, versionOffset)
+	buf = ssz.WriteOffset(buf, versionOffset)
 
 	// Field (1) 'CapellaData'
 	dataOffset := versionOffset + len(gpr.CapellaVersion)
-	ssz.WriteOffset(buf, dataOffset)
+	buf = ssz.WriteOffset(buf, dataOffset)
 
 	// Field (0) 'CapellaVersion'
 	buf = append(buf, []byte(gpr.CapellaVersion)...)
@@ -1579,11 +1574,11 @@ func (gpr *GetPayloadResponse) UnmarshalSSZ(buf []byte) error {
 	}
 
 	// Field (0) 'CapellaVersion'
-	gpr.CapellaVersion = types.VersionString(buf[versionOffset:])
+	gpr.CapellaVersion = types.VersionString(buf[versionOffset:dataOffset])
 
 	// Field (1) 'CapellaData'
 	{
-		if err := gpr.CapellaData.UnmarshalSSZ(buf); err != nil {
+		if err := gpr.CapellaData.UnmarshalSSZ(buf[dataOffset:]); err != nil {
 			return err
 		}
 	}

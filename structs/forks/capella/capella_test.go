@@ -80,7 +80,7 @@ func TestEncodeDecode_BlockAndTraceExtended(t *testing.T) {
 					EpBlockHash:     random32Bytes(),
 					EpTransactions:  randomTransactions(55),
 				},
-				EpWithdrawals: randomWithdrawals(55),
+				EpWithdrawals: randomWithdrawals(16),
 			},
 		},
 		CapellaExecutionHeaderHash: random32Bytes(),
