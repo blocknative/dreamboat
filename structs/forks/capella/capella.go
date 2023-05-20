@@ -1388,8 +1388,8 @@ func (s *SignedBeaconBlock) Signature() types.Signature {
 
 type BlockAndTraceExtended struct {
 	CapellaPayload             GetPayloadResponse
-	CapellaExecutionHeaderHash types.Hash `json:"execution_header_hash" ssz-size:"32"`
 	CapellaTrace               SignedBidTrace
+	CapellaExecutionHeaderHash types.Hash `json:"execution_header_hash" ssz-size:"32"`
 }
 
 func (bte *BlockAndTraceExtended) MarshalSSZ() ([]byte, error) {
@@ -1399,17 +1399,17 @@ func (bte *BlockAndTraceExtended) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BlockAndTraceExtended object to a target array
 func (bte *BlockAndTraceExtended) MarshalSSZTo(buf []byte) ([]byte, error) {
 	// Field (0) 'CapellaPayload'
-	payloadOffset := 4 + 32 + 332
+	payloadOffset := 4 + 332 + 32
 	buf = ssz.WriteOffset(buf, payloadOffset)
 
-	// Field (1) 'CapellaExecutionHeaderHash'
-	buf = append(buf, bte.CapellaExecutionHeaderHash[:]...)
-
-	// Field (2) 'CapellaTrace'
+	// Field (1) 'CapellaTrace'
 	buf, err := bte.CapellaTrace.MarshalSSZTo(buf)
 	if err != nil {
 		return buf, fmt.Errorf("failed to marshal trace: %w", err)
 	}
+
+	// Field (2) 'CapellaExecutionHeaderHash'
+	buf = append(buf, bte.CapellaExecutionHeaderHash[:]...)
 
 	// Field (0) 'CapellaPayload'
 	buf, err = bte.CapellaPayload.MarshalSSZTo(buf)
@@ -1439,13 +1439,13 @@ func (bte *BlockAndTraceExtended) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrInvalidVariableOffset
 	}
 
-	// Field (1) 'CapellaExecutionHeaderHash'
-	copy(bte.CapellaExecutionHeaderHash[:], buf[4:36])
-
-	// Offset (2) 'CapellaTrace'
-	if err = bte.CapellaTrace.UnmarshalSSZ(buf[36:368]); err != nil {
+	// Offset (1) 'CapellaTrace'
+	if err = bte.CapellaTrace.UnmarshalSSZ(buf[4:336]); err != nil {
 		return fmt.Errorf("failed to unmarshal trace message: %w", err)
 	}
+
+	// Field (2) 'CapellaExecutionHeaderHash'
+	copy(bte.CapellaExecutionHeaderHash[:], buf[336:368])
 
 	// Field (0) 'CapellaPayload'
 	{
