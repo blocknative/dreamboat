@@ -66,12 +66,7 @@ type Withdrawal struct {
 }
 
 func (w *Withdrawal) MarshalSSZ() ([]byte, error) {
-	buf := make([]byte, 0)
-	buf, err := w.MarshalSSZTo(buf)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
+	return ssz.MarshalSSZ(w)
 }
 
 // MarshalSSZTo ssz marshals the Withdrawal object to a target array
