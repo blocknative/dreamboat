@@ -42,9 +42,10 @@ type MultiBeaconClient struct {
 
 func NewMultiBeaconClient(l log.Logger) *MultiBeaconClient {
 	return &MultiBeaconClient{
-		slotC: make(chan HeadEvent, 10),
-		payC:  make(chan PayloadAttributesEvent, 10),
-		Log:   l.WithField("service", "multi-beacon client"),
+		clients: make(map[int]BeaconClient),
+		slotC:   make(chan HeadEvent, 10),
+		payC:    make(chan PayloadAttributesEvent, 10),
+		Log:     l.WithField("service", "multi-beacon client"),
 	}
 	// TODO
 	//client.AttachMetrics(m)

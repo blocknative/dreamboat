@@ -106,7 +106,6 @@ func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger lo
 			}
 
 			timer.Reset(b.c.EventTimeout)
-
 			select {
 			case slotC <- head:
 			case <-time.After(structs.DurationPerSlot / 2): // relief pressure

@@ -53,7 +53,7 @@ import (
 )
 
 const (
-	shutdownTimeout = 15 * time.Second
+	shutdownTimeout = 45 * time.Second
 )
 
 var (
@@ -338,7 +338,7 @@ func main() {
 	go b.Run(ctx, state, beaconCli, validatorStoreManager, validatorCache)
 
 	//if s.Config.RunPayloadAttributesSubscription {
-	go b.RunPayloadAttributesSubscription(ctx, state, beaconCli.PayloadAttributesSubscription(), beaconCli.HeadEventsSubscription())
+	// go b.RunPayloadAttributesSubscription(ctx, state, beaconCli.PayloadAttributesSubscription(), beaconCli.HeadEventsSubscription())
 	//}
 
 	logger.Info("beacon manager ready")
@@ -372,15 +372,11 @@ func main() {
 		Handler:        mux,
 		MaxHeaderBytes: 4096,
 	}
-	// run the http server
-	go func(srv *http.Server) (err error) {
-		logger.Info("http server listening")
-		if err = srv.ListenAndServe(); err == http.ErrServerClosed {
-			err = nil
-		}
-		logger.Info("http server finished")
-		return err
-	}(srv)
+
+	logger.Info("http server listening")
+	if err := srv.ListenAndServe(); err == http.ErrServerClosed {
+		err = nil
+	}
 
 	logger.Info("Shutdown initialized")
 	err = srv.Shutdown(ctx)
@@ -394,7 +390,7 @@ func main() {
 	select {
 	case <-finish:
 	case <-ctx.Done():
-		logger.Warn("Closing manager deadline exceeded ")
+		logger.Warn("Closing, manager deadline exceeded ")
 	}
 
 }
@@ -447,7 +443,7 @@ func initBeaconClients(l log.Logger, mbc *bcli.MultiBeaconClient, endpoints []st
 		go bc.SubscribeToHeadEvents(mbc.HeadEventsSubscription())
 		// TODO
 		//if enabled
-		go bc.SubscribeToPayloadAttributesEvents(mbc.PayloadAttributesSubscription())
+		//	go bc.SubscribeToPayloadAttributesEvents(mbc.PayloadAttributesSubscription())
 	}
 	return nil
 }

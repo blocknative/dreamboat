@@ -116,6 +116,9 @@ type RelayConfig struct {
 
 var DefaultBeaconConfig = &BeaconConfig{
 	PayloadAttributesSubscription: true,
+	EventRestart:                  5,
+	EventTimeout:                  26 * time.Second,
+	QueryTimeout:                  20 * time.Second,
 }
 
 type BeaconConfig struct {

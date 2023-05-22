@@ -330,7 +330,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 
 	if headSlot > 0 {
 		for slot := headSlot + 1; slot < received; slot++ {
-			logger.With(log.F{"slot": slot, "event": "missed_slot"}).Warn("missed slot")
+			logger.With(log.F{"slot": slot, "event": "missed_slot", "received": received}).Warn("missed slot")
 		}
 	}
 

@@ -20,9 +20,11 @@ func NewConfigManager(s Source) *ConfigManager {
 }
 
 func DefaultConfig() Config {
+	external := *DefaultHTTPConfig
+	internal := *DefaultHTTPConfig
 	c := Config{
-		ExternalHttp:    DefaultHTTPConfig,
-		InternalHttp:    DefaultHTTPConfig,
+		ExternalHttp:    &external,
+		InternalHttp:    &internal,
 		Api:             DefaultApiConfig,
 		Relay:           DefaultRelayConfig,
 		Beacon:          DefaultBeaconConfig,
@@ -33,6 +35,7 @@ func DefaultConfig() Config {
 		DataAPI:         DefaultDataAPIConfig,
 	}
 	c.ExternalHttp.Address = "0.0.0.0:18550"
+
 	c.InternalHttp.Address = "0.0.0.0:19550"
 	c.Relay.Network = "mainnet"
 
