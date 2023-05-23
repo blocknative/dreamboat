@@ -7,7 +7,8 @@ import (
 )
 
 type Metadata struct {
-	Source string
+	Source       string
+	ForkEncoding ForkVersionFormat
 }
 
 type JsonItem struct {

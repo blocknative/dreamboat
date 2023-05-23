@@ -57,7 +57,7 @@ type Client struct {
 
 	m StreamMetrics
 
-	slotDelivered chan structs.Slot
+	//slotDelivered chan structs.Slot
 
 	st State
 }
@@ -107,7 +107,7 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 	var bbt structs.BlockBidAndTrace
 
 	for raw := range s.cacheIn {
-		sData, forkFormat, err := s.decode(raw)
+		sData, err := s.decode(raw)
 		if err != nil {
 			l.WithError(err).Warn("failed to decode cache wrapper")
 			continue
@@ -117,30 +117,30 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 			continue
 		}
 
-		switch forkFormat {
+		switch forkEncoding := sData.Meta().ForkEncoding; forkEncoding {
 		case BellatrixJson:
 			var bbbt bellatrix.BlockBidAndTrace
 			if err := json.Unmarshal(sData.Data(), &bbbt); err != nil {
-				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode cache")
+				l.WithError(err).WithField("forkEncoding", forkEncoding).Warn("failed to decode cache")
 				continue
 			}
 			bbt = &bbbt
 		case CapellaJson:
 			var cbbt capella.BlockAndTraceExtended
 			if err := json.Unmarshal(sData.Data(), &cbbt); err != nil {
-				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode cache")
+				l.WithError(err).WithField("forkEncoding", forkEncoding).Warn("failed to decode cache")
 				continue
 			}
 			bbt = &cbbt
 		case CapellaSSZ:
 			var cbbt capella.BlockAndTraceExtended
 			if err := cbbt.UnmarshalSSZ(sData.Data()); err != nil {
-				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode cache")
+				l.WithError(err).WithField("forkEncoding", forkEncoding).Warn("failed to decode cache")
 				continue
 			}
 			bbt = &cbbt
 		default:
-			l.WithField("forkFormat", forkFormat).Warn("unkown cache forkFormat")
+			l.WithField("forkEncoding", forkEncoding).Warn("unkown cache forkEncoding")
 			continue
 		}
 
@@ -163,7 +163,7 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 	var bb structs.BuilderBidExtended
 
 	for raw := range s.builderBidIn {
-		sData, forkFormat, err := s.decode(raw)
+		sData, err := s.decode(raw)
 		if err != nil {
 			l.WithError(err).Warn("failed to decode builder bid  wrapper")
 			continue
@@ -173,30 +173,30 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 			continue
 		}
 
-		switch forkFormat {
+		switch forkEncoding := sData.Meta().ForkEncoding; forkEncoding {
 		case BellatrixJson:
 			var bbb bellatrix.BuilderBidExtended
 			if err := json.Unmarshal(sData.Data(), &bbb); err != nil {
-				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid")
+				l.WithError(err).WithField("forkEncoding", forkEncoding).Warn("failed to decode builder bid")
 				continue
 			}
 			bb = &bbb
 		case CapellaJson:
 			var cbb capella.BuilderBidExtended
 			if err := json.Unmarshal(sData.Data(), &cbb); err != nil {
-				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid")
+				l.WithError(err).WithField("forkEncoding", forkEncoding).Warn("failed to decode builder bid")
 				continue
 			}
 			bb = &cbb
 		case CapellaSSZ:
 			var cbb capella.BuilderBidExtended
 			if err := cbb.UnmarshalSSZ(sData.Data()); err != nil {
-				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode builder bid")
+				l.WithError(err).WithField("forkEncoding", forkEncoding).Warn("failed to decode builder bid")
 				continue
 			}
 			bb = &cbb
 		default:
-			l.WithField("forkFormat", forkFormat).Warn("unkown builder bid forkFormat")
+			l.WithField("forkEncoding", forkEncoding).Warn("unkown builder bid forkEncoding")
 			continue
 		}
 
@@ -218,8 +218,8 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "encode"))
-	forkFormat := toBidFormat(s.st.ForkVersion(structs.Slot(bid.Slot())))
-	b, err := s.encode(bid, forkFormat)
+	forkEncoding := toBidFormat(s.st.ForkVersion(structs.Slot(bid.Slot())))
+	b, err := s.encode(bid, forkEncoding)
 	if err != nil {
 		timer1.ObserveDuration()
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
@@ -240,8 +240,8 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockBidAn
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "encode"))
-	forkFormat := toBlockCacheFormat(s.st.ForkVersion(structs.Slot(block.Slot())))
-	b, err := s.encode(block, forkFormat)
+	forkEncoding := toBlockCacheFormat(s.st.ForkVersion(structs.Slot(block.Slot())))
+	b, err := s.encode(block, forkEncoding)
 	if err != nil {
 		timer1.ObserveDuration()
 		return fmt.Errorf("fail to encode cache block: %w", err)
@@ -286,7 +286,7 @@ func (s *Client) encode(data any, fvf ForkVersionFormat) ([]byte, error) {
 
 	item := JsonItem{
 		StreamData: rawData,
-		StreamMeta: Metadata{Source: s.Config.ID},
+		StreamMeta: Metadata{Source: s.Config.ID, ForkEncoding: fvf},
 	}
 
 	rawItem, err := json.Marshal(item)
@@ -295,7 +295,7 @@ func (s *Client) encode(data any, fvf ForkVersionFormat) ([]byte, error) {
 	}
 	// encode the varint with a variable size
 	varintBytes := make([]byte, binary.MaxVarintLen64)
-	n := binary.PutUvarint(varintBytes, uint64(fvf))
+	n := binary.PutUvarint(varintBytes, uint64(CapellaJson))
 	varintBytes = varintBytes[:n]
 
 	// append the varint
@@ -307,20 +307,26 @@ type StreamData interface {
 	Meta() Metadata
 }
 
-func (s *Client) decode(b []byte) (StreamData, ForkVersionFormat, error) {
+func (s *Client) decode(b []byte) (StreamData, error) {
 	varint, n := binary.Uvarint(b)
 	if n <= 0 {
-		return nil, 0, ErrDecodeVarint
+		return nil, ErrDecodeVarint
 	}
 
 	b = b[n:]
-	forkFormat := ForkVersionFormat(varint)
+	forkEncoding := ForkVersionFormat(varint)
 
-	var jsonReq JsonItem
-	if err := json.Unmarshal(b, &jsonReq); err != nil {
-		return nil, forkFormat, fmt.Errorf("failed to unmarshal json stream data: %w", err)
+	switch forkEncoding {
+	case BellatrixJson:
+		fallthrough
+	case CapellaJson:
+		var jsonReq JsonItem
+		if err := json.Unmarshal(b, &jsonReq); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal json stream data: %w", err)
+		}
+		return &jsonReq, nil
 	}
-	return &jsonReq, forkFormat, nil
+	return nil, fmt.Errorf("invalid fork version format: %d", forkEncoding)
 }
 
 type ForkVersionFormat uint64
