@@ -316,7 +316,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 
 	fork := rs.beaconState.ForkVersion(slot)
 	if _, ok := rs.pc.Get(key); !ok { // Get instead of Contains, to refersh cache LRU
-		rs.m.CacheHitCount.WithLabelValues("getHeader", "false").Add(1)
+		rs.m.CacheHitCount.WithLabelValues("getHeaderPayloadCache", "false").Add(1)
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
 			defer cancel()
@@ -339,7 +339,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 			}
 		}()
 	} else {
-		rs.m.CacheHitCount.WithLabelValues("getHeader", "true").Add(1)
+		rs.m.CacheHitCount.WithLabelValues("getHeaderPayloadCache", "true").Add(1)
 	}
 
 	if fork == structs.ForkBellatrix {
