@@ -48,7 +48,7 @@ type Client struct {
 	builderBidIn     chan []byte
 	builderBidOut    chan structs.BuilderBidExtended
 	cacheIn          chan []byte
-	cacheOut         chan structs.BlockBidAndTrace
+	cacheOut         chan structs.BlockAndTraceExtended
 	slotDeliveredIn  chan []byte
 	slotDeliveredOut chan uint64
 
@@ -70,7 +70,7 @@ func NewClient(ps Pubsub, st State, cfg StreamConfig) *Client {
 		builderBidIn:     make(chan []byte, cfg.StreamQueueSize),
 		builderBidOut:    make(chan structs.BuilderBidExtended, cfg.StreamQueueSize),
 		cacheIn:          make(chan []byte, cfg.StreamQueueSize),
-		cacheOut:         make(chan structs.BlockBidAndTrace, cfg.StreamQueueSize),
+		cacheOut:         make(chan structs.BlockAndTraceExtended, cfg.StreamQueueSize),
 		slotDeliveredIn:  make(chan []byte, cfg.StreamQueueSize),
 		slotDeliveredOut: make(chan uint64, cfg.StreamQueueSize),
 
@@ -98,13 +98,13 @@ func (s *Client) RunSubscriberParallel(ctx context.Context, num uint) error {
 	return nil
 }
 
-func (s *Client) BlockCache() <-chan structs.BlockBidAndTrace {
+func (s *Client) BlockCache() <-chan structs.BlockAndTraceExtended {
 	return s.cacheOut
 }
 
 func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 	l := s.Logger.WithField("method", "runCacheSubscriber")
-	var bbt structs.BlockBidAndTrace
+	var bbt structs.BlockAndTraceExtended
 
 	for raw := range s.cacheIn {
 		sData, err := s.decode(raw)
@@ -236,7 +236,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	return nil
 }
 
-func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockBidAndTrace) error {
+func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTraceExtended) error {
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "encode"))

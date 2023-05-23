@@ -43,7 +43,7 @@ func NewDatastore(t TTLStorage, db DBInter) *Datastore {
 	}
 }
 
-func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload structs.BlockBidAndTrace, ttl time.Duration) error {
+func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payload structs.BlockAndTraceExtended, ttl time.Duration) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func (s *Datastore) PutPayload(ctx context.Context, key structs.PayloadKey, payl
 	return s.TTLStorage.PutWithTTL(ctx, PayloadKeyKey(key), data, ttl)
 }
 
-func (s *Datastore) GetPayload(ctx context.Context, fork structs.ForkVersion, key structs.PayloadKey) (payload structs.BlockBidAndTrace, err error) {
+func (s *Datastore) GetPayload(ctx context.Context, fork structs.ForkVersion, key structs.PayloadKey) (payload structs.BlockAndTraceExtended, err error) {
 	data, err := s.TTLStorage.Get(ctx, PayloadKeyKey(key))
 	if err != nil {
 		return nil, err

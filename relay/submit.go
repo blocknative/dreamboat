@@ -270,7 +270,7 @@ func (rs *Relay) bidExtended(sbr structs.SubmitBlockRequest, header structs.Exec
 		if !ok {
 			return nil, errors.New("failed to cast header to bellatrix")
 		}
-		return bellatrix.BuilderBidExtended{
+		return &bellatrix.BuilderBidExtended{
 			BellatrixBuilderBid: bellatrix.BuilderBid{
 				BellatrixHeader: header,
 				BellatrixValue:  sbr.Value(),
@@ -284,7 +284,7 @@ func (rs *Relay) bidExtended(sbr structs.SubmitBlockRequest, header structs.Exec
 		if !ok {
 			return nil, errors.New("failed to cast header to capella")
 		}
-		return capella.BuilderBidExtended{
+		return &capella.BuilderBidExtended{
 			CapellaBuilderBid: capella.BuilderBid{
 				CapellaHeader: header,
 				CapellaValue:  sbr.Value(),

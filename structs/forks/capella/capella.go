@@ -150,7 +150,7 @@ func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 	}
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid SignedBuilderBid) (structs.BlockBidAndTrace, error) {
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid SignedBuilderBid) (structs.BlockAndTraceExtended, error) {
 	execHeaderHash, err := signedBuilderBid.CapellaMessage.CapellaHeader.HashTreeRoot()
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate header hash: %w", err)

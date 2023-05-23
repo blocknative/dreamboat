@@ -192,7 +192,7 @@ type ExecutionPayloadHeader interface {
 	GetBlockNumber() uint64
 }
 
-type BlockBidAndTrace interface {
+type BlockAndTraceExtended interface {
 	BidValue() types.U256Str
 	Slot() uint64
 	Proposer() types.PublicKey
@@ -270,7 +270,7 @@ func (hd *HeaderData) UnmarshalJSON(b []byte) error {
 // / That's to be improved in future
 type CompleteBlockstruct struct {
 	Header  HeaderAndTrace
-	Payload BlockBidAndTrace
+	Payload BlockAndTraceExtended
 }
 
 type ValidatorCacheEntry struct {

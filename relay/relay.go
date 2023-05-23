@@ -89,19 +89,19 @@ type DataAPIStore interface {
 }
 
 type PayloadCache interface {
-	ContainsOrAdd(structs.PayloadKey, structs.BlockBidAndTrace) (ok, evicted bool)
-	Add(structs.PayloadKey, structs.BlockBidAndTrace) (evicted bool)
-	Get(structs.PayloadKey) (structs.BlockBidAndTrace, bool)
+	ContainsOrAdd(structs.PayloadKey, structs.BlockAndTraceExtended) (ok, evicted bool)
+	Add(structs.PayloadKey, structs.BlockAndTraceExtended) (evicted bool)
+	Get(structs.PayloadKey) (structs.BlockAndTraceExtended, bool)
 }
 
 type Datastore interface {
-	PutPayload(context.Context, structs.PayloadKey, structs.BlockBidAndTrace, time.Duration) error
-	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockBidAndTrace, error)
+	PutPayload(context.Context, structs.PayloadKey, structs.BlockAndTraceExtended, time.Duration) error
+	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockAndTraceExtended, error)
 }
 
 type Streamer interface {
-	BlockCache() <-chan structs.BlockBidAndTrace
-	PublishBlockCache(ctx context.Context, block structs.BlockBidAndTrace) error
+	BlockCache() <-chan structs.BlockAndTraceExtended
+	PublishBlockCache(ctx context.Context, block structs.BlockAndTraceExtended) error
 
 	BuilderBid() <-chan structs.BuilderBidExtended
 	PublishBuilderBid(ctx context.Context, bid structs.BuilderBidExtended) error
@@ -627,7 +627,7 @@ func (rs *Relay) storeGetPayloadRequest(logger log.Logger, m *structs.MetricGrou
 	m.AppendSince(tStoreWarehouse, "getPayload", "storeWarehouse")
 }
 
-func validatePayload(expected structs.BlockBidAndTrace, requested structs.SignedBlindedBeaconBlock) error {
+func validatePayload(expected structs.BlockAndTraceExtended, requested structs.SignedBlindedBeaconBlock) error {
 	have, err := expected.ExecutionHeaderHash()
 	if err != nil {
 		return fmt.Errorf("failed to read expected header hash: %w", err)
@@ -645,7 +645,7 @@ func validatePayload(expected structs.BlockBidAndTrace, requested structs.Signed
 	return nil
 }
 
-func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload structs.BlockBidAndTrace) {
+func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload structs.BlockAndTraceExtended) {
 	trace, err := payload.ToDeliveredTrace(slot)
 	if err != nil {
 		logger.WithField("event", "wrong_evidence_payload").WithError(err).Error("failed to generate delivered payload")
