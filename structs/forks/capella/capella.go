@@ -2,6 +2,7 @@ package capella
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/blocknative/dreamboat/structs"
@@ -149,21 +150,33 @@ func (s *SubmitBlockRequest) ToPayloadKey() structs.PayloadKey {
 	}
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid SignedBuilderBid) (bbt structs.BlockBidAndTrace) {
-	return &BlockBidAndTrace{
-		Trace: &types.SignedBidTrace{
-			Message:   &s.CapellaMessage,
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid SignedBuilderBid) (structs.BlockBidAndTrace, error) {
+	execHeaderHash, err := signedBuilderBid.CapellaMessage.CapellaHeader.HashTreeRoot()
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate header hash: %w", err)
+	}
+
+	return &BlockAndTraceExtended{
+		CapellaTrace: SignedBidTrace{
+			Message: BidTrace{
+				Slot:                 s.CapellaMessage.Slot,
+				ParentHash:           s.CapellaMessage.ParentHash,
+				BlockHash:            s.CapellaMessage.BlockHash,
+				BuilderPubkey:        s.CapellaMessage.BuilderPubkey,
+				ProposerPubkey:       s.CapellaMessage.ProposerPubkey,
+				ProposerFeeRecipient: s.CapellaMessage.ProposerFeeRecipient,
+				GasLimit:             s.CapellaMessage.GasLimit,
+				GasUsed:              s.CapellaMessage.GasUsed,
+				Value:                s.CapellaMessage.Value,
+			},
 			Signature: s.CapellaSignature,
 		},
-		Bid: GetHeaderResponse{
-			CapellaVersion: types.VersionString("capella"),
-			CapellaData:    signedBuilderBid,
-		},
-		Payload: GetPayloadResponse{
+		CapellaPayload: GetPayloadResponse{
 			CapellaVersion: types.VersionString("capella"),
 			CapellaData:    s.CapellaExecutionPayload,
 		},
-	}
+		CapellaExecutionHeaderHash: execHeaderHash,
+	}, nil
 }
 
 func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *types.PublicKey, domain types.Domain) (cbs structs.CompleteBlockstruct, err error) {
@@ -172,7 +185,10 @@ func (s *SubmitBlockRequest) PreparePayloadContents(sk *bls.SecretKey, pubkey *t
 		return cbs, err
 	}
 
-	cbs.Payload = s.toBlockBidAndTrace(signedBuilderBid)
+	cbs.Payload, err = s.toBlockBidAndTrace(signedBuilderBid)
+	if err != nil {
+		return cbs, fmt.Errorf("failed to create BlockBidAndTrace: %w", err)
+	}
 
 	cbs.Header = structs.HeaderAndTrace{
 		Header: signedBuilderBid.CapellaMessage.CapellaHeader,
@@ -534,6 +550,108 @@ type ExecutionPayload struct {
 	EpWithdrawals structs.Withdrawals `json:"withdrawals" ssz-max:"16"`
 }
 
+// MarshalSSZ ssz marshals the ExecutionPayload object
+func (e *ExecutionPayload) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(e)
+}
+
+// MarshalSSZTo ssz marshals the ExecutionPayload object to a target array
+func (e *ExecutionPayload) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(512)
+
+	// Field (0) 'ParentHash'
+	dst = append(dst, e.EpParentHash[:]...)
+
+	// Field (1) 'FeeRecipient'
+	dst = append(dst, e.EpFeeRecipient[:]...)
+
+	// Field (2) 'StateRoot'
+	dst = append(dst, e.EpStateRoot[:]...)
+
+	// Field (3) 'ReceiptsRoot'
+	dst = append(dst, e.EpReceiptsRoot[:]...)
+
+	// Field (4) 'LogsBloom'
+	dst = append(dst, e.EpLogsBloom[:]...)
+
+	// Field (5) 'PrevRandao'
+	dst = append(dst, e.EpRandom[:]...)
+
+	// Field (6) 'BlockNumber'
+	dst = ssz.MarshalUint64(dst, e.EpBlockNumber)
+
+	// Field (7) 'GasLimit'
+	dst = ssz.MarshalUint64(dst, e.EpGasLimit)
+
+	// Field (8) 'GasUsed'
+	dst = ssz.MarshalUint64(dst, e.EpGasUsed)
+
+	// Field (9) 'Timestamp'
+	dst = ssz.MarshalUint64(dst, e.EpTimestamp)
+
+	// Offset (10) 'ExtraData'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.EpExtraData)
+
+	// Field (11) 'BaseFeePerGas'
+	dst = append(dst, e.EpBaseFeePerGas[:]...)
+
+	// Field (12) 'BlockHash'
+	dst = append(dst, e.EpBlockHash[:]...)
+
+	// Offset (13) 'Transactions'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(e.EpTransactions); ii++ {
+		offset += 4
+		offset += len(e.EpTransactions[ii])
+	}
+
+	// Offset (14) 'Withdrawals'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(e.EpWithdrawals) * 44
+
+	// Field (10) 'ExtraData'
+	if size := len(e.EpExtraData); size > 32 {
+		err = ssz.ErrBytesLengthFn("ExecutionPayload.ExtraData", size, 32)
+		return
+	}
+	dst = append(dst, e.EpExtraData...)
+
+	// Field (13) 'Transactions'
+	if size := len(e.EpTransactions); size > 1048576 {
+		err = ssz.ErrListTooBigFn("ExecutionPayload.Transactions", size, 1048576)
+		return
+	}
+	{
+		offset = 4 * len(e.EpTransactions)
+		for ii := 0; ii < len(e.EpTransactions); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(e.EpTransactions[ii])
+		}
+	}
+	for ii := 0; ii < len(e.EpTransactions); ii++ {
+		if size := len(e.EpTransactions[ii]); size > 1073741824 {
+			err = ssz.ErrBytesLengthFn("ExecutionPayload.Transactions[ii]", size, 1073741824)
+			return
+		}
+		dst = append(dst, e.EpTransactions[ii]...)
+	}
+
+	// Field (14) 'Withdrawals'
+	if size := len(e.EpWithdrawals); size > 16 {
+		err = ssz.ErrListTooBigFn("ExecutionPayload.Withdrawals", size, 16)
+		return
+	}
+	for ii := 0; ii < len(e.EpWithdrawals); ii++ {
+		if dst, err = e.EpWithdrawals[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 // UnmarshalSSZ ssz unmarshals the ExecutionPayload object
 func (e *ExecutionPayload) UnmarshalSSZ(buf []byte) error {
 	var err error
@@ -642,7 +760,7 @@ func (e *ExecutionPayload) UnmarshalSSZ(buf []byte) error {
 		if err != nil {
 			return err
 		}
-		e.EpWithdrawals = make(structs.Withdrawals, num)
+		e.EpWithdrawals = make([]*structs.Withdrawal, num)
 		for ii := 0; ii < num; ii++ {
 			if e.EpWithdrawals[ii] == nil {
 				e.EpWithdrawals[ii] = new(structs.Withdrawal)
@@ -672,6 +790,111 @@ func (e *ExecutionPayload) SizeSSZ() (size int) {
 	size += len(e.EpWithdrawals) * 44
 
 	return
+}
+
+// HashTreeRoot ssz hashes the ExecutionPayload object
+func (e *ExecutionPayload) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(e)
+}
+
+// HashTreeRootWith ssz hashes the ExecutionPayload object with a hasher
+func (e *ExecutionPayload) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'ParentHash'
+	hh.PutBytes(e.EpParentHash[:])
+
+	// Field (1) 'FeeRecipient'
+	hh.PutBytes(e.EpFeeRecipient[:])
+
+	// Field (2) 'StateRoot'
+	hh.PutBytes(e.EpStateRoot[:])
+
+	// Field (3) 'ReceiptsRoot'
+	hh.PutBytes(e.EpReceiptsRoot[:])
+
+	// Field (4) 'LogsBloom'
+	hh.PutBytes(e.EpLogsBloom[:])
+
+	// Field (5) 'PrevRandao'
+	hh.PutBytes(e.EpRandom[:])
+
+	// Field (6) 'BlockNumber'
+	hh.PutUint64(e.EpBlockNumber)
+
+	// Field (7) 'GasLimit'
+	hh.PutUint64(e.EpGasLimit)
+
+	// Field (8) 'GasUsed'
+	hh.PutUint64(e.EpGasUsed)
+
+	// Field (9) 'Timestamp'
+	hh.PutUint64(e.EpTimestamp)
+
+	// Field (10) 'ExtraData'
+	{
+		elemIndx := hh.Index()
+		byteLen := uint64(len(e.EpExtraData))
+		if byteLen > 32 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.PutBytes(e.EpExtraData)
+		hh.MerkleizeWithMixin(elemIndx, byteLen, (32+31)/32)
+	}
+
+	// Field (11) 'BaseFeePerGas'
+	hh.PutBytes(e.EpBaseFeePerGas[:])
+
+	// Field (12) 'BlockHash'
+	hh.PutBytes(e.EpBlockHash[:])
+
+	// Field (13) 'Transactions'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.EpTransactions))
+		if num > 1048576 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.EpTransactions {
+			{
+				elemIndx := hh.Index()
+				byteLen := uint64(len(elem))
+				if byteLen > 1073741824 {
+					err = ssz.ErrIncorrectListSize
+					return
+				}
+				hh.AppendBytes32(elem)
+				hh.MerkleizeWithMixin(elemIndx, byteLen, (1073741824+31)/32)
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 1048576)
+	}
+
+	// Field (14) 'Withdrawals'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(e.EpWithdrawals))
+		if num > 16 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range e.EpWithdrawals {
+			if err = elem.HashTreeRootWith(hh); err != nil {
+				return
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the ExecutionPayload object
+func (e *ExecutionPayload) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(e)
 }
 
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
@@ -1163,71 +1386,204 @@ func (s *SignedBeaconBlock) Signature() types.Signature {
 	return s.CapellaSignature
 }
 
-type BlockBidAndTrace struct {
-	Trace   *types.SignedBidTrace
-	Bid     GetHeaderResponse
-	Payload GetPayloadResponse
+type BlockAndTraceExtended struct {
+	CapellaPayload             GetPayloadResponse
+	CapellaTrace               SignedBidTrace
+	CapellaExecutionHeaderHash types.Hash `json:"execution_header_hash" ssz-size:"32"`
 }
 
-func (bbat *BlockBidAndTrace) BidValue() types.U256Str {
-	return bbat.Bid.CapellaData.CapellaMessage.CapellaValue
+func (bte *BlockAndTraceExtended) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(bte)
 }
 
-func (bbat *BlockBidAndTrace) Slot() uint64 {
-	return bbat.Trace.Message.Slot
-}
-func (bbat *BlockBidAndTrace) Proposer() types.PublicKey {
-	return bbat.Trace.Message.ProposerPubkey
-}
+// MarshalSSZTo ssz marshals the BlockAndTraceExtended object to a target array
+func (bte *BlockAndTraceExtended) MarshalSSZTo(buf []byte) ([]byte, error) {
+	// Field (0) 'CapellaPayload'
+	payloadOffset := 4 + 332 + 32
+	buf = ssz.WriteOffset(buf, payloadOffset)
 
-func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
-	return &bbat.Payload.CapellaData
-}
-
-func (bbat *BlockBidAndTrace) ExecutionHeaderHash() (types.Hash, error) {
-	if bbat.Bid.CapellaData.CapellaMessage.CapellaHeader == nil {
-		return [32]byte{}, nil
+	// Field (1) 'CapellaTrace'
+	buf, err := bte.CapellaTrace.MarshalSSZTo(buf)
+	if err != nil {
+		return buf, fmt.Errorf("failed to marshal trace: %w", err)
 	}
-	return bbat.Bid.CapellaData.CapellaMessage.CapellaHeader.HashTreeRoot()
+
+	// Field (2) 'CapellaExecutionHeaderHash'
+	buf = append(buf, bte.CapellaExecutionHeaderHash[:]...)
+
+	// Field (0) 'CapellaPayload'
+	buf, err = bte.CapellaPayload.MarshalSSZTo(buf)
+	if err != nil {
+		return buf, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	return buf, nil
 }
 
-func (bbat *BlockBidAndTrace) BuilderPubkey() (pub types.PublicKey) {
-	if bbat.Trace == nil || bbat.Trace.Message == nil {
-		return pub
+func (bte *BlockAndTraceExtended) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 368 {
+		return ssz.ErrSize
 	}
-	return bbat.Trace.Message.BuilderPubkey
+
+	tail := buf
+	var payloadOffset uint64
+
+	// Offset (0) 'CapellaPayload'
+	if payloadOffset = ssz.ReadOffset(buf[0:4]); payloadOffset > size {
+		return ssz.ErrOffset
+	}
+
+	if payloadOffset < 368 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'CapellaTrace'
+	if err = bte.CapellaTrace.UnmarshalSSZ(buf[4:336]); err != nil {
+		return fmt.Errorf("failed to unmarshal trace message: %w", err)
+	}
+
+	// Field (2) 'CapellaExecutionHeaderHash'
+	copy(bte.CapellaExecutionHeaderHash[:], buf[336:368])
+
+	// Field (0) 'CapellaPayload'
+	{
+		buf = tail[payloadOffset:]
+		if err = bte.CapellaPayload.UnmarshalSSZ(buf); err != nil {
+			return fmt.Errorf("failed to unmarshal payload data: %w", err)
+		}
+	}
+
+	return nil
 }
 
-func (bbat *BlockBidAndTrace) ToDeliveredTrace(slot uint64) (dt structs.DeliveredTrace, err error) {
-	if bbat.Trace == nil || bbat.Trace.Message == nil {
-		return dt, errors.New("empty message")
-	}
+// SizeSSZ returns the ssz encoded size in bytes for the ExecutionPayloadHeader object
+func (bte *BlockAndTraceExtended) SizeSSZ() (size int) {
+	size = 368
+
+	// Field (0) 'CapellaPayload'
+	size += bte.CapellaPayload.SizeSSZ()
+
+	return
+}
+
+func (bbat *BlockAndTraceExtended) BidValue() types.U256Str {
+	return bbat.CapellaTrace.Message.Value
+}
+
+func (bbat *BlockAndTraceExtended) Slot() uint64 {
+	return bbat.CapellaTrace.Message.Slot
+}
+func (bbat *BlockAndTraceExtended) Proposer() types.PublicKey {
+	return bbat.CapellaTrace.Message.ProposerPubkey
+}
+
+func (bbat *BlockAndTraceExtended) ExecutionPayload() structs.ExecutionPayload {
+	return &bbat.CapellaPayload.CapellaData
+}
+
+func (bbat *BlockAndTraceExtended) ExecutionHeaderHash() (types.Hash, error) {
+	return bbat.CapellaExecutionHeaderHash, nil
+}
+
+func (bbat *BlockAndTraceExtended) BuilderPubkey() (pub types.PublicKey) {
+	return bbat.CapellaTrace.Message.BuilderPubkey
+}
+
+func (bbat *BlockAndTraceExtended) ToDeliveredTrace(slot uint64) (dt structs.DeliveredTrace, err error) {
 	return structs.DeliveredTrace{
 		Trace: structs.BidTraceWithTimestamp{
 			BidTraceExtended: structs.BidTraceExtended{
 				BidTrace: types.BidTrace{
 					Slot:                 slot,
-					ParentHash:           bbat.Payload.CapellaData.EpParentHash,
-					BlockHash:            bbat.Payload.CapellaData.EpBlockHash,
-					BuilderPubkey:        bbat.Trace.Message.BuilderPubkey,
-					ProposerPubkey:       bbat.Trace.Message.ProposerPubkey,
-					ProposerFeeRecipient: bbat.Trace.Message.ProposerFeeRecipient,
-					GasLimit:             bbat.Payload.CapellaData.EpGasLimit,
-					GasUsed:              bbat.Payload.CapellaData.EpGasUsed,
-					Value:                bbat.Trace.Message.Value,
+					ParentHash:           bbat.CapellaPayload.CapellaData.EpParentHash,
+					BlockHash:            bbat.CapellaPayload.CapellaData.EpBlockHash,
+					BuilderPubkey:        bbat.CapellaTrace.Message.BuilderPubkey,
+					ProposerPubkey:       bbat.CapellaTrace.Message.ProposerPubkey,
+					ProposerFeeRecipient: bbat.CapellaTrace.Message.ProposerFeeRecipient,
+					GasLimit:             bbat.CapellaPayload.CapellaData.EpGasLimit,
+					GasUsed:              bbat.CapellaPayload.CapellaData.EpGasUsed,
+					Value:                bbat.CapellaTrace.Message.Value,
 				},
-				BlockNumber: bbat.Payload.CapellaData.EpBlockNumber,
-				NumTx:       uint64(len(bbat.Payload.CapellaData.EpTransactions)),
+				BlockNumber: bbat.CapellaPayload.CapellaData.EpBlockNumber,
+				NumTx:       uint64(len(bbat.CapellaPayload.CapellaData.EpTransactions)),
 			},
-			Timestamp: bbat.Payload.CapellaData.EpTimestamp,
+			Timestamp: bbat.CapellaPayload.CapellaData.EpTimestamp,
 		},
-		BlockNumber: bbat.Payload.CapellaData.EpBlockNumber,
+		BlockNumber: bbat.CapellaPayload.CapellaData.EpBlockNumber,
 	}, nil
 }
 
 type GetPayloadResponse struct {
 	CapellaVersion types.VersionString `json:"version"`
 	CapellaData    ExecutionPayload    `json:"data"`
+}
+
+func (gpr *GetPayloadResponse) SizeSSZ() (size int) {
+	// Field (0) 'CapellaVersion'
+	size = 4 + len(gpr.CapellaVersion)
+
+	// Field (1) 'CapellaData'
+	size += 4 + gpr.CapellaData.SizeSSZ()
+
+	return
+}
+
+func (gpr *GetPayloadResponse) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(gpr)
+}
+
+// MarshalSSZTo ssz marshals the GetPayloadResponse object to a target array
+func (gpr *GetPayloadResponse) MarshalSSZTo(buf []byte) ([]byte, error) {
+	// Field (0) 'CapellaVersion'
+	versionOffset := 4 + 4
+	buf = ssz.WriteOffset(buf, versionOffset)
+
+	// Field (1) 'CapellaData'
+	dataOffset := versionOffset + len(gpr.CapellaVersion)
+	buf = ssz.WriteOffset(buf, dataOffset)
+
+	// Field (0) 'CapellaVersion'
+	buf = append(buf, []byte(gpr.CapellaVersion)...)
+
+	// Field (1) 'CapellaData'
+	return gpr.CapellaData.MarshalSSZTo(buf)
+}
+
+func (gpr *GetPayloadResponse) UnmarshalSSZ(buf []byte) error {
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	var versionOffset, dataOffset uint64
+
+	// Offset (0) 'CapellaVersion'
+	if versionOffset = ssz.ReadOffset(buf[0:4]); versionOffset > size {
+		return ssz.ErrOffset
+	}
+
+	if versionOffset < 8 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
+	// Offset (1) 'CapellaData'
+	if dataOffset = ssz.ReadOffset(buf[4:8]); dataOffset > size || versionOffset > dataOffset {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'CapellaVersion'
+	gpr.CapellaVersion = types.VersionString(buf[versionOffset:dataOffset])
+
+	// Field (1) 'CapellaData'
+	{
+		if err := gpr.CapellaData.UnmarshalSSZ(buf[dataOffset:]); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *GetPayloadResponse) Data() structs.ExecutionPayload {
@@ -1523,4 +1879,132 @@ func (b *BLSToExecutionChange) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 // GetTree ssz hashes the BLSToExecutionChange object
 func (b *BLSToExecutionChange) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(b)
+}
+
+// SignedBidTrace is a BidTrace with a signature
+type SignedBidTrace struct {
+	Signature types.Signature `json:"signature" ssz-size:"96"`
+	Message   BidTrace        `json:"message"`
+}
+
+func (sbt *SignedBidTrace) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(sbt)
+}
+
+// MarshalSSZTo ssz marshals the SignedBidTrace object to a target array
+func (sbt *SignedBidTrace) MarshalSSZTo(buf []byte) ([]byte, error) {
+	// Field (0) 'Signature'
+	buf = append(buf, sbt.Signature[:]...)
+
+	// Field (1) 'Message'
+	return sbt.Message.MarshalSSZTo(buf)
+}
+
+func (sbt *SignedBidTrace) UnmarshalSSZ(buf []byte) error {
+	size := uint64(len(buf))
+	if size < 332 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Signature'
+	copy(sbt.Signature[:], buf[:96])
+
+	// Field (1) 'Message'
+	if err := sbt.Message.UnmarshalSSZ(buf[96:332]); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (sbt *SignedBidTrace) SizeSSZ() int {
+	return 332
+}
+
+type BidTrace struct {
+	Slot                 uint64          `json:"slot,string"`
+	ParentHash           types.Hash      `json:"parent_hash" ssz-size:"32"`
+	BlockHash            types.Hash      `json:"block_hash" ssz-size:"32"`
+	BuilderPubkey        types.PublicKey `json:"builder_pubkey" ssz-size:"48"`
+	ProposerPubkey       types.PublicKey `json:"proposer_pubkey" ssz-size:"48"`
+	ProposerFeeRecipient types.Address   `json:"proposer_fee_recipient" ssz-size:"20"`
+	GasLimit             uint64          `json:"gas_limit,string"`
+	GasUsed              uint64          `json:"gas_used,string"`
+	Value                types.U256Str   `json:"value" ssz-size:"32"`
+}
+
+func (bt *BidTrace) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(bt)
+}
+
+// MarshalSSZTo ssz marshals the BidTrace object to a target array
+func (bt *BidTrace) MarshalSSZTo(buf []byte) ([]byte, error) {
+	// Field (0) 'Slot'
+	buf = ssz.MarshalUint64(buf, bt.Slot)
+
+	// Field (1) 'ParentHash'
+	buf = append(buf, bt.ParentHash[:]...)
+
+	// Field (2) 'BlockHash'
+	buf = append(buf, bt.BlockHash[:]...)
+
+	// Field (3) 'BuilderPubkey'
+	buf = append(buf, bt.BuilderPubkey[:]...)
+
+	// Field (4) 'ProposerPubkey'
+	buf = append(buf, bt.ProposerPubkey[:]...)
+
+	// Field (5) 'ProposerFeeRecipient'
+	buf = append(buf, bt.ProposerFeeRecipient[:]...)
+
+	// Field (6) 'GasLimit'
+	buf = ssz.MarshalUint64(buf, bt.GasLimit)
+
+	// Field (7) 'GasUsed'
+	buf = ssz.MarshalUint64(buf, bt.GasUsed)
+
+	// Field (8) 'Value'
+	buf = append(buf, bt.Value[:]...)
+
+	return buf, nil
+}
+
+func (bt *BidTrace) UnmarshalSSZ(buf []byte) error {
+	size := uint64(len(buf))
+	if size < 236 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Slot'
+	bt.Slot = ssz.UnmarshallUint64(buf[:8])
+
+	// Field (1) 'ParentHash'
+	copy(bt.ParentHash[:], buf[8:40])
+
+	// Field (2) 'BlockHash'
+	copy(bt.BlockHash[:], buf[40:72])
+
+	// Field (3) 'BuilderPubkey'
+	copy(bt.BuilderPubkey[:], buf[72:120])
+
+	// Field (4) 'ProposerPubkey'
+	copy(bt.ProposerPubkey[:], buf[120:168])
+
+	// Field (5) 'ProposerFeeRecipient'
+	copy(bt.ProposerFeeRecipient[:], buf[168:188])
+
+	// Field (6) 'GasLimit'
+	bt.GasLimit = ssz.UnmarshallUint64(buf[188:196])
+
+	// Field (7) 'GasUsed'
+	bt.GasUsed = ssz.UnmarshallUint64(buf[196:204])
+
+	// Field (8) 'Value'
+	copy(bt.Value[:], buf[204:236])
+
+	return nil
+}
+
+func (bt *BidTrace) SizeSSZ() int {
+	return 236
 }

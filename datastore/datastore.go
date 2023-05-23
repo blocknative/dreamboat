@@ -62,7 +62,7 @@ func (s *Datastore) GetPayload(ctx context.Context, fork structs.ForkVersion, ke
 		payload = &bellatrix.BlockBidAndTrace{}
 		err = json.Unmarshal(data, &payload)
 	case structs.ForkCapella:
-		payload = &capella.BlockBidAndTrace{}
+		payload = &capella.BlockAndTraceExtended{}
 		err = json.Unmarshal(data, &payload)
 	default:
 		return payload, errors.New("unknown fork")

@@ -126,8 +126,15 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 			}
 			bbt = &bbbt
 		case CapellaJson:
-			var cbbt capella.BlockBidAndTrace
+			var cbbt capella.BlockAndTraceExtended
 			if err := json.Unmarshal(sData.Data(), &cbbt); err != nil {
+				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode cache")
+				continue
+			}
+			bbt = &cbbt
+		case CapellaSSZ:
+			var cbbt capella.BlockAndTraceExtended
+			if err := cbbt.UnmarshalSSZ(sData.Data()); err != nil {
 				l.WithError(err).WithField("forkFormat", forkFormat).Warn("failed to decode cache")
 				continue
 			}
@@ -355,7 +362,7 @@ func toBlockCacheFormat(fork structs.ForkVersion) ForkVersionFormat {
 	case structs.ForkBellatrix:
 		return BellatrixJson
 	case structs.ForkCapella:
-		return CapellaJson
+		return CapellaSSZ
 	}
 	return Unknown
 }
