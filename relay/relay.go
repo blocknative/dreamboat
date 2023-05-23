@@ -337,7 +337,6 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 				}
 				logger.Debug("streamed")
 			}
-			return
 		}()
 	} else {
 		rs.m.CacheHitCount.WithLabelValues("getHeader", "true").Add(1)
