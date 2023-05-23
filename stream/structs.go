@@ -1,8 +1,6 @@
 package stream
 
 import (
-	"encoding/json"
-
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -14,7 +12,7 @@ type Metadata struct {
 
 type JsonItem struct {
 	StreamMeta Metadata
-	StreamData json.RawMessage
+	StreamData []byte
 }
 
 func (d JsonItem) Data() []byte {
