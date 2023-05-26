@@ -14,7 +14,7 @@ const (
 )
 
 type MultiSlotState struct {
-	mu    sync.Mutex
+	mu    *sync.Mutex
 	slots [NumberOfSlotsInState]AtomicState
 
 	duties               atomic.Value
@@ -107,7 +107,18 @@ func (as *MultiSlotState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	as.slots[withdrawals.Slot%NumberOfSlotsInState].SetWithdrawals(withdrawals)
+	curr := as.slots[withdrawals.Slot%NumberOfSlotsInState]
+	if curr.slot != uint64(withdrawals.Slot) {
+		curr = AtomicState{
+			slot:        uint64(withdrawals.Slot),
+			withdrawals: make(map[types.Hash]structs.WithdrawalsState),
+			randao:      make(map[types.Hash]structs.RandaoState),
+			Mutex:       &sync.Mutex{},
+		}
+		as.slots[withdrawals.Slot%NumberOfSlotsInState] = curr
+	}
+
+	curr.SetWithdrawals(withdrawals)
 }
 
 func (as *MultiSlotState) Randao(slot uint64, parentHash types.Hash) structs.RandaoState {
@@ -124,7 +135,18 @@ func (as *MultiSlotState) SetRandao(randao structs.RandaoState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	as.slots[randao.Slot%NumberOfSlotsInState].SetRandao(randao)
+	curr := as.slots[randao.Slot%NumberOfSlotsInState]
+	if curr.slot != uint64(randao.Slot) {
+		curr = AtomicState{
+			slot:        uint64(randao.Slot),
+			withdrawals: make(map[types.Hash]structs.WithdrawalsState),
+			randao:      make(map[types.Hash]structs.RandaoState),
+			Mutex:       &sync.Mutex{},
+		}
+		as.slots[randao.Slot%NumberOfSlotsInState] = curr
+	}
+
+	curr.SetRandao(randao)
 }
 
 func (as *MultiSlotState) ForkVersion(slot structs.Slot) structs.ForkVersion {
@@ -156,7 +178,8 @@ func (as *MultiSlotState) SetParentBlockHash(blockHash types.Hash) {
 }
 
 type AtomicState struct {
-	sync.Mutex
+	*sync.Mutex
+	slot        uint64
 	withdrawals map[types.Hash]structs.WithdrawalsState
 	randao      map[types.Hash]structs.RandaoState
 }
