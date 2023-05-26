@@ -272,16 +272,14 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 		return false, fmt.Errorf("%w: got %d, expected slot in range [%d-%d]", ErrInvalidSlot, sbr.Slot(), minSlot, maxSlot)
 	}
 
-	if randao := beaconState.Randao(sbr.Slot() - 1); randao.Randao == "" || randao.Randao != sbr.Random().String() {
+	if randao := beaconState.Randao(sbr.Slot()-1, sbr.ParentHash()); randao.Randao == "" || randao.Randao != sbr.Random().String() {
 		time.Sleep(StateRecheckDelay) // recheck sync state for early blocks
-		randao := beaconState.Randao(sbr.Slot() - 1)
+		randao := beaconState.Randao(sbr.Slot()-1, sbr.ParentHash())
 		if randao.Randao == "" {
-			prev, next := beaconState.Randao(sbr.Slot()-2), beaconState.Randao(sbr.Slot())
-			return true, fmt.Errorf("randao for slot %d not found. Previous: %s and Next:%s", sbr.Slot(), prev.Randao, next.Randao)
+			return true, fmt.Errorf("randao for slot %d not found", sbr.Slot())
 		}
 		if randao.Randao != sbr.Random().String() {
-			prev, next := beaconState.Randao(sbr.Slot()-2), beaconState.Randao(sbr.Slot())
-			return true, fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next:%s", ErrInvalidRandao, sbr.Random().String(), randao.Randao, prev.Randao, next.Randao)
+			return true, fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next:%s", ErrInvalidRandao, sbr.Random().String(), randao.Randao, )
 		}
 		return true, nil
 	}
@@ -307,16 +305,15 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		return types.Root{}, false, nil
 	}
 
-	withdrawalState := state.Withdrawals(submitBlockRequest.Slot() - 1)
+	withdrawalState := state.Withdrawals(submitBlockRequest.Slot() - 1, submitBlockRequest.ParentHash())
 	retried = false
 	if withdrawalState.Slot == 0 {
 		// recheck beacon sync state for early blocks
 		time.Sleep(StateRecheckDelay)
 		retried = true
-		withdrawalState = state.Withdrawals(submitBlockRequest.Slot() - 1)
+		withdrawalState = state.Withdrawals(submitBlockRequest.Slot() - 1, submitBlockRequest.ParentHash())
 		if withdrawalState.Slot == 0 {
-			prev, next := state.Withdrawals(submitBlockRequest.Slot()-2), state.Withdrawals(submitBlockRequest.Slot())
-			return root, retried, fmt.Errorf("withdrawals for slot %d not found. Previous: %s and Next: %s", submitBlockRequest.Slot(), prev.Root.String(), next.Root.String())
+			return root, retried, fmt.Errorf("withdrawals for slot %d not found", submitBlockRequest.Slot())
 		}
 	}
 
@@ -329,8 +326,7 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 
 	root = types.Root(withdrawalsRoot)
 	if withdrawalState.Root != withdrawalsRoot {
-		prev, next := state.Withdrawals(submitBlockRequest.Slot()-2), state.Withdrawals(submitBlockRequest.Slot())
-		err = fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next: %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String(), prev.Root.String(), next.Root.String())
+		err = fmt.Errorf("%w: got %s, expected %s", ErrInvalidWithdrawalRoot, types.Root(withdrawalsRoot).String(), withdrawalState.Root.String())
 	}
 
 	return root, retried, err

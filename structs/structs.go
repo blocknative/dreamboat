@@ -277,13 +277,15 @@ type ValidatorCacheEntry struct {
 }
 
 type WithdrawalsState struct {
-	Slot Slot
-	Root types.Root
+	Slot       Slot
+	ParentHash types.Hash
+	Root       types.Root
 }
 
 type RandaoState struct {
-	Slot   uint64
-	Randao string
+	Slot       uint64
+	ParentHash types.Hash
+	Randao     string
 }
 
 type ForkState struct {
