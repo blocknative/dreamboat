@@ -14,7 +14,7 @@ const (
 )
 
 type MultiSlotState struct {
-	mu    *sync.Mutex
+	mu    sync.Mutex
 	slots [NumberOfSlotsInState]AtomicState
 
 	duties               atomic.Value
