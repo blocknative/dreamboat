@@ -6,38 +6,20 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/structs"
+	"github.com/flashbots/go-boost-utils/types"
 )
-
-
 
 type MultiSlotState struct {
 	mu    sync.Mutex
 	slots [structs.NumberOfSlotsInState]AtomicState
 
-	headSlotPayloadAttributes atomic.Uint64
-	duties                    atomic.Value
-	validatorsUpdateTime      atomic.Value
-	headSlot                  atomic.Value
-	fork                      atomic.Value
-	knownValidators           atomic.Value
-	genesis                   atomic.Value
-	parentBlockHash           atomic.Value
-}
-
-func (as *MultiSlotState) HeadSlotPayloadAttributes() uint64 {
-	return as.headSlotPayloadAttributes.Load()
-}
-func (as *MultiSlotState) SetHeadSlotPayloadAttributesIfHigher(slot uint64) (uint64, bool) {
-	as.mu.Lock()
-	defer as.mu.Unlock()
-
-	headSlot := as.headSlotPayloadAttributes.Load()
-	if slot > headSlot {
-		as.headSlotPayloadAttributes.Store(slot)
-		return slot, true
-	}
-
-	return headSlot, false
+	duties               atomic.Value
+	validatorsUpdateTime atomic.Value
+	headSlot             atomic.Value
+	fork                 atomic.Value
+	knownValidators      atomic.Value
+	genesis              atomic.Value
+	parentBlockHash      atomic.Value
 }
 
 func (as *MultiSlotState) Duties() structs.DutiesState {
@@ -93,15 +75,24 @@ func (as *MultiSlotState) HeadSlot() structs.Slot {
 	return 0
 }
 
-func (as *MultiSlotState) SetHeadSlot(headSlot structs.Slot) {
-	as.headSlot.Store(headSlot)
-}
-
-func (as *MultiSlotState) Withdrawals(slot uint64) structs.WithdrawalsState {
+func (as *MultiSlotState) SetHeadSlotIfHigher(slot structs.Slot) (structs.Slot, bool) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if ws := as.slots[slot%structs.NumberOfSlotsInState].Withdrawals(); uint64(ws.Slot) == slot {
+	headSlot := as.headSlot.Load()
+	if headSlot == nil || slot > headSlot.(structs.Slot) {
+		as.headSlot.Store(slot)
+		return slot, true
+	}
+
+	return headSlot.(structs.Slot), false
+}
+
+func (as *MultiSlotState) Withdrawals(slot uint64, parentHash types.Hash) structs.WithdrawalsState {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	if ws := as.slots[slot%structs.NumberOfSlotsInState].Withdrawals(parentHash); uint64(ws.Slot) == slot {
 		return ws
 	}
 
@@ -115,11 +106,11 @@ func (as *MultiSlotState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 	as.slots[withdrawals.Slot%structs.NumberOfSlotsInState].SetWithdrawals(withdrawals)
 }
 
-func (as *MultiSlotState) Randao(slot uint64) structs.RandaoState {
+func (as *MultiSlotState) Randao(slot uint64, parentHash types.Hash) structs.RandaoState {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if randao := as.slots[slot%structs.NumberOfSlotsInState].Randao(); randao.Slot == slot {
+	if randao := as.slots[slot%structs.NumberOfSlotsInState].Randao(parentHash); randao.Slot == slot {
 		return randao
 	}
 	return structs.RandaoState{}
@@ -148,43 +139,56 @@ func (as *MultiSlotState) SetFork(fork structs.ForkState) {
 	as.fork.Store(fork)
 }
 
-func (as *MultiSlotState) ParentBlockHash() string {
+func (as *MultiSlotState) ParentBlockHash() types.Hash {
 	if val := as.parentBlockHash.Load(); val != nil {
-		return val.(string)
+		return val.(types.Hash)
 	}
 
-	return ""
+	return types.Hash{}
 }
 
-func (as *MultiSlotState) SetParentBlockHash(blockHash string) {
+func (as *MultiSlotState) SetParentBlockHash(blockHash types.Hash) {
 	as.parentBlockHash.Store(blockHash)
 }
 
 type AtomicState struct {
-	withdrawals atomic.Value
-	randao      atomic.Value
+	sync.Mutex
+	withdrawals map[types.Hash]structs.WithdrawalsState
+	randao      map[types.Hash]structs.RandaoState
 }
 
-func (as *AtomicState) Withdrawals() structs.WithdrawalsState {
-	if val := as.withdrawals.Load(); val != nil {
-		return val.(structs.WithdrawalsState)
+func (as *AtomicState) Withdrawals(parentHash types.Hash) structs.WithdrawalsState {
+	as.Lock()
+	defer as.Unlock()
+
+	if w, ok := as.withdrawals[parentHash]; ok {
+		return w
 	}
 
 	return structs.WithdrawalsState{}
 }
 
 func (as *AtomicState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
-	as.withdrawals.Store(withdrawals)
+	as.Lock()
+	defer as.Unlock()
+
+	as.withdrawals[withdrawals.ParentHash] = withdrawals
 }
 
-func (as *AtomicState) Randao() structs.RandaoState {
-	if val := as.randao.Load(); val != nil {
-		return val.(structs.RandaoState)
+func (as *AtomicState) Randao(parentHash types.Hash) structs.RandaoState {
+	as.Lock()
+	defer as.Unlock()
+
+	if r, ok := as.randao[parentHash]; ok {
+		return r
 	}
 
 	return structs.RandaoState{}
 }
 
 func (as *AtomicState) SetRandao(randao structs.RandaoState) {
-	as.randao.Store(randao)
+	as.Lock()
+	defer as.Unlock()
+
+	as.randao[randao.ParentHash] = randao
 }
