@@ -262,6 +262,11 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		logger.WithField("slotHead", currHeadSlot).Debug("received duplicate payload attributes")
 		return nil
 	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash != currParentBlockHash {
+		logger.
+			WithField("slotHead", currHeadSlot).
+			WithField("currParentBlockHash", currParentBlockHash).
+			WithField("receivedParentBlockHash", receivedParentBlockHash).
+			Debug("received payload attributes with different parentBlockhash")
 		return s.updateWithdrawalsAndRandao(ctx, logger, state, event)
 	}
 
@@ -289,8 +294,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	}
 
 	state.SetParentBlockHash(receivedParentBlockHash)
-
-	if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event); err != nil{
+	if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event); err != nil {
 		return err
 	}
 
