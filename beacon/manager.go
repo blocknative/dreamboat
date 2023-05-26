@@ -290,6 +290,10 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 
 	state.SetParentBlockHash(receivedParentBlockHash)
 
+	if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event); err != nil{
+		return err
+	}
+
 	// update proposer duties
 	entries, err := s.getProposerDuties(ctx, client, structs.Slot(currHeadSlot))
 	if err != nil {
