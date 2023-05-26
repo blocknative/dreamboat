@@ -142,7 +142,12 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 			}
 			s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
 
-			if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event); err != nil {
+			var receivedParentBlockHash types.Hash
+			if err := receivedParentBlockHash.UnmarshalText([]byte(event.Data.ParentBlockHash)); err != nil {
+				return fmt.Errorf("failed to unmarshal parentBlockHash: %w", err)
+			}
+
+			if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash); err != nil {
 				return err
 			}
 			return nil
@@ -267,7 +272,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 			WithField("currParentBlockHash", currParentBlockHash).
 			WithField("receivedParentBlockHash", receivedParentBlockHash).
 			Debug("received payload attributes with different parentBlockhash")
-		return s.updateWithdrawalsAndRandao(ctx, logger, state, event)
+		return s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash)
 	}
 
 	if currHeadSlot > 0 {
@@ -294,7 +299,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	}
 
 	state.SetParentBlockHash(receivedParentBlockHash)
-	if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event); err != nil {
+	if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash); err != nil {
 		return err
 	}
 
@@ -308,7 +313,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	return nil
 }
 
-func (m *Manager) updateWithdrawalsAndRandao(ctx context.Context, logger log.Logger, state State, event bcli.PayloadAttributesEvent) error {
+func (m *Manager) updateWithdrawalsAndRandao(ctx context.Context, logger log.Logger, state State, event bcli.PayloadAttributesEvent, parentHash types.Hash) error {
 	slot := event.Data.ProposalSlot - 1
 
 	hW := structs.HashWithdrawals{Withdrawals: event.Data.PayloadAttributes.Withdrawals}
@@ -318,8 +323,8 @@ func (m *Manager) updateWithdrawalsAndRandao(ctx context.Context, logger log.Log
 	}
 	randao := event.Data.PayloadAttributes.PrevRandao
 
-	state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(slot), Root: root})
-	state.SetRandao(structs.RandaoState{Slot: uint64(slot), Randao: randao})
+	state.SetWithdrawals(structs.WithdrawalsState{Slot: structs.Slot(slot), Root: root, ParentHash: parentHash})
+	state.SetRandao(structs.RandaoState{Slot: uint64(slot), Randao: randao, ParentHash: parentHash})
 
 	return nil
 }
