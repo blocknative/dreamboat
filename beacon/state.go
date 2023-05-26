@@ -86,9 +86,6 @@ func (as *MultiSlotState) SetHeadSlotIfHigher(slot structs.Slot) (structs.Slot, 
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-<<<<<<< Updated upstream
-	if ws := as.slots[slot%NumberOfSlotsInState].Withdrawals(); uint64(ws.Slot) == slot {
-=======
 	headSlot := as.headSlot.Load()
 	if headSlot == nil || slot > headSlot.(structs.Slot) {
 		as.headSlot.Store(slot)
@@ -103,7 +100,6 @@ func (as *MultiSlotState) Withdrawals(slot uint64, parentHash types.Hash) struct
 	defer as.mu.Unlock()
 
 	if ws := as.slots[slot%structs.NumberOfSlotsInState].Withdrawals(parentHash); uint64(ws.Slot) == slot {
->>>>>>> Stashed changes
 		return ws
 	}
 
@@ -121,11 +117,7 @@ func (as *MultiSlotState) Randao(slot uint64, parentHash types.Hash) structs.Ran
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-<<<<<<< Updated upstream
-	if randao := as.slots[slot%NumberOfSlotsInState].Randao(); randao.Slot == slot {
-=======
 	if randao := as.slots[slot%structs.NumberOfSlotsInState].Randao(parentHash); randao.Slot == slot {
->>>>>>> Stashed changes
 		return randao
 	}
 	return structs.RandaoState{}
