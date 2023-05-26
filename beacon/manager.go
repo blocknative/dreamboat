@@ -82,7 +82,7 @@ type Manager struct {
 func NewManager(l log.Logger, cfg Config) *Manager {
 	return &Manager{
 		Log: l.With(log.F{
-			"subService":                    "beacon-manager",
+			"subService":                       "beacon-manager",
 			"runPayloadAttributesSubscription": cfg.RunPayloadAttributesSubscription,
 		}),
 		Config: cfg,
@@ -243,24 +243,37 @@ func (s *Manager) waitSynced(ctx context.Context, client BeaconClient) (*bcli.Sy
 func (s *Manager) processNewSlot(ctx context.Context, state State, client BeaconClient, event bcli.PayloadAttributesEvent, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "ProcessNewSlot")
 
-	headSlot := state.HeadSlot()
-	received := structs.Slot(event.Data.ProposalSlot - 1)
-	paHeadSlot, ok := state.SetHeadSlotIfHigher(received)
-	if !ok {
-		logger.WithField("slotHead", paHeadSlot).Debug("received old payload attributes")
-		return nil
+	var (
+		receivedParentBlockHash    types.Hash
+		currParentBlockHash        = state.ParentBlockHash()
+		receivedSlot               = structs.Slot(event.Data.ProposalSlot - 1)
+		currHeadSlot, isNewHighest = state.SetHeadSlotIfHigher(receivedSlot)
+	)
+
+	if err := receivedParentBlockHash.UnmarshalText([]byte(event.Data.ParentBlockHash)); err != nil {
+		return fmt.Errorf("failed to unmarshal parentBlockHash: %w", err)
 	}
 
-	if headSlot > 0 {
-		for slot := headSlot + 1; slot < received; slot++ {
+	if !isNewHighest && receivedSlot < currHeadSlot {
+		logger.WithField("slotHead", currHeadSlot).Debug("received old payload attributes")
+		return nil
+	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash == currParentBlockHash {
+		logger.WithField("slotHead", currHeadSlot).Debug("received duplicate payload attributes")
+		return nil
+	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash != currParentBlockHash {
+		return s.updateWithdrawalsAndRandao(ctx, logger, state, event)
+	}
+
+	if currHeadSlot > 0 {
+		for slot := currHeadSlot + 1; slot < receivedSlot; slot++ {
 			logger.With(log.F{"slot": slot, "event": "missed_slot"}).Warn("missed slot")
 		}
 	}
 
-	headSlot = received
-	logger = logger.WithField("slotHead", headSlot)
+	currHeadSlot = receivedSlot
+	logger = logger.WithField("slotHead", currHeadSlot)
 
-	if fork := state.Fork().Version(received); fork == structs.ForkAltair || fork == structs.ForkBellatrix {
+	if fork := state.Fork().Version(receivedSlot); fork == structs.ForkAltair || fork == structs.ForkBellatrix {
 		return fmt.Errorf("unknown fork: %d", fork)
 	}
 
@@ -271,25 +284,17 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 				logger.WithError(err).Error("failed to update known validators")
 				return
 			}
-		}(received)
+		}(receivedSlot)
 	}
 
-	var latestParentBlockHash types.Hash
-	if err := latestParentBlockHash.UnmarshalText([]byte(event.Data.ParentBlockHash)); err != nil {
-		return fmt.Errorf("failed to unmarshal parentBlockHash: %w", err)
-	}
-	state.SetParentBlockHash(latestParentBlockHash)
-
-	if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event); err != nil {
-		return err
-	}
+	state.SetParentBlockHash(receivedParentBlockHash)
 
 	// update proposer duties
-	entries, err := s.getProposerDuties(ctx, client, structs.Slot(headSlot))
+	entries, err := s.getProposerDuties(ctx, client, structs.Slot(currHeadSlot))
 	if err != nil {
 		return err
 	}
-	s.storeProposerDuties(ctx, state, d, vCache, structs.Slot(headSlot), entries)
+	s.storeProposerDuties(ctx, state, d, vCache, structs.Slot(currHeadSlot), entries)
 
 	return nil
 }
