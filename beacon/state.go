@@ -96,8 +96,8 @@ func (as *MultiSlotState) Withdrawals(slot uint64, parentHash types.Hash) struct
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if ws := as.slots[slot%NumberOfSlotsInState].Withdrawals(parentHash); uint64(ws.Slot) == slot {
-		return ws
+	if ws := as.slots[slot%NumberOfSlotsInState]; ws.slot == slot {
+		return ws.Withdrawals(parentHash)
 	}
 
 	return structs.WithdrawalsState{}
@@ -125,8 +125,8 @@ func (as *MultiSlotState) Randao(slot uint64, parentHash types.Hash) structs.Ran
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if randao := as.slots[slot%NumberOfSlotsInState].Randao(parentHash); randao.Slot == slot {
-		return randao
+	if randao := as.slots[slot%NumberOfSlotsInState]; randao.slot == slot {
+		return randao.Randao(parentHash)
 	}
 	return structs.RandaoState{}
 }
