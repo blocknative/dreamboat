@@ -145,6 +145,7 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 			if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event); err != nil {
 				return err
 			}
+			return nil
 		}
 	}
 }
