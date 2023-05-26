@@ -9,13 +9,10 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-<<<<<<< Updated upstream
 const (
 	NumberOfSlotsInState = 2
 )
 
-=======
->>>>>>> Stashed changes
 type MultiSlotState struct {
 	mu    sync.Mutex
 	slots [NumberOfSlotsInState]AtomicState
@@ -99,7 +96,7 @@ func (as *MultiSlotState) Withdrawals(slot uint64, parentHash types.Hash) struct
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if ws := as.slots[slot%structs.NumberOfSlotsInState].Withdrawals(parentHash); uint64(ws.Slot) == slot {
+	if ws := as.slots[slot%NumberOfSlotsInState].Withdrawals(parentHash); uint64(ws.Slot) == slot {
 		return ws
 	}
 
@@ -117,7 +114,7 @@ func (as *MultiSlotState) Randao(slot uint64, parentHash types.Hash) structs.Ran
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if randao := as.slots[slot%structs.NumberOfSlotsInState].Randao(parentHash); randao.Slot == slot {
+	if randao := as.slots[slot%NumberOfSlotsInState].Randao(parentHash); randao.Slot == slot {
 		return randao
 	}
 	return structs.RandaoState{}
