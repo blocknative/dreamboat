@@ -144,7 +144,7 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 			continue
 		}
 
-		s.m.StreamRecvCounter.WithLabelValues("cache").Inc()
+		s.m.RecvCounter.WithLabelValues("cache").Inc()
 		select {
 		case s.cacheOut <- bbt:
 		case <-ctx.Done():
@@ -200,7 +200,7 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 			continue
 		}
 
-		s.m.StreamRecvCounter.WithLabelValues("bid").Inc()
+		s.m.RecvCounter.WithLabelValues("bid").Inc()
 		select {
 		case s.builderBidOut <- bb:
 		case <-ctx.Done():
@@ -232,6 +232,9 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	}
 	timer2.ObserveDuration()
 
+	s.m.PublishSize.WithLabelValues("publishBuilderBid").Observe(float64(len(b)))
+	s.m.PublishCounter.WithLabelValues("publishBuilderBid").Add(float64(len(b)))
+
 	timer0.ObserveDuration()
 	return nil
 }
@@ -253,6 +256,9 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 		return fmt.Errorf("fail to publish cache block: %w", err)
 	}
 	timer2.ObserveDuration()
+
+	s.m.PublishSize.WithLabelValues("publishCacheBlock").Observe(float64(len(b)))
+	s.m.PublishCounter.WithLabelValues("publishBuilderBid").Add(float64(len(b)))
 
 	timer0.ObserveDuration()
 	return nil

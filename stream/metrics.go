@@ -6,12 +6,14 @@ import (
 )
 
 type StreamMetrics struct {
-	StreamRecvCounter *prometheus.CounterVec
-	Timing            *prometheus.HistogramVec
+	RecvCounter *prometheus.CounterVec
+	Timing      *prometheus.HistogramVec
+	PublishSize *prometheus.HistogramVec
+	PublishCounter *prometheus.CounterVec
 }
 
 func (s *Client) initMetrics() {
-	s.m.StreamRecvCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	s.m.RecvCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dreamboat",
 		Subsystem: "stream",
 		Name:      "recvcount",
@@ -24,9 +26,25 @@ func (s *Client) initMetrics() {
 		Name:      "timing",
 		Help:      "Duration of requests per function",
 	}, []string{"function", "type"})
+
+	s.m.PublishSize = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "dreamboat",
+		Subsystem: "stream",
+		Name:      "publishSize",
+		Help:      "Size of the publications per function",
+	}, []string{"function"})
+
+	s.m.PublishCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "dreamboat",
+		Subsystem: "stream",
+		Name:      "publishCounter",
+		Help:      "Number of publications per function",
+	}, []string{"function"})
 }
 
 func (s *Client) AttachMetrics(m *metrics.Metrics) {
-	m.Register(s.m.StreamRecvCounter)
+	m.Register(s.m.RecvCounter)
 	m.Register(s.m.Timing)
+	m.Register(s.m.PublishSize)
+	m.Register(s.m.PublishCounter)
 }
