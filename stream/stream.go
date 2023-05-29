@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,7 +31,6 @@ type Pubsub interface {
 type StreamConfig struct {
 	Logger          log.Logger
 	ID              string
-	TTL             time.Duration
 	PubsubTopic     string // pubsub topic name for block submissions
 	StreamQueueSize int
 }

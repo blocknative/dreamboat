@@ -35,6 +35,9 @@ type Config struct {
 
 	//
 	DataAPI *DataAPIConfig `config:"dataapi"`
+
+	//
+	Warehouse *WarehouseConfig `config:"warehouse"`
 }
 
 var DefaultHTTPConfig = &HTTPConfig{
@@ -215,13 +218,77 @@ var DefaultDataAPIConfig = &DataAPIConfig{
 }
 
 type PayloadConfig struct {
-	// BadgerDB config if sql is not used
+	// BadgerDB config
 	Badger BadgerDBConfig `config:"badger"`
 	// number of payloads to cache for fast in-memory reads
 	CacheSize int `config:"cache_size"`
+
+	// Redis config
+	Redis RedisDBConfig `config:"redis"`
 }
 
 var DefaultPayloadConfig = &PayloadConfig{
 	Badger:    *DefaultBadgerDBConfig,
 	CacheSize: 1_000,
+}
+
+type RedisDBConfig struct {
+	Master  RedisConfig `config:"master"`
+	Replica RedisConfig `config:"replica"`
+}
+
+type WarehouseConfig struct {
+	Enabled bool `config:"enabled"`
+
+	// Data directory where the data is stored in the warehouse
+	Directory string `config:"directory"`
+
+	// Number of workers for storing data in warehouse, if 0, then data is not exported
+	WorkerNumber int `config:"workers"`
+
+	// Size of the buffer for processing requests
+	Buffer int `config:"directory"`
+}
+
+var DefaultWarehouseConfig = &WarehouseConfig{
+	Enabled:      true,
+	Directory:    "/data/relay/warehouse",
+	WorkerNumber: 32,
+	Buffer:       1_000,
+}
+
+type DistributedConfig struct {
+	Redis *RedisStreamConfig `config:"redis"`
+
+	Enabled    bool   `config:"enabled"`
+	InstanceID string `config:"id"`
+
+	// Number of workers for storing data in warehouse, if 0, then data is not exported
+	WorkerNumber int `config:"workers"`
+
+	// publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published
+	PublishOnSubmission bool `config:"publish_on_submission"`
+
+	// Stream internal channel size
+	StreamQueueSize int
+}
+
+var DefaultDistributedConfig = &DistributedConfig{
+	Enabled:             true,
+	WorkerNumber:        100,
+	PublishOnSubmission: false,
+	StreamQueueSize:     200,
+}
+
+type RedisStreamConfig struct {
+	Topic   string `config:"topic"`
+	Address string `config:"address"`
+}
+
+var DefaultRedisStreamConfig = &RedisStreamConfig{
+	Topic: "relay",
+}
+
+type RedisConfig struct {
+	Address string `config:"address"`
 }

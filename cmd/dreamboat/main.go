@@ -22,6 +22,7 @@ import (
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
 	fileS "github.com/blocknative/dreamboat/cmd/dreamboat/config/source/file"
 	"github.com/blocknative/dreamboat/datastore"
+	daBadger "github.com/blocknative/dreamboat/datastore/evidence/badger"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/relay"
 	"github.com/blocknative/dreamboat/sim/client/fallback"
@@ -32,22 +33,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
-	"github.com/urfave/cli"
+
+	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 
 	trBadger "github.com/blocknative/dreamboat/datastore/transport/badger"
 	trPostgres "github.com/blocknative/dreamboat/datastore/transport/postgres"
 
-	daBadger "github.com/blocknative/dreamboat/datastore/evidence/badger"
 	daPostgres "github.com/blocknative/dreamboat/datastore/evidence/postgres"
 
 	valBadger "github.com/blocknative/dreamboat/datastore/validator/badger"
 	valPostgres "github.com/blocknative/dreamboat/datastore/validator/postgres"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/go-boost-utils/types"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 )
@@ -277,13 +275,14 @@ func main() {
 		logger.WithError(err).Fatal("error computing capella domain")
 		return
 	}
-
-	payloadCache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](cfg.Payload.CacheSize)
-	if err != nil {
-		logger.WithError(err).Fatal("failed to initialize payload cache")
-		return
-	}
-	ds := datastore.NewDatastore(storage, storage.DB, cfg.Payload.Badger.TTL, payloadCache)
+	/*
+		payloadCache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](cfg.Payload.CacheSize)
+		if err != nil {
+			logger.WithError(err).Fatal("failed to initialize payload cache")
+			return
+		}
+	*/
+	ds := datastore.NewDatastore(storage, storage.DB, cfg.Payload.Badger.TTL)
 
 	var allowed map[[48]byte]struct{}
 	if len(cfg.Relay.AllowedBuilders) > 0 {
@@ -311,7 +310,7 @@ func main() {
 		MaxBlockPublishDelay:  cfg.Relay.MaxBlockPublishDelay,
 	}
 	cfg.Relay.SubscribeForUpdates(rcfg)
-	r := relay.NewRelay(logger, rcfg, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb)
+	r := relay.NewRelay(logger, rcfg, beaconCli, validatorCache, valDS, verificator, state, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 	r.AttachMetrics(m)
 
 	ee := &api.EnabledEndpoints{
@@ -468,7 +467,7 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-func initStreamer(c *cli.Context, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
+func initStreamer(c *context.Context, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
 	timeStreamStart := time.Now()
 
 	pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: l}
@@ -481,7 +480,6 @@ func initStreamer(c *cli.Context, redisClient *redis.Client, l log.Logger, m *me
 	streamConfig := stream.StreamConfig{
 		Logger:          l,
 		ID:              id,
-		TTL:             c.Duration("relay-distribution-stream-ttl"),
 		PubsubTopic:     c.String("relay-distribution-stream-topic"),
 		StreamQueueSize: c.Int("relay-distribution-stream-queue"),
 	}
@@ -489,7 +487,7 @@ func initStreamer(c *cli.Context, redisClient *redis.Client, l log.Logger, m *me
 	redisStreamer := stream.NewClient(pubsub, st, streamConfig)
 	redisStreamer.AttachMetrics(m)
 
-	if err := redisStreamer.RunSubscriberParallel(c.Context, c.Uint("relay-distribution-stream-workers")); err != nil {
+	if err := redisStreamer.RunSubscriberParallel(c, c.Uint("relay-distribution-stream-workers")); err != nil {
 		return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
 	}
 
@@ -499,4 +497,30 @@ func initStreamer(c *cli.Context, redisClient *redis.Client, l log.Logger, m *me
 	}).Info("initialized")
 
 	return redisStreamer, nil
+}
+
+func InitWarehouse(c *context.Context, l log.Logger, m *metrics.Metrics, st stream.State) {
+	var relayWh *wh.Warehouse
+
+	warehouse := wh.NewWarehouse(logger, c.Int("warehouse-buffer"))
+
+	datadir := c.String("warehouse-dir")
+	if err := os.MkdirAll(datadir, 0755); err != nil {
+		return fmt.Errorf("failed to create datadir: %w", err)
+	}
+
+	if err := warehouse.RunParallel(c.Context, datadir, c.Int("warehouse-workers")); err != nil {
+		return fmt.Errorf("failed to run data exporter: %w", err)
+	}
+
+	warehouse.AttachMetrics(m)
+
+	l.With(log.F{
+		"subService": "warehouse",
+		"datadir":    c.String("warehouse-dir"),
+		"workers":    c.Int("warehouse-workers"),
+	}).Info("initialized")
+
+	relayWh = warehouse
+
 }

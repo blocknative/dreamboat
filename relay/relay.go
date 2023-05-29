@@ -81,7 +81,7 @@ type Verifier interface {
 
 type DataAPIStore interface {
 	//CheckSlotDelivered(context.Context, uint64) (bool, error)
-	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
+	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace) error
 	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
 
 	PutBuilderBlockSubmission(ctx context.Context, bid structs.BidTraceWithTimestamp, isMostProfitable bool) (err error)
@@ -95,7 +95,7 @@ type PayloadCache interface {
 }
 
 type Datastore interface {
-	PutPayload(context.Context, structs.PayloadKey, structs.BlockAndTraceExtended, time.Duration) error
+	PutPayload(context.Context, structs.PayloadKey, structs.BlockAndTraceExtended) error
 	GetPayload(context.Context, structs.ForkVersion, structs.PayloadKey) (structs.BlockAndTraceExtended, error)
 }
 
@@ -198,7 +198,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
+func NewRelay(l log.Logger, config *RelayConfig, beacon Beacon, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
 	rs := &Relay{
 		pc:            pcache,
 		d:             d,
@@ -587,24 +587,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		return nil, ErrHigherSlotDelivered
 	}
 
-	rs.runnignAsyncs.Add(1)
-	go func(wg *TimeoutWaitGroup, l log.Logger, rs *Relay, slot uint64) {
-		defer wg.Done()
-		trace, err := payload.ToDeliveredTrace(slot)
-		if err != nil {
-			l.With(log.F{
-				"event":            "wrong_evidence_payload",
-				"processingTimeMs": time.Since(tStart).Milliseconds()}).WithError(err).Error("failed to generate delivered payload")
-			return
-		}
-
-		if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace); err != nil {
-			l.With(log.F{
-				"event":            "evidence_failure",
-				"processingTimeMs": time.Since(tStart).Milliseconds()}).WithError(err).Warn("failed to set payload after delivery")
-		}
-	}(rs.runnignAsyncs, logger, rs, payloadRequest.Slot())
-
 	exp := payload.ExecutionPayload()
 
 	// TODO: stream delivered
@@ -701,7 +683,7 @@ func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload str
 		return
 	}
 
-	if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
+	if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace); err != nil {
 		logger.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		return
 	}

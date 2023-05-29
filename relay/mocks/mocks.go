@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	types "github.com/blocknative/dreamboat/client/sim/types"
+	types "github.com/blocknative/dreamboat/sim/client/types"
 	structs "github.com/blocknative/dreamboat/structs"
 	types0 "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
@@ -118,28 +118,13 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 	return m.recorder
 }
 
-// CacheBlock mocks base method.
-func (m *MockDatastore) CacheBlock(arg0 context.Context, arg1 structs.PayloadKey, arg2 *structs.CompleteBlockstruct) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CacheBlock", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CacheBlock indicates an expected call of CacheBlock.
-func (mr *MockDatastoreMockRecorder) CacheBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheBlock", reflect.TypeOf((*MockDatastore)(nil).CacheBlock), arg0, arg1, arg2)
-}
-
 // GetPayload mocks base method.
-func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.ForkVersion, arg2 structs.PayloadKey) (structs.BlockAndTraceExtended, bool, error) {
+func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.ForkVersion, arg2 structs.PayloadKey) (structs.BlockAndTraceExtended, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1, arg2)
 	ret0, _ := ret[0].(structs.BlockAndTraceExtended)
-	ret1, _ := ret[1].(bool)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetPayload indicates an expected call of GetPayload.
@@ -149,7 +134,7 @@ func (mr *MockDatastoreMockRecorder) GetPayload(arg0, arg1, arg2 interface{}) *g
 }
 
 // PutPayload mocks base method.
-func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey, arg2 structs.BlockAndTraceExtended, arg3 time.Duration) error {
+func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey, arg2 structs.BlockAndTraceExtended) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutPayload", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -462,7 +447,7 @@ func (m *MockAuctioneer) EXPECT() *MockAuctioneerMockRecorder {
 }
 
 // AddBlock mocks base method.
-func (m *MockAuctioneer) AddBlock(arg0 *structs.CompleteBlockstruct) bool {
+func (m *MockAuctioneer) AddBlock(arg0 structs.BuilderBidExtended) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddBlock", arg0)
 	ret0, _ := ret[0].(bool)
@@ -476,10 +461,10 @@ func (mr *MockAuctioneerMockRecorder) AddBlock(arg0 interface{}) *gomock.Call {
 }
 
 // MaxProfitBlock mocks base method.
-func (m *MockAuctioneer) MaxProfitBlock(arg0 structs.Slot, arg1 types0.Hash) (*structs.CompleteBlockstruct, bool) {
+func (m *MockAuctioneer) MaxProfitBlock(arg0 structs.Slot, arg1 types0.Hash) (structs.BuilderBidExtended, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxProfitBlock", arg0, arg1)
-	ret0, _ := ret[0].(*structs.CompleteBlockstruct)
+	ret0, _ := ret[0].(structs.BuilderBidExtended)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
