@@ -31,4 +31,5 @@ cmd/scratch/*
 /dreamboat
 /migration-postgres
 /config.ini
-config.ini
+config.ini 
+networks.json
