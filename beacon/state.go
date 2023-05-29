@@ -9,13 +9,11 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-const (
-	NumberOfSlotsInState = 2
-)
+
 
 type MultiSlotState struct {
 	mu    sync.Mutex
-	slots [NumberOfSlotsInState]AtomicState
+	slots [structs.NumberOfSlotsInState]AtomicState
 
 	duties               atomic.Value
 	validatorsUpdateTime atomic.Value
@@ -96,7 +94,7 @@ func (as *MultiSlotState) Withdrawals(slot uint64, parentHash types.Hash) struct
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if ws := as.slots[slot%NumberOfSlotsInState]; ws.slot == slot {
+	if ws := as.slots[slot%structs.NumberOfSlotsInState]; ws.slot == slot {
 		return ws.Withdrawals(parentHash)
 	}
 
@@ -107,7 +105,7 @@ func (as *MultiSlotState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	curr := as.slots[withdrawals.Slot%NumberOfSlotsInState]
+	curr := as.slots[withdrawals.Slot%structs.NumberOfSlotsInState]
 	if curr.slot != uint64(withdrawals.Slot) {
 		curr = AtomicState{
 			slot:        uint64(withdrawals.Slot),
@@ -115,7 +113,7 @@ func (as *MultiSlotState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 			randao:      make(map[types.Hash]structs.RandaoState),
 			Mutex:       &sync.Mutex{},
 		}
-		as.slots[withdrawals.Slot%NumberOfSlotsInState] = curr
+		as.slots[withdrawals.Slot%structs.NumberOfSlotsInState] = curr
 	}
 
 	curr.SetWithdrawals(withdrawals)
@@ -125,7 +123,7 @@ func (as *MultiSlotState) Randao(slot uint64, parentHash types.Hash) structs.Ran
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	if randao := as.slots[slot%NumberOfSlotsInState]; randao.slot == slot {
+	if randao := as.slots[slot%structs.NumberOfSlotsInState]; randao.slot == slot {
 		return randao.Randao(parentHash)
 	}
 	return structs.RandaoState{}
@@ -135,7 +133,7 @@ func (as *MultiSlotState) SetRandao(randao structs.RandaoState) {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
-	curr := as.slots[randao.Slot%NumberOfSlotsInState]
+	curr := as.slots[randao.Slot%structs.NumberOfSlotsInState]
 	if curr.slot != uint64(randao.Slot) {
 		curr = AtomicState{
 			slot:        uint64(randao.Slot),
@@ -143,7 +141,7 @@ func (as *MultiSlotState) SetRandao(randao structs.RandaoState) {
 			randao:      make(map[types.Hash]structs.RandaoState),
 			Mutex:       &sync.Mutex{},
 		}
-		as.slots[randao.Slot%NumberOfSlotsInState] = curr
+		as.slots[randao.Slot%structs.NumberOfSlotsInState] = curr
 	}
 
 	curr.SetRandao(randao)

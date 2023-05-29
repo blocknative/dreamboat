@@ -84,6 +84,7 @@ func NewManager(l log.Logger, cfg Config) *Manager {
 		Log: l.With(log.F{
 			"subService":                       "beacon-manager",
 			"runPayloadAttributesSubscription": cfg.RunPayloadAttributesSubscription,
+			"numberOfSlotsInState":             structs.NumberOfSlotsInState,
 		}),
 		Config: cfg,
 	}

@@ -11,7 +11,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
-	"github.com/blocknative/dreamboat/beacon"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/structs"
@@ -94,7 +93,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 		return ctx.Err()
 	}
 
-	isNewMax, err := rs.storeSubmission(ctx, m, sbr)
+	isNewMax, err := rs.storeSubmission(ctx, logger, m, sbr)
 	if err != nil {
 		return err
 	}
@@ -224,7 +223,7 @@ func (rs *Relay) checkRegistration(ctx context.Context, pubkey types.PublicKey, 
 	return v.Message.GasLimit, nil
 }
 
-func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sbr structs.SubmitBlockRequest) (newMax bool, err error) {
+func (rs *Relay) storeSubmission(ctx context.Context, logger log.Logger, m *structs.MetricGroup, sbr structs.SubmitBlockRequest) (newMax bool, err error) {
 	if rs.config.SecretKey == nil {
 		return false, ErrMissingSecretKey
 	}
@@ -242,7 +241,11 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")
 
 	tAddAuction := time.Now()
-	newMax = rs.a.AddBlock(&complete)
+	bid, err := rs.bidExtended(sbr, complete.Header.Header)
+	if err != nil {
+		return false, fmt.Errorf("failed to generate bid: %w", err)
+	}
+	newMax = rs.a.AddBlock(bid)
 	m.AppendSince(tAddAuction, "submitBlock", "addAuction")
 
 	rs.runnignAsyncs.Add(1)
@@ -253,7 +256,46 @@ func (rs *Relay) storeSubmission(ctx context.Context, m *structs.MetricGroup, sb
 		}
 	}(rs.runnignAsyncs, complete.Header.Trace, newMax)
 
+	if rs.config.Distributed && rs.config.StreamSubmissions {
+		go rs.s.PublishBuilderBid(context.Background(), bid)
+	}
+
 	return newMax, nil
+}
+
+func (rs *Relay) bidExtended(sbr structs.SubmitBlockRequest, header structs.ExecutionPayloadHeader) (structs.BuilderBidExtended, error) {
+	fork := rs.beaconState.ForkVersion(structs.Slot(sbr.Slot()))
+	if fork == structs.ForkBellatrix {
+		header, ok := header.(*bellatrix.ExecutionPayloadHeader)
+		if !ok {
+			return nil, errors.New("failed to cast header to bellatrix")
+		}
+		return &bellatrix.BuilderBidExtended{
+			BellatrixBuilderBid: bellatrix.BuilderBid{
+				BellatrixHeader: header,
+				BellatrixValue:  sbr.Value(),
+				BellatrixPubkey: sbr.BuilderPubkey(),
+			},
+			BellatrixProposer: sbr.ProposerPubkey(),
+			BellatrixSlot:     sbr.Slot(),
+		}, nil
+	} else if fork == structs.ForkCapella {
+		header, ok := header.(*capella.ExecutionPayloadHeader)
+		if !ok {
+			return nil, errors.New("failed to cast header to capella")
+		}
+		return &capella.BuilderBidExtended{
+			CapellaBuilderBid: capella.BuilderBid{
+				CapellaHeader: header,
+				CapellaValue:  sbr.Value(),
+				CapellaPubkey: sbr.BuilderPubkey(),
+			},
+			CapellaProposer: sbr.ProposerPubkey(),
+			CapellaSlot:     sbr.Slot(),
+		}, nil
+	}
+
+	return nil, fmt.Errorf("unkown fork: %d", fork)
 }
 
 // returns a bool and an error, the bool indicates whether the block verification retried before succeeding
@@ -267,7 +309,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 	}
 
 	maxSlot := beaconState.HeadSlot() + 1
-	minSlot := maxSlot - (beacon.NumberOfSlotsInState - 1)
+	minSlot := maxSlot - (structs.NumberOfSlotsInState - 1)
 	if slot := structs.Slot(sbr.Slot()); slot > maxSlot || slot < minSlot {
 		return false, fmt.Errorf("%w: got %d, expected slot in range [%d-%d]", ErrInvalidSlot, sbr.Slot(), minSlot, maxSlot)
 	}

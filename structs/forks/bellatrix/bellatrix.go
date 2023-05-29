@@ -116,7 +116,7 @@ func (s *SubmitBlockRequest) toSignedBuilderBid(sk *bls.SecretKey, pubkey *types
 	}, nil
 }
 
-func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid SignedBuilderBid) (bbt structs.BlockBidAndTrace) {
+func (s *SubmitBlockRequest) toBlockBidAndTrace(signedBuilderBid SignedBuilderBid) (bbt structs.BlockAndTraceExtended) {
 	return &BlockBidAndTrace{
 		Trace: &types.SignedBidTrace{
 			Message:   &s.BellatrixMessage,
@@ -233,6 +233,10 @@ func (b *BuilderBid) Pubkey() types.PublicKey {
 	return b.BellatrixPubkey
 }
 
+func (b *BuilderBid) Header() structs.ExecutionPayloadHeader {
+	return b.BellatrixHeader
+}
+
 // HashTreeRoot ssz hashes the BuilderBid object
 func (b *BuilderBid) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(b)
@@ -260,6 +264,24 @@ func (b *BuilderBid) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 // GetTree ssz hashes the BuilderBid object
 func (b *BuilderBid) GetTree() (*ssz.Node, error) {
 	return ssz.ProofTree(b)
+}
+
+type BuilderBidExtended struct {
+	BellatrixBuilderBid BuilderBid      `json:"bid"`
+	BellatrixProposer   types.PublicKey `json:"proposer"`
+	BellatrixSlot       uint64          `json:"slot"`
+}
+
+func (b BuilderBidExtended) BuilderBid() structs.BuilderBid {
+	return &b.BellatrixBuilderBid
+}
+
+func (b BuilderBidExtended) Proposer() types.PublicKey {
+	return b.BellatrixProposer
+}
+
+func (b BuilderBidExtended) Slot() uint64 {
+	return b.BellatrixSlot
 }
 
 // GetHeaderResponse is the response payload from the getHeader request: https://github.com/ethereum/builder-specs/pull/2/files#diff-c80f52e38c99b1049252a99215450a29fd248d709ffd834a9480c98a233bf32c
@@ -589,6 +611,13 @@ type BlockBidAndTrace struct {
 
 func (bbat *BlockBidAndTrace) BidValue() types.U256Str {
 	return bbat.Bid.BellatrixData.Value()
+}
+
+func (bbat *BlockBidAndTrace) Slot() uint64 {
+	return bbat.Trace.Message.Slot
+}
+func (bbat *BlockBidAndTrace) Proposer() types.PublicKey {
+	return bbat.Trace.Message.ProposerPubkey
 }
 
 func (bbat *BlockBidAndTrace) ExecutionPayload() structs.ExecutionPayload {
