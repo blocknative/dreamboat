@@ -146,7 +146,7 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 		}
 
 		l.With(log.F{
-			"blockHash":  bbt.ExecutionPayload().BlockHash(),
+			"blockHash": bbt.ExecutionPayload().BlockHash(),
 			"timestamp": receivedAt.String(),
 		}).Debug("received")
 
@@ -207,7 +207,7 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 			continue
 		}
 		l.With(log.F{
-			"blockHash":  bb.BuilderBid().Header().GetBlockHash(),
+			"blockHash": bb.BuilderBid().Header().GetBlockHash(),
 			"timestamp": receivedAt.String(),
 		}).Debug("received")
 
@@ -243,6 +243,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	}
 	s.Logger.With(log.F{
 		"method":    "publishBuilderBid",
+		"size":      len(b),
 		"blockHash": bid.BuilderBid().Header().GetBlockHash(),
 		"timestamp": time.Now().String(),
 	}).Debug("published")
@@ -273,6 +274,7 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 	}
 	s.Logger.With(log.F{
 		"method":    "publishBlockCache",
+		"size":      len(b),
 		"blockHash": block.ExecutionPayload().BlockHash(),
 		"timestamp": time.Now().String(),
 	}).Debug("published")
