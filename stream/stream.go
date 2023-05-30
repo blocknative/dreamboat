@@ -284,8 +284,8 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 	}).Debug("published")
 	timer2.ObserveDuration()
 
-	s.m.PublishSize.WithLabelValues("publishCacheBlock").Observe(float64(len(b)))
-	s.m.PublishCounter.WithLabelValues("publishCacheBlock").Add(float64(len(b)))
+	s.m.PublishSize.WithLabelValues("publishBlockCache").Observe(float64(len(b)))
+	s.m.PublishCounter.WithLabelValues("publishBlockCache").Add(float64(len(b)))
 
 	timer0.ObserveDuration()
 	return nil
