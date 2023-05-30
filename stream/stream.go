@@ -75,7 +75,7 @@ func NewClient(ps Pubsub, st State, cfg StreamConfig) *Client {
 		slotDeliveredOut: make(chan uint64, cfg.StreamQueueSize),
 
 		Config: cfg,
-		Logger: cfg.Logger.WithField("relay-service", "stream").WithField("type", "redis"),
+		Logger: cfg.Logger.WithField("subService", "stream").WithField("type", "redis"),
 	}
 
 	s.initMetrics()
@@ -89,7 +89,7 @@ func (s *Client) RunSubscriberParallel(ctx context.Context, num uint) error {
 	s.slotDeliveredIn = s.Pubsub.Subscribe(ctx, s.Config.PubsubTopic+SlotDeliveredTopic)
 
 	for i := uint(0); i < num; i++ {
-		go s.RunCacheSubscriber(ctx)
+		go s.RunBlockCacheSubscriber(ctx)
 		go s.RunBuilderBidSubscriber(ctx)
 	}
 
@@ -102,7 +102,7 @@ func (s *Client) BlockCache() <-chan structs.BlockAndTraceExtended {
 	return s.cacheOut
 }
 
-func (s *Client) RunCacheSubscriber(ctx context.Context) error {
+func (s *Client) RunBlockCacheSubscriber(ctx context.Context) error {
 	l := s.Logger.WithField("method", "runCacheSubscriber")
 	var bbt structs.BlockAndTraceExtended
 
@@ -146,6 +146,7 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 		}
 
 		l.With(log.F{
+			"itemType":  "blockCache",
 			"blockHash": bbt.ExecutionPayload().BlockHash(),
 			"timestamp": receivedAt.String(),
 		}).Debug("received")
@@ -207,6 +208,7 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 			continue
 		}
 		l.With(log.F{
+			"itemType":  "builderBid",
 			"blockHash": bb.BuilderBid().Header().GetBlockHash(),
 			"timestamp": receivedAt.String(),
 		}).Debug("received")
@@ -243,6 +245,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	}
 	s.Logger.With(log.F{
 		"method":    "publishBuilderBid",
+		"itemType":  "builderBid",
 		"size":      len(b),
 		"blockHash": bid.BuilderBid().Header().GetBlockHash(),
 		"timestamp": time.Now().String(),
@@ -274,6 +277,7 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 	}
 	s.Logger.With(log.F{
 		"method":    "publishBlockCache",
+		"itemType":  "blockCache",
 		"size":      len(b),
 		"blockHash": block.ExecutionPayload().BlockHash(),
 		"timestamp": time.Now().String(),
@@ -300,7 +304,7 @@ func (s *Client) encode(data any, fvf ForkVersionFormat) ([]byte, error) {
 	if fvf == CapellaSSZ {
 		enc, ok := data.(EncoderSSZ)
 		if !ok {
-			return nil, errors.New("capella ssz unable to cast to SSZ encoder")
+			return nil, errors.New("unable to cast to SSZ encoder")
 		}
 		rawData, err = enc.MarshalSSZ()
 		if err != nil {
