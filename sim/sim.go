@@ -34,12 +34,10 @@ type Manager struct {
 }
 
 func NewManager(l log.Logger, fb *fallback.Fallback) (m *Manager) {
-	m = &Manager{
+	return &Manager{
 		l:  l,
 		fb: fb,
 	}
-
-	return m
 }
 
 func (m *Manager) AddRPCClient(ctx context.Context, simHttpAddr string) {

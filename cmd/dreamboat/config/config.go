@@ -38,17 +38,22 @@ type Config struct {
 
 	//
 	Warehouse *WarehouseConfig `config:"warehouse"`
+
+	//
+	Distributed *DistributedConfig `config:"distributed"`
 }
 
 var DefaultHTTPConfig = &HTTPConfig{
 	ReadTimeout:  2 * time.Second,
 	WriteTimeout: 2 * time.Second,
+	IdleTimeout:  2 * time.Second,
 }
 
 type HTTPConfig struct {
 	// address (ip+port) on which http should be served
 	Address      string        `config:"address"`
 	ReadTimeout  time.Duration `config:"read_timeout"`  //time.Second * 2,
+	IdleTimeout  time.Duration `config:"idle_timeout"`  //time.Second * 2,
 	WriteTimeout time.Duration `config:"write_timeout"` //time.Second * 2,
 }
 
@@ -130,6 +135,9 @@ type BeaconConfig struct {
 	// comma separate list of urls to beacon endpoints
 	Addresses []string `config:"addresses,allow_dynamic"`
 
+	// comma separate list of urls to beacon endpoints
+	PublishAddresses []string `config:"publish_addresses,allow_dynamic"`
+
 	// should payload attributes be enabled
 	PayloadAttributesSubscription bool `config:"payload_attributes_subscription,allow_dynamic"`
 
@@ -182,15 +190,18 @@ type ValidatorsConfig struct {
 	RegistrationsCacheSize int `config:"registrations_cache_size"`
 	// Registrations cache ttl
 	RegistrationsCacheTTL time.Duration `config:"registrations_cache_ttl"`
+	// Registrations cache ttl
+	RegistrationsWriteCacheTTL time.Duration `config:"registrations_write_cache_ttl"`
 }
 
 var DefaultValidatorsConfig = &ValidatorsConfig{
-	DB:                     DefaultSQLConfig,
-	Badger:                 *DefaultBadgerDBConfig,
-	QueueSize:              100_000,
-	StoreWorkersNum:        400,
-	RegistrationsCacheSize: 600_000,
-	RegistrationsCacheTTL:  time.Hour,
+	DB:                         DefaultSQLConfig,
+	Badger:                     *DefaultBadgerDBConfig,
+	QueueSize:                  100_000,
+	StoreWorkersNum:            400,
+	RegistrationsCacheSize:     600_000,
+	RegistrationsCacheTTL:      time.Hour,
+	RegistrationsWriteCacheTTL: 12 * time.Hour,
 }
 
 type VerifyConfig struct {

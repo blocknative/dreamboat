@@ -2,12 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
-	"fmt"
-	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,20 +17,17 @@ import (
 	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
 	fileS "github.com/blocknative/dreamboat/cmd/dreamboat/config/source/file"
+	"github.com/blocknative/dreamboat/cmd/dreamboat/inits"
 	"github.com/blocknative/dreamboat/datastore"
 	daBadger "github.com/blocknative/dreamboat/datastore/evidence/badger"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/relay"
 	"github.com/blocknative/dreamboat/sim/client/fallback"
-	"github.com/blocknative/dreamboat/stream"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/validators"
 	"github.com/blocknative/dreamboat/verify"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
 
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 
@@ -131,28 +124,15 @@ func main() {
 		QueryTimeout: cfg.Beacon.QueryTimeout,
 	}
 	cfg.Beacon.SubscribeForUpdates(bcfg)
-	if err := initBeaconClients(logger, beaconCli, cfg.Beacon.Addresses, m, bcfg); err != nil {
+	if err := inits.BeaconClients(logger, beaconCli, cfg.Beacon.Addresses, m, bcfg); err != nil {
 		logger.Fatalf("fail to initialize beacon: %w", err)
 		return
 	}
-	/*
 
-	   beaconConfig := bcli.BeaconConfig{
-	   		BeaconEventTimeout: c.Duration("beacon-event-timeout"),
-	   		BeaconEventRestart: c.Int("beacon-event-restart"),
-	   		BeaconQueryTimeout: c.Duration("beacon-query-timeout"),
-	   	}
-	   	beaconCli, err := initBeaconClients(logger, c.StringSlice("beacon"), m, beaconConfig)
-	   	if err != nil {
-	   		return fmt.Errorf("fail to initialize beacon: %w", err)
-	   	}
-
-	   	beaconPubCli, err := initBeaconClients(logger, c.StringSlice("beacon-publish"), m, beaconConfig)
-	   	if err != nil {
-	   		return fmt.Errorf("fail to initialize publish beacon: %w", err)
-	   	}
-
-	*/
+	if err := inits.BeaconClients(logger, beaconCli, cfg.Beacon.PublishAddresses, m, bcfg); err != nil {
+		logger.Fatalf("fail to initialize beacon: %w", err)
+		return
+	}
 
 	// SIM Client
 	simFallb := fallback.NewFallback()
@@ -230,13 +210,13 @@ func main() {
 
 	// lazyload validators cache, it's optional and we don't care if it errors out
 	go preloadValidators(ctx, logger, valDS, validatorCache)
-	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, int(math.Floor(cfg.Validators.Badger.TTL.Seconds()/2)), cfg.Validators.QueueSize)
+	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, cfg.Validators.RegistrationsWriteCacheTTL, cfg.Validators.QueueSize)
 	validatorStoreManager.AttachMetrics(m)
 	if cfg.Validators.StoreWorkersNum > 0 {
 		validatorStoreManager.RunStore(cfg.Validators.StoreWorkersNum)
 	}
 
-	domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, chainCfg.GenesisForkVersion, types.Root{}.String())
+	domainBuilder, err := inits.ComputeDomain(types.DomainTypeAppBuilder, chainCfg.GenesisForkVersion, types.Root{}.String())
 	if err != nil {
 		logger.WithError(err).Fatal("error computing genesis domain")
 		return
@@ -264,24 +244,18 @@ func main() {
 		return
 	}
 
-	bellatrixBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, chainCfg.BellatrixForkVersion, chainCfg.GenesisValidatorsRoot)
+	bellatrixBeaconProposer, err := inits.ComputeDomain(types.DomainTypeBeaconProposer, chainCfg.BellatrixForkVersion, chainCfg.GenesisValidatorsRoot)
 	if err != nil {
 		logger.WithError(err).Fatal("error computing bellatrix domain")
 		return
 	}
 
-	capellaBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, chainCfg.CapellaForkVersion, chainCfg.GenesisValidatorsRoot)
+	capellaBeaconProposer, err := inits.ComputeDomain(types.DomainTypeBeaconProposer, chainCfg.CapellaForkVersion, chainCfg.GenesisValidatorsRoot)
 	if err != nil {
 		logger.WithError(err).Fatal("error computing capella domain")
 		return
 	}
-	/*
-		payloadCache, err := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](cfg.Payload.CacheSize)
-		if err != nil {
-			logger.WithError(err).Fatal("failed to initialize payload cache")
-			return
-		}
-	*/
+
 	ds := datastore.NewDatastore(storage, storage.DB, cfg.Payload.Badger.TTL)
 
 	var allowed map[[48]byte]struct{}
@@ -296,6 +270,17 @@ func main() {
 			allowed[pk] = struct{}{}
 		}
 	}
+
+	relayWh, err := inits.Warehouse(ctx, logger, cfg.Warehouse)
+	if err != nil {
+		logger.WithError(err).Fatal("error initializing warehouse")
+		return
+	}
+	relayWh.AttachMetrics(m)
+
+	pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: l}
+	streamer, err := inits.Streamer(ctx)
+	streamer.AttachMetrics(m)
 
 	rcfg := &relay.RelayConfig{
 		BuilderSigningDomain: domainBuilder,
@@ -384,7 +369,7 @@ func main() {
 	ctx, closeC := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer closeC()
 	finish := make(chan struct{})
-	go closemanager(ctx, finish, validatorStoreManager, r)
+	go closemanager(ctx, finish, validatorStoreManager, r, relayWh)
 
 	select {
 	case <-finish:
@@ -430,97 +415,9 @@ func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs Validat
 	}
 }
 
-func initBeaconClients(l log.Logger, mbc *bcli.MultiBeaconClient, endpoints []string, m *metrics.Metrics, c *bcli.BeaconConfig) error {
-	for _, endpoint := range endpoints {
-		u, err := url.Parse(endpoint)
-		if err != nil {
-			return err
-		}
-
-		bc := bcli.NewBeaconClient(l, u, c)
-		mbc.Add(bc)
-		go bc.SubscribeToHeadEvents(mbc.HeadEventsSubscription())
-		// TODO
-		//if enabled
-		//	go bc.SubscribeToPayloadAttributesEvents(mbc.PayloadAttributesSubscription())
-	}
-	return nil
-}
-
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay, relayWh *wh.Warehouse) {
 	regMgr.Close(ctx)
 	r.Close(ctx)
 	relayWh.Close(ctx)
 	finish <- struct{}{}
-}
-
-// ComputeDomain computes the signing domain
-func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisValidatorsRootHex string) (domain types.Domain, err error) {
-	genesisValidatorsRoot := types.Root(common.HexToHash(genesisValidatorsRootHex))
-	forkVersionBytes, err := hexutil.Decode(forkVersionHex)
-	if err != nil || len(forkVersionBytes) > 4 {
-		err = errors.New("invalid fork version passed")
-		return domain, err
-	}
-	var forkVersion [4]byte
-	copy(forkVersion[:], forkVersionBytes[:4])
-	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
-}
-
-func initStreamer(c *context.Context, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
-	timeStreamStart := time.Now()
-
-	pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: l}
-
-	id := c.String("relay-distribution-id")
-	if id == "" {
-		id = uuid.NewString()
-	}
-
-	streamConfig := stream.StreamConfig{
-		Logger:          l,
-		ID:              id,
-		PubsubTopic:     c.String("relay-distribution-stream-topic"),
-		StreamQueueSize: c.Int("relay-distribution-stream-queue"),
-	}
-
-	redisStreamer := stream.NewClient(pubsub, st, streamConfig)
-	redisStreamer.AttachMetrics(m)
-
-	if err := redisStreamer.RunSubscriberParallel(c, c.Uint("relay-distribution-stream-workers")); err != nil {
-		return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
-	}
-
-	l.With(log.F{
-		"relay-service": "stream-subscriber",
-		"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
-	}).Info("initialized")
-
-	return redisStreamer, nil
-}
-
-func InitWarehouse(c *context.Context, l log.Logger, m *metrics.Metrics, st stream.State) {
-	var relayWh *wh.Warehouse
-
-	warehouse := wh.NewWarehouse(logger, c.Int("warehouse-buffer"))
-
-	datadir := c.String("warehouse-dir")
-	if err := os.MkdirAll(datadir, 0755); err != nil {
-		return fmt.Errorf("failed to create datadir: %w", err)
-	}
-
-	if err := warehouse.RunParallel(c.Context, datadir, c.Int("warehouse-workers")); err != nil {
-		return fmt.Errorf("failed to run data exporter: %w", err)
-	}
-
-	warehouse.AttachMetrics(m)
-
-	l.With(log.F{
-		"subService": "warehouse",
-		"datadir":    c.String("warehouse-dir"),
-		"workers":    c.Int("warehouse-workers"),
-	}).Info("initialized")
-
-	relayWh = warehouse
-
 }
