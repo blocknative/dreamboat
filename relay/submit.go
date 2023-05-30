@@ -256,7 +256,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, logger log.Logger, m *stru
 		}
 	}(rs.runnignAsyncs, complete.Header.Trace, newMax)
 
-	if rs.config.Distributed && rs.config.StreamSubmissions {
+	if rs.config.Distributed {
 		go rs.s.PublishBuilderBid(context.Background(), bid)
 	}
 
@@ -321,7 +321,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 			return true, fmt.Errorf("randao for slot %d not found", sbr.Slot())
 		}
 		if randao.Randao != sbr.Random().String() {
-			return true, fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next:%s", ErrInvalidRandao, sbr.Random().String(), randao.Randao, )
+			return true, fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next:%s", ErrInvalidRandao, sbr.Random().String(), randao.Randao)
 		}
 		return true, nil
 	}
@@ -347,13 +347,13 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 		return types.Root{}, false, nil
 	}
 
-	withdrawalState := state.Withdrawals(submitBlockRequest.Slot() - 1, submitBlockRequest.ParentHash())
+	withdrawalState := state.Withdrawals(submitBlockRequest.Slot()-1, submitBlockRequest.ParentHash())
 	retried = false
 	if withdrawalState.Slot == 0 {
 		// recheck beacon sync state for early blocks
 		time.Sleep(StateRecheckDelay)
 		retried = true
-		withdrawalState = state.Withdrawals(submitBlockRequest.Slot() - 1, submitBlockRequest.ParentHash())
+		withdrawalState = state.Withdrawals(submitBlockRequest.Slot()-1, submitBlockRequest.ParentHash())
 		if withdrawalState.Slot == 0 {
 			return root, retried, fmt.Errorf("withdrawals for slot %d not found", submitBlockRequest.Slot())
 		}

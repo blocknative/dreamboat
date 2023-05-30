@@ -279,10 +279,10 @@ var flags = []cli.Flag{
 		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_WORKERS"},
 	},
 	&cli.BoolFlag{
-		Name:    "relay-distribution-stream-submissions",
-		Usage:   "publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published",
+		Name:    "relay-distribution-stream-served-bids",
+		Usage:   "stream entire block for every bid that is served in GetHeader requests.",
 		Value:   true,
-		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_SUBMISSIONS"},
+		EnvVars: []string{"RELAY_DISTRIBUTION_STREAM_SERVED_BIDS"},
 	},
 	&cli.DurationFlag{
 		Name:    "relay-distribution-stream-ttl",
@@ -654,7 +654,7 @@ func run() cli.ActionFunc {
 			AllowedListedBuilders: allowed,
 			PublishBlock:          c.Bool("relay-publish-block"),
 			Distributed:           c.Bool("relay-distribution"),
-			StreamSubmissions:     c.Bool("relay-distribution-stream-submissions"),
+			StreamServedBids:      c.Bool("relay-distribution-stream-served-bids"),
 		}, beaconPubCli, validatorCache, valDS, verificator, state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 		r.AttachMetrics(m)
 

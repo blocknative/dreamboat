@@ -107,6 +107,7 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 	var bbt structs.BlockAndTraceExtended
 
 	for raw := range s.cacheIn {
+		receivedAt := time.Now()
 		sData, err := s.decode(raw)
 		if err != nil {
 			l.WithError(err).Warn("failed to decode cache wrapper")
@@ -144,6 +145,11 @@ func (s *Client) RunCacheSubscriber(ctx context.Context) error {
 			continue
 		}
 
+		l.With(log.F{
+			"blockHash":  bbt.ExecutionPayload().BlockHash(),
+			"timestamp": receivedAt.String(),
+		}).Debug("received")
+
 		s.m.RecvCounter.WithLabelValues("cache").Inc()
 		select {
 		case s.cacheOut <- bbt:
@@ -163,6 +169,7 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 	var bb structs.BuilderBidExtended
 
 	for raw := range s.builderBidIn {
+		receivedAt := time.Now()
 		sData, err := s.decode(raw)
 		if err != nil {
 			l.WithError(err).Warn("failed to decode builder bid  wrapper")
@@ -199,6 +206,10 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 			l.WithField("forkEncoding", forkEncoding).Warn("unkown builder bid forkEncoding")
 			continue
 		}
+		l.With(log.F{
+			"blockHash":  bb.BuilderBid().Header().GetBlockHash(),
+			"timestamp": receivedAt.String(),
+		}).Debug("received")
 
 		s.m.RecvCounter.WithLabelValues("bid").Inc()
 		select {
@@ -230,6 +241,11 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+BidTopic, b); err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
+	s.Logger.With(log.F{
+		"method":    "publishBuilderBid",
+		"blockHash": bid.BuilderBid().Header().GetBlockHash(),
+		"timestamp": time.Now().String(),
+	}).Debug("published")
 	timer2.ObserveDuration()
 
 	s.m.PublishSize.WithLabelValues("publishBuilderBid").Observe(float64(len(b)))
@@ -255,6 +271,11 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+CacheTopic, b); err != nil {
 		return fmt.Errorf("fail to publish cache block: %w", err)
 	}
+	s.Logger.With(log.F{
+		"method":    "publishBlockCache",
+		"blockHash": block.ExecutionPayload().BlockHash(),
+		"timestamp": time.Now().String(),
+	}).Debug("published")
 	timer2.ObserveDuration()
 
 	s.m.PublishSize.WithLabelValues("publishCacheBlock").Observe(float64(len(b)))
