@@ -239,17 +239,19 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	}
 	timer1.ObserveDuration()
 
-	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "publish"))
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+BidTopic, b); err != nil {
-		return fmt.Errorf("fail to encode encode and stream block: %w", err)
-	}
-	s.Logger.With(log.F{
+	l := s.Logger.With(log.F{
 		"method":    "publishBuilderBid",
 		"itemType":  "builderBid",
 		"size":      len(b),
 		"blockHash": bid.BuilderBid().Header().GetBlockHash(),
-		"timestamp": time.Now().String(),
-	}).Debug("published")
+	})
+
+	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "publish"))
+	l.WithField("timestamp", time.Now().String()).Debug("publishing")
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+BidTopic, b); err != nil {
+		return fmt.Errorf("fail to encode encode and stream block: %w", err)
+	}
+	l.WithField("timestamp", time.Now().String()).Debug("published")
 	timer2.ObserveDuration()
 
 	s.m.PublishSize.WithLabelValues("publishBuilderBid").Observe(float64(len(b)))
@@ -271,17 +273,20 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 	}
 	timer1.ObserveDuration()
 
-	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "publish"))
-	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+CacheTopic, b); err != nil {
-		return fmt.Errorf("fail to publish cache block: %w", err)
-	}
-	s.Logger.With(log.F{
+	l := s.Logger.With(log.F{
 		"method":    "publishBlockCache",
 		"itemType":  "blockCache",
 		"size":      len(b),
 		"blockHash": block.ExecutionPayload().BlockHash(),
 		"timestamp": time.Now().String(),
-	}).Debug("published")
+	})
+
+	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "publish"))
+	l.WithField("timestamp", time.Now().String()).Debug("publishing")
+	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+CacheTopic, b); err != nil {
+		return fmt.Errorf("fail to publish cache block: %w", err)
+	}
+	l.WithField("timestamp", time.Now().String()).Debug("published")
 	timer2.ObserveDuration()
 
 	s.m.PublishSize.WithLabelValues("publishBlockCache").Observe(float64(len(b)))
