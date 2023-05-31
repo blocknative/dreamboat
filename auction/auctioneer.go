@@ -48,7 +48,10 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) bool {
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
 
-	auction.latestBlockByBuilder[LatestKey{ParentHash: parent, Pk: block.Header.Trace.BuilderPubkey}] = block
+	// always discard submissions lower than latest slot
+	if auction.Slot > block.Header.Trace.Slot {
+		return false
+	}
 
 	// always set new value and bigger slot
 	if auction.Slot < block.Header.Trace.Slot {
@@ -58,14 +61,12 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) bool {
 			maxProfit:            make(map[types.Hash]*structs.CompleteBlockstruct),
 		}
 
+		auction.latestBlockByBuilder[LatestKey{ParentHash: parent, Pk: block.Header.Trace.BuilderPubkey}] = block
 		auction.maxProfit[parent] = block
 		return true
 	}
 
-	// always discard submissions lower than latest slot
-	if auction.Slot > block.Header.Trace.Slot {
-		return false
-	}
+	auction.latestBlockByBuilder[LatestKey{ParentHash: parent, Pk: block.Header.Trace.BuilderPubkey}] = block
 
 	mp, ok := auction.maxProfit[parent]
 	if !ok {
