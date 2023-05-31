@@ -47,6 +47,11 @@ func (a *Auctioneer) AddBlock(block *structs.CompleteBlockstruct) bool {
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
 
+	a.auctions[(block.Header.Trace.Slot-2)%3] = &Auction{
+		latestBlockByBuilder: make(map[LatestKey]*structs.CompleteBlockstruct),
+		maxProfit:            make(map[types.Hash]*structs.CompleteBlockstruct),
+	}
+
 	//auction.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
 	auction.latestBlockByBuilder[LatestKey{ParentHash: parent, Pk: block.Header.Trace.BuilderPubkey}] = block
 
