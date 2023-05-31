@@ -13,6 +13,7 @@ type Auctioneer struct {
 
 type Auction struct {
 	mu                   sync.RWMutex
+	Slot                 uint64
 	maxProfit            map[types.Hash]structs.BuilderBidExtended
 	latestBlockByBuilder map[LatestKey]structs.BuilderBidExtended
 }
@@ -26,6 +27,7 @@ func NewAuctioneer() *Auctioneer {
 	a := &Auctioneer{}
 	for i := 0; i < structs.NumberOfSlotsInState; i++ {
 		a.auctions[i] = &Auction{
+			Slot:                 uint64(i),
 			latestBlockByBuilder: make(map[LatestKey]structs.BuilderBidExtended),
 			maxProfit:            make(map[types.Hash]structs.BuilderBidExtended),
 		}
@@ -43,21 +45,28 @@ func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {
 	auction.mu.Lock()
 	defer auction.mu.Unlock()
 
-
-	//auction.latestBlockByBuilder[block.Payload.Trace.Message.BuilderPubkey] = block
-	//auction.latestBlockByBuilder[bid.BuilderBid().Pubkey()] = bid
-	auction.latestBlockByBuilder[LatestKey{ParentHash: parent, Pk: bbid.Pubkey()}] = bid
-	mp, ok := auction.maxProfit[parent]
+	// always discard submissions lower than latest slot
+	if auction.Slot > bid.Slot() {
+		return false
+	}
 
 	// always set new value and bigger slot
-	if !ok || mp.Slot() < bid.Slot() {
+	if auction.Slot < bid.Slot() {
+		a.auctions[bid.Slot()%structs.NumberOfSlotsInState] = &Auction{
+			Slot:                 bid.Slot(),
+			latestBlockByBuilder: make(map[LatestKey]structs.BuilderBidExtended),
+			maxProfit:            make(map[types.Hash]structs.BuilderBidExtended),
+		}
 		auction.maxProfit[parent] = bid
+		auction.latestBlockByBuilder[LatestKey{ParentHash: parent, Pk: bbid.Pubkey()}] = bid
 		return true
 	}
 
-	// always discard submissions lower than latest slot
-	if mp.Slot() > bid.Slot() {
-		return false
+	auction.latestBlockByBuilder[LatestKey{ParentHash: parent, Pk: bbid.Pubkey()}] = bid
+	mp, ok := auction.maxProfit[parent]
+	if !ok {
+		auction.maxProfit[parent] = bid
+		return true
 	}
 
 	// accept bigger bid
