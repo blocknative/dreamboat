@@ -354,18 +354,20 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		reader io.Reader = r.Body
 		err    error
 	)
+	defer r.Body.Close()
 
 	if encoding == "gzip" {
-		reader, err = gzip.NewReader(r.Body)
+		gReader, err := gzip.NewReader(r.Body)
 		if err != nil {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "gzip reader").Inc()
 			writeError(w, http.StatusBadRequest, errors.New("invalid gzipped submitblock request decode"))
 			return
 		}
+		defer gReader.Close()
+		reader = gReader
 	}
 
-	reader = io.LimitReader(reader, 10*1024*1024) // 10 MB
-	b, err := ioutil.ReadAll(reader)
+	b, err := ioutil.ReadAll(io.LimitReader(reader, 10*1024*1024)) // 10 MB
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "read body").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
