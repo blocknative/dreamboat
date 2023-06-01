@@ -12,6 +12,8 @@ import (
 
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/blocknative/dreamboat/api"
 	"github.com/blocknative/dreamboat/api/inner"
 	"github.com/blocknative/dreamboat/auction"
@@ -26,7 +28,6 @@ import (
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/stream"
-	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	badger "github.com/ipfs/go-ds-badger2"
 
@@ -445,9 +446,12 @@ func run() cli.ActionFunc {
 			readClient := redis.NewClient(&redis.Options{
 				Addr: c.String("relay-storage-read-redis-uri"),
 			})
+			m.RegisterRedis("redis", "readreplica", readClient)
+
 			writeClient := redis.NewClient(&redis.Options{
 				Addr: c.String("relay-storage-write-redis-uri"),
 			})
+			m.RegisterRedis("redis", "master", writeClient)
 			storage = &dsRedis.RedisDatastore{Read: readClient, Write: writeClient}
 		} else {
 			storage = badgerDs
@@ -469,6 +473,8 @@ func run() cli.ActionFunc {
 			redisClient := redis.NewClient(&redis.Options{
 				Addr: c.String("relay-pubsub-redis-uri"),
 			})
+
+			m.RegisterRedis("redis", "stream", redisClient)
 			streamer, err = initStreamer(c, redisClient, logger, m, state)
 			if err != nil {
 				return fmt.Errorf("fail to create streamer: %w", err)

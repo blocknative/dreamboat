@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/extra/redisprometheus/v9"
 )
 
 type Metrics struct {
@@ -21,6 +22,10 @@ func NewMetrics() (m *Metrics) {
 	reg.Register(collectors.NewGoCollector())
 
 	return &Metrics{registry: reg, gatherers: prometheus.Gatherers{reg}}
+}
+
+func (m *Metrics) RegisterRedis(namespace, subsystem string, client redisprometheus.StatGetter) error {
+	return m.registry.Register(redisprometheus.NewCollector(namespace, subsystem, client))
 }
 
 func (m *Metrics) RegisterDB(db *sql.DB, dbName string) error {
