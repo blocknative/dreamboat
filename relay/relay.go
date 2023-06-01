@@ -275,6 +275,16 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 	})
 
 	logger.Info("header requested")
+
+	slotStart := int64(rs.beaconState.Genesis().GenesisTime+(uint64(slot)*12)) * 1000
+	now := time.Now().UnixMilli()
+	msIntoSlot := now - slotStart
+	if msIntoSlot > int64(rs.config.GetPayloadRequestTimeLimit.Milliseconds()) {
+		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too late")
+		return nil, ErrLateRequest
+	}
+	logger = logger.WithField("msIntoSlot", msIntoSlot)
+
 	tGet := time.Now()
 
 	maxProfit, ok := rs.a.MaxProfitBlock(slot, parentHash)
