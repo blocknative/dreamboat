@@ -45,6 +45,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 		"proposer":       sbr.ProposerPubkey(),
 		"bid":            value.String(),
 		"withdrawalsNum": len(sbr.Withdrawals()),
+		"size":           len(sbr.Raw()),
 	})
 
 	bRetried, err := verifyBlock(sbr, rs.beaconState)
