@@ -331,6 +331,8 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 			ctx, cancel := context.WithTimeout(context.Background(), structs.DurationPerSlot)
 			defer cancel()
 
+			logger = logger.WithField("blockHash", key.BlockHash)
+
 			bbt, err := rs.d.GetPayload(ctx, fork, key)
 			if err != nil {
 				logger.WithError(err).Warn("failed to cache block")
