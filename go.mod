@@ -6,7 +6,6 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/ethereum/go-ethereum v1.11.6
 	github.com/ferranbt/fastssz v0.1.3
-	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
@@ -17,6 +16,8 @@ require (
 	github.com/lthibault/log v1.2.3
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
+	github.com/redis/go-redis/extra/redisprometheus/v9 v9.0.5
+	github.com/redis/go-redis/v9 v9.0.5
 	github.com/sirupsen/logrus v1.9.2
 	github.com/stretchr/testify v1.8.2
 	github.com/supranational/blst v0.3.10

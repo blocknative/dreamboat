@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	ds "github.com/ipfs/go-datastore"
+	"github.com/redis/go-redis/v9"
 )
 
 type RedisDatastore struct {
