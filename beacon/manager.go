@@ -194,20 +194,13 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 			t := time.Now()
 
 			err := s.processNewSlot(ctx, state, client, ev, d, vCache)
-			if err != nil {
-				logger.
-					WithField("slot", ev.Data.ProposalSlot-1).
-					WithError(err).
-					Error("error processing slot")
-				continue
-			}
-
+			
 			headSlot := state.HeadSlot()
 			validators := state.KnownValidators()
 			duties := state.Duties()
 			parentHash := state.ParentBlockHash()
 
-			logger.With(log.F{
+			logger = logger.With(log.F{
 				"epoch":                     headSlot.Epoch(),
 				"slotHead":                  headSlot,
 				"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
@@ -218,7 +211,16 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 				"randao":                    state.Randao(uint64(headSlot), parentHash).Randao,
 				"withdrawalsRoot":           state.Withdrawals(uint64(headSlot), parentHash).Root.String(),
 				"processingTimeMs":          time.Since(t).Milliseconds(),
-			}).Debug("processed new slot")
+			})
+			if err != nil {
+				logger.
+					WithField("slot", ev.Data.ProposalSlot-1).
+					WithError(err).
+					Error("error processing slot")
+				continue
+			}
+
+			logger.Debug("processed new slot")
 		}
 	}
 }
