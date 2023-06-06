@@ -31,7 +31,7 @@ func TestPutGetPayload(t *testing.T) {
 	require.NoError(t, err)
 	defer tB.Close()
 
-	cache, _ := lru.New[structs.PayloadKey, structs.BlockBidAndTrace](10)
+	cache, _ := lru.New[structs.PayloadKey, structs.BlockAndTraceExtended](10)
 	ds := datastore.Datastore{TTLStorage: tB, PayloadCache: cache}
 
 	payload := randomBlockBidAndTrace()
@@ -87,7 +87,7 @@ func randomPayload() *types.ExecutionPayload {
 	}
 }
 
-func randomBlockBidAndTrace() structs.BlockBidAndTrace {
+func randomBlockBidAndTrace() structs.BlockAndTraceExtended {
 
 	sk, _, _ := bls.GenerateNewKeypair()
 

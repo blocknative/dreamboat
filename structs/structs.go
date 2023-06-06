@@ -192,8 +192,10 @@ type ExecutionPayloadHeader interface {
 	GetBlockNumber() uint64
 }
 
-type BlockBidAndTrace interface {
+type BlockAndTraceExtended interface {
 	BidValue() types.U256Str
+	Slot() uint64
+	Proposer() types.PublicKey
 	BuilderPubkey() (pub types.PublicKey)
 
 	ExecutionPayload() ExecutionPayload
@@ -268,7 +270,7 @@ func (hd *HeaderData) UnmarshalJSON(b []byte) error {
 // / That's to be improved in future
 type CompleteBlockstruct struct {
 	Header  HeaderAndTrace
-	Payload BlockBidAndTrace
+	Payload BlockAndTraceExtended
 }
 
 type ValidatorCacheEntry struct {
@@ -277,13 +279,15 @@ type ValidatorCacheEntry struct {
 }
 
 type WithdrawalsState struct {
-	Slot Slot
-	Root types.Root
+	Slot       Slot
+	ParentHash types.Hash
+	Root       types.Root
 }
 
 type RandaoState struct {
-	Slot   uint64
-	Randao string
+	Slot       uint64
+	ParentHash types.Hash
+	Randao     string
 }
 
 type ForkState struct {

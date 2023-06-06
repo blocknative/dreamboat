@@ -134,10 +134,10 @@ func (mr *MockDatastoreMockRecorder) CacheBlock(arg0, arg1, arg2 interface{}) *g
 }
 
 // GetPayload mocks base method.
-func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.ForkVersion, arg2 structs.PayloadKey) (structs.BlockBidAndTrace, bool, error) {
+func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.ForkVersion, arg2 structs.PayloadKey) (structs.BlockAndTraceExtended, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1, arg2)
-	ret0, _ := ret[0].(structs.BlockBidAndTrace)
+	ret0, _ := ret[0].(structs.BlockAndTraceExtended)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -150,7 +150,7 @@ func (mr *MockDatastoreMockRecorder) GetPayload(arg0, arg1, arg2 interface{}) *g
 }
 
 // PutPayload mocks base method.
-func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey, arg2 structs.BlockBidAndTrace, arg3 time.Duration) error {
+func (m *MockDatastore) PutPayload(arg0 context.Context, arg1 structs.PayloadKey, arg2 structs.BlockAndTraceExtended, arg3 time.Duration) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PutPayload", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
