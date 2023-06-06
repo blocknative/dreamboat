@@ -119,13 +119,28 @@ func (m *MockDatastore) EXPECT() *MockDatastoreMockRecorder {
 	return m.recorder
 }
 
+// CacheBlock mocks base method.
+func (m *MockDatastore) CacheBlock(arg0 context.Context, arg1 structs.PayloadKey, arg2 *structs.CompleteBlockstruct) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CacheBlock", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CacheBlock indicates an expected call of CacheBlock.
+func (mr *MockDatastoreMockRecorder) CacheBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CacheBlock", reflect.TypeOf((*MockDatastore)(nil).CacheBlock), arg0, arg1, arg2)
+}
+
 // GetPayload mocks base method.
-func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.ForkVersion, arg2 structs.PayloadKey) (structs.BlockAndTraceExtended, error) {
+func (m *MockDatastore) GetPayload(arg0 context.Context, arg1 structs.ForkVersion, arg2 structs.PayloadKey) (structs.BlockAndTraceExtended, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPayload", arg0, arg1, arg2)
 	ret0, _ := ret[0].(structs.BlockAndTraceExtended)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // GetPayload indicates an expected call of GetPayload.
@@ -228,31 +243,31 @@ func (mr *MockStateMockRecorder) KnownValidators() *gomock.Call {
 }
 
 // Randao mocks base method.
-func (m *MockState) Randao(arg0 uint64, arg1 types0.Hash) structs.RandaoState {
+func (m *MockState) Randao(arg0 uint64) structs.RandaoState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Randao", arg0, arg1)
+	ret := m.ctrl.Call(m, "Randao", arg0)
 	ret0, _ := ret[0].(structs.RandaoState)
 	return ret0
 }
 
 // Randao indicates an expected call of Randao.
-func (mr *MockStateMockRecorder) Randao(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) Randao(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao), arg0)
 }
 
 // Withdrawals mocks base method.
-func (m *MockState) Withdrawals(arg0 uint64, arg1 types0.Hash) structs.WithdrawalsState {
+func (m *MockState) Withdrawals(arg0 uint64) structs.WithdrawalsState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Withdrawals", arg0, arg1)
+	ret := m.ctrl.Call(m, "Withdrawals", arg0)
 	ret0, _ := ret[0].(structs.WithdrawalsState)
 	return ret0
 }
 
 // Withdrawals indicates an expected call of Withdrawals.
-func (mr *MockStateMockRecorder) Withdrawals(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) Withdrawals(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals), arg0)
 }
 
 // MockValidatorStore is a mock of ValidatorStore interface.
@@ -448,7 +463,7 @@ func (m *MockAuctioneer) EXPECT() *MockAuctioneerMockRecorder {
 }
 
 // AddBlock mocks base method.
-func (m *MockAuctioneer) AddBlock(arg0 structs.BuilderBidExtended) bool {
+func (m *MockAuctioneer) AddBlock(arg0 *structs.CompleteBlockstruct) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddBlock", arg0)
 	ret0, _ := ret[0].(bool)
@@ -462,10 +477,10 @@ func (mr *MockAuctioneerMockRecorder) AddBlock(arg0 interface{}) *gomock.Call {
 }
 
 // MaxProfitBlock mocks base method.
-func (m *MockAuctioneer) MaxProfitBlock(arg0 structs.Slot, arg1 types0.Hash) (structs.BuilderBidExtended, bool) {
+func (m *MockAuctioneer) MaxProfitBlock(arg0 structs.Slot, arg1 types0.Hash) (*structs.CompleteBlockstruct, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxProfitBlock", arg0, arg1)
-	ret0, _ := ret[0].(structs.BuilderBidExtended)
+	ret0, _ := ret[0].(*structs.CompleteBlockstruct)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }

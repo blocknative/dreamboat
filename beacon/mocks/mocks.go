@@ -159,6 +159,21 @@ func (mr *MockBeaconClientMockRecorder) GetProposerDuties(arg0 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposerDuties", reflect.TypeOf((*MockBeaconClient)(nil).GetProposerDuties), arg0)
 }
 
+// GetWithdrawals mocks base method.
+func (m *MockBeaconClient) GetWithdrawals(arg0 structs.Slot) (*client.GetWithdrawalsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWithdrawals", arg0)
+	ret0, _ := ret[0].(*client.GetWithdrawalsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWithdrawals indicates an expected call of GetWithdrawals.
+func (mr *MockBeaconClientMockRecorder) GetWithdrawals(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWithdrawals", reflect.TypeOf((*MockBeaconClient)(nil).GetWithdrawals), arg0)
+}
+
 // KnownValidators mocks base method.
 func (m *MockBeaconClient) KnownValidators(arg0 structs.Slot) (client.AllValidatorsResponse, error) {
 	m.ctrl.T.Helper()
@@ -172,6 +187,21 @@ func (m *MockBeaconClient) KnownValidators(arg0 structs.Slot) (client.AllValidat
 func (mr *MockBeaconClientMockRecorder) KnownValidators(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KnownValidators", reflect.TypeOf((*MockBeaconClient)(nil).KnownValidators), arg0)
+}
+
+// Randao mocks base method.
+func (m *MockBeaconClient) Randao(arg0 structs.Slot) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Randao", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Randao indicates an expected call of Randao.
+func (mr *MockBeaconClientMockRecorder) Randao(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockBeaconClient)(nil).Randao), arg0)
 }
 
 // SubscribeToHeadEvents mocks base method.
@@ -278,6 +308,20 @@ func (mr *MockStateMockRecorder) HeadSlot() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadSlot", reflect.TypeOf((*MockState)(nil).HeadSlot))
 }
 
+// HeadSlotPayloadAttributes mocks base method.
+func (m *MockState) HeadSlotPayloadAttributes() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HeadSlotPayloadAttributes")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// HeadSlotPayloadAttributes indicates an expected call of HeadSlotPayloadAttributes.
+func (mr *MockStateMockRecorder) HeadSlotPayloadAttributes() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadSlotPayloadAttributes", reflect.TypeOf((*MockState)(nil).HeadSlotPayloadAttributes))
+}
+
 // KnownValidators mocks base method.
 func (m *MockState) KnownValidators() structs.ValidatorsState {
 	m.ctrl.T.Helper()
@@ -307,10 +351,10 @@ func (mr *MockStateMockRecorder) KnownValidatorsUpdateTime() *gomock.Call {
 }
 
 // ParentBlockHash mocks base method.
-func (m *MockState) ParentBlockHash() types.Hash {
+func (m *MockState) ParentBlockHash() string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ParentBlockHash")
-	ret0, _ := ret[0].(types.Hash)
+	ret0, _ := ret[0].(string)
 	return ret0
 }
 
@@ -321,17 +365,17 @@ func (mr *MockStateMockRecorder) ParentBlockHash() *gomock.Call {
 }
 
 // Randao mocks base method.
-func (m *MockState) Randao(arg0 uint64, arg1 types.Hash) structs.RandaoState {
+func (m *MockState) Randao(arg0 uint64) structs.RandaoState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Randao", arg0, arg1)
+	ret := m.ctrl.Call(m, "Randao", arg0)
 	ret0, _ := ret[0].(structs.RandaoState)
 	return ret0
 }
 
 // Randao indicates an expected call of Randao.
-func (mr *MockStateMockRecorder) Randao(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) Randao(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Randao", reflect.TypeOf((*MockState)(nil).Randao), arg0)
 }
 
 // SetDuties mocks base method.
@@ -370,19 +414,31 @@ func (mr *MockStateMockRecorder) SetGenesis(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGenesis", reflect.TypeOf((*MockState)(nil).SetGenesis), arg0)
 }
 
-// SetHeadSlotIfHigher mocks base method.
-func (m *MockState) SetHeadSlotIfHigher(arg0 structs.Slot) (structs.Slot, bool) {
+// SetHeadSlot mocks base method.
+func (m *MockState) SetHeadSlot(arg0 structs.Slot) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetHeadSlotIfHigher", arg0)
-	ret0, _ := ret[0].(structs.Slot)
+	m.ctrl.Call(m, "SetHeadSlot", arg0)
+}
+
+// SetHeadSlot indicates an expected call of SetHeadSlot.
+func (mr *MockStateMockRecorder) SetHeadSlot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeadSlot", reflect.TypeOf((*MockState)(nil).SetHeadSlot), arg0)
+}
+
+// SetHeadSlotPayloadAttributesIfHigher mocks base method.
+func (m *MockState) SetHeadSlotPayloadAttributesIfHigher(arg0 uint64) (uint64, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetHeadSlotPayloadAttributesIfHigher", arg0)
+	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
-// SetHeadSlotIfHigher indicates an expected call of SetHeadSlotIfHigher.
-func (mr *MockStateMockRecorder) SetHeadSlotIfHigher(arg0 interface{}) *gomock.Call {
+// SetHeadSlotPayloadAttributesIfHigher indicates an expected call of SetHeadSlotPayloadAttributesIfHigher.
+func (mr *MockStateMockRecorder) SetHeadSlotPayloadAttributesIfHigher(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeadSlotIfHigher", reflect.TypeOf((*MockState)(nil).SetHeadSlotIfHigher), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeadSlotPayloadAttributesIfHigher", reflect.TypeOf((*MockState)(nil).SetHeadSlotPayloadAttributesIfHigher), arg0)
 }
 
 // SetKnownValidators mocks base method.
@@ -398,7 +454,7 @@ func (mr *MockStateMockRecorder) SetKnownValidators(arg0 interface{}) *gomock.Ca
 }
 
 // SetParentBlockHash mocks base method.
-func (m *MockState) SetParentBlockHash(arg0 types.Hash) {
+func (m *MockState) SetParentBlockHash(arg0 string) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetParentBlockHash", arg0)
 }
@@ -434,15 +490,15 @@ func (mr *MockStateMockRecorder) SetWithdrawals(arg0 interface{}) *gomock.Call {
 }
 
 // Withdrawals mocks base method.
-func (m *MockState) Withdrawals(arg0 uint64, arg1 types.Hash) structs.WithdrawalsState {
+func (m *MockState) Withdrawals(arg0 uint64) structs.WithdrawalsState {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Withdrawals", arg0, arg1)
+	ret := m.ctrl.Call(m, "Withdrawals", arg0)
 	ret0, _ := ret[0].(structs.WithdrawalsState)
 	return ret0
 }
 
 // Withdrawals indicates an expected call of Withdrawals.
-func (mr *MockStateMockRecorder) Withdrawals(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) Withdrawals(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Withdrawals", reflect.TypeOf((*MockState)(nil).Withdrawals), arg0)
 }

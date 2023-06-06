@@ -194,7 +194,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 			t := time.Now()
 
 			err := s.processNewSlot(ctx, state, client, ev, d, vCache)
-
+			
 			headSlot := state.HeadSlot()
 			validators := state.KnownValidators()
 			duties := state.Duties()
@@ -300,6 +300,9 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	}
 
 	state.SetParentBlockHash(receivedParentBlockHash)
+	if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash); err != nil {
+		return err
+	}
 
 	// update proposer duties
 	entries, err := s.getProposerDuties(ctx, client, structs.Slot(currHeadSlot))
@@ -308,7 +311,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	}
 	s.storeProposerDuties(ctx, state, d, vCache, structs.Slot(currHeadSlot), entries)
 
-	return s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash)
+	return nil
 }
 
 func (m *Manager) updateWithdrawalsAndRandao(ctx context.Context, logger log.Logger, state State, event bcli.PayloadAttributesEvent, parentHash types.Hash) error {
