@@ -37,7 +37,7 @@ func VerifySignatureBytes(msg [32]byte, sigBytes, pkBytes []byte) (ok bool, err 
 		return false, nil
 	}
 
-	if blst.CoreVerifyPkInG1(pk, sig, true, msg[:], dst, nil) != BLST_SUCCESS {
+	if result := blst.CoreVerifyPkInG1(pk, sig, true, msg[:], dst, nil); result != BLST_SUCCESS {
 		return false, bls.ErrInvalidSignature
 	}
 

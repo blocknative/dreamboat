@@ -34,14 +34,15 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 	tStart := time.Now()
 	defer m.AppendSince(tStart, "submitBlock", "all")
 	value := sbr.Value()
+	headSlot := rs.beaconState.HeadSlot()
 	logger := rs.l.With(log.F{
 		"method":         "SubmitBlock",
 		"ip":             uc.IP,
 		"builder":        sbr.BuilderPubkey(),
 		"blockHash":      sbr.BlockHash(),
-		"headSlot":       rs.beaconState.HeadSlot(),
+		"headSlot":       headSlot,
 		"slot":           sbr.Slot(),
-		"slotDiff":       int64(sbr.Slot()) - int64(rs.beaconState.HeadSlot()),
+		"slotDiff":       int64(sbr.Slot()) - int64(headSlot),
 		"proposer":       sbr.ProposerPubkey(),
 		"bid":            value.String(),
 		"withdrawalsNum": len(sbr.Withdrawals()),
@@ -322,7 +323,7 @@ func verifyBlock(sbr structs.SubmitBlockRequest, beaconState State) (retry bool,
 			return true, fmt.Errorf("randao for slot %d not found", sbr.Slot())
 		}
 		if randao.Randao != sbr.Random().String() {
-			return true, fmt.Errorf("%w: got %s, expected %s. Previous: %s and Next:%s", ErrInvalidRandao, sbr.Random().String(), randao.Randao)
+			return true, fmt.Errorf("%w: got %s, expected %s", ErrInvalidRandao, sbr.Random().String(), randao.Randao)
 		}
 		return true, nil
 	}
