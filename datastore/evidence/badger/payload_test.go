@@ -51,8 +51,9 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	dt.Trace.Slot = uint64(slotInt)
 
 	// get
-	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Slot: slot})
-	require.ErrorIs(t, err, ds.ErrNotFound)
+	payloads, err := d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Slot: slot})
+	require.NoError(t, err)
+	require.Len(t, payloads, 0)
 
 	// get by block hash
 	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockHash: dt.Trace.BlockHash})
