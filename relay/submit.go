@@ -351,12 +351,12 @@ func verifyWithdrawals(state State, submitBlockRequest structs.SubmitBlockReques
 
 	withdrawalState := state.Withdrawals(submitBlockRequest.Slot()-1, submitBlockRequest.ParentHash())
 	retried = false
-	if withdrawalState.Slot == 0 {
+	if (withdrawalState.Root == types.Hash{}) {
 		// recheck beacon sync state for early blocks
 		time.Sleep(StateRecheckDelay)
 		retried = true
 		withdrawalState = state.Withdrawals(submitBlockRequest.Slot()-1, submitBlockRequest.ParentHash())
-		if withdrawalState.Slot == 0 {
+		if (withdrawalState.Root == types.Hash{}) {
 			return root, retried, fmt.Errorf("withdrawals for slot %d not found", submitBlockRequest.Slot())
 		}
 	}

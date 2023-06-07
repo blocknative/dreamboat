@@ -152,7 +152,7 @@ type Relay struct {
 	cache  ValidatorCache
 	vstore ValidatorStore
 
-	s  Streamer
+	s Streamer
 
 	bvc BlockValidationClient
 

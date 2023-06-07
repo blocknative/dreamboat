@@ -17,6 +17,7 @@ import (
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
 	ccommon "github.com/blocknative/dreamboat/test/common"
+	"github.com/blocknative/dreamboat/verify"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -54,11 +55,14 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	require.NoError(t, err)
 	conf := RelayConfig{
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
-			0: proposerSigningDomain,
+			structs.ForkAltair:    proposerSigningDomain,
+			structs.ForkBellatrix: proposerSigningDomain,
+			structs.ForkCapella:   proposerSigningDomain,
 		},
-		BuilderSigningDomain: relaySigningDomain,
-		SecretKey:            sk,
-		PubKey:               pubKey,
+		BuilderSigningDomain:       relaySigningDomain,
+		SecretKey:                  sk,
+		PubKey:                     pubKey,
+		GetPayloadRequestTimeLimit: time.Hour,
 	}
 
 	ds := mocks.NewMockDatastore(ctrl)
@@ -104,6 +108,10 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	require.NoError(t, err)
 	verify.EXPECT().Enqueue(context.Background(), submitRequest.Signature(), submitRequest.BuilderPubkey(), msg).Times(1)
 
+	hW := structs.HashWithdrawals{Withdrawals: submitRequest.Withdrawals()}
+	h, err := hW.HashTreeRoot()
+	require.NoError(t, err)
+
 	bvc.EXPECT().IsSet().Times(1).Return(true)
 	switch fork {
 	case structs.ForkBellatrix:
@@ -114,6 +122,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	case structs.ForkCapella:
 		bvc.EXPECT().ValidateBlockV2(context.Background(), &rpctypes.BuilderBlockValidationRequestV2{
 			SubmitBlockRequest: submitRequest.(*capella.SubmitBlockRequest),
+			WithdrawalsRoot:    h,
 			RegisteredGasLimit: 3_000_000,
 		}).Return(nil)
 	}
@@ -139,33 +148,35 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		Timestamp: time.Now(),
 	}
 	wh.EXPECT().StoreAsync(context.Background(), whMatcher{req}).Times(1)
+	// state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1)
 
-	////   GetHeader
+	// GetHeader
 	a.EXPECT().MaxProfitBlock(structs.Slot(submitRequest.Slot()), submitRequest.ParentHash()).Times(1).
 		DoAndReturn(func(slot structs.Slot, ph types.Hash) (structs.BuilderBidExtended, bool) {
 			return bl, true
 		})
-
-	hW := structs.HashWithdrawals{Withdrawals: submitRequest.Withdrawals()}
-	h, err := hW.HashTreeRoot()
-	require.NoError(t, err)
 	switch fork {
 	case structs.ForkCapella:
-		state.EXPECT().Withdrawals(submitRequest.Slot(), submitRequest.ParentHash()).Times(1).Return(structs.WithdrawalsState{
+		state.EXPECT().Withdrawals(submitRequest.Slot()-1, submitRequest.ParentHash()).Times(1).Return(structs.WithdrawalsState{
 			Slot: structs.Slot(submitRequest.Slot() - 1),
 			Root: h,
 		})
 	}
 	pc.EXPECT().Get(submitRequest.ToPayloadKey()).Times(1)
-	ds.EXPECT().GetPayload(gomock.Any(), fork, submitRequest.ToPayloadKey()).Return(contents.Payload, nil).Times(1)
+	ds.EXPECT().GetPayload(gomock.Any(), fork, gomock.Any()).Return(contents.Payload, nil).Times(1)
 	pc.EXPECT().Add(submitRequest.ToPayloadKey(), contents.Payload).Times(1)
+	// state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1)
 
 	// GetPayload
 	state.EXPECT().KnownValidators().Times(1).Return(structs.ValidatorsState{
 		KnownValidatorsByIndex: map[uint64]types.PubkeyHex{0: submitRequest.ProposerPubkey().PubkeyHex()},
 	})
+	pc.EXPECT().Get(submitRequest.ToPayloadKey()).Times(1)
+	ds.EXPECT().GetPayload(gomock.Any(), fork, submitRequest.ToPayloadKey()).Return(contents.Payload, nil).Times(1)
+	// state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
+	das.EXPECT().PutDelivered(gomock.Any(), structs.Slot(submitRequest.Slot()), gomock.Any(), conf.TTL).Times(1)
 
-	state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
+	wh.EXPECT().StoreAsync(gomock.Any(), gomock.Any()).Times(1)
 
 	return fields{
 		config:      conf,
@@ -340,6 +351,11 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				}
 				signature, err := types.SignMessage(&msg, proposerSigningDomain, sk)
 				require.NoError(t, err)
+				msgRaw, err := types.ComputeSigningRoot(&msg, proposerSigningDomain)
+				require.NoError(t, err)
+				ok, err := verify.VerifySignatureBytes(msgRaw, signature[:], pubKey[:])
+				require.NoError(t, err)
+				require.True(t, ok)
 				sbbb = &capella.SignedBlindedBeaconBlock{
 					SMessage:   msg,
 					SSignature: signature,
@@ -384,8 +400,7 @@ func validSubmitBlockRequestBellatrix(t require.TestingT, sk *bls.SecretKey, pub
 }
 
 func validSubmitBlockRequestCapella(t require.TestingT, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) *capella.SubmitBlockRequest {
-
-	slot := rand.Uint64()
+	slot := uint64(1)
 	random := randomPayload()
 
 	payload := capella.ExecutionPayload{
@@ -405,7 +420,7 @@ func validSubmitBlockRequestCapella(t require.TestingT, sk *bls.SecretKey, pubKe
 		ParentHash:           payload.EpParentHash,
 		BlockHash:            payload.EpBlockHash,
 		BuilderPubkey:        pubKey,
-		ProposerPubkey:       types.PublicKey(random48Bytes()),
+		ProposerPubkey:       pubKey,
 		ProposerFeeRecipient: types.Address(random20Bytes()),
 		Value:                types.IntToU256(rand.Uint64()),
 	}

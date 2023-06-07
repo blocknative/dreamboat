@@ -267,7 +267,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash == currParentBlockHash {
 		logger.WithField("slotHead", currHeadSlot).Debug("received duplicate payload attributes")
 		return nil
-	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash != currParentBlockHash {
+	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash != currParentBlockHash && !(state.Fork().IsAltair(receivedSlot) || state.Fork().IsBellatrix(receivedSlot)) {
 		logger.
 			WithField("slotHead", currHeadSlot).
 			WithField("currParentBlockHash", currParentBlockHash).
@@ -307,6 +307,10 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 		return err
 	}
 	s.storeProposerDuties(ctx, state, d, vCache, structs.Slot(currHeadSlot), entries)
+
+	if state.Fork().IsAltair(receivedSlot) || state.Fork().IsBellatrix(receivedSlot) {
+		return nil
+	}
 
 	return s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash)
 }
