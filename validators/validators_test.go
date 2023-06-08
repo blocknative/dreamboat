@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blocknative/dreamboat/beacon"
 	"github.com/blocknative/dreamboat/blstools"
 	dbadger "github.com/blocknative/dreamboat/datastore/validator/badger"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/test/common"
 	"github.com/blocknative/dreamboat/validators"
-	mock_val "github.com/blocknative/dreamboat/validators/mocks"
 	"github.com/blocknative/dreamboat/verify"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
-	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	lru "github.com/hashicorp/golang-lru/v2"
 	badger "github.com/ipfs/go-ds-badger2"
 	"github.com/lthibault/log"
 	"github.com/stretchr/testify/require"
@@ -24,9 +24,6 @@ import (
 
 func TestGetValidators(t *testing.T) {
 	t.Parallel()
-
-	ctrl := gomock.NewController(t)
-	bs := mock_val.NewMockState(ctrl)
 
 	l := log.New()
 	ver := verify.NewVerificationManager(l, 20)
@@ -37,7 +34,8 @@ func TestGetValidators(t *testing.T) {
 		types.Root{}.String())
 	require.NoError(t, err)
 
-	r := validators.NewRegister(l, relaySigningDomain, bs, ver, nil)
+	s := &beacon.MultiSlotState{}
+	r := validators.NewRegister(l, relaySigningDomain, s, ver, nil)
 
 	dutiesState := structs.DutiesState{
 		ProposerDutiesResponse: structs.BuilderGetValidatorsResponseEntrySlice{{
@@ -45,7 +43,7 @@ func TestGetValidators(t *testing.T) {
 			Entry: &types.SignedValidatorRegistration{},
 		}},
 	}
-	bs.EXPECT().Duties().Return(dutiesState).Times(1)
+	s.SetDuties(dutiesState)
 
 	validators := r.GetValidators(structs.NewMetricGroup(4))
 	require.NotNil(t, validators)
@@ -59,12 +57,9 @@ func TestRegisterValidator(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctrl := gomock.NewController(t)
-
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := dbadger.NewDatastore(store, time.Minute)
-	bs := mock_val.NewMockState(ctrl)
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -73,7 +68,9 @@ func TestRegisterValidator(t *testing.T) {
 
 	l := log.New()
 
-	storeMgr := validators.NewStoreManager(l, nil, ds, 20, 20000)
+	vc, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](10)
+	require.NoError(t, err)
+	storeMgr := validators.NewStoreManager(l, vc, ds, 20, 20000)
 	storeMgr.RunStore(300)
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -90,9 +87,10 @@ func TestRegisterValidator(t *testing.T) {
 
 		validatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
-	bs.EXPECT().KnownValidators().Return(validatorsState)
+	s := &beacon.MultiSlotState{}
+	s.SetKnownValidators(validatorsState)
 
-	vr := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr)
+	vr := validators.NewRegister(l, relaySigningDomain, s, ver, storeMgr)
 	err = vr.RegisterValidator(ctx, structs.NewMetricGroup(4), registrations)
 	require.NoError(t, err)
 
@@ -112,12 +110,9 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctrl := gomock.NewController(t)
-
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := dbadger.NewDatastore(store, time.Minute)
-	bs := mock_val.NewMockState(ctrl)
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -126,13 +121,16 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 
 	l := log.New()
 
-	storeMgr := validators.NewStoreManager(l, nil, ds, 20, 20000)
+	vc, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](10)
+	require.NoError(t, err)
+	storeMgr := validators.NewStoreManager(l, vc, ds, 20, 20000)
 	storeMgr.RunStore(300)
 
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr)
+	s := &beacon.MultiSlotState{}
+	r := validators.NewRegister(l, relaySigningDomain, s, ver, storeMgr)
 	validatorsState := structs.ValidatorsState{
 		KnownValidators: make(map[types.PubkeyHex]struct{}),
 	}
@@ -146,7 +144,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 	}
 
 	registrations[N/2].Signature = types.Signature{}
-	bs.EXPECT().KnownValidators().Return(validatorsState)
+	s.SetKnownValidators(validatorsState)
 
 	err = r.RegisterValidator(ctx, structs.NewMetricGroup(4), registrations)
 	require.Error(t, err)
@@ -158,7 +156,7 @@ func TestBrokenSignatureRegisterValidator(t *testing.T) {
 		gotRegistration, err := ds.GetRegistration(ctx, registration.Message.Pubkey)
 		if !errored {
 			if i != N/2 {
-				if err == nil || err.Error() != "datastore: key not found" {
+				if err == nil || err.Error() != "not found" {
 					require.NoError(t, err)
 					require.EqualValues(t, registration, gotRegistration)
 				}
@@ -178,12 +176,9 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctrl := gomock.NewController(t)
-
 	var datadir = "/tmp/" + t.Name() + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := dbadger.NewDatastore(store, time.Minute)
-	bs := mock_val.NewMockState(ctrl)
 
 	relaySigningDomain, err := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -192,13 +187,17 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 
 	l := log.New()
 
-	storeMgr := validators.NewStoreManager(l, nil, ds, 20, 20000)
+	vc, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](10)
+	require.NoError(t, err)
+	storeMgr := validators.NewStoreManager(l, vc, ds, 20, 20000)
 	storeMgr.RunStore(300)
 
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr)
+	s := &beacon.MultiSlotState{}
+
+	r := validators.NewRegister(l, relaySigningDomain, s, ver, storeMgr)
 	validatorsState := structs.ValidatorsState{
 		KnownValidators: make(map[types.PubkeyHex]struct{}),
 	}
@@ -213,7 +212,7 @@ func TestNotKnownRegisterValidator(t *testing.T) {
 
 	}
 
-	bs.EXPECT().KnownValidators().Return(validatorsState)
+	s.SetKnownValidators(validatorsState)
 	err = r.RegisterValidator(ctx, structs.NewMetricGroup(4), registrations)
 	require.Error(t, err)
 	//t.Logf("returned %s", err.Error())
@@ -225,12 +224,9 @@ func BenchmarkRegisterValidator(b *testing.B) {
 
 	const N = 10_000
 
-	ctrl := gomock.NewController(b)
-
 	var datadir = "/tmp/bench" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := dbadger.NewDatastore(store, 5*time.Minute)
-	bs := mock_val.NewMockState(ctrl)
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -238,13 +234,17 @@ func BenchmarkRegisterValidator(b *testing.B) {
 
 	l := log.New()
 
-	storeMgr := validators.NewStoreManager(l, nil, ds, 20, 20000)
+	vc, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](10)
+	require.NoError(b, err)
+	storeMgr := validators.NewStoreManager(l, vc, ds, 20, 20000)
 	storeMgr.RunStore(300)
 
 	ver := verify.NewVerificationManager(l, 20000)
 	ver.RunVerify(300)
 
-	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr)
+	s := &beacon.MultiSlotState{}
+
+	r := validators.NewRegister(l, relaySigningDomain, s, ver, storeMgr)
 
 	validatorsState := structs.ValidatorsState{
 		KnownValidators: make(map[types.PubkeyHex]struct{}),
@@ -256,7 +256,7 @@ func BenchmarkRegisterValidator(b *testing.B) {
 		registrations = append(registrations, *registration)
 		validatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
-	bs.EXPECT().KnownValidators().Return(validatorsState).AnyTimes()
+	s.SetKnownValidators(validatorsState)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -273,11 +273,9 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctrl := gomock.NewController(b)
 	var datadir = "/tmp/bench" + uuid.New().String()
 	store, _ := badger.NewDatastore(datadir, &badger.DefaultOptions)
 	ds := dbadger.NewDatastore(store, 5*time.Minute)
-	bs := mock_val.NewMockState(ctrl)
 
 	relaySigningDomain, _ := common.ComputeDomain(
 		types.DomainTypeAppBuilder,
@@ -285,7 +283,9 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	l := log.New()
 
-	storeMgr := validators.NewStoreManager(l, nil, ds, 20, 20000)
+	vc, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](10)
+	require.NoError(b, err)
+	storeMgr := validators.NewStoreManager(l, vc, ds, 20, 20000)
 	storeMgr.RunStore(300)
 
 	ver := verify.NewVerificationManager(l, 20000)
@@ -293,7 +293,8 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 
 	const N = 10_000
 
-	r := validators.NewRegister(l, relaySigningDomain, bs, ver, storeMgr)
+	s := &beacon.MultiSlotState{}
+	r := validators.NewRegister(l, relaySigningDomain, s, ver, storeMgr)
 	validatorsState := structs.ValidatorsState{
 		KnownValidators: make(map[types.PubkeyHex]struct{}),
 	}
@@ -304,7 +305,7 @@ func BenchmarkRegisterValidatorParallel(b *testing.B) {
 		registrations = append(registrations, *registration)
 		validatorsState.KnownValidators[registration.Message.Pubkey.PubkeyHex()] = struct{}{}
 	}
-	bs.EXPECT().KnownValidators().Return(validatorsState).AnyTimes()
+	s.SetKnownValidators(validatorsState)
 
 	var wg sync.WaitGroup
 	wg.Add(b.N)

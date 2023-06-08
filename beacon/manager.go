@@ -194,7 +194,7 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 			t := time.Now()
 
 			err := s.processNewSlot(ctx, state, client, ev, d, vCache)
-			
+
 			headSlot := state.HeadSlot()
 			validators := state.KnownValidators()
 			duties := state.Duties()
@@ -267,7 +267,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash == currParentBlockHash {
 		logger.WithField("slotHead", currHeadSlot).Debug("received duplicate payload attributes")
 		return nil
-	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash != currParentBlockHash {
+	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash != currParentBlockHash && !(state.Fork().IsAltair(receivedSlot) || state.Fork().IsBellatrix(receivedSlot)) {
 		logger.
 			WithField("slotHead", currHeadSlot).
 			WithField("currParentBlockHash", currParentBlockHash).
@@ -300,9 +300,6 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	}
 
 	state.SetParentBlockHash(receivedParentBlockHash)
-	if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash); err != nil {
-		return err
-	}
 
 	// update proposer duties
 	entries, err := s.getProposerDuties(ctx, client, structs.Slot(currHeadSlot))
@@ -311,7 +308,11 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	}
 	s.storeProposerDuties(ctx, state, d, vCache, structs.Slot(currHeadSlot), entries)
 
-	return nil
+	if state.Fork().IsAltair(receivedSlot) || state.Fork().IsBellatrix(receivedSlot) {
+		return nil
+	}
+
+	return s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash)
 }
 
 func (m *Manager) updateWithdrawalsAndRandao(ctx context.Context, logger log.Logger, state State, event bcli.PayloadAttributesEvent, parentHash types.Hash) error {

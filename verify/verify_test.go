@@ -17,16 +17,18 @@ func BenchmarkSignatureValidation(b *testing.B) {
 		types.DomainTypeAppBuilder,
 		types.Root{}.String())
 	registration, _ := validValidatorRegistration(b, relaySigningDomain)
+	msg, err := types.ComputeSigningRoot(registration.Message, relaySigningDomain)
+	require.NoError(b, err)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := verify.VerifySignature(
-			registration.Message,
-			relaySigningDomain,
+		_, err := verify.VerifySignatureBytes(
+			msg,
+			registration.Signature[:],
 			registration.Message.Pubkey[:],
-			registration.Signature[:])
+		)
 		if err != nil {
 			panic(err)
 		}

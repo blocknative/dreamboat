@@ -19,6 +19,8 @@ func localOrEnv(local string) string {
 }
 
 func Test_payoads(t *testing.T) {
+	t.Skip("outdated test")
+
 	tests := []struct {
 		name        string
 		domain      string

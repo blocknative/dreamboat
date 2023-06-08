@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/relay DataAPIStore,Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient,Auctioneer,Verifier,Beacon
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/relay DataAPIStore,Datastore,State,ValidatorStore,ValidatorCache,BlockValidationClient,Auctioneer,Verifier,Beacon,PayloadCache,Warehouse,Streamer
 package relay
 
 import (
@@ -12,7 +12,6 @@ import (
 
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
@@ -153,8 +152,7 @@ type Relay struct {
 	cache  ValidatorCache
 	vstore ValidatorStore
 
-	s  Streamer
-	sc *lru.Cache[structs.PayloadKey, struct{}]
+	s Streamer
 
 	bvc BlockValidationClient
 

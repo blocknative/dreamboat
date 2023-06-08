@@ -3,18 +3,21 @@ package relay
 import (
 	"context"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/blocknative/dreamboat/blstools"
 	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
+	"github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/relay/mocks"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
 	ccommon "github.com/blocknative/dreamboat/test/common"
+	"github.com/blocknative/dreamboat/verify"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
@@ -39,10 +42,12 @@ type fields struct {
 	bvc         BlockValidationClient
 	beacon      Beacon
 	beaconState State
+	pc          PayloadCache
+	wh          Warehouse
+	s           Streamer
 }
 
 func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVersion, submitRequest structs.SubmitBlockRequest, sk *bls.SecretKey, pubKey types.PublicKey, relaySigningDomain types.Domain, genesisTime uint64) fields {
-
 	proposerSigningDomain, err := ccommon.ComputeDomain(
 		types.DomainTypeBeaconProposer,
 		types.Root{}.String())
@@ -50,32 +55,38 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	require.NoError(t, err)
 	conf := RelayConfig{
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
-			0: proposerSigningDomain,
+			structs.ForkAltair:    proposerSigningDomain,
+			structs.ForkBellatrix: proposerSigningDomain,
+			structs.ForkCapella:   proposerSigningDomain,
 		},
-		BuilderSigningDomain: relaySigningDomain,
-		SecretKey:            sk,
-		PubKey:               pubKey,
+		BuilderSigningDomain:       relaySigningDomain,
+		SecretKey:                  sk,
+		PubKey:                     pubKey,
+		GetPayloadRequestTimeLimit: time.Hour,
 	}
 
 	ds := mocks.NewMockDatastore(ctrl)
 
 	das := mocks.NewMockDataAPIStore(ctrl)
 	state := mocks.NewMockState(ctrl)
+	pc := mocks.NewMockPayloadCache(ctrl)
 	cache := mocks.NewMockValidatorCache(ctrl)
 	vstore := mocks.NewMockValidatorStore(ctrl)
 	verify := mocks.NewMockVerifier(ctrl)
 	bvc := mocks.NewMockBlockValidationClient(ctrl)
 	a := mocks.NewMockAuctioneer(ctrl)
+	wh := mocks.NewMockWarehouse(ctrl)
+	s := mocks.NewMockStreamer(ctrl)
 
 	// Submit Block
-	state.EXPECT().Genesis().MaxTimes(1).Return(
+	state.EXPECT().Genesis().MaxTimes(3).Return(
 		structs.GenesisInfo{GenesisTime: genesisTime},
 	)
-	state.EXPECT().HeadSlot().MaxTimes(1).Return(
+	state.EXPECT().HeadSlot().MaxTimes(3).Return(
 		structs.Slot(submitRequest.Slot()),
 	)
 
-	state.EXPECT().Randao().MaxTimes(1).Return(submitRequest.Random().String())
+	state.EXPECT().Randao(submitRequest.Slot()-1, submitRequest.ParentHash()).MaxTimes(1).Return(structs.RandaoState{Randao: submitRequest.Random().String(), Slot: submitRequest.Slot(), ParentHash: submitRequest.ParentHash()})
 
 	cache.EXPECT().Get(submitRequest.ProposerPubkey()).Return(
 		structs.ValidatorCacheEntry{}, false,
@@ -97,6 +108,10 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	require.NoError(t, err)
 	verify.EXPECT().Enqueue(context.Background(), submitRequest.Signature(), submitRequest.BuilderPubkey(), msg).Times(1)
 
+	hW := structs.HashWithdrawals{Withdrawals: submitRequest.Withdrawals()}
+	h, err := hW.HashTreeRoot()
+	require.NoError(t, err)
+
 	bvc.EXPECT().IsSet().Times(1).Return(true)
 	switch fork {
 	case structs.ForkBellatrix:
@@ -107,6 +122,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	case structs.ForkCapella:
 		bvc.EXPECT().ValidateBlockV2(context.Background(), &rpctypes.BuilderBlockValidationRequestV2{
 			SubmitBlockRequest: submitRequest.(*capella.SubmitBlockRequest),
+			WithdrawalsRoot:    h,
 			RegisteredGasLimit: 3_000_000,
 		}).Return(nil)
 	}
@@ -117,48 +133,50 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 
 	ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), contents.Payload, conf.TTL).Return(nil)
 
-	var bl *structs.CompleteBlockstruct
-	a.EXPECT().AddBlock(gomock.Any()).Times(1).DoAndReturn(func(block *structs.CompleteBlockstruct) bool {
+	var bl structs.BuilderBidExtended
+	a.EXPECT().AddBlock(gomock.Any()).Times(1).DoAndReturn(func(block structs.BuilderBidExtended) bool {
 		bl = block
 		return true
 	})
 
-	das.EXPECT().PutBuilderBlockSubmission(context.Background(), contents.Header.Trace, true).Times(1)
+	das.EXPECT().PutBuilderBlockSubmission(context.Background(), bttMatcher{contents.Header.Trace}, true).Times(1)
+	req := warehouse.StoreRequest{
+		DataType:  "SubmitBlockRequest",
+		Data:      submitRequest.Raw(),
+		Slot:      submitRequest.Slot(),
+		Id:        submitRequest.BlockHash().String(),
+		Timestamp: time.Now(),
+	}
+	wh.EXPECT().StoreAsync(context.Background(), whMatcher{req}).Times(1)
+	// state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1)
 
-	////   GetHeader
-	a.EXPECT().MaxProfitBlock(structs.Slot(submitRequest.Slot())).Times(1).
-		DoAndReturn(func(slot structs.Slot) (block *structs.CompleteBlockstruct, a bool) {
+	// GetHeader
+	a.EXPECT().MaxProfitBlock(structs.Slot(submitRequest.Slot()), submitRequest.ParentHash()).Times(1).
+		DoAndReturn(func(slot structs.Slot, ph types.Hash) (structs.BuilderBidExtended, bool) {
 			return bl, true
 		})
-
-	ds.EXPECT().CacheBlock(gomock.Any(), structs.PayloadKey{
-		BlockHash: submitRequest.BlockHash(),
-		Slot:      structs.Slot(submitRequest.Slot()),
-		Proposer:  submitRequest.ProposerPubkey()},
-		gomock.Any()).Times(1).DoAndReturn(func(c context.Context, s structs.PayloadKey, block *structs.CompleteBlockstruct) error {
-		if bl != block {
-			t.Errorf("cache block is different structure")
-		}
-		return nil
-	})
-
-	hW := structs.HashWithdrawals{Withdrawals: submitRequest.Withdrawals()}
-	h, err := hW.HashTreeRoot()
-	require.NoError(t, err)
 	switch fork {
 	case structs.ForkCapella:
-		state.EXPECT().Withdrawals().Times(1).Return(structs.WithdrawalsState{
+		state.EXPECT().Withdrawals(submitRequest.Slot()-1, submitRequest.ParentHash()).Times(1).Return(structs.WithdrawalsState{
 			Slot: structs.Slot(submitRequest.Slot() - 1),
 			Root: h,
 		})
 	}
+	pc.EXPECT().Get(submitRequest.ToPayloadKey()).Times(1)
+	ds.EXPECT().GetPayload(gomock.Any(), fork, gomock.Any()).Return(contents.Payload, nil).Times(1)
+	pc.EXPECT().Add(submitRequest.ToPayloadKey(), contents.Payload).Times(1)
+	// state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1)
 
 	// GetPayload
 	state.EXPECT().KnownValidators().Times(1).Return(structs.ValidatorsState{
 		KnownValidatorsByIndex: map[uint64]types.PubkeyHex{0: submitRequest.ProposerPubkey().PubkeyHex()},
 	})
+	pc.EXPECT().Get(submitRequest.ToPayloadKey()).Times(1)
+	ds.EXPECT().GetPayload(gomock.Any(), fork, submitRequest.ToPayloadKey()).Return(contents.Payload, nil).Times(1)
+	// state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
+	das.EXPECT().PutDelivered(gomock.Any(), structs.Slot(submitRequest.Slot()), gomock.Any(), conf.TTL).Times(1)
 
-	state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
+	wh.EXPECT().StoreAsync(gomock.Any(), gomock.Any()).Times(1)
 
 	return fields{
 		config:      conf,
@@ -171,6 +189,9 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 		bvc:         bvc,
 		beacon:      mocks.NewMockBeacon(ctrl),
 		beaconState: state,
+		pc:          pc,
+		wh:          wh,
+		s:           s,
 	}
 }
 
@@ -179,6 +200,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 	type args struct {
 		ctx context.Context
 		m   *structs.MetricGroup
+		uc  structs.UserContent
 		sbr structs.SubmitBlockRequest
 	}
 
@@ -220,6 +242,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			l := log.New()
@@ -233,12 +256,15 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				f.vstore,
 				f.ver,
 				f.beaconState,
+				f.pc,
 				f.d,
 				f.das,
 				f.a,
-				f.bvc)
+				f.bvc,
+				f.wh,
+				f.s)
 
-			if err := rs.SubmitBlock(tt.args.ctx, tt.args.m, tt.args.sbr); (err != nil) != tt.wantErr {
+			if err := rs.SubmitBlock(tt.args.ctx, tt.args.m, tt.args.uc, tt.args.sbr); (err != nil) != tt.wantErr {
 				t.Errorf("Relay.SubmitBlock() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
@@ -250,7 +276,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				pHash = s.CapellaExecutionPayload.EpParentHash
 			}
 
-			gh, err := rs.GetHeader(tt.args.ctx, tt.args.m, structs.HeaderRequest{
+			gh, err := rs.GetHeader(tt.args.ctx, tt.args.m, tt.args.uc, structs.HeaderRequest{
 				"slot":        strconv.FormatUint(tt.args.sbr.Slot(), 10),
 				"parent_hash": pHash.String(),
 				"pubkey":      tt.args.sbr.ProposerPubkey().String(),
@@ -325,24 +351,30 @@ func TestRelay_SubmitBlock(t *testing.T) {
 				}
 				signature, err := types.SignMessage(&msg, proposerSigningDomain, sk)
 				require.NoError(t, err)
+				msgRaw, err := types.ComputeSigningRoot(&msg, proposerSigningDomain)
+				require.NoError(t, err)
+				ok, err := verify.VerifySignatureBytes(msgRaw, signature[:], pubKey[:])
+				require.NoError(t, err)
+				require.True(t, ok)
 				sbbb = &capella.SignedBlindedBeaconBlock{
 					SMessage:   msg,
 					SSignature: signature,
 				}
-
 			}
 
-			_, err = rs.GetPayload(tt.args.ctx, tt.args.m, sbbb)
+			_, err = rs.GetPayload(tt.args.ctx, tt.args.m, tt.args.uc, sbbb)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Relay.GetPayload() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
+			time.Sleep(time.Second) // Wait for async code to finish.
 		})
 	}
 }
 
 func validSubmitBlockRequestBellatrix(t require.TestingT, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) *bellatrix.SubmitBlockRequest {
 
-	slot := rand.Uint64()
+	slot := uint64(1)
 
 	payload := randomPayload()
 	payload.EpTimestamp = genesisTime + (slot * 12)
@@ -352,7 +384,7 @@ func validSubmitBlockRequestBellatrix(t require.TestingT, sk *bls.SecretKey, pub
 		ParentHash:           payload.EpParentHash,
 		BlockHash:            payload.EpBlockHash,
 		BuilderPubkey:        pubKey,
-		ProposerPubkey:       types.PublicKey(random48Bytes()),
+		ProposerPubkey:       pubKey,
 		ProposerFeeRecipient: types.Address(random20Bytes()),
 		Value:                types.IntToU256(rand.Uint64()),
 	}
@@ -368,8 +400,7 @@ func validSubmitBlockRequestBellatrix(t require.TestingT, sk *bls.SecretKey, pub
 }
 
 func validSubmitBlockRequestCapella(t require.TestingT, sk *bls.SecretKey, pubKey types.PublicKey, domain types.Domain, genesisTime uint64) *capella.SubmitBlockRequest {
-
-	slot := rand.Uint64()
+	slot := uint64(1)
 	random := randomPayload()
 
 	payload := capella.ExecutionPayload{
@@ -389,7 +420,7 @@ func validSubmitBlockRequestCapella(t require.TestingT, sk *bls.SecretKey, pubKe
 		ParentHash:           payload.EpParentHash,
 		BlockHash:            payload.EpBlockHash,
 		BuilderPubkey:        pubKey,
-		ProposerPubkey:       types.PublicKey(random48Bytes()),
+		ProposerPubkey:       pubKey,
 		ProposerFeeRecipient: types.Address(random20Bytes()),
 		Value:                types.IntToU256(rand.Uint64()),
 	}
@@ -451,4 +482,43 @@ func randomTransactions(size int) []hexutil.Bytes {
 		txs = append(txs, tx)
 	}
 	return txs
+}
+
+type whMatcher struct {
+	warehouse.StoreRequest
+}
+
+// Matches returns whether x is a match.
+func (whm whMatcher) Matches(x interface{}) bool {
+	if sr, ok := x.(warehouse.StoreRequest); ok {
+		return reflect.DeepEqual(sr.Data, whm.Data) &&
+			sr.DataType == whm.DataType &&
+			sr.Id == whm.Id &&
+			sr.Slot == whm.Slot &&
+			!sr.Timestamp.After(whm.Timestamp.Add(time.Minute)) &&
+			!sr.Timestamp.Before(whm.Timestamp.Add(-time.Minute))
+	}
+	return false
+}
+
+// String describes what the matcher matches.
+func (whm whMatcher) String() string {
+	return ""
+}
+
+type bttMatcher struct {
+	structs.BidTraceWithTimestamp
+}
+
+// Matches returns whether x is a match.
+func (btt bttMatcher) Matches(x interface{}) bool {
+	if sr, ok := x.(structs.BidTraceWithTimestamp); ok {
+		return sr.BidTraceExtended == sr.BidTraceExtended
+	}
+	return false
+}
+
+// String describes what the matcher matches.
+func (btt bttMatcher) String() string {
+	return ""
 }
