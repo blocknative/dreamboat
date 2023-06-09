@@ -3,7 +3,9 @@ package dspostgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +38,7 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.B
 	return err
 }
 
-func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) (bts []structs.BidTraceWithTimestamp, err error) {
+func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer, headSlot uint64, payload structs.SubmissionTraceQuery) error {
 	var i = 1
 	parts := []string{"relay_id = $" + strconv.Itoa(i)}
 	data := []interface{}{s.RelayID}
@@ -84,9 +86,9 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
-		return []structs.BidTraceWithTimestamp{}, nil
+		return json.NewEncoder(w).Encode([]structs.BidTraceWithTimestamp{})
 	case err != nil:
-		return nil, fmt.Errorf("query error: %w", err)
+		return fmt.Errorf("query error: %w", err)
 	default:
 	}
 
@@ -99,13 +101,18 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		blockHash            []byte
 		value                []byte
 	)
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+
+	fmt.Fprint(w, "[") // Write the opening bracket manually
 	for rows.Next() {
 		bt := structs.BidTraceWithTimestamp{}
 		t := time.Time{}
 		err = rows.Scan(&t, &bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &value,
 			&bt.GasUsed, &bt.GasLimit, &bt.BlockNumber, &bt.NumTx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		bt.BuilderPubkey.UnmarshalText(builderpubkey)
 		bt.ProposerPubkey.UnmarshalText(proposerPubkey)
@@ -116,9 +123,14 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 
 		bt.Timestamp = uint64(t.Unix())
 		bt.TimestampMs = uint64(t.UnixMilli())
-		bts = append(bts, bt)
+
+		if err := encoder.Encode(bt); err != nil {
+			return err
+		}
 	}
-	return bts, err
+
+	fmt.Fprint(w, "]") // Write the closing bracket manually
+	return nil
 }
 
 type GetBuilderSubmissionsFilters struct {

@@ -57,8 +57,8 @@ type Relay interface {
 	SubmitBlock(context.Context, *structs.MetricGroup, structs.UserContent, structs.SubmitBlockRequest) error
 
 	// Data APIs
-	GetPayloadDelivered(context.Context, structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error)
-	GetBlockReceived(ctx context.Context, query structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	GetPayloadDelivered(context.Context, io.Writer, structs.PayloadTraceQuery) error
+	GetBlockReceived(ctx context.Context, w io.Writer, query structs.SubmissionTraceQuery) error
 }
 
 type Registrations interface {
@@ -564,22 +564,15 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	payloads, err := a.r.GetPayloadDelivered(r.Context(), query)
-	if err != nil {
+	if err := a.r.GetPayloadDelivered(r.Context(), w, query); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	if payloads != nil {
-		a.m.ApiReqElCount.WithLabelValues("proposerPayloadsDelivered", "payload").Observe(float64(len(payloads)))
-	}
-
-	if err := json.NewEncoder(w).Encode(payloads); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "encode response").Inc()
-		// we don't write response as encoder already crashed
-		return
-	}
+	// if payloads != nil {
+	// 	a.m.ApiReqElCount.WithLabelValues("proposerPayloadsDelivered", "payload").Observe(float64(len(payloads)))
+	// }
 
 	a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "200", "").Inc()
 }
@@ -594,22 +587,15 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blocks, err := a.r.GetBlockReceived(r.Context(), query)
-	if err != nil {
+	if err := a.r.GetBlockReceived(r.Context(), w, query); err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	if blocks != nil {
-		a.m.ApiReqElCount.WithLabelValues("builderBlocksReceived", "block").Observe(float64(len(blocks)))
-	}
-
-	if err := json.NewEncoder(w).Encode(blocks); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "encode response").Inc()
-		// we don't write response as encoder already crashed
-		return
-	}
+	// if blocks != nil {
+	// 	a.m.ApiReqElCount.WithLabelValues("builderBlocksReceived", "block").Observe(float64(len(blocks)))
+	// }
 
 	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200", "").Inc()
 }
