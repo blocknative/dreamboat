@@ -139,8 +139,8 @@ func (a *API) AttachToHandler(m *http.ServeMux) {
 func (a *API) OnConfigChange(c structs.OldNew) (err error) {
 	switch c.Name {
 	case "DataLimit":
-		if i, ok := c.New.(int); ok {
-			a.dataLimit = i
+		if i, ok := c.New.(int64); ok {
+			a.dataLimit = int(i)
 		}
 	case "ErrorsOnDisable":
 		if b, ok := c.New.(bool); ok {
