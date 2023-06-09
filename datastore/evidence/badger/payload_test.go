@@ -63,7 +63,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{BlockNum: dt.BlockNumber})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
-	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Pubkey: dt.Trace.ProposerPubkey})
+	_, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{ProposerPubkey: dt.Trace.ProposerPubkey})
 	require.ErrorIs(t, err, ds.ErrNotFound)
 
 	// set as delivered and retrieve again
@@ -85,7 +85,7 @@ func TestPutGetHeaderDelivered(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, dt.Trace.Value, gotHeader[0].BidTrace.Value)
 
-	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{Pubkey: dt.Trace.ProposerPubkey})
+	gotHeader, err = d.GetDeliveredPayloads(ctx, uint64(slotInt+1), structs.PayloadTraceQuery{ProposerPubkey: dt.Trace.ProposerPubkey})
 	require.NoError(t, err)
 	require.EqualValues(t, dt.Trace.Value, gotHeader[0].BidTrace.Value)
 }

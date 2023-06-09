@@ -83,7 +83,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 	} else if query.HasBlockNum() {
 		key, err = s.queryToDeliveredKey(ctx, structs.PayloadQuery{BlockNum: query.BlockNum})
 	} else if query.HasPubkey() {
-		key, err = s.queryToDeliveredKey(ctx, structs.PayloadQuery{PubKey: query.Pubkey})
+		key, err = s.queryToDeliveredKey(ctx, structs.PayloadQuery{PubKey: query.ProposerPubkey})
 	}
 
 	if err != nil {
