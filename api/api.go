@@ -565,7 +565,11 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := a.r.GetPayloadDelivered(r.Context(), w, query); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
+		if isJSONError(err) {
+			a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "encode response").Inc()
+		} else {
+			a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -588,16 +592,38 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.r.GetBlockReceived(r.Context(), w, query); err != nil {
-		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
+		if isJSONError(err) {
+			a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "encode response").Inc()
+		} else {
+			a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
+		}
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+
+	json.NewEncoder(w).Encode()
 
 	// if blocks != nil {
 	// 	a.m.ApiReqElCount.WithLabelValues("builderBlocksReceived", "block").Observe(float64(len(blocks)))
 	// }
 
 	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200", "").Inc()
+}
+
+// IsJSONError checks if the given error is from the JSON package.
+func isJSONError(err error) bool {
+	switch err.(type) {
+	case *json.SyntaxError,
+		*json.InvalidUTF8Error,
+		*json.InvalidUnmarshalError,
+		*json.UnmarshalTypeError,
+		*json.UnmarshalFieldError,
+		*json.UnsupportedTypeError,
+		*json.UnsupportedValueError,
+		*json.MarshalerError:
+		return true
+	}
+	return false
 }
 
 func writeError(w http.ResponseWriter, code int, err error) {
