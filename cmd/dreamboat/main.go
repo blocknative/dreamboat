@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
 
 	"github.com/blocknative/dreamboat/api"
 	"github.com/blocknative/dreamboat/api/inner"
@@ -21,12 +22,12 @@ import (
 	"github.com/blocknative/dreamboat/beacon"
 	bcli "github.com/blocknative/dreamboat/beacon/client"
 	"github.com/blocknative/dreamboat/blstools"
-	"github.com/blocknative/dreamboat/client/sim/fallback"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethhttp"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethrpc"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethws"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
+	"github.com/blocknative/dreamboat/sim/client/fallback"
+	"github.com/blocknative/dreamboat/sim/client/transport/gethhttp"
+	"github.com/blocknative/dreamboat/sim/client/transport/gethrpc"
+	"github.com/blocknative/dreamboat/sim/client/transport/gethws"
 	"github.com/blocknative/dreamboat/stream"
 	"github.com/google/uuid"
 	badger "github.com/ipfs/go-ds-badger2"
@@ -61,7 +62,8 @@ import (
 )
 
 const (
-	shutdownTimeout = 15 * time.Second
+	gethSimNamespace = "flashbots"
+	shutdownTimeout  = 15 * time.Second
 )
 
 var (
@@ -97,9 +99,6 @@ var (
 	flagDataapiDatabaseUrl   string
 
 	flagAllowListedBuilderList string
-
-	flagSubmissionLimitRate  int
-	flagSubmissionLimitBurst int
 
 	flagBlockValidationEndpointHTTP   string
 	flagBlockValidationEndpointWSList string
@@ -172,9 +171,6 @@ func init() {
 
 	flag.StringVar(&flagAllowListedBuilderList, "relay-allow-listed-builder", "", "comma separated list of allowed builder pubkeys")
 
-	flag.IntVar(&flagSubmissionLimitRate, "relay-submission-limit-rate", 2, "submission request limit - rate per second")
-	flag.IntVar(&flagSubmissionLimitBurst, "relay-submission-limit-burst", 2, "submission request limit - burst")
-
 	flag.StringVar(&flagBlockValidationEndpointHTTP, "block-validation-endpoint-http", "", "http block validation endpoint address")
 	flag.StringVar(&flagBlockValidationEndpointWSList, "block-validation-endpoint-ws", "", "ws block validation endpoint address (comma separated list)")
 	flag.BoolVar(&flagBlockValidationWSRetry, "block-validation-ws-retry", false, "retry to other connection on failure")
@@ -213,10 +209,6 @@ func init() {
 	flag.Parse()
 }
 
-const (
-	gethSimNamespace = "flashbots"
-)
-
 // Main starts the relay
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -231,15 +223,15 @@ func main() {
 
 	logger := logger(loglvl, logfmt, false, false, os.Stdout)
 
+	cfg := config.NewConfigManager(fileS.NewSource(configFile))
 	if configFile != "" {
-		cfg := config.NewConfigManager(fileS.NewSource(configFile))
 		if err := cfg.Load(); err != nil {
 			logger.WithError(err).Fatal("failed loading config file")
 			return
 		}
-
 		go reloadConfigSignal(reloadSig, cfg)
 	}
+
 	chainCfg := config.NewChainConfig()
 	chainCfg.LoadNetwork(flagNetwork)
 	if chainCfg.GenesisForkVersion == "" {
@@ -512,8 +504,14 @@ func main() {
 		SubmitBlock: true,
 	}
 	iApi := inner.NewAPI(ee, ds)
-	a := api.NewApi(logger, ee, r, validatorRelay, state, api.NewLimitter(flagSubmissionLimitRate, flagSubmissionLimitBurst, allowed))
+
+	limitterCache, _ := lru.New[[48]byte, *rate.Limiter](cfg.Api.LimitterCacheSize)
+	apiLimitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache, allowed)
+	cfg.Api.SubscribeForUpdates(apiLimitter)
+
+	a := api.NewApi(logger, ee, r, validatorRelay, state, apiLimitter, cfg.Api.DataLimit, cfg.Api.ErrorsOnDisable)
 	a.AttachMetrics(m)
+	cfg.Api.SubscribeForUpdates(a)
 	logger.With(log.F{
 		"service":     "relay",
 		"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
@@ -549,19 +547,18 @@ func main() {
 	mux := http.NewServeMux()
 	a.AttachToHandler(mux)
 
-	var srv *http.Server
+	srv := &http.Server{
+		Addr:           flagAddr,
+		ReadTimeout:    flagTimeout,
+		WriteTimeout:   flagTimeout,
+		IdleTimeout:    flagTimeout,
+		Handler:        mux,
+		MaxHeaderBytes: 4096,
+	}
 	// run the http server
 	go func(srv *http.Server) (err error) {
-		svr := &http.Server{
-			Addr:           flagAddr,
-			ReadTimeout:    flagTimeout,
-			WriteTimeout:   flagTimeout,
-			IdleTimeout:    flagTimeout,
-			Handler:        mux,
-			MaxHeaderBytes: 4096,
-		}
 		logger.Info("http server listening")
-		if err = svr.ListenAndServe(); err == http.ErrServerClosed {
+		if err = srv.ListenAndServe(); err == http.ErrServerClosed {
 			err = nil
 		}
 		logger.Info("http server finished")

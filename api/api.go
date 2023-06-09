@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -43,11 +42,6 @@ const (
 	PathBuilderBlocksReceived     = "/relay/v1/data/bidtraces/builder_blocks_received"
 	PathProposerPayloadsDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
 	PathSpecificRegistration      = "/relay/v1/data/validator_registration"
-)
-
-const (
-	DataLimit       = 450
-	ErrorsOnDisable = false
 )
 
 var (
@@ -95,18 +89,23 @@ type API struct {
 
 	m *APIMetrics
 
+	dataLimit       int  //   = 450
+	errorsOnDisable bool //= false
+
 	enabled *EnabledEndpoints
 }
 
-func NewApi(l log.Logger, enabled *EnabledEndpoints, r Relay, reg Registrations, st State, lim RateLimitter) (a *API) {
+func NewApi(l log.Logger, enabled *EnabledEndpoints, r Relay, reg Registrations, st State, lim RateLimitter, dataLimit int, errorsOnDisable bool) (a *API) {
 	a = &API{
-		l:       l,
-		r:       r,
-		reg:     reg,
-		st:      st,
-		lim:     lim,
-		enabled: enabled,
-		m:       &APIMetrics{}}
+		l:               l,
+		r:               r,
+		reg:             reg,
+		st:              st,
+		lim:             lim,
+		dataLimit:       dataLimit,
+		errorsOnDisable: errorsOnDisable,
+		enabled:         enabled,
+		m:               &APIMetrics{}}
 	a.initMetrics()
 	return a
 }
@@ -135,6 +134,20 @@ func (a *API) AttachToHandler(m *http.ServeMux) {
 
 	router.Use(mux.CORSMethodMiddleware(router))
 	m.Handle("/", router)
+}
+
+func (a *API) OnConfigChange(c structs.OldNew) (err error) {
+	switch c.Name {
+	case "DataLimit":
+		if i, ok := c.New.(int64); ok {
+			a.dataLimit = int(i)
+		}
+	case "ErrorsOnDisable":
+		if b, ok := c.New.(bool); ok {
+			a.errorsOnDisable = b
+		}
+	}
+	return nil
 }
 
 func status(w http.ResponseWriter, _ *http.Request) {
@@ -180,7 +193,7 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 	if !a.enabled.GetHeader {
-		if ErrorsOnDisable {
+		if a.errorsOnDisable {
 			w.WriteHeader(http.StatusForbidden)
 			a.m.ApiReqCounter.WithLabelValues("getHeader", "403", "forbiden").Inc()
 		} else {
@@ -251,7 +264,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	var req structs.SignedBlindedBeaconBlock
 	fork := a.st.ForkVersion(a.st.HeadSlot())
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "read body").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
@@ -331,7 +344,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 // builder related handlers
 func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 	if !a.enabled.SubmitBlock {
-		if ErrorsOnDisable {
+		if a.errorsOnDisable {
 			w.WriteHeader(http.StatusForbidden)
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "403", "forbidden").Inc()
 		} else {
@@ -367,7 +380,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		reader = gReader
 	}
 
-	b, err := ioutil.ReadAll(io.LimitReader(reader, 10*1024*1024)) // 10 MB
+	b, err := io.ReadAll(io.LimitReader(reader, 10*1024*1024)) // 10 MB
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("getPayload", "400", "read body").Inc()
 		writeError(w, http.StatusBadRequest, errors.New("unable to read request body"))
@@ -544,7 +557,7 @@ func (a *API) specificRegistration(w http.ResponseWriter, r *http.Request) {
 func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	query, kind, err := validateProposerPayloadsDelivered(r)
+	query, kind, err := validateProposerPayloadsDelivered(r, uint64(a.dataLimit))
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "400", "bad "+kind).Inc()
 		writeError(w, http.StatusBadRequest, err)
@@ -574,7 +587,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	query, kind, err := validateBuilderBlocksReceived(r)
+	query, kind, err := validateBuilderBlocksReceived(r, uint64(a.dataLimit))
 	if err != nil {
 		a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "400", "bad "+kind).Inc()
 		writeError(w, http.StatusBadRequest, err)
@@ -609,7 +622,7 @@ func writeError(w http.ResponseWriter, code int, err error) {
 	})
 }
 
-func validateBuilderBlocksReceived(r *http.Request) (query structs.SubmissionTraceQuery, kind string, err error) {
+func validateBuilderBlocksReceived(r *http.Request, dataLimit uint64) (query structs.SubmissionTraceQuery, kind string, err error) {
 
 	slot, err := specificSlot(r)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
@@ -626,13 +639,13 @@ func validateBuilderBlocksReceived(r *http.Request) (query structs.SubmissionTra
 		return query, "number", err
 	}
 
-	limit, err := limit(r)
+	limit, err := limit(r, dataLimit)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
 		return query, "limit", err
 	}
 
 	if errors.Is(err, ErrParamNotFound) {
-		limit = DataLimit
+		limit = dataLimit
 	}
 
 	return structs.SubmissionTraceQuery{
@@ -643,7 +656,7 @@ func validateBuilderBlocksReceived(r *http.Request) (query structs.SubmissionTra
 	}, "", nil
 }
 
-func validateProposerPayloadsDelivered(r *http.Request) (query structs.PayloadTraceQuery, kind string, err error) {
+func validateProposerPayloadsDelivered(r *http.Request, dataLimit uint64) (query structs.PayloadTraceQuery, kind string, err error) {
 
 	slot, err := specificSlot(r)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
@@ -665,13 +678,13 @@ func validateProposerPayloadsDelivered(r *http.Request) (query structs.PayloadTr
 		return query, "key", err
 	}
 
-	limit, err := limit(r)
+	limit, err := limit(r, dataLimit)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
 		return query, "limit", err
 	}
 
 	if errors.Is(err, ErrParamNotFound) {
-		limit = DataLimit
+		limit = dataLimit
 	}
 
 	cursor, err := cursor(r)
@@ -729,13 +742,13 @@ func blockNumber(r *http.Request) (uint64, error) {
 	return 0, ErrParamNotFound
 }
 
-func limit(r *http.Request) (uint64, error) {
+func limit(r *http.Request, dataLimit uint64) (uint64, error) {
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		limit, err := strconv.ParseUint(limitStr, 10, 64)
 		if err != nil {
 			return 0, err
-		} else if DataLimit < limit {
-			return 0, fmt.Errorf("limit is higher than %d", DataLimit)
+		} else if dataLimit < limit {
+			return 0, fmt.Errorf("limit is higher than %d", dataLimit)
 		}
 		return limit, err
 	}

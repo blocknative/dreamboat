@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/blocknative/dreamboat/client"
-	"github.com/blocknative/dreamboat/client/sim/types"
+	sim "github.com/blocknative/dreamboat/sim/client"
+	"github.com/blocknative/dreamboat/sim/client/types"
 )
 
 type Client interface {
@@ -40,7 +40,7 @@ func (f *Fallback) Len() int {
 func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
 	if len(f.clients) == 0 {
 		f.m.ServedFrom.WithLabelValues("none", "error").Inc()
-		return client.ErrNotFound
+		return sim.ErrNotFound
 	}
 
 	for _, c := range f.clients {
@@ -54,7 +54,7 @@ func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockV
 			return
 		}
 
-		if !(errors.Is(err, client.ErrNotFound) || errors.Is(err, client.ErrConnectionFailure)) {
+		if !(errors.Is(err, sim.ErrNotFound) || errors.Is(err, sim.ErrConnectionFailure)) {
 			f.m.ServedFrom.WithLabelValues(c.Kind(), "error").Inc()
 			return err
 		}
@@ -67,7 +67,7 @@ func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockV
 func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
 	if len(f.clients) == 0 {
 		f.m.ServedFrom.WithLabelValues("none", "error").Inc()
-		return client.ErrNotFound
+		return sim.ErrNotFound
 	}
 
 	for _, c := range f.clients {
@@ -90,7 +90,7 @@ func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBloc
 			return err
 		}
 
-		if !(errors.Is(err, client.ErrNotFound) || errors.Is(err, client.ErrConnectionFailure)) {
+		if !(errors.Is(err, sim.ErrNotFound) || errors.Is(err, sim.ErrConnectionFailure)) {
 			f.m.ServedFrom.WithLabelValues(c.Kind(), "error").Inc()
 			return err
 		}

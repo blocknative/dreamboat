@@ -35,7 +35,6 @@ func DefaultConfig() Config {
 		DataAPI:         DefaultDataAPIConfig,
 	}
 	c.ExternalHttp.Address = "0.0.0.0:18550"
-
 	c.InternalHttp.Address = "0.0.0.0:19550"
 	c.Relay.Network = "mainnet"
 
@@ -43,14 +42,6 @@ func DefaultConfig() Config {
 }
 
 func (cm *ConfigManager) Reload() error {
-	/*
-		testC := &Config{}
-		// check file before loading content
-		if err := cm.s.Load(testC, false); err != nil {
-			return err
-		}
-	*/
-
 	return cm.s.Load(cm.Config, false)
 }
 

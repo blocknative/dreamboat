@@ -11,8 +11,8 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
-	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
+	rpctypes "github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
