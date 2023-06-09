@@ -547,19 +547,18 @@ func main() {
 	mux := http.NewServeMux()
 	a.AttachToHandler(mux)
 
-	var srv *http.Server
+	srv := &http.Server{
+		Addr:           flagAddr,
+		ReadTimeout:    flagTimeout,
+		WriteTimeout:   flagTimeout,
+		IdleTimeout:    flagTimeout,
+		Handler:        mux,
+		MaxHeaderBytes: 4096,
+	}
 	// run the http server
 	go func(srv *http.Server) (err error) {
-		svr := &http.Server{
-			Addr:           flagAddr,
-			ReadTimeout:    flagTimeout,
-			WriteTimeout:   flagTimeout,
-			IdleTimeout:    flagTimeout,
-			Handler:        mux,
-			MaxHeaderBytes: 4096,
-		}
 		logger.Info("http server listening")
-		if err = svr.ListenAndServe(); err == http.ErrServerClosed {
+		if err = srv.ListenAndServe(); err == http.ErrServerClosed {
 			err = nil
 		}
 		logger.Info("http server finished")
