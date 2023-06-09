@@ -26,7 +26,6 @@ type Limitter struct {
 }
 
 func NewLimitter(ratel int, burst int, c Cache, ab map[[48]byte]struct{}) *Limitter {
-
 	return &Limitter{
 		AllowedBuilders: ab,
 		c:               c,
@@ -58,13 +57,13 @@ func (l *Limitter) Allow(ctx context.Context, pubkey [48]byte) error {
 func (l *Limitter) OnConfigChange(c structs.OldNew) (err error) {
 	switch c.Name {
 	case "SubmissionLimitRate":
-		if i, ok := c.New.(int); ok {
+		if i, ok := c.New.(int64); ok {
 			l.RateLimit = rate.Limit(i)
 			l.c.Purge()
 		}
 	case "SubmissionLimitBurst":
-		if i, ok := c.New.(int); ok {
-			l.Burst = i
+		if i, ok := c.New.(int64); ok {
+			l.Burst = int(i)
 			l.c.Purge()
 		}
 	case "AllowedBuilders":
