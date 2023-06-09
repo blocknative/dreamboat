@@ -137,7 +137,7 @@ var (
 func init() {
 	flag.StringVar(&loglvl, "loglvl", "info", "logging level: trace, debug, info, warn, error or fatal")
 	flag.StringVar(&logfmt, "logfmt", "text", "format logs as text, json or none")
-	flag.StringVar(&configFile, "config", "./config", "configuration file needed for relay to run")
+	flag.StringVar(&configFile, "config", "", "configuration file needed for relay to run")
 	flag.StringVar(&datadir, "datadir", "/tmp/relay", "data directory where blocks and validators are stored in the default datastore implementation")
 
 	flag.StringVar(&flagAddr, "addr", "localhost:18550", "server listen address")
@@ -231,14 +231,15 @@ func main() {
 
 	logger := logger(loglvl, logfmt, false, false, os.Stdout)
 
-	cfg := config.NewConfigManager(fileS.NewSource(configFile))
-	if err := cfg.Load(); err != nil {
-		logger.WithError(err).Fatal("failed loading config file")
-		return
+	if configFile != "" {
+		cfg := config.NewConfigManager(fileS.NewSource(configFile))
+		if err := cfg.Load(); err != nil {
+			logger.WithError(err).Fatal("failed loading config file")
+			return
+		}
+
+		go reloadConfigSignal(reloadSig, cfg)
 	}
-
-	go reloadConfigSignal(reloadSig, cfg)
-
 	chainCfg := config.NewChainConfig()
 	chainCfg.LoadNetwork(flagNetwork)
 	if chainCfg.GenesisForkVersion == "" {
