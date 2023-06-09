@@ -9,8 +9,8 @@ import (
 	reflect "reflect"
 	time "time"
 
-	types "github.com/blocknative/dreamboat/client/sim/types"
 	warehouse "github.com/blocknative/dreamboat/datastore/warehouse"
+	types "github.com/blocknative/dreamboat/sim/client/types"
 	structs "github.com/blocknative/dreamboat/structs"
 	types0 "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"

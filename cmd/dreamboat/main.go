@@ -21,12 +21,12 @@ import (
 	"github.com/blocknative/dreamboat/beacon"
 	bcli "github.com/blocknative/dreamboat/beacon/client"
 	"github.com/blocknative/dreamboat/blstools"
-	"github.com/blocknative/dreamboat/client/sim/fallback"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethhttp"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethrpc"
-	"github.com/blocknative/dreamboat/client/sim/transport/gethws"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
+	"github.com/blocknative/dreamboat/sim/client/fallback"
+	"github.com/blocknative/dreamboat/sim/client/transport/gethhttp"
+	"github.com/blocknative/dreamboat/sim/client/transport/gethrpc"
+	"github.com/blocknative/dreamboat/sim/client/transport/gethws"
 	"github.com/blocknative/dreamboat/stream"
 	"github.com/google/uuid"
 	badger "github.com/ipfs/go-ds-badger2"
@@ -61,6 +61,8 @@ import (
 )
 
 const (
+	gethSimNamespace = "flashbots"
+
 	shutdownTimeout = 15 * time.Second
 )
 
@@ -212,10 +214,6 @@ func init() {
 
 	flag.Parse()
 }
-
-const (
-	gethSimNamespace = "flashbots"
-)
 
 // Main starts the relay
 func main() {

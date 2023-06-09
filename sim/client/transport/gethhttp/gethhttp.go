@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/blocknative/dreamboat/client/sim/types"
+	"github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/lthibault/log"
 )
 

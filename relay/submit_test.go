@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/blocknative/dreamboat/blstools"
-	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	"github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/relay/mocks"
+	rpctypes "github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
