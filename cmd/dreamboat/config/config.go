@@ -83,6 +83,8 @@ type BadgerDBConfig struct {
 var DefaultApiConfig = &ApiConfig{
 	SubmissionLimitRate:  2,
 	SubmissionLimitBurst: 2,
+	LimitterCacheSize:    1_000,
+	DataLimit:            450,
 }
 
 type ApiConfig struct {
@@ -96,6 +98,15 @@ type ApiConfig struct {
 
 	// submission request limit - burst value
 	SubmissionLimitBurst int `config:"submission_limit_burst,allow_dynamic"`
+
+	// rate limitter cache entries size
+	LimitterCacheSize int `config:"limitter_cache_size"`
+
+	// limit of data returned in one response
+	DataLimit int `config:"datalimit,allow_dynamic"`
+
+	// this flag set to allows to return errors when endpoint is disabled
+	ErrorsOnDisable bool `config:"errors_on_disable,allow_dynamic"`
 }
 
 var DefaultRelayConfig = &RelayConfig{
