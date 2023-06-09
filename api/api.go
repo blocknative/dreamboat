@@ -600,9 +600,6 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-
-	json.NewEncoder(w).Encode()
-
 	// if blocks != nil {
 	// 	a.m.ApiReqElCount.WithLabelValues("builderBlocksReceived", "block").Observe(float64(len(blocks)))
 	// }
