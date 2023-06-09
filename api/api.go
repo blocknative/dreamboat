@@ -673,9 +673,14 @@ func validateProposerPayloadsDelivered(r *http.Request, dataLimit uint64) (query
 		return query, "number", err
 	}
 
-	pk, err := publickKey(r)
+	ppk, err := proposerPublickKey(r)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
-		return query, "key", err
+		return query, "proposer_key", err
+	}
+
+	bpk, err := builderPublickKey(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "builder_key", err
 	}
 
 	limit, err := limit(r, dataLimit)
@@ -692,13 +697,20 @@ func validateProposerPayloadsDelivered(r *http.Request, dataLimit uint64) (query
 		return query, "cursor", err
 	}
 
+	orderByValue, err := orderByValue(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "order_by", err
+	}
+
 	return structs.PayloadTraceQuery{
-		Slot:      slot,
-		BlockHash: bh,
-		BlockNum:  bn,
-		Pubkey:    pk,
-		Cursor:    cursor,
-		Limit:     limit,
+		Slot:           slot,
+		BlockHash:      bh,
+		BlockNum:       bn,
+		ProposerPubkey: ppk,
+		BuilderPubkey:  bpk,
+		Cursor:         cursor,
+		Limit:          limit,
+		OrderByValue:   orderByValue,
 	}, "", nil
 }
 
@@ -724,8 +736,19 @@ func blockHash(r *http.Request) (types.Hash, error) {
 	return types.Hash{}, ErrParamNotFound
 }
 
-func publickKey(r *http.Request) (types.PublicKey, error) {
+func proposerPublickKey(r *http.Request) (types.PublicKey, error) {
 	if pkStr := r.URL.Query().Get("proposer_pubkey"); pkStr != "" {
+		var pk types.PublicKey
+		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
+			return pk, err
+		}
+		return pk, nil
+	}
+	return types.PublicKey{}, ErrParamNotFound
+}
+
+func builderPublickKey(r *http.Request) (types.PublicKey, error) {
+	if pkStr := r.URL.Query().Get("builder_pubkey"); pkStr != "" {
 		var pk types.PublicKey
 		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
 			return pk, err
@@ -760,6 +783,15 @@ func cursor(r *http.Request) (uint64, error) {
 		return strconv.ParseUint(cursorStr, 10, 64)
 	}
 	return 0, ErrParamNotFound
+}
+
+func orderByValue(r *http.Request) (int, error) {
+	if orderByStr := r.URL.Query().Get("order_by"); orderByStr == "value" {
+		return 1, nil
+	} else if orderByStr == "-value" {
+		return -1, nil
+	}
+	return 0, nil
 }
 
 func ParseHeaderRequest(r *http.Request) structs.HeaderRequest {

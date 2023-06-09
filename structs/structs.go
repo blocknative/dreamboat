@@ -55,11 +55,12 @@ func (pk PubKey) Bytes() []byte {
 
 // PayloadTraceQuery structure used to query payloads only
 type PayloadTraceQuery struct {
-	Slot          Slot
-	BlockHash     types.Hash
-	BlockNum      uint64
-	Pubkey        types.PublicKey
-	Cursor, Limit uint64
+	Slot                          Slot
+	BlockHash                     types.Hash
+	BlockNum                      uint64
+	ProposerPubkey, BuilderPubkey types.PublicKey
+	Cursor, Limit                 uint64
+	OrderByValue                  int
 }
 
 func (q PayloadTraceQuery) HasSlot() bool {
@@ -75,7 +76,7 @@ func (q PayloadTraceQuery) HasBlockNum() bool {
 }
 
 func (q PayloadTraceQuery) HasPubkey() bool {
-	return q.Pubkey != types.PublicKey{}
+	return q.ProposerPubkey != types.PublicKey{}
 }
 
 func (q PayloadTraceQuery) HasCursor() bool {

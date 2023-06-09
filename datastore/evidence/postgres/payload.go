@@ -62,9 +62,15 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		i++
 	}
 
-	if queryArgs.Pubkey != Emptybytes48 {
+	if queryArgs.ProposerPubkey != Emptybytes48 {
 		parts = append(parts, "proposer_pubkey = $"+strconv.Itoa(i))
-		data = append(data, queryArgs.Pubkey.String())
+		data = append(data, queryArgs.ProposerPubkey.String())
+		i++
+	}
+
+	if queryArgs.BuilderPubkey != Emptybytes48 {
+		parts = append(parts, "builder_pubkey = $"+strconv.Itoa(i))
+		data = append(data, queryArgs.ProposerPubkey.String())
 		i++
 	}
 
@@ -81,7 +87,13 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		}
 	}
 
-	qBuilder.WriteString(` ORDER BY slot DESC, inserted_at DESC `)
+	if queryArgs.OrderByValue > 0 {
+		qBuilder.WriteString(` ORDER BY value ASC `)
+	} else if queryArgs.OrderByValue < 0 {
+		qBuilder.WriteString(` ORDER BY value DESC `)
+	} else {
+		qBuilder.WriteString(` ORDER BY slot DESC, inserted_at DESC `)
+	}
 
 	if queryArgs.Limit > 0 {
 		qBuilder.WriteString(` LIMIT $` + strconv.Itoa(i))
