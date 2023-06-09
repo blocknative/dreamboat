@@ -639,7 +639,7 @@ func validateBuilderBlocksReceived(r *http.Request, dataLimit uint64) (query str
 		return query, "number", err
 	}
 
-	bpk, err := builderPublickKey(r)
+	bpk, err := builderPublicKey(r)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
 		return query, "builder_key", err
 	}
@@ -684,7 +684,7 @@ func validateProposerPayloadsDelivered(r *http.Request, dataLimit uint64) (query
 		return query, "proposer_key", err
 	}
 
-	bpk, err := builderPublickKey(r)
+	bpk, err := builderPublicKey(r)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
 		return query, "builder_key", err
 	}
@@ -753,7 +753,7 @@ func proposerPublickKey(r *http.Request) (types.PublicKey, error) {
 	return types.PublicKey{}, ErrParamNotFound
 }
 
-func builderPublickKey(r *http.Request) (types.PublicKey, error) {
+func builderPublicKey(r *http.Request) (types.PublicKey, error) {
 	if pkStr := r.URL.Query().Get("builder_pubkey"); pkStr != "" {
 		var pk types.PublicKey
 		if err := pk.UnmarshalText([]byte(pkStr)); err != nil {
