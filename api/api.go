@@ -639,6 +639,11 @@ func validateBuilderBlocksReceived(r *http.Request, dataLimit uint64) (query str
 		return query, "number", err
 	}
 
+	bpk, err := builderPublickKey(r)
+	if err != nil && !errors.Is(err, ErrParamNotFound) {
+		return query, "builder_key", err
+	}
+
 	limit, err := limit(r, dataLimit)
 	if err != nil && !errors.Is(err, ErrParamNotFound) {
 		return query, "limit", err
@@ -649,10 +654,11 @@ func validateBuilderBlocksReceived(r *http.Request, dataLimit uint64) (query str
 	}
 
 	return structs.SubmissionTraceQuery{
-		Slot:      slot,
-		BlockHash: bh,
-		BlockNum:  bn,
-		Limit:     limit,
+		Slot:          slot,
+		BlockHash:     bh,
+		BlockNum:      bn,
+		Limit:         limit,
+		BuilderPubkey: bpk,
 	}, "", nil
 }
 

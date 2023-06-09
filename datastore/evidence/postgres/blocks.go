@@ -60,6 +60,12 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		i++
 	}
 
+	if payload.BuilderPubkey != Emptybytes48 {
+		parts = append(parts, "builder_pubkey = $"+strconv.Itoa(i))
+		data = append(data, payload.BuilderPubkey.String())
+		i++
+	}
+
 	qBuilder := strings.Builder{}
 	qBuilder.WriteString(`SELECT block_time, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, value, gas_used, gas_limit, block_number, num_tx FROM builder_block_submission `)
 

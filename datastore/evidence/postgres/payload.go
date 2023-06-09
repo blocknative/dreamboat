@@ -70,7 +70,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 
 	if queryArgs.BuilderPubkey != Emptybytes48 {
 		parts = append(parts, "builder_pubkey = $"+strconv.Itoa(i))
-		data = append(data, queryArgs.ProposerPubkey.String())
+		data = append(data, queryArgs.BuilderPubkey.String())
 		i++
 	}
 

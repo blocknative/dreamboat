@@ -121,10 +121,11 @@ func (q HeaderTraceQuery) HasLimit() bool {
 
 // SubmissionTraceQuery structure used to query header structure
 type SubmissionTraceQuery struct {
-	Slot      Slot
-	BlockHash types.Hash
-	BlockNum  uint64
-	Limit     uint64
+	Slot          Slot
+	BlockHash     types.Hash
+	BlockNum      uint64
+	Limit         uint64
+	BuilderPubkey types.PublicKey
 }
 
 func (q SubmissionTraceQuery) HasSlot() bool {
