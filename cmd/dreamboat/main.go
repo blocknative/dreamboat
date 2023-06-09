@@ -19,7 +19,6 @@ import (
 	"github.com/blocknative/dreamboat/api/inner"
 	"github.com/blocknative/dreamboat/auction"
 	"github.com/blocknative/dreamboat/beacon"
-	"github.com/blocknative/dreamboat/beacon/client"
 	bcli "github.com/blocknative/dreamboat/beacon/client"
 	"github.com/blocknative/dreamboat/blstools"
 	"github.com/blocknative/dreamboat/client/sim/fallback"
@@ -626,7 +625,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc 
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c client.BeaconConfig) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c bcli.BeaconConfig) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
