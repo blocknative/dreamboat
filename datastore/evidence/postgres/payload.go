@@ -125,7 +125,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 	encoder := json.NewEncoder(w)
 
 	if _, err := fmt.Fprint(w, "["); err != nil {
-		return nil
+		return err
 	}
 	// After we write the first character, do not return an error, log it and return nil.
 
