@@ -124,11 +124,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 
 	encoder := json.NewEncoder(w)
 
-	if _, err := fmt.Fprint(w, "["); err != nil {
-		return err
-	}
 	// After we write the first character, do not return an error, log it and return nil.
-
 	idx := 0
 	for rows.Next() {
 		bt := structs.BidTraceExtended{}
@@ -137,6 +133,9 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 			s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "scan").Inc()
 			s.l.WithError(err).Warn("failed to scan row")
 			fmt.Fprint(w, "]")
+			if idx == 0 {
+				return err
+			}
 			return nil
 		}
 
@@ -147,7 +146,11 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		bt.BlockHash.UnmarshalText(blockHash)
 		bt.Value.UnmarshalText(value)
 
-		if idx > 0 {
+		if idx == 0 {
+			if _, err := fmt.Fprint(w, "["); err != nil {
+				return err
+			}
+		} else {
 			fmt.Fprint(w, ", ")
 		}
 		idx++

@@ -105,9 +105,6 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 
 	encoder := json.NewEncoder(w)
 
-	if _, err := fmt.Fprint(w, "["); err != nil {
-		return err
-	}
 	// After we write the first character, do not return an error, log it and return nil.
 	idx := 0
 	for rows.Next() {
@@ -116,9 +113,12 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		err = rows.Scan(&t, &bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &value,
 			&bt.GasUsed, &bt.GasLimit, &bt.BlockNumber, &bt.NumTx)
 		if err != nil {
-			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions","scan").Inc()
+			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "scan").Inc()
 			s.l.WithError(err).Warn("failed to scan row")
 			fmt.Fprint(w, "]")
+			if idx == 0 {
+				return err
+			}
 			return nil
 		}
 		bt.BuilderPubkey.UnmarshalText(builderpubkey)
@@ -131,13 +131,17 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		bt.Timestamp = uint64(t.Unix())
 		bt.TimestampMs = uint64(t.UnixMilli())
 
-		if idx > 0 {
+		if idx == 0 {
+			if _, err := fmt.Fprint(w, "["); err != nil {
+				return err
+			}
+		} else {
 			fmt.Fprint(w, ", ")
 		}
 		idx++
 
 		if err := encoder.Encode(bt); err != nil {
-			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions","encode").Inc()
+			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "encode").Inc()
 			s.l.WithError(err).Warn("failed to encode row")
 			fmt.Fprint(w, "]")
 			return nil
