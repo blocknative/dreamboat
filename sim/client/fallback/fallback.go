@@ -71,7 +71,7 @@ func removeClient(cSlice []sim.Client, id string) []sim.Client {
 }
 
 func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
-	if f.atLeastOne {
+	if !f.atLeastOne {
 		f.m.ServedFrom.WithLabelValues("none", "error").Inc()
 		return sim.ErrNotFound
 	}
@@ -122,7 +122,7 @@ func (f *Fallback) validateBlock(ctx context.Context, c sim.Client, block *types
 }
 
 func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
-	if f.atLeastOne {
+	if !f.atLeastOne {
 		f.m.ServedFrom.WithLabelValues("none", "error").Inc()
 		return sim.ErrNotFound
 	}
