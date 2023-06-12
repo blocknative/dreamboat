@@ -21,5 +21,7 @@ type Datastore struct {
 }
 
 func NewDatastore(l log.Logger, db *sql.DB, relayID uint64) *Datastore {
-	return &Datastore{DB: db, RelayID: relayID, l: l}
+	ds := &Datastore{DB: db, RelayID: relayID, l: l}
+	ds.initMetrics()
+	return ds
 }
