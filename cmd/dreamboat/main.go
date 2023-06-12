@@ -77,9 +77,8 @@ var (
 	flagBeaconList        string
 	flagBeaconPublishList string
 
-	flagNetwork   string
-	flagSecretKey string
-	flagTTL       time.Duration
+	flagNetwork string
+	flagTTL     time.Duration
 
 	flagWorkersVerify         uint64
 	flagWorkersStoreValidator uint64
@@ -139,7 +138,6 @@ func init() {
 
 	flag.StringVar(&flagNetwork, "network", "mainnet", "the networks the relay works on")
 
-	flag.StringVar(&flagSecretKey, "secretKey", "", "secret key used to sign messages")
 	flag.DurationVar(&flagTTL, "ttl", 24*time.Hour, "ttl of the data")
 
 	flag.Uint64Var(&flagWorkersVerify, "relay-workers-verify", 2000, "number of workers running verify in parallel")
@@ -392,7 +390,7 @@ func main() {
 		}
 	}
 
-	skBytes, err := hexutil.Decode(flagSecretKey)
+	skBytes, err := hexutil.Decode(cfg.Relay.SecretKey)
 	if err != nil {
 		logger.WithError(err).Error("fail to decode secretKey")
 		return
