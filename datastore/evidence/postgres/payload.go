@@ -123,7 +123,6 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 	)
 
 	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
 
 	fmt.Fprint(w, "[") // Write the opening bracket manually
 	idx := 0
@@ -142,7 +141,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		bt.BlockHash.UnmarshalText(blockHash)
 		bt.Value.UnmarshalText(value)
 
-		if i > 0 {
+		if idx > 0 {
 			fmt.Fprint(w, ", ")
 			idx++
 		}

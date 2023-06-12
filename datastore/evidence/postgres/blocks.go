@@ -104,7 +104,6 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 	)
 
 	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
 
 	fmt.Fprint(w, "[") // Write the opening bracket manually
 	idx := 0
@@ -127,7 +126,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		bt.Timestamp = uint64(t.Unix())
 		bt.TimestampMs = uint64(t.UnixMilli())
 
-		if i > 0{
+		if idx > 0{
 			fmt.Fprint(w, ", ")
 			idx++
 		}
