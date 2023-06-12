@@ -128,8 +128,9 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 
 		if idx > 0{
 			fmt.Fprint(w, ", ")
-			idx++
 		}
+		idx++
+		
 		if err := encoder.Encode(bt); err != nil {
 			fmt.Fprint(w, "]")
 			return err

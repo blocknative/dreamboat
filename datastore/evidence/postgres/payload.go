@@ -141,10 +141,11 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		bt.BlockHash.UnmarshalText(blockHash)
 		bt.Value.UnmarshalText(value)
 
-		if idx > 0 {
+		if idx > 0{
 			fmt.Fprint(w, ", ")
-			idx++
 		}
+		idx++
+		
 		if err := encoder.Encode(bt); err != nil {
 			fmt.Fprint(w, "]")
 			return err
