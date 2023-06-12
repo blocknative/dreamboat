@@ -126,6 +126,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 	encoder.SetIndent("", "  ")
 
 	fmt.Fprint(w, "[") // Write the opening bracket manually
+	idx := 0
 	for rows.Next() {
 		bt := structs.BidTraceExtended{}
 		err = rows.Scan(&bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &bt.BlockNumber, &bt.NumTx, &value, &bt.GasUsed, &bt.GasLimit)
@@ -141,6 +142,10 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		bt.BlockHash.UnmarshalText(blockHash)
 		bt.Value.UnmarshalText(value)
 
+		if i > 0 {
+			fmt.Fprint(w, ", ")
+			idx++
+		}
 		if err := encoder.Encode(bt); err != nil {
 			fmt.Fprint(w, "]")
 			return err

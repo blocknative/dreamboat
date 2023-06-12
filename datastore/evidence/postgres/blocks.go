@@ -107,6 +107,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 	encoder.SetIndent("", "  ")
 
 	fmt.Fprint(w, "[") // Write the opening bracket manually
+	idx := 0
 	for rows.Next() {
 		bt := structs.BidTraceWithTimestamp{}
 		t := time.Time{}
@@ -126,6 +127,10 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		bt.Timestamp = uint64(t.Unix())
 		bt.TimestampMs = uint64(t.UnixMilli())
 
+		if i > 0{
+			fmt.Fprint(w, ", ")
+			idx++
+		}
 		if err := encoder.Encode(bt); err != nil {
 			fmt.Fprint(w, "]")
 			return err
