@@ -96,13 +96,6 @@ var (
 
 	flagDistribution bool
 
-	flagDistributionID               string
-	flagDistributionStreamWorkers    uint64
-	flagDistributionStreamServedBids bool
-	flagDistributionStreamTTL        time.Duration
-	flagDistributionStreamTopic      string
-	flagDistributionStreamQueue      int
-
 	flagStorageReadRedisURI  string
 	flagStorageWriteRedisURI string
 	flagPubsubRedisURI       string
@@ -111,11 +104,6 @@ var (
 	flagGetPayloadRequestTimeLimit time.Duration
 
 	flagWarehouse bool
-	/*
-		flagWarehouseDir     string
-		flagWarehouseWorkers int
-		flagWarehouseBuffer  int
-	*/
 
 	flagBeaconEventRestart                  int
 	flagBeaconEventTimeout                  time.Duration
@@ -157,15 +145,6 @@ func init() {
 	flag.StringVar(&flagAllowListedBuilderList, "relay-allow-listed-builder", "", "comma separated list of allowed builder pubkeys")
 
 	flag.BoolVar(&flagDistribution, "relay-distribution", false, "run relay as a distributed system with multiple replicas")
-	flag.StringVar(&flagDistributionID, "relay-distribution-id", "", "the id of the relay to differentiate from other replicas")
-	flag.Uint64Var(&flagDistributionStreamWorkers, "relay-distribution-stream-workers", 100, "number of workers publishing and processing subscriptions in the stream")
-
-	flag.BoolVar(&flagDistributionStreamServedBids, "relay-distribution-stream-served-bids", true, "stream entire block for every bid that is served in GetHeader requests.")
-
-	flag.DurationVar(&flagDistributionStreamTTL, "relay-distribution-stream-ttl", time.Minute, "TTL of the data that is distributed")
-
-	flag.StringVar(&flagDistributionStreamTopic, "relay-distribution-stream-topic", "relay", "Pubsub topic for streaming payloads")
-	flag.IntVar(&flagDistributionStreamQueue, "relay-distribution-stream-queue", 100, "Pubsub publish queue size")
 
 	flag.StringVar(&flagStorageReadRedisURI, "relay-storage-read-redis-uri", "", "Redis Storage URI for read replica")
 	flag.StringVar(&flagStorageWriteRedisURI, "relay-storage-write-redis-uri", "", "Redis Storage URI for write")
@@ -270,7 +249,7 @@ func main() {
 		})
 
 		m.RegisterRedis("redis", "stream", redisClient)
-		streamer, err = initStreamer(ctx, redisClient, logger, m, state)
+		streamer, err = initStreamer(ctx, cfg.Distributed, redisClient, logger, m, state)
 		if err != nil {
 			logger.WithError(err).Error("fail to create streamer")
 			return
@@ -447,12 +426,12 @@ func main() {
 		AllowedListedBuilders: allowed,
 		PublishBlock:          cfg.Relay.PublishBlock,
 		Distributed:           flagDistribution,
-		StreamServedBids:      flagDistributionStreamServedBids,
+		StreamServedBids:      cfg.Distributed.StreamServedBids,
 	}, beaconPubCli, validatorCache, valDS, verificator, state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 	r.AttachMetrics(m)
 
 	if flagDistribution {
-		r.RunSubscribersParallel(ctx, uint(flagDistributionStreamWorkers))
+		r.RunSubscribersParallel(ctx, uint(cfg.Distributed.WorkerNumber))
 	}
 
 	ee := &api.EnabledEndpoints{
@@ -614,12 +593,12 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-func initStreamer(ctx context.Context, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
+func initStreamer(ctx context.Context, cfg *config.DistributedConfig, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
 	timeStreamStart := time.Now()
 
 	pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: l}
 
-	id := flagDistributionID
+	id := cfg.InstanceID
 	if id == "" {
 		id = uuid.NewString()
 	}
@@ -627,15 +606,14 @@ func initStreamer(ctx context.Context, redisClient *redis.Client, l log.Logger, 
 	streamConfig := stream.StreamConfig{
 		Logger:          l,
 		ID:              id,
-		TTL:             flagDistributionStreamTTL,
-		PubsubTopic:     flagDistributionStreamTopic,
-		StreamQueueSize: flagDistributionStreamQueue,
+		PubsubTopic:     cfg.Redis.Topic,
+		StreamQueueSize: cfg.StreamQueueSize,
 	}
 
 	redisStreamer := stream.NewClient(pubsub, st, streamConfig)
 	redisStreamer.AttachMetrics(m)
 
-	if err := redisStreamer.RunSubscriberParallel(ctx, uint(flagDistributionStreamWorkers)); err != nil {
+	if err := redisStreamer.RunSubscriberParallel(ctx, uint(cfg.WorkerNumber)); err != nil {
 		return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
 	}
 

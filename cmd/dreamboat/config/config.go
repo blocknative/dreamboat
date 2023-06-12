@@ -249,6 +249,7 @@ type PayloadConfig struct {
 	// BadgerDB config
 	Badger BadgerDBConfig `config:"badger"`
 	// number of payloads to cache for fast in-memory reads
+
 	CacheSize int `config:"cache_size"`
 
 	// Redis config
@@ -285,24 +286,25 @@ var DefaultWarehouseConfig = &WarehouseConfig{
 type DistributedConfig struct {
 	Redis *RedisStreamConfig `config:"redis"`
 
-	Enabled    bool   `config:"enabled"`
 	InstanceID string `config:"id"`
 
 	// Number of workers for storing data in warehouse, if 0, then data is not exported
 	WorkerNumber int `config:"workers"`
 
-	// publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published
-	PublishOnSubmission bool `config:"publish_on_submission"`
-
 	// Stream internal channel size
-	StreamQueueSize int
+	StreamQueueSize int `config:"stream_queue_size"`
+
+	// stream entire block for every bid that is served in GetHeader requests.
+	StreamServedBids bool `config:"stream_served_bids"`
 }
 
 var DefaultDistributedConfig = &DistributedConfig{
-	Enabled:             true,
-	WorkerNumber:        100,
-	PublishOnSubmission: false,
-	StreamQueueSize:     200,
+	Redis: &RedisStreamConfig{
+		Topic: "relay",
+	},
+	WorkerNumber:     100,
+	StreamQueueSize:  100,
+	StreamServedBids: true,
 }
 
 type RedisStreamConfig struct {
