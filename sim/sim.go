@@ -33,16 +33,22 @@ func NewManager(l log.Logger, fb Fallback) (m *Manager) {
 	}
 }
 
-func (m *Manager) AddRPCClient(ctx context.Context, simHttpAddr string) {
-	simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
+func (m *Manager) AddRPCClient(ctx context.Context, address string) {
+	if address == "" {
+		return
+	}
+	simRPCCli := gethrpc.NewClient(gethSimNamespace, address)
 	if err := simRPCCli.Dial(ctx); err != nil {
-		m.l.WithError(err).Fatalf("fail to initialize rpc connection (%s): %w", simHttpAddr, err)
+		m.l.WithError(err).Fatalf("fail to initialize rpc connection (%s): %w", address, err)
 		return
 	}
 	m.fb.AddClient(simRPCCli)
 }
 
 func (m *Manager) AddWsClients(ctx context.Context, address string, retry bool) {
+	if address == "" {
+		return
+	}
 	if m.ws == nil {
 		m.ws = gethws.NewReConn(m.l)
 		simWSCli := gethws.NewClient(m.ws, gethSimNamespace, retry, m.l)
@@ -54,8 +60,11 @@ func (m *Manager) AddWsClients(ctx context.Context, address string, retry bool) 
 
 }
 
-func (m *Manager) AddHTTPClient(ctx context.Context, simHttpAddr string) {
-	m.fb.AddClient(gethhttp.NewClient(simHttpAddr, gethSimNamespace, m.l))
+func (m *Manager) AddHTTPClient(ctx context.Context, address string) {
+	if address == "" {
+		return
+	}
+	m.fb.AddClient(gethhttp.NewClient(address, gethSimNamespace, m.l))
 }
 
 /*
