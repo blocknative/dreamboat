@@ -2,6 +2,8 @@ package dspostgres
 
 import (
 	"database/sql"
+
+	"github.com/lthibault/log"
 )
 
 var (
@@ -14,8 +16,10 @@ var SlotsPerEpoch = 32
 type Datastore struct {
 	RelayID uint64
 	DB      *sql.DB
+	l       log.Logger
+	m       PostgresMetrics
 }
 
-func NewDatastore(db *sql.DB, relayID uint64) *Datastore {
-	return &Datastore{DB: db, RelayID: relayID}
+func NewDatastore(l log.Logger, db *sql.DB, relayID uint64) *Datastore {
+	return &Datastore{DB: db, RelayID: relayID, l: l}
 }

@@ -124,14 +124,20 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 
 	encoder := json.NewEncoder(w)
 
-	fmt.Fprint(w, "[") // Write the opening bracket manually
+	if _, err := fmt.Fprint(w, "["); err != nil {
+		return nil
+	}
+	// After we write the first character, do not return an error, log it and return nil.
+
 	idx := 0
 	for rows.Next() {
 		bt := structs.BidTraceExtended{}
 		err = rows.Scan(&bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &bt.BlockNumber, &bt.NumTx, &value, &bt.GasUsed, &bt.GasLimit)
 		if err != nil {
+			s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "scan").Inc()
+			s.l.WithError(err).Warn("failed to scan row")
 			fmt.Fprint(w, "]")
-			return err
+			return nil
 		}
 
 		bt.BuilderPubkey.UnmarshalText(builderpubkey)
@@ -141,14 +147,16 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		bt.BlockHash.UnmarshalText(blockHash)
 		bt.Value.UnmarshalText(value)
 
-		if idx > 0{
+		if idx > 0 {
 			fmt.Fprint(w, ", ")
 		}
 		idx++
-		
+
 		if err := encoder.Encode(bt); err != nil {
+			s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "encode").Inc()
+			s.l.WithError(err).Warn("failed to encode row")
 			fmt.Fprint(w, "]")
-			return err
+			return nil
 		}
 	}
 
