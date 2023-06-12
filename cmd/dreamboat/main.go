@@ -77,8 +77,7 @@ var (
 	flagBeaconList        string
 	flagBeaconPublishList string
 
-	flagNetwork string
-	flagTTL     time.Duration
+	flagTTL time.Duration
 
 	flagWorkersVerify         uint64
 	flagWorkersStoreValidator uint64
@@ -113,10 +112,12 @@ var (
 	flagGetPayloadResponseDelay    time.Duration
 	flagGetPayloadRequestTimeLimit time.Duration
 
-	flagWarehouse        bool
-	flagWarehouseDir     string
-	flagWarehouseWorkers int
-	flagWarehouseBuffer  int
+	flagWarehouse bool
+	/*
+		flagWarehouseDir     string
+		flagWarehouseWorkers int
+		flagWarehouseBuffer  int
+	*/
 
 	flagBeaconEventRestart                  int
 	flagBeaconEventTimeout                  time.Duration
@@ -135,8 +136,6 @@ func init() {
 	flag.DurationVar(&flagTimeout, "timeout", time.Second*5, "request timeout")
 	flag.StringVar(&flagBeaconList, "beacon", "", "`url` for beacon endpoint")
 	flag.StringVar(&flagBeaconPublishList, "beacon-publish", "", "`url` for beacon endpoints that publish blocks")
-
-	flag.StringVar(&flagNetwork, "network", "mainnet", "the networks the relay works on")
 
 	flag.DurationVar(&flagTTL, "ttl", 24*time.Hour, "ttl of the data")
 
@@ -181,11 +180,6 @@ func init() {
 
 	flag.BoolVar(&flagWarehouse, "warehouse", true, "Enable warehouse storage of data")
 
-	flag.StringVar(&flagWarehouseDir, "warehouse-dir", "/data/relay/warehouse", "Data directory where the data is stored in the warehouse")
-
-	flag.IntVar(&flagWarehouseWorkers, "warehouse-workers", 32, "Number of workers for storing data in warehouse, if 0, then data is not exported")
-	flag.IntVar(&flagWarehouseBuffer, "warehouse-buffer", 1_000, "Size of the buffer for processing requests")
-
 	flag.DurationVar(&flagBeaconEventTimeout, "beacon-event-timeout", 16*time.Second, "The maximum time allowed to wait for head events from the beacon, we recommend setting it to 'durationPerSlot * 1.25'")
 	flag.IntVar(&flagBeaconEventRestart, "beacon-event-restart", 5, "The number of consecutive timeouts allowed before restarting the head event subscription")
 	flag.DurationVar(&flagBeaconQueryTimeout, "beacon-query-timeout", 20*time.Second, "The maximum time allowed to wait for a response from the beacon")
@@ -218,9 +212,9 @@ func main() {
 	}
 
 	chainCfg := config.NewChainConfig()
-	chainCfg.LoadNetwork(flagNetwork)
+	chainCfg.LoadNetwork(cfg.Relay.Network)
 	if chainCfg.GenesisForkVersion == "" {
-		if err := chainCfg.ReadNetworkConfig(datadir, flagNetwork); err != nil {
+		if err := chainCfg.ReadNetworkConfig(datadir, cfg.Relay.Network); err != nil {
 			logger.WithError(err).Fatal("failed read chain configuration")
 			return
 		}
@@ -415,14 +409,13 @@ func main() {
 
 	var relayWh *wh.Warehouse
 	if flagWarehouse {
-		warehouse := wh.NewWarehouse(logger, flagWarehouseBuffer)
-
-		if err := os.MkdirAll(flagWarehouseDir, 0755); err != nil {
+		warehouse := wh.NewWarehouse(logger, cfg.Warehouse.Buffer)
+		if err := os.MkdirAll(cfg.Warehouse.Directory, 0755); err != nil {
 			logger.WithError(err).Error("failed to create datadir")
 			return
 		}
 
-		if err := warehouse.RunParallel(ctx, flagWarehouseDir, flagWarehouseWorkers); err != nil {
+		if err := warehouse.RunParallel(ctx, cfg.Warehouse.Directory, cfg.Warehouse.WorkerNumber); err != nil {
 			logger.WithError(err).Error("failed to run data exporter")
 			return
 		}
@@ -431,8 +424,8 @@ func main() {
 
 		logger.With(log.F{
 			"subService": "warehouse",
-			"datadir":    flagWarehouseDir,
-			"workers":    flagWarehouseWorkers,
+			"datadir":    cfg.Warehouse.Directory,
+			"workers":    cfg.Warehouse.WorkerNumber,
 		}).Info("initialized")
 
 		relayWh = warehouse

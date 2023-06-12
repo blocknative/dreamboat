@@ -33,6 +33,7 @@ func DefaultConfig() Config {
 		Validators:      DefaultValidatorsConfig,
 		Payload:         DefaultPayloadConfig,
 		DataAPI:         DefaultDataAPIConfig,
+		Warehouse:       DefaultWarehouseConfig,
 	}
 	c.ExternalHttp.Address = "0.0.0.0:18550"
 	c.InternalHttp.Address = "0.0.0.0:19550"

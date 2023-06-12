@@ -260,8 +260,6 @@ type RedisDBConfig struct {
 }
 
 type WarehouseConfig struct {
-	Enabled bool `config:"enabled"`
-
 	// Data directory where the data is stored in the warehouse
 	Directory string `config:"directory"`
 
@@ -269,11 +267,10 @@ type WarehouseConfig struct {
 	WorkerNumber int `config:"workers"`
 
 	// Size of the buffer for processing requests
-	Buffer int `config:"directory"`
+	Buffer int `config:"buffer"`
 }
 
 var DefaultWarehouseConfig = &WarehouseConfig{
-	Enabled:      true,
 	Directory:    "/data/relay/warehouse",
 	WorkerNumber: 32,
 	Buffer:       1_000,
