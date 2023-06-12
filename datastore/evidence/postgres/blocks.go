@@ -86,7 +86,8 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
-		return json.NewEncoder(w).Encode([]structs.BidTraceWithTimestamp{})
+		_, err := w.Write([]byte("[]"))
+		return err
 	case err != nil:
 		return fmt.Errorf("query error: %w", err)
 	default:
@@ -112,6 +113,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		err = rows.Scan(&t, &bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &value,
 			&bt.GasUsed, &bt.GasLimit, &bt.BlockNumber, &bt.NumTx)
 		if err != nil {
+			fmt.Fprint(w, "]")
 			return err
 		}
 		bt.BuilderPubkey.UnmarshalText(builderpubkey)
@@ -125,6 +127,7 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		bt.TimestampMs = uint64(t.UnixMilli())
 
 		if err := encoder.Encode(bt); err != nil {
+			fmt.Fprint(w, "]")
 			return err
 		}
 	}

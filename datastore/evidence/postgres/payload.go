@@ -130,6 +130,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		bt := structs.BidTraceExtended{}
 		err = rows.Scan(&bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &bt.BlockNumber, &bt.NumTx, &value, &bt.GasUsed, &bt.GasLimit)
 		if err != nil {
+			fmt.Fprint(w, "]")
 			return err
 		}
 
@@ -141,6 +142,7 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		bt.Value.UnmarshalText(value)
 
 		if err := encoder.Encode(bt); err != nil {
+			fmt.Fprint(w, "]")
 			return err
 		}
 	}

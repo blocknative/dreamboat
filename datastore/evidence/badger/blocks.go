@@ -77,11 +77,13 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 
 	if err != nil {
 		if errors.Is(err, ds.ErrNotFound) {
-			return json.NewEncoder(w).Encode([]structs.BidTraceWithTimestamp{})
+			_, err := w.Write([]byte("[]"))
+			return err
 		}
 		return err
 	} else if events == nil {
-		return json.NewEncoder(w).Encode([]structs.BidTraceWithTimestamp{})
+		_, err := w.Write([]byte("[]"))
+		return err
 	}
 
 	return json.NewEncoder(w).Encode(events)
