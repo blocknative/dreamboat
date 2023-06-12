@@ -162,12 +162,18 @@ type BeaconConfig struct {
 	QueryTimeout time.Duration `config:"query_timeout"`
 }
 
-var DefaultBlockSimulation = &BlockSimulationConfig{}
+var DefaultBlockSimulation = &BlockSimulationConfig{
+	WS: &BlockSimulationWSConfig{
+		Retry: true,
+	},
+	RPC:  &BlockSimulationRPCConfig{},
+	HTTP: &BlockSimulationHTTPConfig{},
+}
 
 type BlockSimulationConfig struct {
-	RPC  BlockSimulationRPCConfig  `config:"rpc"`
-	WS   BlockSimulationWSConfig   `config:"ws"`
-	HTTP BlockSimulationHTTPConfig `config:"http"`
+	RPC  *BlockSimulationRPCConfig  `config:"rpc"`
+	WS   *BlockSimulationWSConfig   `config:"ws"`
+	HTTP *BlockSimulationHTTPConfig `config:"http"`
 }
 
 type BlockSimulationRPCConfig struct {

@@ -89,8 +89,6 @@ var (
 	flagRegistrationsCacheReadTTL  time.Duration
 	flagRegistrationsCacheWriteTTL time.Duration
 
-	flagPublishBlock bool
-
 	flagValidatorDatabaseUrl string
 	flagDataapiDatabaseUrl   string
 
@@ -152,8 +150,6 @@ func init() {
 
 	flag.DurationVar(&flagRegistrationsCacheReadTTL, "relay-registrations-cache-read-ttl", time.Hour, "registrations cache ttl for reading")
 	flag.DurationVar(&flagRegistrationsCacheWriteTTL, "relay-registrations-cache-write-ttl", 12*time.Hour, "registrations cache ttl for writing")
-
-	flag.BoolVar(&flagPublishBlock, "relay-publish-block", true, "relay registrations cache size")
 
 	flag.StringVar(&flagValidatorDatabaseUrl, "relay-validator-database-url", "", "address of postgress database for validator registrations, if empty - default, badger will be used")
 	flag.StringVar(&flagDataapiDatabaseUrl, "relay-dataapi-database-url", "", "address of postgress database for dataapi, if empty - default, badger will be used")
@@ -449,7 +445,7 @@ func main() {
 		RegistrationCacheTTL:  flagRegistrationsCacheReadTTL,
 		TTL:                   flagTTL,
 		AllowedListedBuilders: allowed,
-		PublishBlock:          flagPublishBlock,
+		PublishBlock:          cfg.Relay.PublishBlock,
 		Distributed:           flagDistribution,
 		StreamServedBids:      flagDistributionStreamServedBids,
 	}, beaconPubCli, validatorCache, valDS, verificator, state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)

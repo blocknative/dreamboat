@@ -171,7 +171,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 				if sRoot != nil {
 					sRoot.Propagate(structs.OldNew{
 						Name:      f.Name, // or maybe `name`
-						ParamPath: key,
+						ParamPath: fullPath,
 						New:       el,
 						Old:       b,
 					})
@@ -202,7 +202,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 						if sRoot != nil {
 							sRoot.Propagate(structs.OldNew{
 								Name:      f.Name,
-								ParamPath: key,
+								ParamPath: fullPath,
 								New:       b,
 								Old:       el.Bool(),
 							})
@@ -226,7 +226,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 						if sRoot != nil {
 							sRoot.Propagate(structs.OldNew{
 								Name:      f.Name,
-								ParamPath: key,
+								ParamPath: fullPath,
 								New:       uintP,
 								Old:       el.Uint(),
 							})
@@ -249,7 +249,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 						if sRoot != nil {
 							sRoot.Propagate(structs.OldNew{
 								Name:      f.Name,
-								ParamPath: key,
+								ParamPath: fullPath,
 								New:       intP,
 								Old:       el.Int(),
 							})
@@ -272,7 +272,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 						if sRoot != nil {
 							sRoot.Propagate(structs.OldNew{
 								Name:      f.Name,
-								ParamPath: key,
+								ParamPath: fullPath,
 								New:       s,
 								Old:       el.String(),
 							})
@@ -297,7 +297,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 							if sRoot != nil {
 								sRoot.Propagate(structs.OldNew{
 									Name:      f.Name,
-									ParamPath: key,
+									ParamPath: fullPath,
 									New:       s,
 									Old:       el,
 								})
