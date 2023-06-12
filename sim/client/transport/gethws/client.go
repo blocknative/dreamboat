@@ -31,6 +31,10 @@ func NewClient(nodeConn Connectionner, namespace string, try bool, l log.Logger)
 	}
 }
 
+func (c *Client) ID() string {
+	return ""
+}
+
 func (f *Client) IsSet() bool {
 	return f.namespace != "" && f.nodeConn != nil
 }

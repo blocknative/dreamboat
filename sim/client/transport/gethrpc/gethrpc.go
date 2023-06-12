@@ -20,6 +20,10 @@ func NewClient(namespace string, rawurl string) *Client {
 	}
 }
 
+func (c *Client) ID() string {
+	return c.rawurl
+}
+
 func (f *Client) IsSet() bool {
 	return f.namespace != "" && f.rawurl != ""
 }

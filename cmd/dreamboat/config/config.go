@@ -180,7 +180,7 @@ type BlockSimulationWSConfig struct {
 	//  block validation endpoint address (comma separated list)
 	Address []string `config:"address,allow_dynamic"`
 	// retry to other websocket connections on failure"
-	Retry bool `config:"retry"`
+	Retry bool `config:"retry,allow_dynamic"`
 }
 
 type BlockSimulationHTTPConfig struct {

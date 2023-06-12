@@ -1,7 +1,8 @@
 package structs
 
 type OldNew struct {
-	Name string
-	Old  any
-	New  any
+	Name      string
+	ParamPath string
+	Old       any
+	New       any
 }

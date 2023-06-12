@@ -30,3 +30,5 @@ cmd/scratch/*
 .data
 /dreamboat
 /migration-postgres
+
+config.ini

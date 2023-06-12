@@ -24,10 +24,8 @@ import (
 	"github.com/blocknative/dreamboat/blstools"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
+	"github.com/blocknative/dreamboat/sim"
 	"github.com/blocknative/dreamboat/sim/client/fallback"
-	"github.com/blocknative/dreamboat/sim/client/transport/gethhttp"
-	"github.com/blocknative/dreamboat/sim/client/transport/gethrpc"
-	"github.com/blocknative/dreamboat/sim/client/transport/gethws"
 	"github.com/blocknative/dreamboat/stream"
 	"github.com/google/uuid"
 	badger "github.com/ipfs/go-ds-badger2"
@@ -100,20 +98,14 @@ var (
 
 	flagAllowListedBuilderList string
 
-	flagBlockValidationEndpointHTTP   string
-	flagBlockValidationEndpointWSList string
-	flagBlockValidationWSRetry        bool
-	flagBlockValidationRPC            string
+	flagDistribution bool
 
-	flagDistribution   bool
-	flagDistributionID string
-
+	flagDistributionID               string
 	flagDistributionStreamWorkers    uint64
 	flagDistributionStreamServedBids bool
-
-	flagDistributionStreamTTL   time.Duration
-	flagDistributionStreamTopic string
-	flagDistributionStreamQueue int
+	flagDistributionStreamTTL        time.Duration
+	flagDistributionStreamTopic      string
+	flagDistributionStreamQueue      int
 
 	flagStorageReadRedisURI  string
 	flagStorageWriteRedisURI string
@@ -170,11 +162,6 @@ func init() {
 	flag.StringVar(&flagDataapiDatabaseUrl, "relay-dataapi-database-url", "", "address of postgress database for dataapi, if empty - default, badger will be used")
 
 	flag.StringVar(&flagAllowListedBuilderList, "relay-allow-listed-builder", "", "comma separated list of allowed builder pubkeys")
-
-	flag.StringVar(&flagBlockValidationEndpointHTTP, "block-validation-endpoint-http", "", "http block validation endpoint address")
-	flag.StringVar(&flagBlockValidationEndpointWSList, "block-validation-endpoint-ws", "", "ws block validation endpoint address (comma separated list)")
-	flag.BoolVar(&flagBlockValidationWSRetry, "block-validation-ws-retry", false, "retry to other connection on failure")
-	flag.StringVar(&flagBlockValidationRPC, "block-validation-endpoint-rpc", "", "rpc block validation rawurl (eg. ipc path)")
 
 	flag.BoolVar(&flagDistribution, "relay-distribution", false, "run relay as a distributed system with multiple replicas")
 	flag.StringVar(&flagDistributionID, "relay-distribution-id", "", "the id of the relay to differentiate from other replicas")
@@ -320,31 +307,14 @@ func main() {
 		return
 	}
 
-	// SIM Client
 	simFallb := fallback.NewFallback()
 	simFallb.AttachMetrics(m)
-	if simHttpAddr := flagBlockValidationRPC; simHttpAddr != "" {
-		simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
-		if err := simRPCCli.Dial(ctx); err != nil {
-			logger.WithError(err).WithField("address", simHttpAddr).Error("fail to initialize rpc connection")
-			return
-		}
-		simFallb.AddClient(simRPCCli)
-	}
 
-	if simWSAddr := flagBlockValidationEndpointWSList; simWSAddr != "" {
-		simWSConn := gethws.NewReConn(logger)
-		for _, s := range strings.Split(simWSAddr, ",") {
-			input := make(chan []byte, 1000)
-			go simWSConn.KeepConnection(s, input)
-		}
-		simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, flagBlockValidationWSRetry, logger)
-		simFallb.AddClient(simWSCli)
-	}
-
-	if simHttpAddr := flagBlockValidationEndpointHTTP; simHttpAddr != "" {
-		simHTTPCli := gethhttp.NewClient(simHttpAddr, gethSimNamespace, logger)
-		simFallb.AddClient(simHTTPCli)
+	simManager := sim.NewManager(logger, simFallb)
+	simManager.AddRPCClient(ctx, cfg.BlockSimulation.RPC.Address)
+	simManager.AddHTTPClient(ctx, cfg.BlockSimulation.HTTP.Address)
+	for _, addr := range cfg.BlockSimulation.WS.Address {
+		simManager.AddWsClients(ctx, addr, cfg.BlockSimulation.WS.Retry)
 	}
 
 	verificator := verify.NewVerificationManager(logger, uint(flagVerifyQueueSize))
