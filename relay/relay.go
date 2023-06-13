@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"strconv"
 	"sync/atomic"
@@ -81,10 +82,10 @@ type Verifier interface {
 type DataAPIStore interface {
 	//CheckSlotDelivered(context.Context, uint64) (bool, error)
 	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
+	GetDeliveredPayloads(ctx context.Context, w io.Writer, headSlot uint64, queryArgs structs.PayloadTraceQuery) error
 
 	PutBuilderBlockSubmission(ctx context.Context, bid structs.BidTraceWithTimestamp, isMostProfitable bool) (err error)
-	GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	GetBuilderBlockSubmissions(ctx context.Context, w io.Writer, headSlot uint64, payload structs.SubmissionTraceQuery) error
 }
 
 type PayloadCache interface {

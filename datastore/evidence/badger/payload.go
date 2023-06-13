@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/blocknative/dreamboat/structs"
@@ -69,7 +70,7 @@ func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, 
 }
 */
 
-func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
+func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headSlot uint64, query structs.PayloadTraceQuery) error {
 	var (
 		key ds.Key
 		err error
@@ -87,27 +88,38 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 	}
 
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ds.ErrNotFound) {
+			return json.NewEncoder(w).Encode([]structs.BidTraceExtended{})
+		}
+		return err
 	}
+
 	if key.String() == "" {
 		start := headSlot
 		if query.Cursor != 0 {
 			start = min(headSlot, query.Cursor)
 		}
-		return s.getlatestDelivered(ctx, start, int(query.Limit))
+		delivered, err := s.getlatestDelivered(ctx, start, int(query.Limit))
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(w).Encode(delivered)
 	}
 
 	data, err := s.DB.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, ds.ErrNotFound) {
-			return []structs.BidTraceExtended{}, nil
+			return json.NewEncoder(w).Encode([]structs.BidTraceExtended{})
 		}
-		return nil, err
+		return err
 	}
 
 	var trace structs.BidTraceWithTimestamp
-	err = json.Unmarshal(data, &trace)
-	return []structs.BidTraceExtended{trace.BidTraceExtended}, err
+	if err = json.Unmarshal(data, &trace); err != nil {
+		return err
+	}
+
+	return json.NewEncoder(w).Encode([]structs.BidTraceExtended{trace.BidTraceExtended})
 }
 
 func (s *Datastore) queryToDeliveredKey(ctx context.Context, query structs.PayloadQuery) (ds.Key, error) {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -59,8 +60,11 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.B
 	return txn.Commit()
 }
 
-func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, query structs.SubmissionTraceQuery) (events []structs.BidTraceWithTimestamp, err error) {
-
+func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer, headSlot uint64, query structs.SubmissionTraceQuery) error {
+	var (
+		events []structs.BidTraceWithTimestamp
+		err    error
+	)
 	if query.HasSlot() {
 		events, err = s.getHeadersRange(ctx, strconv.FormatUint(uint64(query.Slot), 10), "")
 	} else if query.HasBlockHash() {
@@ -73,13 +77,16 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 
 	if err != nil {
 		if errors.Is(err, ds.ErrNotFound) {
-			return []structs.BidTraceWithTimestamp{}, nil
+			_, err := w.Write([]byte("[]"))
+			return err
 		}
-		return []structs.BidTraceWithTimestamp{}, err
+		return err
 	} else if events == nil {
-		return []structs.BidTraceWithTimestamp{}, nil
+		_, err := w.Write([]byte("[]"))
+		return err
 	}
-	return events, err
+
+	return json.NewEncoder(w).Encode(events)
 }
 
 func (s *Datastore) getHeadersRange(ctx context.Context, slot, blockhash string) (el []structs.BidTraceWithTimestamp, err error) {

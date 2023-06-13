@@ -3,7 +3,9 @@ package dspostgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -34,7 +36,7 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, payload
 	return err
 }
 
-func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error) {
+func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headSlot uint64, queryArgs structs.PayloadTraceQuery) error {
 	var i = 1
 	parts := []string{"relay_id = $" + strconv.Itoa(i)}
 	data := []interface{}{s.RelayID}
@@ -103,9 +105,9 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
-		return []structs.BidTraceExtended{}, nil
+		return json.NewEncoder(w).Encode([]structs.BidTraceExtended{})
 	case err != nil:
-		return nil, fmt.Errorf("query error: %w", err)
+		return fmt.Errorf("query error: %w", err)
 	default:
 	}
 
@@ -119,11 +121,22 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		blockHash            []byte
 		value                []byte
 	)
+
+	encoder := json.NewEncoder(w)
+
+	// After we write the first character, do not return an error, log it and return nil.
+	idx := 0
 	for rows.Next() {
 		bt := structs.BidTraceExtended{}
 		err = rows.Scan(&bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &bt.BlockNumber, &bt.NumTx, &value, &bt.GasUsed, &bt.GasLimit)
 		if err != nil {
-			return nil, err
+			s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "scan").Inc()
+			s.l.WithError(err).Warn("failed to scan row")
+			fmt.Fprint(w, "]")
+			if idx == 0 {
+				return err
+			}
+			return nil
 		}
 
 		bt.BuilderPubkey.UnmarshalText(builderpubkey)
@@ -133,10 +146,37 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, q
 		bt.BlockHash.UnmarshalText(blockHash)
 		bt.Value.UnmarshalText(value)
 
-		bts = append(bts, bt)
+		select {
+		case <-ctx.Done():
+			s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "context done").Inc()
+			return nil
+		default:
+		}
+
+		if idx == 0 {
+			if _, err := fmt.Fprint(w, "["); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprint(w, ", "); err != nil {
+				s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "fprint").Inc()
+				s.l.WithError(err).Warn("failed to fprint comma")
+				fmt.Fprint(w, "]")
+				return nil
+			}
+		}
+		idx++
+
+		if err := encoder.Encode(bt); err != nil {
+			s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "encode").Inc()
+			s.l.WithError(err).Warn("failed to encode row")
+			fmt.Fprint(w, "]")
+			return nil
+		}
 	}
 
-	return bts, err
+	fmt.Fprint(w, "]") // Write the closing bracket manually
+	return nil
 }
 
 /*
