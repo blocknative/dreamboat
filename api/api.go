@@ -565,7 +565,7 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := a.r.GetPayloadDelivered(r.Context(), w, query); err != nil {
-		if isJSONError(err) {
+		if isEncodeError(err) {
 			a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "encode response").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
@@ -573,10 +573,6 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-
-	// if payloads != nil {
-	// 	a.m.ApiReqElCount.WithLabelValues("proposerPayloadsDelivered", "payload").Observe(float64(len(payloads)))
-	// }
 
 	a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "200", "").Inc()
 }
@@ -592,7 +588,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.r.GetBlockReceived(r.Context(), w, query); err != nil {
-		if isJSONError(err) {
+		if isEncodeError(err) {
 			a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "encode response").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
@@ -600,26 +596,30 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	// if blocks != nil {
-	// 	a.m.ApiReqElCount.WithLabelValues("builderBlocksReceived", "block").Observe(float64(len(blocks)))
-	// }
 
 	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200", "").Inc()
 }
 
-// IsJSONError checks if the given error is from the JSON package.
-func isJSONError(err error) bool {
+// IsEncode checks if the given error is an encoded related error.
+func isEncodeError(err error) bool {
+	switch {
+	case errors.Is(err, io.ErrClosedPipe),
+		errors.Is(err, io.ErrShortWrite),
+		errors.Is(err, io.ErrShortBuffer),
+		errors.Is(err, io.ErrUnexpectedEOF):
+		return true
+	}
+
 	switch err.(type) {
 	case *json.SyntaxError,
-		*json.InvalidUTF8Error,
 		*json.InvalidUnmarshalError,
 		*json.UnmarshalTypeError,
-		*json.UnmarshalFieldError,
 		*json.UnsupportedTypeError,
 		*json.UnsupportedValueError,
 		*json.MarshalerError:
 		return true
 	}
+
 	return false
 }
 

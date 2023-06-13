@@ -151,7 +151,12 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 				return err
 			}
 		} else {
-			fmt.Fprint(w, ", ")
+			if _, err := fmt.Fprint(w, ", "); err != nil {
+				s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "fprint").Inc()
+				s.l.WithError(err).Warn("failed to fprint comma")
+				fmt.Fprint(w, "]")
+				return nil
+			}
 		}
 		idx++
 

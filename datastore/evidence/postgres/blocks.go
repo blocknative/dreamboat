@@ -136,7 +136,13 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 				return err
 			}
 		} else {
-			fmt.Fprint(w, ", ")
+			if _, err := fmt.Fprint(w, ", "); err != nil {
+				s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "fprint").Inc()
+				s.l.WithError(err).Warn("failed to fprint comma")
+				fmt.Fprint(w, "]")
+				return nil
+			}
+
 		}
 		idx++
 
