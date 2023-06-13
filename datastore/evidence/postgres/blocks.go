@@ -133,13 +133,8 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 
 		select {
 		case <-ctx.Done():
-			if idx == 0 {
-				return ctx.Err()
-			} else {
-				s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "context done").Inc()
-				fmt.Fprint(w, "]")
-				return nil
-			}
+			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "context done").Inc()
+			return nil
 		default:
 		}
 

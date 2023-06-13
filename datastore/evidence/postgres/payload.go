@@ -148,13 +148,8 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 
 		select {
 		case <-ctx.Done():
-			if idx == 0 {
-				return ctx.Err()
-			} else {
-				s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "context done").Inc()
-				fmt.Fprint(w, "]")
-				return nil
-			}
+			s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "context done").Inc()
+			return nil
 		default:
 		}
 
