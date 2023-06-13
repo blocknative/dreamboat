@@ -131,7 +131,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	require.NoError(t, err)
 	log.Debug(contents)
 
-	ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), contents.Payload, conf.TTL).Return(nil)
+	ds.EXPECT().PutPayload(context.Background(), submitRequest.ToPayloadKey(), contents.Payload, conf.PayloadDataTTL).Return(nil)
 
 	var bl structs.BuilderBidExtended
 	a.EXPECT().AddBlock(gomock.Any()).Times(1).DoAndReturn(func(block structs.BuilderBidExtended) bool {
@@ -174,7 +174,7 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	pc.EXPECT().Get(submitRequest.ToPayloadKey()).Times(1)
 	ds.EXPECT().GetPayload(gomock.Any(), fork, submitRequest.ToPayloadKey()).Return(contents.Payload, nil).Times(1)
 	// state.EXPECT().ForkVersion(structs.Slot(submitRequest.Slot())).Times(1).Return(fork)
-	das.EXPECT().PutDelivered(gomock.Any(), structs.Slot(submitRequest.Slot()), gomock.Any(), conf.TTL).Times(1)
+	das.EXPECT().PutDelivered(gomock.Any(), structs.Slot(submitRequest.Slot()), gomock.Any()).Times(1)
 
 	wh.EXPECT().StoreAsync(gomock.Any(), gomock.Any()).Times(1)
 

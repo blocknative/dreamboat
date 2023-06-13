@@ -100,9 +100,6 @@ var (
 	flagStorageWriteRedisURI string
 	flagPubsubRedisURI       string
 
-	flagGetPayloadResponseDelay    time.Duration
-	flagGetPayloadRequestTimeLimit time.Duration
-
 	flagWarehouse bool
 
 	flagBeaconEventRestart                  int
@@ -149,9 +146,6 @@ func init() {
 	flag.StringVar(&flagStorageReadRedisURI, "relay-storage-read-redis-uri", "", "Redis Storage URI for read replica")
 	flag.StringVar(&flagStorageWriteRedisURI, "relay-storage-write-redis-uri", "", "Redis Storage URI for write")
 	flag.StringVar(&flagPubsubRedisURI, "relay-pubsub-redis-uri", "", "Redis Pub/Sub URI")
-
-	flag.DurationVar(&flagGetPayloadResponseDelay, "getpayload-response-delay", 1*time.Second, "Delay between block publication and returning request to validator")
-	flag.DurationVar(&flagGetPayloadRequestTimeLimit, "getpayload-request-time-limit", 4*time.Second, "Time allowed for GetPayload requests since the slot started")
 
 	flag.BoolVar(&flagWarehouse, "warehouse", true, "Enable warehouse storage of data")
 
@@ -344,21 +338,6 @@ func main() {
 		RunPayloadAttributesSubscription: flagBeaconPayloadAttributesSubscription,
 	})
 
-	auctioneer := auction.NewAuctioneer()
-
-	var allowed map[[48]byte]struct{}
-	if flagAllowListedBuilderList != "" {
-		allowed = make(map[[48]byte]struct{})
-		for _, k := range strings.Split(flagAllowListedBuilderList, ",") {
-			var pk types.PublicKey
-			if err := pk.UnmarshalText([]byte(k)); err != nil {
-				logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
-				continue
-			}
-			allowed[pk] = struct{}{}
-		}
-	}
-
 	skBytes, err := hexutil.Decode(cfg.Relay.SecretKey)
 	if err != nil {
 		logger.WithError(err).Error("fail to decode secretKey")
@@ -412,22 +391,28 @@ func main() {
 		return
 	}
 
-	r := relay.NewRelay(logger, relay.RelayConfig{
+	rCfg := relay.RelayConfig{
 		BuilderSigningDomain:       domainBuilder,
-		GetPayloadResponseDelay:    flagGetPayloadResponseDelay,
-		GetPayloadRequestTimeLimit: flagGetPayloadRequestTimeLimit,
+		GetPayloadResponseDelay:    cfg.Relay.GetPayloadResponseDelay,
+		GetPayloadRequestTimeLimit: cfg.Relay.GetPayloadRequestTimeLimit,
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 			structs.ForkBellatrix: bellatrixBeaconProposer,
 			structs.ForkCapella:   capellaBeaconProposer},
-		PubKey:                pk,
-		SecretKey:             sk,
-		RegistrationCacheTTL:  flagRegistrationsCacheReadTTL,
-		TTL:                   flagTTL,
-		AllowedListedBuilders: allowed,
-		PublishBlock:          cfg.Relay.PublishBlock,
-		Distributed:           flagDistribution,
-		StreamServedBids:      cfg.Distributed.StreamServedBids,
-	}, beaconPubCli, validatorCache, valDS, verificator, state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
+		PubKey:               pk,
+		SecretKey:            sk,
+		RegistrationCacheTTL: flagRegistrationsCacheReadTTL,
+		PayloadDataTTL:       flagTTL,
+
+		PublishBlock:     cfg.Relay.PublishBlock,
+		Distributed:      flagDistribution,
+		StreamServedBids: cfg.Distributed.StreamServedBids,
+	}
+	rCfg.ParseInitialConfig(cfg.Relay.AllowedBuilders)
+	cfg.Relay.SubscribeForUpdates(&rCfg)
+
+	auctioneer := auction.NewAuctioneer()
+	r := relay.NewRelay(logger, rCfg, beaconPubCli, validatorCache, valDS, verificator,
+		state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 	r.AttachMetrics(m)
 
 	if flagDistribution {
@@ -442,7 +427,8 @@ func main() {
 	iApi := inner.NewAPI(ee, ds)
 
 	limitterCache, _ := lru.New[[48]byte, *rate.Limiter](cfg.Api.LimitterCacheSize)
-	apiLimitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache, allowed)
+	apiLimitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache)
+	apiLimitter.ParseInitialConfig(cfg.Api.AllowedBuilders)
 	cfg.Api.SubscribeForUpdates(apiLimitter)
 
 	a := api.NewApi(logger, ee, r, validatorRelay, state, apiLimitter, cfg.Api.DataLimit, cfg.Api.ErrorsOnDisable)

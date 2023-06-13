@@ -110,8 +110,10 @@ type ApiConfig struct {
 }
 
 var DefaultRelayConfig = &RelayConfig{
-	PublishBlock:         true,
-	MaxBlockPublishDelay: 500 * time.Millisecond,
+	PublishBlock:               true,
+	PayloadDataTTL:             24 * time.Hour,
+	GetPayloadResponseDelay:    800 * time.Millisecond,
+	GetPayloadRequestTimeLimit: 4 * time.Second,
 }
 
 type RelayConfig struct {
@@ -126,8 +128,14 @@ type RelayConfig struct {
 	// for publishing payloads to beacon nodes after a delivery
 	PublishBlock bool `config:"publish_block"`
 
+	// TTL of payload data
+	PayloadDataTTL time.Duration `config:"payload_dataTTL,allow_dynamic"`
+
 	// block publish delay
-	MaxBlockPublishDelay time.Duration `config:"max_block_publish_delay,allow_dynamic"`
+	GetPayloadResponseDelay time.Duration `config:"get_payload_response_delay,allow_dynamic"`
+
+	// deadline for calling get Payload
+	GetPayloadRequestTimeLimit time.Duration `config:"get_payload_request_time_limit,allow_dynamic"`
 
 	// comma separated list of allowed builder pubkeys"
 	AllowedBuilders []string `config:"allowed_builders,allow_dynamic"` // map[[48]byte]struct{}

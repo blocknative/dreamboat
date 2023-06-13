@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/dgraph-io/badger/v2"
@@ -32,7 +31,7 @@ func DeliveredPubkeyKey(pk types.PublicKey) ds.Key {
 	return ds.NewKey(fmt.Sprintf("delivered-pk-%s", pk.String()))
 }
 
-func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace structs.DeliveredTrace, ttl time.Duration) error {
+func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace structs.DeliveredTrace) error {
 	data, err := json.Marshal(trace.Trace)
 	if err != nil {
 		return err
@@ -40,34 +39,21 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace s
 
 	txn := s.DBInter.NewTransaction(true)
 	defer txn.Discard()
-	if err := txn.SetEntry(badger.NewEntry(DeliveredHashKey(trace.Trace.BlockHash).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(DeliveredHashKey(trace.Trace.BlockHash).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(s.TTL)); err != nil {
 		return err
 	}
-	if err := txn.SetEntry(badger.NewEntry(DeliveredNumKey(trace.BlockNumber).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(DeliveredNumKey(trace.BlockNumber).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(s.TTL)); err != nil {
 		return err
 	}
-	if err := txn.SetEntry(badger.NewEntry(DeliveredPubkeyKey(trace.Trace.ProposerPubkey).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(DeliveredPubkeyKey(trace.Trace.ProposerPubkey).Bytes(), DeliveredKey(slot).Bytes()).WithTTL(s.TTL)); err != nil {
 		return err
 	}
-	if err := txn.SetEntry(badger.NewEntry(DeliveredKey(slot).Bytes(), data).WithTTL(ttl)); err != nil {
+	if err := txn.SetEntry(badger.NewEntry(DeliveredKey(slot).Bytes(), data).WithTTL(s.TTL)); err != nil {
 		return err
 	}
 
 	return txn.Commit()
 }
-
-/*
-func (s *Datastore) CheckSlotDelivered(ctx context.Context, slot uint64) (bool, error) {
-	tx := s.DBInter.NewTransaction(false)
-	defer tx.Discard()
-
-	_, err := tx.Get(DeliveredKey(structs.Slot(slot)).Bytes())
-	if err == badger.ErrKeyNotFound {
-		return false, nil
-	}
-	return (err == nil), err
-}
-*/
 
 func (s *Datastore) GetDeliveredPayloads(ctx context.Context, headSlot uint64, query structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
 	var (
