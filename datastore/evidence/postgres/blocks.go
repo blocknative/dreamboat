@@ -131,6 +131,18 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		bt.Timestamp = uint64(t.Unix())
 		bt.TimestampMs = uint64(t.UnixMilli())
 
+		select {
+		case <-ctx.Done():
+			if idx == 0 {
+				return ctx.Err()
+			} else {
+				s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "context done").Inc()
+				fmt.Fprint(w, "]")
+				return nil
+			}
+		default:
+		}
+
 		if idx == 0 {
 			if _, err := fmt.Fprint(w, "["); err != nil {
 				return err

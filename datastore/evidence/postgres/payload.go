@@ -146,6 +146,18 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		bt.BlockHash.UnmarshalText(blockHash)
 		bt.Value.UnmarshalText(value)
 
+		select {
+		case <-ctx.Done():
+			if idx == 0 {
+				return ctx.Err()
+			} else {
+				s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "context done").Inc()
+				fmt.Fprint(w, "]")
+				return nil
+			}
+		default:
+		}
+
 		if idx == 0 {
 			if _, err := fmt.Fprint(w, "["); err != nil {
 				return err

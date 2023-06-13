@@ -567,6 +567,8 @@ func (a *API) proposerPayloadsDelivered(w http.ResponseWriter, r *http.Request) 
 	if err := a.r.GetPayloadDelivered(r.Context(), w, query); err != nil {
 		if isEncodeError(err) {
 			a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "encode response").Inc()
+		} else if isContextDoneError(err) {
+			a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "context done").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("proposerPayloadsDelivered", "500", "get payloads").Inc()
 		}
@@ -590,6 +592,8 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 	if err := a.r.GetBlockReceived(r.Context(), w, query); err != nil {
 		if isEncodeError(err) {
 			a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "encode response").Inc()
+		} else if isContextDoneError(err) {
+			a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "context done").Inc()
 		} else {
 			a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "500", "get block").Inc()
 		}
@@ -600,7 +604,7 @@ func (a *API) builderBlocksReceived(w http.ResponseWriter, r *http.Request) {
 	a.m.ApiReqCounter.WithLabelValues("builderBlocksReceived", "200", "").Inc()
 }
 
-// IsEncode checks if the given error is an encoded related error.
+// isEncode checks if the given error is an encoded related error.
 func isEncodeError(err error) bool {
 	switch {
 	case errors.Is(err, io.ErrClosedPipe),
@@ -621,6 +625,10 @@ func isEncodeError(err error) bool {
 	}
 
 	return false
+}
+
+func isContextDoneError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func writeError(w http.ResponseWriter, code int, err error) {
