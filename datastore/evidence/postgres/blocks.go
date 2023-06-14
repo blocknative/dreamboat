@@ -3,7 +3,9 @@ package dspostgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +38,7 @@ func (s *Datastore) PutBuilderBlockSubmission(ctx context.Context, bid structs.B
 	return err
 }
 
-func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) (bts []structs.BidTraceWithTimestamp, err error) {
+func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer, headSlot uint64, payload structs.SubmissionTraceQuery) error {
 	var i = 1
 	parts := []string{"relay_id = $" + strconv.Itoa(i)}
 	data := []interface{}{s.RelayID}
@@ -60,6 +62,12 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		i++
 	}
 
+	if payload.BuilderPubkey != Emptybytes48 {
+		parts = append(parts, "builder_pubkey = $"+strconv.Itoa(i))
+		data = append(data, payload.BuilderPubkey.String())
+		i++
+	}
+
 	qBuilder := strings.Builder{}
 	qBuilder.WriteString(`SELECT block_time, slot, builder_pubkey, proposer_pubkey, proposer_fee_recipient, parent_hash, block_hash, value, gas_used, gas_limit, block_number, num_tx FROM builder_block_submission `)
 
@@ -78,9 +86,10 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
-		return []structs.BidTraceWithTimestamp{}, nil
+		_, err := w.Write([]byte("[]"))
+		return err
 	case err != nil:
-		return nil, fmt.Errorf("query error: %w", err)
+		return fmt.Errorf("query error: %w", err)
 	default:
 	}
 
@@ -93,13 +102,24 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 		blockHash            []byte
 		value                []byte
 	)
+
+	encoder := json.NewEncoder(w)
+
+	// After we write the first character, do not return an error, log it and return nil.
+	idx := 0
 	for rows.Next() {
 		bt := structs.BidTraceWithTimestamp{}
 		t := time.Time{}
 		err = rows.Scan(&t, &bt.Slot, &builderpubkey, &proposerPubkey, &proposerFeeRecipient, &parentHash, &blockHash, &value,
 			&bt.GasUsed, &bt.GasLimit, &bt.BlockNumber, &bt.NumTx)
 		if err != nil {
-			return nil, err
+			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "scan").Inc()
+			s.l.WithError(err).Warn("failed to scan row")
+			fmt.Fprint(w, "]")
+			if idx == 0 {
+				return err
+			}
+			return nil
 		}
 		bt.BuilderPubkey.UnmarshalText(builderpubkey)
 		bt.ProposerPubkey.UnmarshalText(proposerPubkey)
@@ -110,9 +130,39 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, headSlot uin
 
 		bt.Timestamp = uint64(t.Unix())
 		bt.TimestampMs = uint64(t.UnixMilli())
-		bts = append(bts, bt)
+
+		select {
+		case <-ctx.Done():
+			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "context done").Inc()
+			return nil
+		default:
+		}
+
+		if idx == 0 {
+			if _, err := fmt.Fprint(w, "["); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprint(w, ", "); err != nil {
+				s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "fprint").Inc()
+				s.l.WithError(err).Warn("failed to fprint comma")
+				fmt.Fprint(w, "]")
+				return nil
+			}
+
+		}
+		idx++
+
+		if err := encoder.Encode(bt); err != nil {
+			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "encode").Inc()
+			s.l.WithError(err).Warn("failed to encode row")
+			fmt.Fprint(w, "]")
+			return nil
+		}
 	}
-	return bts, err
+
+	fmt.Fprint(w, "]") // Write the closing bracket manually
+	return nil
 }
 
 type GetBuilderSubmissionsFilters struct {

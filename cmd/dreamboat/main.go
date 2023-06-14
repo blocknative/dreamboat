@@ -235,7 +235,10 @@ func main() {
 			logger.WithError(err).Error("failed to connect to dataapi database")
 		}
 		m.RegisterDB(valPG, "dataapi")
-		daDS = daPostgres.NewDatastore(valPG, 0)
+		daDSPost := daPostgres.NewDatastore(logger, valPG, 0)
+		daDSPost.AttachMetrics(m)
+		daDS = daDSPost
+
 		defer valPG.Close()
 	} else { // by default use badger
 		daDS = daBadger.NewDatastore(storage, badgerDs.DB, cfg.DataAPI.Badger.TTL)

@@ -159,7 +159,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: TestDataLimit, Slot: 100}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: TestDataLimit, Slot: 100}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -182,7 +182,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: TestDataLimit, BlockHash: blockHash}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: TestDataLimit, BlockHash: blockHash}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -204,7 +204,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: TestDataLimit, BlockNum: 100}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: TestDataLimit, BlockNum: 100}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -226,7 +226,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: 50}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: 50}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -247,7 +247,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: TestDataLimit}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: TestDataLimit}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -269,7 +269,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: TestDataLimit, Slot: 100}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit, Slot: 100}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -292,7 +292,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: TestDataLimit, BlockHash: blockHash}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit, BlockHash: blockHash}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -315,7 +315,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: TestDataLimit, BlockNum: 100}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit, BlockNum: 100}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -337,7 +337,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: TestDataLimit, Cursor: 50}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit, Cursor: 50}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -359,7 +359,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: 50}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: 50}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -380,7 +380,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: TestDataLimit}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit}).
 			Times(1)
 
 		m.ServeHTTP(w, req)

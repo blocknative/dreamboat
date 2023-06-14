@@ -6,6 +6,7 @@ package mocks
 
 import (
 	context "context"
+	io "io"
 	reflect "reflect"
 
 	structs "github.com/blocknative/dreamboat/structs"
@@ -37,18 +38,17 @@ func (m *MockRelay) EXPECT() *MockRelayMockRecorder {
 }
 
 // GetBlockReceived mocks base method.
-func (m *MockRelay) GetBlockReceived(arg0 context.Context, arg1 structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+func (m *MockRelay) GetBlockReceived(arg0 context.Context, arg1 io.Writer, arg2 structs.SubmissionTraceQuery) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlockReceived", arg0, arg1)
-	ret0, _ := ret[0].([]structs.BidTraceWithTimestamp)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "GetBlockReceived", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // GetBlockReceived indicates an expected call of GetBlockReceived.
-func (mr *MockRelayMockRecorder) GetBlockReceived(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) GetBlockReceived(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockReceived", reflect.TypeOf((*MockRelay)(nil).GetBlockReceived), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockReceived", reflect.TypeOf((*MockRelay)(nil).GetBlockReceived), arg0, arg1, arg2)
 }
 
 // GetHeader mocks base method.
@@ -82,18 +82,17 @@ func (mr *MockRelayMockRecorder) GetPayload(arg0, arg1, arg2, arg3 interface{}) 
 }
 
 // GetPayloadDelivered mocks base method.
-func (m *MockRelay) GetPayloadDelivered(arg0 context.Context, arg1 structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
+func (m *MockRelay) GetPayloadDelivered(arg0 context.Context, arg1 io.Writer, arg2 structs.PayloadTraceQuery) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPayloadDelivered", arg0, arg1)
-	ret0, _ := ret[0].([]structs.BidTraceExtended)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "GetPayloadDelivered", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // GetPayloadDelivered indicates an expected call of GetPayloadDelivered.
-func (mr *MockRelayMockRecorder) GetPayloadDelivered(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockRelayMockRecorder) GetPayloadDelivered(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayloadDelivered", reflect.TypeOf((*MockRelay)(nil).GetPayloadDelivered), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPayloadDelivered", reflect.TypeOf((*MockRelay)(nil).GetPayloadDelivered), arg0, arg1, arg2)
 }
 
 // SubmitBlock mocks base method.
