@@ -111,7 +111,6 @@ type ApiConfig struct {
 
 var DefaultRelayConfig = &RelayConfig{
 	PublishBlock:               true,
-	PayloadDataTTL:             24 * time.Hour,
 	GetPayloadResponseDelay:    800 * time.Millisecond,
 	GetPayloadRequestTimeLimit: 4 * time.Second,
 }
@@ -127,9 +126,6 @@ type RelayConfig struct {
 
 	// for publishing payloads to beacon nodes after a delivery
 	PublishBlock bool `config:"publish_block"`
-
-	// TTL of payload data
-	PayloadDataTTL time.Duration `config:"payload_dataTTL,allow_dynamic"`
 
 	// block publish delay
 	GetPayloadResponseDelay time.Duration `config:"get_payload_response_delay,allow_dynamic"`
@@ -262,10 +258,14 @@ type PayloadConfig struct {
 
 	// Redis config
 	Redis RedisDBConfig `config:"redis"`
+
+	// TTL of payload data
+	TTL time.Duration `config:"TTL,allow_dynamic"`
 }
 
 var DefaultPayloadConfig = &PayloadConfig{
 	Badger:    *DefaultBadgerDBConfig,
+	TTL:       24 * time.Hour,
 	CacheSize: 1_000,
 }
 

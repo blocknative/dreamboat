@@ -330,7 +330,7 @@ func main() {
 		PubKey:               pk,
 		SecretKey:            sk,
 		RegistrationCacheTTL: cfg.Validators.RegistrationsReadCacheTTL,
-		PayloadDataTTL:       cfg.Relay.PayloadDataTTL,
+		PayloadDataTTL:       cfg.Payload.TTL,
 		PublishBlock:         cfg.Relay.PublishBlock,
 		Distributed:          flagDistribution,
 		StreamServedBids:     cfg.Distributed.StreamServedBids,
