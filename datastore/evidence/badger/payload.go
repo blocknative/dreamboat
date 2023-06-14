@@ -5,9 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt" 
+	"fmt"
 	"io"
-	"time"
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/dgraph-io/badger/v2"
@@ -56,7 +55,6 @@ func (s *Datastore) PutDelivered(ctx context.Context, slot structs.Slot, trace s
 
 	return txn.Commit()
 }
-
 
 func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headSlot uint64, query structs.PayloadTraceQuery) error {
 	var (
