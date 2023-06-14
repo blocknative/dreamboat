@@ -44,9 +44,9 @@ type Config struct {
 }
 
 var DefaultHTTPConfig = &HTTPConfig{
-	ReadTimeout:  2 * time.Second,
-	WriteTimeout: 2 * time.Second,
-	IdleTimeout:  2 * time.Second,
+	ReadTimeout:  5 * time.Second,
+	WriteTimeout: 5 * time.Second,
+	IdleTimeout:  5 * time.Second,
 }
 
 type HTTPConfig struct {
@@ -73,7 +73,7 @@ type SQLConfig struct {
 }
 
 var DefaultBadgerDBConfig = &BadgerDBConfig{
-	TTL: 48 * time.Hour,
+	TTL: 24 * time.Hour,
 }
 
 type BadgerDBConfig struct {
@@ -214,7 +214,7 @@ type ValidatorsConfig struct {
 	// Registrations cache size
 	RegistrationsCacheSize int `config:"registrations_cache_size"`
 	// Registrations cache ttl
-	RegistrationsCacheTTL time.Duration `config:"registrations_cache_ttl"`
+	RegistrationsReadCacheTTL time.Duration `config:"registrations_cache_ttl"`
 	// Registrations cache ttl
 	RegistrationsWriteCacheTTL time.Duration `config:"registrations_write_cache_ttl"`
 }
@@ -225,7 +225,7 @@ var DefaultValidatorsConfig = &ValidatorsConfig{
 	QueueSize:                  100_000,
 	StoreWorkersNum:            400,
 	RegistrationsCacheSize:     600_000,
-	RegistrationsCacheTTL:      time.Hour,
+	RegistrationsReadCacheTTL:  time.Hour,
 	RegistrationsWriteCacheTTL: 12 * time.Hour,
 }
 
