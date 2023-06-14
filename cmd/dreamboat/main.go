@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"time"
@@ -70,21 +69,10 @@ var (
 	datadir    string
 	configFile string
 
-	flagBeaconList        string
-	flagBeaconPublishList string
-
 	flagDistribution bool
+	flagWarehouse    bool
 
-	flagStorageReadRedisURI  string
-	flagStorageWriteRedisURI string
-	flagPubsubRedisURI       string
-
-	flagWarehouse bool
-
-	flagBeaconEventRestart                  int
-	flagBeaconEventTimeout                  time.Duration
-	flagBeaconQueryTimeout                  time.Duration
-	flagBeaconPayloadAttributesSubscription bool
+// flagBeaconPayloadAttributesSubscription bool
 )
 
 func init() {
@@ -96,16 +84,7 @@ func init() {
 	flag.BoolVar(&flagDistribution, "relay-distribution", false, "run relay as a distributed system with multiple replicas")
 	flag.BoolVar(&flagWarehouse, "warehouse", true, "Enable warehouse storage of data")
 
-	flag.StringVar(&flagStorageReadRedisURI, "relay-storage-read-redis-uri", "", "Redis Storage URI for read replica")
-	flag.StringVar(&flagStorageWriteRedisURI, "relay-storage-write-redis-uri", "", "Redis Storage URI for write")
-	flag.StringVar(&flagPubsubRedisURI, "relay-pubsub-redis-uri", "", "Redis Pub/Sub URI")
-
-	flag.StringVar(&flagBeaconList, "beacon", "", "`url` for beacon endpoint")
-	flag.StringVar(&flagBeaconPublishList, "beacon-publish", "", "`url` for beacon endpoints that publish blocks")
-	flag.DurationVar(&flagBeaconEventTimeout, "beacon-event-timeout", 16*time.Second, "The maximum time allowed to wait for head events from the beacon, we recommend setting it to 'durationPerSlot * 1.25'")
-	flag.IntVar(&flagBeaconEventRestart, "beacon-event-restart", 5, "The number of consecutive timeouts allowed before restarting the head event subscription")
-	flag.DurationVar(&flagBeaconQueryTimeout, "beacon-query-timeout", 20*time.Second, "The maximum time allowed to wait for a response from the beacon")
-	flag.BoolVar(&flagBeaconPayloadAttributesSubscription, "beacon-payload-attributes-subscription", true, "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)")
+	//	flag.BoolVar(&flagBeaconPayloadAttributesSubscription, "beacon-payload-attributes-subscription", true, "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)")
 
 	flag.Parse()
 }
@@ -162,17 +141,30 @@ func main() {
 		return
 	}
 
+	state := &beacon.MultiSlotState{}
+
 	if flagDistribution {
 		readClient := redis.NewClient(&redis.Options{
-			Addr: flagStorageReadRedisURI,
+			Addr: cfg.Payload.Redis.Read.Address,
 		})
 		m.RegisterRedis("redis", "readreplica", readClient)
 
 		writeClient := redis.NewClient(&redis.Options{
-			Addr: flagStorageWriteRedisURI,
+			Addr: cfg.Payload.Redis.Write.Address,
 		})
 		m.RegisterRedis("redis", "master", writeClient)
 		storage = &dsRedis.RedisDatastore{Read: readClient, Write: writeClient}
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: cfg.Distributed.Redis.Address,
+		})
+
+		m.RegisterRedis("redis", "stream", redisClient)
+		streamer, err = initStreamer(ctx, cfg.Distributed, redisClient, logger, m, state)
+		if err != nil {
+			logger.WithError(err).Error("fail to create streamer")
+			return
+		}
 	} else {
 		storage = badgerDs
 	}
@@ -183,39 +175,25 @@ func main() {
 	}).Info("data store initialized")
 
 	timeRelayStart := time.Now()
-	state := &beacon.MultiSlotState{}
 	ds := datastore.NewDatastore(storage, badgerDs.DB)
 	if err != nil {
 		logger.WithError(err).Error("failed to create datastore")
 		return
 	}
 
-	if flagDistribution {
-		redisClient := redis.NewClient(&redis.Options{
-			Addr: flagPubsubRedisURI,
-		})
-
-		m.RegisterRedis("redis", "stream", redisClient)
-		streamer, err = initStreamer(ctx, cfg.Distributed, redisClient, logger, m, state)
-		if err != nil {
-			logger.WithError(err).Error("fail to create streamer")
-			return
-		}
-	}
-
 	beaconConfig := bcli.BeaconConfig{
-		BeaconEventTimeout: flagBeaconEventTimeout,
-		BeaconEventRestart: flagBeaconEventRestart,
-		BeaconQueryTimeout: flagBeaconQueryTimeout,
+		BeaconEventTimeout: cfg.Beacon.EventTimeout,
+		BeaconEventRestart: cfg.Beacon.EventRestart,
+		BeaconQueryTimeout: cfg.Beacon.QueryTimeout,
 	}
 
-	beaconCli, err := initBeaconClients(logger, strings.Split(flagBeaconList, ","), m, beaconConfig)
+	beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, m, beaconConfig)
 	if err != nil {
 		logger.WithError(err).Error("fail to initialize beacon")
 		return
 	}
 
-	beaconPubCli, err := initBeaconClients(logger, strings.Split(flagBeaconPublishList, ","), m, beaconConfig)
+	beaconPubCli, err := initBeaconClients(logger, cfg.Beacon.PublishAddresses, m, beaconConfig)
 	if err != nil {
 		logger.WithError(err).Error("fail to initialize publish beacon")
 		return
@@ -288,7 +266,7 @@ func main() {
 	b := beacon.NewManager(logger, beacon.Config{
 		BellatrixForkVersion:             chainCfg.BellatrixForkVersion,
 		CapellaForkVersion:               chainCfg.CapellaForkVersion,
-		RunPayloadAttributesSubscription: flagBeaconPayloadAttributesSubscription,
+		RunPayloadAttributesSubscription: cfg.Beacon.PayloadAttributesSubscription,
 	})
 
 	skBytes, err := hexutil.Decode(cfg.Relay.SecretKey)

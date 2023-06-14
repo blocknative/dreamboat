@@ -144,7 +144,7 @@ type RelayConfig struct {
 var DefaultBeaconConfig = &BeaconConfig{
 	PayloadAttributesSubscription: true,
 	EventRestart:                  5,
-	EventTimeout:                  26 * time.Second,
+	EventTimeout:                  16 * time.Second,
 	QueryTimeout:                  20 * time.Second,
 }
 
@@ -270,8 +270,8 @@ var DefaultPayloadConfig = &PayloadConfig{
 }
 
 type RedisDBConfig struct {
-	Master  RedisConfig `config:"master"`
-	Replica RedisConfig `config:"replica"`
+	Read  *RedisConfig `config:"read"`
+	Write *RedisConfig `config:"write"`
 }
 
 type WarehouseConfig struct {
