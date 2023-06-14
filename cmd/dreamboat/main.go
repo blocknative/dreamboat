@@ -71,8 +71,6 @@ var (
 
 	flagDistribution bool
 	flagWarehouse    bool
-
-// flagBeaconPayloadAttributesSubscription bool
 )
 
 func init() {
@@ -83,9 +81,6 @@ func init() {
 
 	flag.BoolVar(&flagDistribution, "relay-distribution", false, "run relay as a distributed system with multiple replicas")
 	flag.BoolVar(&flagWarehouse, "warehouse", true, "Enable warehouse storage of data")
-
-	//	flag.BoolVar(&flagBeaconPayloadAttributesSubscription, "beacon-payload-attributes-subscription", true, "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)")
-
 	flag.Parse()
 }
 
