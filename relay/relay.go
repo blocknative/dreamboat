@@ -316,7 +316,7 @@ func (rs *Relay) GetHeader(ctx context.Context, m *structs.MetricGroup, uc struc
 			rs.pc.Add(key, bbt)
 			logger.Debug("cached")
 
-			if rs.config.StreamServedBids {
+			if rs.config.Distributed && rs.config.StreamServedBids {
 				if err := rs.s.PublishBlockCache(ctx, bbt); err != nil {
 					logger.WithError(err).Warn("failed to stream cache block")
 					return
