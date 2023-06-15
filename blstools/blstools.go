@@ -6,12 +6,13 @@ import (
 )
 
 func GenerateNewKeypair() (sk *bls.SecretKey, pubKey types.PublicKey, err error) {
-
 	sk, pk, err := bls.GenerateNewKeypair()
 	if err != nil {
 		return nil, pubKey, err
 	}
-	err = pubKey.FromSlice(pk.Compress()) //nolint
+
+	pkBytes := pk.Bytes()
+	err = pubKey.FromSlice(pkBytes[:]) //nolint
 
 	return sk, pubKey, err
 }
@@ -22,7 +23,13 @@ func SecretKeyFromBytes(skBytes []byte) (sk *bls.SecretKey, pk types.PublicKey, 
 		return nil, types.PublicKey{}, err
 	}
 
-	err = pk.FromSlice(bls.PublicKeyFromSecretKey(sk).Compress()) //nolint
+	pubkey, err := bls.PublicKeyFromSecretKey(sk)
+	if err != nil {
+		return nil, types.PublicKey{}, err
+	}
+
+	pubkeyBytes := pubkey.Bytes()
+	err = pk.FromSlice(pubkeyBytes[:]) //nolint
 
 	return sk, pk, err
 }
