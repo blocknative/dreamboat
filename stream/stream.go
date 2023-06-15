@@ -32,7 +32,6 @@ type Pubsub interface {
 type StreamConfig struct {
 	Logger          log.Logger
 	ID              string
-	TTL             time.Duration
 	PubsubTopic     string // pubsub topic name for block submissions
 	StreamQueueSize int
 }

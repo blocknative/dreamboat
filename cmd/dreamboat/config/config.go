@@ -44,9 +44,9 @@ type Config struct {
 }
 
 var DefaultHTTPConfig = &HTTPConfig{
-	ReadTimeout:  2 * time.Second,
-	WriteTimeout: 2 * time.Second,
-	IdleTimeout:  2 * time.Second,
+	ReadTimeout:  5 * time.Second,
+	WriteTimeout: 5 * time.Second,
+	IdleTimeout:  5 * time.Second,
 }
 
 type HTTPConfig struct {
@@ -73,7 +73,7 @@ type SQLConfig struct {
 }
 
 var DefaultBadgerDBConfig = &BadgerDBConfig{
-	TTL: 48 * time.Hour,
+	TTL: 24 * time.Hour,
 }
 
 type BadgerDBConfig struct {
@@ -110,8 +110,9 @@ type ApiConfig struct {
 }
 
 var DefaultRelayConfig = &RelayConfig{
-	PublishBlock:         true,
-	MaxBlockPublishDelay: 500 * time.Millisecond,
+	PublishBlock:               true,
+	GetPayloadResponseDelay:    800 * time.Millisecond,
+	GetPayloadRequestTimeLimit: 4 * time.Second,
 }
 
 type RelayConfig struct {
@@ -127,7 +128,10 @@ type RelayConfig struct {
 	PublishBlock bool `config:"publish_block"`
 
 	// block publish delay
-	MaxBlockPublishDelay time.Duration `config:"max_block_publish_delay,allow_dynamic"`
+	GetPayloadResponseDelay time.Duration `config:"get_payload_response_delay,allow_dynamic"`
+
+	// deadline for calling get Payload
+	GetPayloadRequestTimeLimit time.Duration `config:"get_payload_request_time_limit,allow_dynamic"`
 
 	// comma separated list of allowed builder pubkeys"
 	AllowedBuilders []string `config:"allowed_builders,allow_dynamic"` // map[[48]byte]struct{}
@@ -136,7 +140,7 @@ type RelayConfig struct {
 var DefaultBeaconConfig = &BeaconConfig{
 	PayloadAttributesSubscription: true,
 	EventRestart:                  5,
-	EventTimeout:                  26 * time.Second,
+	EventTimeout:                  16 * time.Second,
 	QueryTimeout:                  20 * time.Second,
 }
 
@@ -162,12 +166,18 @@ type BeaconConfig struct {
 	QueryTimeout time.Duration `config:"query_timeout"`
 }
 
-var DefaultBlockSimulation = &BlockSimulationConfig{}
+var DefaultBlockSimulation = &BlockSimulationConfig{
+	WS: &BlockSimulationWSConfig{
+		Retry: true,
+	},
+	RPC:  &BlockSimulationRPCConfig{},
+	HTTP: &BlockSimulationHTTPConfig{},
+}
 
 type BlockSimulationConfig struct {
-	RPC  BlockSimulationRPCConfig  `config:"rpc"`
-	WS   BlockSimulationWSConfig   `config:"ws"`
-	HTTP BlockSimulationHTTPConfig `config:"http"`
+	RPC  *BlockSimulationRPCConfig  `config:"rpc"`
+	WS   *BlockSimulationWSConfig   `config:"ws"`
+	HTTP *BlockSimulationHTTPConfig `config:"http"`
 }
 
 type BlockSimulationRPCConfig struct {
@@ -180,7 +190,7 @@ type BlockSimulationWSConfig struct {
 	//  block validation endpoint address (comma separated list)
 	Address []string `config:"address,allow_dynamic"`
 	// retry to other websocket connections on failure"
-	Retry bool `config:"retry"`
+	Retry bool `config:"retry,allow_dynamic"`
 }
 
 type BlockSimulationHTTPConfig struct {
@@ -196,11 +206,11 @@ type ValidatorsConfig struct {
 	// The size of response queue, should be set to expected number of validators in one request
 	QueueSize uint `config:"queue_size"`
 	// Number of workers storing validators in parallel
-	StoreWorkersNum uint64 `config:"store_workers"`
+	StoreWorkersNum uint `config:"store_workers"`
 	// Registrations cache size
 	RegistrationsCacheSize int `config:"registrations_cache_size"`
 	// Registrations cache ttl
-	RegistrationsCacheTTL time.Duration `config:"registrations_cache_ttl"`
+	RegistrationsReadCacheTTL time.Duration `config:"registrations_cache_ttl"`
 	// Registrations cache ttl
 	RegistrationsWriteCacheTTL time.Duration `config:"registrations_write_cache_ttl"`
 }
@@ -211,7 +221,7 @@ var DefaultValidatorsConfig = &ValidatorsConfig{
 	QueueSize:                  100_000,
 	StoreWorkersNum:            400,
 	RegistrationsCacheSize:     600_000,
-	RegistrationsCacheTTL:      time.Hour,
+	RegistrationsReadCacheTTL:  time.Hour,
 	RegistrationsWriteCacheTTL: 12 * time.Hour,
 }
 
@@ -243,25 +253,34 @@ type PayloadConfig struct {
 	// BadgerDB config
 	Badger BadgerDBConfig `config:"badger"`
 	// number of payloads to cache for fast in-memory reads
+
 	CacheSize int `config:"cache_size"`
 
 	// Redis config
 	Redis RedisDBConfig `config:"redis"`
+
+	// TTL of payload data
+	TTL time.Duration `config:"TTL,allow_dynamic"`
 }
 
 var DefaultPayloadConfig = &PayloadConfig{
 	Badger:    *DefaultBadgerDBConfig,
+	TTL:       24 * time.Hour,
 	CacheSize: 1_000,
+	Redis:     *DefaultRedisDBConfig,
 }
 
 type RedisDBConfig struct {
-	Master  RedisConfig `config:"master"`
-	Replica RedisConfig `config:"replica"`
+	Read  *RedisConfig `config:"read"`
+	Write *RedisConfig `config:"write"`
+}
+
+var DefaultRedisDBConfig = &RedisDBConfig{
+	Read:  &RedisConfig{},
+	Write: &RedisConfig{},
 }
 
 type WarehouseConfig struct {
-	Enabled bool `config:"enabled"`
-
 	// Data directory where the data is stored in the warehouse
 	Directory string `config:"directory"`
 
@@ -269,11 +288,10 @@ type WarehouseConfig struct {
 	WorkerNumber int `config:"workers"`
 
 	// Size of the buffer for processing requests
-	Buffer int `config:"directory"`
+	Buffer int `config:"buffer"`
 }
 
 var DefaultWarehouseConfig = &WarehouseConfig{
-	Enabled:      true,
 	Directory:    "/data/relay/warehouse",
 	WorkerNumber: 32,
 	Buffer:       1_000,
@@ -282,24 +300,25 @@ var DefaultWarehouseConfig = &WarehouseConfig{
 type DistributedConfig struct {
 	Redis *RedisStreamConfig `config:"redis"`
 
-	Enabled    bool   `config:"enabled"`
 	InstanceID string `config:"id"`
 
 	// Number of workers for storing data in warehouse, if 0, then data is not exported
 	WorkerNumber int `config:"workers"`
 
-	// publish all submitted blocks into pubsub. If false, only blocks returned in GetHeader are published
-	PublishOnSubmission bool `config:"publish_on_submission"`
-
 	// Stream internal channel size
-	StreamQueueSize int
+	StreamQueueSize int `config:"stream_queue_size"`
+
+	// stream entire block for every bid that is served in GetHeader requests.
+	StreamServedBids bool `config:"stream_served_bids"`
 }
 
 var DefaultDistributedConfig = &DistributedConfig{
-	Enabled:             true,
-	WorkerNumber:        100,
-	PublishOnSubmission: false,
-	StreamQueueSize:     200,
+	Redis: &RedisStreamConfig{
+		Topic: "relay",
+	},
+	WorkerNumber:     100,
+	StreamQueueSize:  100,
+	StreamServedBids: true,
 }
 
 type RedisStreamConfig struct {

@@ -237,7 +237,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, logger log.Logger, m *stru
 
 	tPutPayload := time.Now()
 
-	if err := rs.d.PutPayload(context.Background(), sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
+	if err := rs.d.PutPayload(context.Background(), sbr.ToPayloadKey(), complete.Payload, rs.config.PayloadDataTTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")

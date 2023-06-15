@@ -25,12 +25,11 @@ type Limitter struct {
 	LimitterCacheSize int
 }
 
-func NewLimitter(ratel int, burst int, c Cache, ab map[[48]byte]struct{}) *Limitter {
+func NewLimitter(ratel int, burst int, c Cache) *Limitter {
 	return &Limitter{
-		AllowedBuilders: ab,
-		c:               c,
-		RateLimit:       rate.Limit(ratel),
-		Burst:           burst,
+		c:         c,
+		RateLimit: rate.Limit(ratel),
+		Burst:     burst,
 	}
 }
 
@@ -51,6 +50,11 @@ func (l *Limitter) Allow(ctx context.Context, pubkey [48]byte) error {
 	}
 
 	return nil
+}
+
+func (l *Limitter) ParseInitialConfig(keys []string) (err error) {
+	l.AllowedBuilders, err = makeKeyMap(keys)
+	return err
 
 }
 
@@ -68,16 +72,25 @@ func (l *Limitter) OnConfigChange(c structs.OldNew) (err error) {
 		}
 	case "AllowedBuilders":
 		if keys, ok := c.New.([]string); ok {
-			newKeys := make(map[[48]byte]struct{})
-			for _, key := range keys {
-				var pk types.PublicKey
-				if err = pk.UnmarshalText([]byte(key)); err != nil {
-					return fmt.Errorf("ALLOWED BUILDER NOT ADDED - wrong public key: %s  - %w", key, err)
-				}
-				newKeys[pk] = struct{}{}
+			ab, err := makeKeyMap(keys)
+			if err != nil {
+				return err
 			}
-			l.AllowedBuilders = newKeys
+			l.c.Purge()
+			l.AllowedBuilders = ab
 		}
 	}
 	return nil
+}
+
+func makeKeyMap(keys []string) (map[[48]byte]struct{}, error) {
+	newKeys := make(map[[48]byte]struct{})
+	for _, key := range keys {
+		var pk types.PublicKey
+		if err := pk.UnmarshalText([]byte(key)); err != nil {
+			return nil, fmt.Errorf("allowed builder not added - wrong public key: %s  - %w", key, err)
+		}
+		newKeys[pk] = struct{}{}
+	}
+	return newKeys, nil
 }

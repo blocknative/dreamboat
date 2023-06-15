@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"time"
@@ -24,10 +23,8 @@ import (
 	"github.com/blocknative/dreamboat/blstools"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
+	"github.com/blocknative/dreamboat/sim"
 	"github.com/blocknative/dreamboat/sim/client/fallback"
-	"github.com/blocknative/dreamboat/sim/client/transport/gethhttp"
-	"github.com/blocknative/dreamboat/sim/client/transport/gethrpc"
-	"github.com/blocknative/dreamboat/sim/client/transport/gethws"
 	"github.com/blocknative/dreamboat/stream"
 	"github.com/google/uuid"
 	badger "github.com/ipfs/go-ds-badger2"
@@ -72,65 +69,8 @@ var (
 	datadir    string
 	configFile string
 
-	flagAddr         string
-	flagInternalAddr string
-
-	flagTimeout           time.Duration
-	flagBeaconList        string
-	flagBeaconPublishList string
-
-	flagNetwork   string
-	flagSecretKey string
-	flagTTL       time.Duration
-
-	flagWorkersVerify         uint64
-	flagWorkersStoreValidator uint64
-	flagVerifyQueueSize       uint64
-	flagStoreQueueSize        uint64
-	flagPayloadCacheSize      int
-
-	flagRegistrationsCacheSize     int
-	flagRegistrationsCacheReadTTL  time.Duration
-	flagRegistrationsCacheWriteTTL time.Duration
-
-	flagPublishBlock bool
-
-	flagValidatorDatabaseUrl string
-	flagDataapiDatabaseUrl   string
-
-	flagAllowListedBuilderList string
-
-	flagBlockValidationEndpointHTTP   string
-	flagBlockValidationEndpointWSList string
-	flagBlockValidationWSRetry        bool
-	flagBlockValidationRPC            string
-
-	flagDistribution   bool
-	flagDistributionID string
-
-	flagDistributionStreamWorkers    uint64
-	flagDistributionStreamServedBids bool
-
-	flagDistributionStreamTTL   time.Duration
-	flagDistributionStreamTopic string
-	flagDistributionStreamQueue int
-
-	flagStorageReadRedisURI  string
-	flagStorageWriteRedisURI string
-	flagPubsubRedisURI       string
-
-	flagGetPayloadResponseDelay    time.Duration
-	flagGetPayloadRequestTimeLimit time.Duration
-
-	flagWarehouse        bool
-	flagWarehouseDir     string
-	flagWarehouseWorkers int
-	flagWarehouseBuffer  int
-
-	flagBeaconEventRestart                  int
-	flagBeaconEventTimeout                  time.Duration
-	flagBeaconQueryTimeout                  time.Duration
-	flagBeaconPayloadAttributesSubscription bool
+	flagDistribution bool
+	flagWarehouse    bool
 )
 
 func init() {
@@ -139,73 +79,8 @@ func init() {
 	flag.StringVar(&configFile, "config", "", "configuration file needed for relay to run")
 	flag.StringVar(&datadir, "datadir", "/tmp/relay", "data directory where blocks and validators are stored in the default datastore implementation")
 
-	flag.StringVar(&flagAddr, "addr", "localhost:18550", "server listen address")
-	flag.StringVar(&flagInternalAddr, "internalAddr", "0.0.0.0:19550", "internal server listen address")
-	flag.DurationVar(&flagTimeout, "timeout", time.Second*5, "request timeout")
-	flag.StringVar(&flagBeaconList, "beacon", "", "`url` for beacon endpoint")
-	flag.StringVar(&flagBeaconPublishList, "beacon-publish", "", "`url` for beacon endpoints that publish blocks")
-
-	flag.StringVar(&flagNetwork, "network", "mainnet", "the networks the relay works on")
-
-	flag.StringVar(&flagSecretKey, "secretKey", "", "secret key used to sign messages")
-	flag.DurationVar(&flagTTL, "ttl", 24*time.Hour, "ttl of the data")
-
-	flag.Uint64Var(&flagWorkersVerify, "relay-workers-verify", 2000, "number of workers running verify in parallel")
-
-	flag.Uint64Var(&flagWorkersStoreValidator, "relay-workers-store-validator", 400, "number of workers storing validators in parallel")
-
-	flag.Uint64Var(&flagVerifyQueueSize, "relay-verify-queue-size", 100_000, "size of verify queue")
-	flag.Uint64Var(&flagStoreQueueSize, "relay-store-queue-size", 100_000, "size of store queue")
-
-	flag.IntVar(&flagPayloadCacheSize, "relay-payload-cache-size", 1_000, "number of payloads to cache for fast in-memory reads")
-
-	flag.IntVar(&flagRegistrationsCacheSize, "relay-registrations-cache-size", 600_000, "relay registrations cache size")
-
-	flag.DurationVar(&flagRegistrationsCacheReadTTL, "relay-registrations-cache-read-ttl", time.Hour, "registrations cache ttl for reading")
-	flag.DurationVar(&flagRegistrationsCacheWriteTTL, "relay-registrations-cache-write-ttl", 12*time.Hour, "registrations cache ttl for writing")
-
-	flag.BoolVar(&flagPublishBlock, "relay-publish-block", true, "relay registrations cache size")
-
-	flag.StringVar(&flagValidatorDatabaseUrl, "relay-validator-database-url", "", "address of postgress database for validator registrations, if empty - default, badger will be used")
-	flag.StringVar(&flagDataapiDatabaseUrl, "relay-dataapi-database-url", "", "address of postgress database for dataapi, if empty - default, badger will be used")
-
-	flag.StringVar(&flagAllowListedBuilderList, "relay-allow-listed-builder", "", "comma separated list of allowed builder pubkeys")
-
-	flag.StringVar(&flagBlockValidationEndpointHTTP, "block-validation-endpoint-http", "", "http block validation endpoint address")
-	flag.StringVar(&flagBlockValidationEndpointWSList, "block-validation-endpoint-ws", "", "ws block validation endpoint address (comma separated list)")
-	flag.BoolVar(&flagBlockValidationWSRetry, "block-validation-ws-retry", false, "retry to other connection on failure")
-	flag.StringVar(&flagBlockValidationRPC, "block-validation-endpoint-rpc", "", "rpc block validation rawurl (eg. ipc path)")
-
 	flag.BoolVar(&flagDistribution, "relay-distribution", false, "run relay as a distributed system with multiple replicas")
-	flag.StringVar(&flagDistributionID, "relay-distribution-id", "", "the id of the relay to differentiate from other replicas")
-	flag.Uint64Var(&flagDistributionStreamWorkers, "relay-distribution-stream-workers", 100, "number of workers publishing and processing subscriptions in the stream")
-
-	flag.BoolVar(&flagDistributionStreamServedBids, "relay-distribution-stream-served-bids", true, "stream entire block for every bid that is served in GetHeader requests.")
-
-	flag.DurationVar(&flagDistributionStreamTTL, "relay-distribution-stream-ttl", time.Minute, "TTL of the data that is distributed")
-
-	flag.StringVar(&flagDistributionStreamTopic, "relay-distribution-stream-topic", "relay", "Pubsub topic for streaming payloads")
-	flag.IntVar(&flagDistributionStreamQueue, "relay-distribution-stream-queue", 100, "Pubsub publish queue size")
-
-	flag.StringVar(&flagStorageReadRedisURI, "relay-storage-read-redis-uri", "", "Redis Storage URI for read replica")
-	flag.StringVar(&flagStorageWriteRedisURI, "relay-storage-write-redis-uri", "", "Redis Storage URI for write")
-	flag.StringVar(&flagPubsubRedisURI, "relay-pubsub-redis-uri", "", "Redis Pub/Sub URI")
-
-	flag.DurationVar(&flagGetPayloadResponseDelay, "getpayload-response-delay", 1*time.Second, "Delay between block publication and returning request to validator")
-	flag.DurationVar(&flagGetPayloadRequestTimeLimit, "getpayload-request-time-limit", 4*time.Second, "Time allowed for GetPayload requests since the slot started")
-
 	flag.BoolVar(&flagWarehouse, "warehouse", true, "Enable warehouse storage of data")
-
-	flag.StringVar(&flagWarehouseDir, "warehouse-dir", "/data/relay/warehouse", "Data directory where the data is stored in the warehouse")
-
-	flag.IntVar(&flagWarehouseWorkers, "warehouse-workers", 32, "Number of workers for storing data in warehouse, if 0, then data is not exported")
-	flag.IntVar(&flagWarehouseBuffer, "warehouse-buffer", 1_000, "Size of the buffer for processing requests")
-
-	flag.DurationVar(&flagBeaconEventTimeout, "beacon-event-timeout", 16*time.Second, "The maximum time allowed to wait for head events from the beacon, we recommend setting it to 'durationPerSlot * 1.25'")
-	flag.IntVar(&flagBeaconEventRestart, "beacon-event-restart", 5, "The number of consecutive timeouts allowed before restarting the head event subscription")
-	flag.DurationVar(&flagBeaconQueryTimeout, "beacon-query-timeout", 20*time.Second, "The maximum time allowed to wait for a response from the beacon")
-	flag.BoolVar(&flagBeaconPayloadAttributesSubscription, "beacon-payload-attributes-subscription", true, "instead of polling withdrawals+prevRandao, use SSE event (requires Prysm v4+)")
-
 	flag.Parse()
 }
 
@@ -233,9 +108,9 @@ func main() {
 	}
 
 	chainCfg := config.NewChainConfig()
-	chainCfg.LoadNetwork(flagNetwork)
+	chainCfg.LoadNetwork(cfg.Relay.Network)
 	if chainCfg.GenesisForkVersion == "" {
-		if err := chainCfg.ReadNetworkConfig(datadir, flagNetwork); err != nil {
+		if err := chainCfg.ReadNetworkConfig(datadir, cfg.Relay.Network); err != nil {
 			logger.WithError(err).Fatal("failed read chain configuration")
 			return
 		}
@@ -261,17 +136,30 @@ func main() {
 		return
 	}
 
+	state := &beacon.MultiSlotState{}
+
 	if flagDistribution {
 		readClient := redis.NewClient(&redis.Options{
-			Addr: flagStorageReadRedisURI,
+			Addr: cfg.Payload.Redis.Read.Address,
 		})
 		m.RegisterRedis("redis", "readreplica", readClient)
 
 		writeClient := redis.NewClient(&redis.Options{
-			Addr: flagStorageWriteRedisURI,
+			Addr: cfg.Payload.Redis.Write.Address,
 		})
 		m.RegisterRedis("redis", "master", writeClient)
 		storage = &dsRedis.RedisDatastore{Read: readClient, Write: writeClient}
+
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: cfg.Distributed.Redis.Address,
+		})
+
+		m.RegisterRedis("redis", "stream", redisClient)
+		streamer, err = initStreamer(ctx, cfg.Distributed, redisClient, logger, m, state)
+		if err != nil {
+			logger.WithError(err).Error("fail to create streamer")
+			return
+		}
 	} else {
 		storage = badgerDs
 	}
@@ -282,78 +170,47 @@ func main() {
 	}).Info("data store initialized")
 
 	timeRelayStart := time.Now()
-	state := &beacon.MultiSlotState{}
 	ds := datastore.NewDatastore(storage, badgerDs.DB)
 	if err != nil {
 		logger.WithError(err).Error("failed to create datastore")
 		return
 	}
 
-	if flagDistribution {
-		redisClient := redis.NewClient(&redis.Options{
-			Addr: flagPubsubRedisURI,
-		})
-
-		m.RegisterRedis("redis", "stream", redisClient)
-		streamer, err = initStreamer(ctx, redisClient, logger, m, state)
-		if err != nil {
-			logger.WithError(err).Error("fail to create streamer")
-			return
-		}
-	}
-
 	beaconConfig := bcli.BeaconConfig{
-		BeaconEventTimeout: flagBeaconEventTimeout,
-		BeaconEventRestart: flagBeaconEventRestart,
-		BeaconQueryTimeout: flagBeaconQueryTimeout,
+		BeaconEventTimeout: cfg.Beacon.EventTimeout,
+		BeaconEventRestart: cfg.Beacon.EventRestart,
+		BeaconQueryTimeout: cfg.Beacon.QueryTimeout,
 	}
 
-	beaconCli, err := initBeaconClients(logger, strings.Split(flagBeaconList, ","), m, beaconConfig)
+	beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, m, beaconConfig)
 	if err != nil {
 		logger.WithError(err).Error("fail to initialize beacon")
 		return
 	}
 
-	beaconPubCli, err := initBeaconClients(logger, strings.Split(flagBeaconPublishList, ","), m, beaconConfig)
+	beaconPubCli, err := initBeaconClients(logger, cfg.Beacon.PublishAddresses, m, beaconConfig)
 	if err != nil {
 		logger.WithError(err).Error("fail to initialize publish beacon")
 		return
 	}
 
-	// SIM Client
 	simFallb := fallback.NewFallback()
 	simFallb.AttachMetrics(m)
-	if simHttpAddr := flagBlockValidationRPC; simHttpAddr != "" {
-		simRPCCli := gethrpc.NewClient(gethSimNamespace, simHttpAddr)
-		if err := simRPCCli.Dial(ctx); err != nil {
-			logger.WithError(err).WithField("address", simHttpAddr).Error("fail to initialize rpc connection")
-			return
-		}
-		simFallb.AddClient(simRPCCli)
+
+	simManager := sim.NewManager(logger, simFallb)
+	simManager.AddRPCClient(ctx, cfg.BlockSimulation.RPC.Address)
+	simManager.AddHTTPClient(ctx, cfg.BlockSimulation.HTTP.Address)
+	for _, addr := range cfg.BlockSimulation.WS.Address {
+		simManager.AddWsClients(ctx, addr, cfg.BlockSimulation.WS.Retry)
 	}
 
-	if simWSAddr := flagBlockValidationEndpointWSList; simWSAddr != "" {
-		simWSConn := gethws.NewReConn(logger)
-		for _, s := range strings.Split(simWSAddr, ",") {
-			input := make(chan []byte, 1000)
-			go simWSConn.KeepConnection(s, input)
-		}
-		simWSCli := gethws.NewClient(simWSConn, gethSimNamespace, flagBlockValidationWSRetry, logger)
-		simFallb.AddClient(simWSCli)
-	}
-
-	if simHttpAddr := flagBlockValidationEndpointHTTP; simHttpAddr != "" {
-		simHTTPCli := gethhttp.NewClient(simHttpAddr, gethSimNamespace, logger)
-		simFallb.AddClient(simHTTPCli)
-	}
-
-	verificator := verify.NewVerificationManager(logger, uint(flagVerifyQueueSize))
-	verificator.RunVerify(uint(flagWorkersVerify))
+	verificator := verify.NewVerificationManager(logger, cfg.Verify.QueueSize)
+	verificator.RunVerify(uint(cfg.Verify.WorkersNum))
 
 	// VALIDATOR MANAGEMENT
 	var valDS ValidatorStore
-	if flagValidatorDatabaseUrl != "" {
-		valPG, err := trPostgres.Open(flagValidatorDatabaseUrl, 10, 10, 10*time.Second)
+	if cfg.Validators.DB.URL != "" {
+		valPG, err := trPostgres.Open(cfg.Validators.DB.URL, 10, 10, 10*time.Second)
 		if err != nil {
 			logger.WithError(err).Error("failed to connect to validator database")
 			return
@@ -361,10 +218,10 @@ func main() {
 		m.RegisterDB(valPG, "registrations")
 		valDS = valPostgres.NewDatastore(valPG)
 	} else { // by default use existsing storage
-		valDS = valBadger.NewDatastore(storage, flagTTL)
+		valDS = valBadger.NewDatastore(storage, cfg.Validators.Badger.TTL)
 	}
 
-	validatorCache, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](flagRegistrationsCacheSize)
+	validatorCache, err := lru.New[types.PublicKey, structs.ValidatorCacheEntry](cfg.Validators.RegistrationsCacheSize)
 	if err != nil {
 		logger.WithError(err).Error("fail to initialize validator cache")
 		return
@@ -372,8 +229,8 @@ func main() {
 
 	// DATAAPI
 	var daDS relay.DataAPIStore
-	if flagDataapiDatabaseUrl != "" {
-		valPG, err := trPostgres.Open(flagDataapiDatabaseUrl, 10, 10, 10*time.Second) // TODO(l): make configurable
+	if cfg.DataAPI.DB.URL != "" {
+		valPG, err := trPostgres.Open(cfg.DataAPI.DB.URL, 10, 10, 10*time.Second) // TODO(l): make configurable
 		if err != nil {
 			logger.WithError(err).Error("failed to connect to dataapi database")
 		}
@@ -384,16 +241,16 @@ func main() {
 
 		defer valPG.Close()
 	} else { // by default use badger
-		daDS = daBadger.NewDatastore(storage, badgerDs.DB, flagTTL)
+		daDS = daBadger.NewDatastore(storage, badgerDs.DB, cfg.DataAPI.Badger.TTL)
 	}
 
 	// lazyload validators cache, it's optional and we don't care if it errors out
 	go preloadValidators(ctx, logger, valDS, validatorCache)
 
-	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, flagRegistrationsCacheWriteTTL, uint(flagStoreQueueSize))
+	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, cfg.Validators.RegistrationsWriteCacheTTL, cfg.Validators.QueueSize)
 	validatorStoreManager.AttachMetrics(m)
-	if flagWorkersStoreValidator > 0 {
-		validatorStoreManager.RunStore(uint(flagWorkersStoreValidator))
+	if cfg.Validators.StoreWorkersNum > 0 {
+		validatorStoreManager.RunStore(uint(cfg.Validators.StoreWorkersNum))
 	}
 
 	domainBuilder, err := ComputeDomain(types.DomainTypeAppBuilder, chainCfg.GenesisForkVersion, types.Root{}.String())
@@ -407,25 +264,10 @@ func main() {
 	b := beacon.NewManager(logger, beacon.Config{
 		BellatrixForkVersion:             chainCfg.BellatrixForkVersion,
 		CapellaForkVersion:               chainCfg.CapellaForkVersion,
-		RunPayloadAttributesSubscription: flagBeaconPayloadAttributesSubscription,
+		RunPayloadAttributesSubscription: cfg.Beacon.PayloadAttributesSubscription,
 	})
 
-	auctioneer := auction.NewAuctioneer()
-
-	var allowed map[[48]byte]struct{}
-	if flagAllowListedBuilderList != "" {
-		allowed = make(map[[48]byte]struct{})
-		for _, k := range strings.Split(flagAllowListedBuilderList, ",") {
-			var pk types.PublicKey
-			if err := pk.UnmarshalText([]byte(k)); err != nil {
-				logger.WithError(err).With(log.F{"key": k}).Error("ALLOWED BUILDER NOT ADDED - wrong public key")
-				continue
-			}
-			allowed[pk] = struct{}{}
-		}
-	}
-
-	skBytes, err := hexutil.Decode(flagSecretKey)
+	skBytes, err := hexutil.Decode(cfg.Relay.SecretKey)
 	if err != nil {
 		logger.WithError(err).Error("fail to decode secretKey")
 		return
@@ -450,14 +292,13 @@ func main() {
 
 	var relayWh *wh.Warehouse
 	if flagWarehouse {
-		warehouse := wh.NewWarehouse(logger, flagWarehouseBuffer)
-
-		if err := os.MkdirAll(flagWarehouseDir, 0755); err != nil {
+		warehouse := wh.NewWarehouse(logger, cfg.Warehouse.Buffer)
+		if err := os.MkdirAll(cfg.Warehouse.Directory, 0755); err != nil {
 			logger.WithError(err).Error("failed to create datadir")
 			return
 		}
 
-		if err := warehouse.RunParallel(ctx, flagWarehouseDir, flagWarehouseWorkers); err != nil {
+		if err := warehouse.RunParallel(ctx, cfg.Warehouse.Directory, cfg.Warehouse.WorkerNumber); err != nil {
 			logger.WithError(err).Error("failed to run data exporter")
 			return
 		}
@@ -466,39 +307,44 @@ func main() {
 
 		logger.With(log.F{
 			"subService": "warehouse",
-			"datadir":    flagWarehouseDir,
-			"workers":    flagWarehouseWorkers,
+			"datadir":    cfg.Warehouse.Directory,
+			"workers":    cfg.Warehouse.WorkerNumber,
 		}).Info("initialized")
 
 		relayWh = warehouse
 	}
 
-	payloadCache, err := structs.NewMultiSlotPayloadCache(flagPayloadCacheSize)
+	payloadCache, err := structs.NewMultiSlotPayloadCache(cfg.Payload.CacheSize)
 	if err != nil {
 		logger.WithError(err).Error("fail to initialize stream cache")
 		return
 	}
 
-	r := relay.NewRelay(logger, relay.RelayConfig{
+	rCfg := relay.RelayConfig{
 		BuilderSigningDomain:       domainBuilder,
-		GetPayloadResponseDelay:    flagGetPayloadResponseDelay,
-		GetPayloadRequestTimeLimit: flagGetPayloadRequestTimeLimit,
+		GetPayloadResponseDelay:    cfg.Relay.GetPayloadResponseDelay,
+		GetPayloadRequestTimeLimit: cfg.Relay.GetPayloadRequestTimeLimit,
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 			structs.ForkBellatrix: bellatrixBeaconProposer,
 			structs.ForkCapella:   capellaBeaconProposer},
-		PubKey:                pk,
-		SecretKey:             sk,
-		RegistrationCacheTTL:  flagRegistrationsCacheReadTTL,
-		TTL:                   flagTTL,
-		AllowedListedBuilders: allowed,
-		PublishBlock:          flagPublishBlock,
-		Distributed:           flagDistribution,
-		StreamServedBids:      flagDistributionStreamServedBids,
-	}, beaconPubCli, validatorCache, valDS, verificator, state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
+		PubKey:               pk,
+		SecretKey:            sk,
+		RegistrationCacheTTL: cfg.Validators.RegistrationsReadCacheTTL,
+		PayloadDataTTL:       cfg.Payload.TTL,
+		PublishBlock:         cfg.Relay.PublishBlock,
+		Distributed:          flagDistribution,
+		StreamServedBids:     cfg.Distributed.StreamServedBids,
+	}
+	rCfg.ParseInitialConfig(cfg.Relay.AllowedBuilders)
+	cfg.Relay.SubscribeForUpdates(&rCfg)
+
+	auctioneer := auction.NewAuctioneer()
+	r := relay.NewRelay(logger, rCfg, beaconPubCli, validatorCache, valDS, verificator,
+		state, payloadCache, ds, daDS, auctioneer, simFallb, relayWh, streamer)
 	r.AttachMetrics(m)
 
 	if flagDistribution {
-		r.RunSubscribersParallel(ctx, uint(flagDistributionStreamWorkers))
+		r.RunSubscribersParallel(ctx, uint(cfg.Distributed.WorkerNumber))
 	}
 
 	ee := &api.EnabledEndpoints{
@@ -509,7 +355,8 @@ func main() {
 	iApi := inner.NewAPI(ee, ds)
 
 	limitterCache, _ := lru.New[[48]byte, *rate.Limiter](cfg.Api.LimitterCacheSize)
-	apiLimitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache, allowed)
+	apiLimitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache)
+	apiLimitter.ParseInitialConfig(cfg.Api.AllowedBuilders)
 	cfg.Api.SubscribeForUpdates(apiLimitter)
 
 	a := api.NewApi(logger, ee, r, validatorRelay, state, apiLimitter, cfg.Api.DataLimit, cfg.Api.ErrorsOnDisable)
@@ -538,7 +385,7 @@ func main() {
 		internalMux.Handle("/metrics", m.Handler())
 		logger.Info("internal server listening")
 		internalSrv := http.Server{
-			Addr:    flagInternalAddr,
+			Addr:    cfg.InternalHttp.Address,
 			Handler: internalMux,
 		}
 		if err = internalSrv.ListenAndServe(); err == http.ErrServerClosed {
@@ -551,10 +398,10 @@ func main() {
 	a.AttachToHandler(mux)
 
 	srv := &http.Server{
-		Addr:           flagAddr,
-		ReadTimeout:    flagTimeout,
-		WriteTimeout:   flagTimeout,
-		IdleTimeout:    flagTimeout,
+		Addr:           cfg.ExternalHttp.Address,
+		ReadTimeout:    cfg.ExternalHttp.ReadTimeout,
+		WriteTimeout:   cfg.ExternalHttp.WriteTimeout,
+		IdleTimeout:    cfg.ExternalHttp.IdleTimeout,
 		Handler:        mux,
 		MaxHeaderBytes: 4096,
 	}
@@ -660,12 +507,12 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-func initStreamer(ctx context.Context, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
+func initStreamer(ctx context.Context, cfg *config.DistributedConfig, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
 	timeStreamStart := time.Now()
 
 	pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: l}
 
-	id := flagDistributionID
+	id := cfg.InstanceID
 	if id == "" {
 		id = uuid.NewString()
 	}
@@ -673,15 +520,14 @@ func initStreamer(ctx context.Context, redisClient *redis.Client, l log.Logger, 
 	streamConfig := stream.StreamConfig{
 		Logger:          l,
 		ID:              id,
-		TTL:             flagDistributionStreamTTL,
-		PubsubTopic:     flagDistributionStreamTopic,
-		StreamQueueSize: flagDistributionStreamQueue,
+		PubsubTopic:     cfg.Redis.Topic,
+		StreamQueueSize: cfg.StreamQueueSize,
 	}
 
 	redisStreamer := stream.NewClient(pubsub, st, streamConfig)
 	redisStreamer.AttachMetrics(m)
 
-	if err := redisStreamer.RunSubscriberParallel(ctx, uint(flagDistributionStreamWorkers)); err != nil {
+	if err := redisStreamer.RunSubscriberParallel(ctx, uint(cfg.WorkerNumber)); err != nil {
 		return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
 	}
 

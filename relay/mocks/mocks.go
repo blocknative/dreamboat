@@ -83,17 +83,17 @@ func (mr *MockDataAPIStoreMockRecorder) PutBuilderBlockSubmission(arg0, arg1, ar
 }
 
 // PutDelivered mocks base method.
-func (m *MockDataAPIStore) PutDelivered(arg0 context.Context, arg1 structs.Slot, arg2 structs.DeliveredTrace, arg3 time.Duration) error {
+func (m *MockDataAPIStore) PutDelivered(arg0 context.Context, arg1 structs.Slot, arg2 structs.DeliveredTrace) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PutDelivered indicates an expected call of PutDelivered.
-func (mr *MockDataAPIStoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockDataAPIStoreMockRecorder) PutDelivered(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutDelivered", reflect.TypeOf((*MockDataAPIStore)(nil).PutDelivered), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutDelivered", reflect.TypeOf((*MockDataAPIStore)(nil).PutDelivered), arg0, arg1, arg2)
 }
 
 // MockDatastore is a mock of Datastore interface.

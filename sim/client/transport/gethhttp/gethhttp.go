@@ -28,6 +28,10 @@ func NewClient(address string, namespace string, l log.Logger) *Client {
 	}
 }
 
+func (c *Client) ID() string {
+	return c.address
+}
+
 func (c *Client) Kind() string {
 	return "http"
 }

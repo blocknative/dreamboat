@@ -90,7 +90,7 @@ func TestPutGetHeaderDelivered2(t *testing.T) {
 	require.Len(t, gotHeader, 0)
 
 	// set as delivered and retrieve again
-	err = d.PutDelivered(ctx, slot, dt, time.Minute)
+	err = d.PutDelivered(ctx, slot, dt)
 	require.NoError(t, err)
 
 	buf.Reset()
