@@ -206,7 +206,7 @@ type ValidatorsConfig struct {
 	// The size of response queue, should be set to expected number of validators in one request
 	QueueSize uint `config:"queue_size"`
 	// Number of workers storing validators in parallel
-	StoreWorkersNum uint64 `config:"store_workers"`
+	StoreWorkersNum uint `config:"store_workers"`
 	// Registrations cache size
 	RegistrationsCacheSize int `config:"registrations_cache_size"`
 	// Registrations cache ttl
@@ -267,11 +267,17 @@ var DefaultPayloadConfig = &PayloadConfig{
 	Badger:    *DefaultBadgerDBConfig,
 	TTL:       24 * time.Hour,
 	CacheSize: 1_000,
+	Redis:     *DefaultRedisDBConfig,
 }
 
 type RedisDBConfig struct {
 	Read  *RedisConfig `config:"read"`
 	Write *RedisConfig `config:"write"`
+}
+
+var DefaultRedisDBConfig = &RedisDBConfig{
+	Read:  &RedisConfig{},
+	Write: &RedisConfig{},
 }
 
 type WarehouseConfig struct {

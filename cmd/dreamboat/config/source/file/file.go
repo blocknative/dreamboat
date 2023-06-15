@@ -197,7 +197,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 					}
 					el.SetBool(b)
 				}
-			case reflect.Uint:
+			case reflect.Uint, reflect.Uint64:
 				uintP, err := paramParseUint(v)
 				if err != nil {
 					return err
@@ -220,7 +220,7 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 					}
 					el.SetUint(uintP)
 				}
-			case reflect.Int:
+			case reflect.Int, reflect.Int64:
 				intP, err := paramParseInt(v)
 				if err != nil {
 					return err
