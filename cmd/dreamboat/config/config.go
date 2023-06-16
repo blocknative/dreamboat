@@ -260,7 +260,7 @@ type PayloadConfig struct {
 	Redis RedisDBConfig `config:"redis"`
 
 	// TTL of payload data
-	TTL time.Duration `config:"TTL,allow_dynamic"`
+	TTL time.Duration `config:"ttl,allow_dynamic"`
 }
 
 var DefaultPayloadConfig = &PayloadConfig{
