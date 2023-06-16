@@ -81,8 +81,12 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		}
 	}
 
-	qBuilder.WriteString(` ORDER BY slot DESC, block_time DESC, block_hash DESC LIMIT $` + strconv.Itoa(i))
-	data = append(data, payload.Limit)
+	qBuilder.WriteString(` ORDER BY slot DESC, block_time DESC, block_hash DESC `)
+	if !(payload.Slot > 0 || payload.BlockNum > 0) {
+		qBuilder.WriteString(` LIMIT $` + strconv.Itoa(i))
+		data = append(data, payload.Limit)
+	}
+
 	rows, err := s.DB.QueryContext(ctx, qBuilder.String(), data...)
 	switch {
 	case err == sql.ErrNoRows:
