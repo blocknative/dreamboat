@@ -14,10 +14,6 @@ import (
 	"github.com/lthibault/log"
 )
 
-const (
-	Version = "0.3.6"
-)
-
 var (
 	ErrUnkownFork = errors.New("beacon node fork is unknown")
 )

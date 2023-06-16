@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/blocknative/dreamboat/client/sim/types"
+	"github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/lthibault/log"
 )
 
@@ -26,6 +26,10 @@ func NewClient(address string, namespace string, l log.Logger) *Client {
 		l:         l,
 		client:    &http.Client{},
 	}
+}
+
+func (c *Client) ID() string {
+	return c.address
 }
 
 func (c *Client) Kind() string {

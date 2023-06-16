@@ -13,8 +13,10 @@ import (
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/golang/mock/gomock"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/lthibault/log"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 )
 
 var (
@@ -26,6 +28,10 @@ var (
 	}
 )
 
+const (
+	TestDataLimit = 450
+)
+
 func TestServerRouting(t *testing.T) {
 	t.Parallel()
 
@@ -35,7 +41,7 @@ func TestServerRouting(t *testing.T) {
 	t.Run("Status", func(t *testing.T) {
 		t.Parallel()
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -50,7 +56,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 		register := mock_relay.NewMockRegistrations(ctrl)
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, register, nil, nil)
+		server := api.NewApi(logger, &ee, service, register, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -68,7 +74,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -86,7 +92,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -104,8 +110,8 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-
-		server := api.NewApi(logger, &ee, service, nil, nil, api.NewLimitter(1, 1, nil))
+		c, _ := lru.New[[48]byte, *rate.Limiter](1000)
+		server := api.NewApi(logger, &ee, service, nil, nil, api.NewLimitter(1, 1, c), TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -123,7 +129,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 		register := mock_relay.NewMockRegistrations(ctrl)
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -141,7 +147,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -153,7 +159,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: api.DataLimit, Slot: 100}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: TestDataLimit, Slot: 100}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -162,7 +168,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -176,7 +182,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: api.DataLimit, BlockHash: blockHash}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: TestDataLimit, BlockHash: blockHash}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -185,7 +191,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -198,7 +204,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: api.DataLimit, BlockNum: 100}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: TestDataLimit, BlockNum: 100}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -207,7 +213,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -220,7 +226,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: 50}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: 50}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -229,7 +235,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -241,7 +247,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetBlockReceived(gomock.Any(), structs.SubmissionTraceQuery{Limit: api.DataLimit}).
+			GetBlockReceived(gomock.Any(), w, structs.SubmissionTraceQuery{Limit: TestDataLimit}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -251,7 +257,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -263,7 +269,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: api.DataLimit, Slot: 100}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit, Slot: 100}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -272,7 +278,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -286,7 +292,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: api.DataLimit, BlockHash: blockHash}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit, BlockHash: blockHash}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -296,7 +302,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -309,7 +315,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: api.DataLimit, BlockNum: 100}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit, BlockNum: 100}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -318,7 +324,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -331,7 +337,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: api.DataLimit, Cursor: 50}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit, Cursor: 50}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -340,7 +346,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -353,7 +359,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: 50}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: 50}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -362,7 +368,7 @@ func TestServerRouting(t *testing.T) {
 		t.Parallel()
 
 		service := mock_relay.NewMockRelay(ctrl)
-		server := api.NewApi(logger, &ee, service, nil, nil, nil)
+		server := api.NewApi(logger, &ee, service, nil, nil, nil, TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -374,7 +380,7 @@ func TestServerRouting(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		service.EXPECT().
-			GetPayloadDelivered(gomock.Any(), structs.PayloadTraceQuery{Limit: api.DataLimit}).
+			GetPayloadDelivered(gomock.Any(), w, structs.PayloadTraceQuery{Limit: TestDataLimit}).
 			Times(1)
 
 		m.ServeHTTP(w, req)
@@ -397,7 +403,7 @@ func BenchmarkAPISequential(b *testing.B) {
 	service := mock_relay.NewMockRelay(ctrl)
 	register := mock_relay.NewMockRegistrations(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
-	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil))
+	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil), TestDataLimit, false)
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 
@@ -428,7 +434,7 @@ func BenchmarkAPIParallel(b *testing.B) {
 
 	register := mock_relay.NewMockRegistrations(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
-	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil))
+	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil), TestDataLimit, false)
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 

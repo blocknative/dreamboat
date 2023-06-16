@@ -3,7 +3,7 @@ package gethrpc
 import (
 	"context"
 
-	"github.com/blocknative/dreamboat/client/sim/types"
+	"github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -18,6 +18,10 @@ func NewClient(namespace string, rawurl string) *Client {
 		rawurl:    rawurl,
 		namespace: namespace,
 	}
+}
+
+func (c *Client) ID() string {
+	return c.rawurl
 }
 
 func (f *Client) IsSet() bool {

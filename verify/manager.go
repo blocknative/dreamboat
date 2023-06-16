@@ -2,12 +2,14 @@ package verify
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+var ErrInvalidSignature = errors.New("invalid signature")
 
 type VerificationManager struct {
 	VerifySubmitBlockCh       chan Request
@@ -121,7 +123,7 @@ func verifyCheck(o prometheus.Observer, v Request) (err error) {
 func verifyUnit(id int, msg [32]byte, sigBytes [96]byte, pkBytes [48]byte) Resp {
 	ok, err := VerifySignatureBytes(msg, sigBytes[:], pkBytes[:])
 	if err == nil && !ok {
-		err = bls.ErrInvalidSignature
+		err = ErrInvalidSignature
 	}
 	return Resp{Err: err, ID: id}
 }

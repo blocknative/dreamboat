@@ -3,29 +3,33 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 
-	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/blocknative/dreamboat/structs"
+	"github.com/flashbots/go-boost-utils/types"
 	"golang.org/x/time/rate"
 )
 
-const LimitterCacheSize = 100
-
 var ErrTooManyCalls = errors.New("too many calls")
 
+type Cache interface {
+	Get([48]byte) (*rate.Limiter, bool)
+	Add([48]byte, *rate.Limiter) bool
+	Purge()
+}
 type Limitter struct {
-	AllowedBuilders map[[48]byte]struct{}
-	c               *lru.Cache[[48]byte, *rate.Limiter]
-	RateLimit       rate.Limit
-	Burst           int
+	AllowedBuilders   map[[48]byte]struct{}
+	c                 Cache
+	RateLimit         rate.Limit
+	Burst             int
+	LimitterCacheSize int
 }
 
-func NewLimitter(ratel int, burst int, ab map[[48]byte]struct{}) *Limitter {
-	c, _ := lru.New[[48]byte, *rate.Limiter](LimitterCacheSize)
+func NewLimitter(ratel int, burst int, c Cache) *Limitter {
 	return &Limitter{
-		AllowedBuilders: ab,
-		c:               c,
-		RateLimit:       rate.Limit(ratel),
-		Burst:           burst,
+		c:         c,
+		RateLimit: rate.Limit(ratel),
+		Burst:     burst,
 	}
 }
 
@@ -46,5 +50,47 @@ func (l *Limitter) Allow(ctx context.Context, pubkey [48]byte) error {
 	}
 
 	return nil
+}
 
+func (l *Limitter) ParseInitialConfig(keys []string) (err error) {
+	l.AllowedBuilders, err = makeKeyMap(keys)
+	return err
+
+}
+
+func (l *Limitter) OnConfigChange(c structs.OldNew) (err error) {
+	switch c.Name {
+	case "SubmissionLimitRate":
+		if i, ok := c.New.(int64); ok {
+			l.RateLimit = rate.Limit(i)
+			l.c.Purge()
+		}
+	case "SubmissionLimitBurst":
+		if i, ok := c.New.(int64); ok {
+			l.Burst = int(i)
+			l.c.Purge()
+		}
+	case "AllowedBuilders":
+		if keys, ok := c.New.([]string); ok {
+			ab, err := makeKeyMap(keys)
+			if err != nil {
+				return err
+			}
+			l.c.Purge()
+			l.AllowedBuilders = ab
+		}
+	}
+	return nil
+}
+
+func makeKeyMap(keys []string) (map[[48]byte]struct{}, error) {
+	newKeys := make(map[[48]byte]struct{})
+	for _, key := range keys {
+		var pk types.PublicKey
+		if err := pk.UnmarshalText([]byte(key)); err != nil {
+			return nil, fmt.Errorf("allowed builder not added - wrong public key: %s  - %w", key, err)
+		}
+		newKeys[pk] = struct{}{}
+	}
+	return newKeys, nil
 }

@@ -5,17 +5,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"strconv"
 	"sync/atomic"
 	"time"
 
-	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
-	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
+	rpctypes "github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -79,12 +79,11 @@ type Verifier interface {
 }
 
 type DataAPIStore interface {
-	//CheckSlotDelivered(context.Context, uint64) (bool, error)
-	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace, time.Duration) error
-	GetDeliveredPayloads(ctx context.Context, headSlot uint64, queryArgs structs.PayloadTraceQuery) (bts []structs.BidTraceExtended, err error)
+	PutDelivered(context.Context, structs.Slot, structs.DeliveredTrace) error
+	GetDeliveredPayloads(ctx context.Context, w io.Writer, headSlot uint64, queryArgs structs.PayloadTraceQuery) error
 
 	PutBuilderBlockSubmission(ctx context.Context, bid structs.BidTraceWithTimestamp, isMostProfitable bool) (err error)
-	GetBuilderBlockSubmissions(ctx context.Context, headSlot uint64, payload structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error)
+	GetBuilderBlockSubmissions(ctx context.Context, w io.Writer, headSlot uint64, payload structs.SubmissionTraceQuery) error
 }
 
 type PayloadCache interface {
@@ -117,25 +116,6 @@ type Beacon interface {
 
 type Warehouse interface {
 	StoreAsync(ctx context.Context, req wh.StoreRequest) error
-}
-
-type RelayConfig struct {
-	BuilderSigningDomain       types.Domain
-	ProposerSigningDomain      map[structs.ForkVersion]types.Domain
-	PubKey                     types.PublicKey
-	SecretKey                  *bls.SecretKey
-	GetPayloadResponseDelay    time.Duration
-	GetPayloadRequestTimeLimit time.Duration
-
-	AllowedListedBuilders map[[48]byte]struct{}
-
-	PublishBlock bool
-
-	TTL time.Duration
-
-	RegistrationCacheTTL time.Duration
-
-	Distributed, StreamServedBids bool
 }
 
 type Relay struct {
@@ -197,10 +177,6 @@ func (rs *Relay) RunSubscribersParallel(ctx context.Context, num uint) {
 		go rs.runSubscriberBlockCache(ctx)
 		go rs.runSubscriberBid(ctx)
 	}
-}
-
-func (rs *Relay) runSlotDeliveredSubscriber(ctx context.Context) error {
-	return nil // TODO
 }
 
 func (rs *Relay) runSubscriberBlockCache(ctx context.Context) error {
@@ -662,7 +638,7 @@ func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload str
 		return
 	}
 
-	if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace, rs.config.TTL); err != nil {
+	if err := rs.das.PutDelivered(context.Background(), structs.Slot(slot), trace); err != nil {
 		logger.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		return
 	}

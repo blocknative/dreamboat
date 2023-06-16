@@ -11,8 +11,8 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
 
-	rpctypes "github.com/blocknative/dreamboat/client/sim/types"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
+	rpctypes "github.com/blocknative/dreamboat/sim/client/types"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
 	"github.com/blocknative/dreamboat/structs/forks/capella"
@@ -237,7 +237,7 @@ func (rs *Relay) storeSubmission(ctx context.Context, logger log.Logger, m *stru
 
 	tPutPayload := time.Now()
 
-	if err := rs.d.PutPayload(context.Background(), sbr.ToPayloadKey(), complete.Payload, rs.config.TTL); err != nil {
+	if err := rs.d.PutPayload(context.Background(), sbr.ToPayloadKey(), complete.Payload, rs.config.PayloadDataTTL); err != nil {
 		return false, fmt.Errorf("%w block as payload: %s", ErrStore, err.Error()) // TODO: multiple err wrapping in Go 1.20
 	}
 	m.AppendSince(tPutPayload, "submitBlock", "putPayload")

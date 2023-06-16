@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/stream.go -package=mocks github.com/blocknative/dreamboat/pkg/stream Pubsub,Datastore
+//go:generate mockgen  -destination=./mocks/stream.go -package=mocks github.com/blocknative/dreamboat/stream Pubsub
 
 package stream
 
@@ -32,7 +32,6 @@ type Pubsub interface {
 type StreamConfig struct {
 	Logger          log.Logger
 	ID              string
-	TTL             time.Duration
 	PubsubTopic     string // pubsub topic name for block submissions
 	StreamQueueSize int
 }

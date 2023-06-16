@@ -6,11 +6,12 @@ package mocks
 
 import (
 	context "context"
+	io "io"
 	reflect "reflect"
 	time "time"
 
-	types "github.com/blocknative/dreamboat/client/sim/types"
 	warehouse "github.com/blocknative/dreamboat/datastore/warehouse"
+	types "github.com/blocknative/dreamboat/sim/client/types"
 	structs "github.com/blocknative/dreamboat/structs"
 	types0 "github.com/flashbots/go-boost-utils/types"
 	gomock "github.com/golang/mock/gomock"
@@ -40,33 +41,31 @@ func (m *MockDataAPIStore) EXPECT() *MockDataAPIStoreMockRecorder {
 }
 
 // GetBuilderBlockSubmissions mocks base method.
-func (m *MockDataAPIStore) GetBuilderBlockSubmissions(arg0 context.Context, arg1 uint64, arg2 structs.SubmissionTraceQuery) ([]structs.BidTraceWithTimestamp, error) {
+func (m *MockDataAPIStore) GetBuilderBlockSubmissions(arg0 context.Context, arg1 io.Writer, arg2 uint64, arg3 structs.SubmissionTraceQuery) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBuilderBlockSubmissions", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]structs.BidTraceWithTimestamp)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "GetBuilderBlockSubmissions", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // GetBuilderBlockSubmissions indicates an expected call of GetBuilderBlockSubmissions.
-func (mr *MockDataAPIStoreMockRecorder) GetBuilderBlockSubmissions(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockDataAPIStoreMockRecorder) GetBuilderBlockSubmissions(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuilderBlockSubmissions", reflect.TypeOf((*MockDataAPIStore)(nil).GetBuilderBlockSubmissions), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuilderBlockSubmissions", reflect.TypeOf((*MockDataAPIStore)(nil).GetBuilderBlockSubmissions), arg0, arg1, arg2, arg3)
 }
 
 // GetDeliveredPayloads mocks base method.
-func (m *MockDataAPIStore) GetDeliveredPayloads(arg0 context.Context, arg1 uint64, arg2 structs.PayloadTraceQuery) ([]structs.BidTraceExtended, error) {
+func (m *MockDataAPIStore) GetDeliveredPayloads(arg0 context.Context, arg1 io.Writer, arg2 uint64, arg3 structs.PayloadTraceQuery) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDeliveredPayloads", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]structs.BidTraceExtended)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "GetDeliveredPayloads", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // GetDeliveredPayloads indicates an expected call of GetDeliveredPayloads.
-func (mr *MockDataAPIStoreMockRecorder) GetDeliveredPayloads(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockDataAPIStoreMockRecorder) GetDeliveredPayloads(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredPayloads", reflect.TypeOf((*MockDataAPIStore)(nil).GetDeliveredPayloads), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeliveredPayloads", reflect.TypeOf((*MockDataAPIStore)(nil).GetDeliveredPayloads), arg0, arg1, arg2, arg3)
 }
 
 // PutBuilderBlockSubmission mocks base method.
@@ -84,17 +83,17 @@ func (mr *MockDataAPIStoreMockRecorder) PutBuilderBlockSubmission(arg0, arg1, ar
 }
 
 // PutDelivered mocks base method.
-func (m *MockDataAPIStore) PutDelivered(arg0 context.Context, arg1 structs.Slot, arg2 structs.DeliveredTrace, arg3 time.Duration) error {
+func (m *MockDataAPIStore) PutDelivered(arg0 context.Context, arg1 structs.Slot, arg2 structs.DeliveredTrace) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "PutDelivered", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PutDelivered indicates an expected call of PutDelivered.
-func (mr *MockDataAPIStoreMockRecorder) PutDelivered(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockDataAPIStoreMockRecorder) PutDelivered(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutDelivered", reflect.TypeOf((*MockDataAPIStore)(nil).PutDelivered), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutDelivered", reflect.TypeOf((*MockDataAPIStore)(nil).PutDelivered), arg0, arg1, arg2)
 }
 
 // MockDatastore is a mock of Datastore interface.
