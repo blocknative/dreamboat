@@ -47,7 +47,9 @@ This is a from-scratch implementation of a PBS relay–aimed at strengthening #R
 
 We are continuously improving Dreamoat's runtime performance, standards compliance, reliability and transparency. We would also like to thank the Flashbots team for their open-source tooling, which helped us get Dreamboat up and running in short order, and for their thoughtful comments on implementation.
 
-## Key Differences and Benefits with Others
+## Dreamboat VS Others
+
+Why should you opt for Dreamboat instead of other relays?
 
 ### Decentralized Bid Delivery
 Unlike centralized relays that heavily rely on a single centralized source of truth, such as Redis, for bid propagation, the Relay project takes a distributed approach. We deliver bids to distributed instances, allowing for improved scalability, fault tolerance, and reduced reliance on a single point of failure. This decentralized bid delivery mechanism ensures higher availability and robustness of the relay network.
@@ -58,7 +60,9 @@ One of the key differentiators of the Relay project is its heavy utilization of 
 ### Efficient Data Storage
 In contrast to relying solely on a costly PostgreSQL database for storing large volumes of data, the Relay project adopts a more cost-effective approach. We store increasing amounts of data in files, utilizing file-based storage systems. This strategy not only reduces infrastructure costs but also enhances performance and scalability, as file operations can be optimized and scaled more efficiently.
 
-Certainly! Here's the updated section with default values included:
+### Relay Diversity
+Relay diversity plays a crucial role in ensuring the resilience, security, and efficiency of the overall network. By running relays with different configurations and settings, we can achieve a more diverse and robust network architecture.
+
 
 ## Command-line Flags
 
