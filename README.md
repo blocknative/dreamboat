@@ -137,8 +137,6 @@ The relay system provides various configuration options that can be customized t
 
 Please note that these values can be modified in the `config.ini` file according to your specific requirements.
 
-## Distribution
-
 ## Planned Features & Enhancements
 
 The following features and enhancements are in-progress.
