@@ -131,10 +131,10 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		if err != nil {
 			s.m.ErrorsCount.WithLabelValues("getDeliveredPayloads", "scan").Inc()
 			s.l.WithError(err).Warn("failed to scan row")
-			fmt.Fprint(w, "]")
 			if idx == 0 {
 				return err
 			}
+			fmt.Fprint(w, "]")
 			return nil
 		}
 
@@ -174,8 +174,12 @@ func (s *Datastore) GetDeliveredPayloads(ctx context.Context, w io.Writer, headS
 		}
 	}
 
-	fmt.Fprint(w, "]") // Write the closing bracket manually
-	return nil
+	if idx == 0 {
+		_, err := fmt.Fprint(w, "[]")
+		return err
+	}
+	_, err = fmt.Fprint(w, "]")
+	return err
 }
 
 /*
