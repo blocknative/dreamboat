@@ -119,10 +119,10 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		if err != nil {
 			s.m.ErrorsCount.WithLabelValues("getBuilderBlockSubmissions", "scan").Inc()
 			s.l.WithError(err).Warn("failed to scan row")
-			fmt.Fprint(w, "]")
 			if idx == 0 {
 				return err
 			}
+			fmt.Fprint(w, "]")
 			return nil
 		}
 		bt.BuilderPubkey.UnmarshalText(builderpubkey)
@@ -165,8 +165,12 @@ func (s *Datastore) GetBuilderBlockSubmissions(ctx context.Context, w io.Writer,
 		}
 	}
 
-	fmt.Fprint(w, "]") // Write the closing bracket manually
-	return nil
+	if idx == 0 {
+		_, err := fmt.Fprint(w, "[]")
+		return err
+	}
+	_, err = fmt.Fprint(w, "]")
+	return err
 }
 
 type GetBuilderSubmissionsFilters struct {
