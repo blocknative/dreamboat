@@ -55,7 +55,7 @@ Why should you opt for Dreamboat instead of other relays?
 Unlike centralized relays that heavily rely on a single centralized source of truth, such as Redis, for bid propagation, the Relay project takes a distributed approach. We deliver bids to distributed instances, allowing for improved scalability, fault tolerance, and reduced reliance on a single point of failure. This decentralized bid delivery mechanism ensures higher availability and robustness of the relay network.
 
 ### Memory-Based Operations
-One of the key differentiators of the Relay project is its heavy utilization of memory for serving various operations. Instead of relying on frequent database access, we leverage in-memory storage to serve most of the required data. This approach results in significantly faster response times and reduced latency for bid retrieval, payload decoding, and other essential operations.
+One of the key differentiators of the Relay project is its heavy utilization of memory for serving various operations. Instead of relying on frequent database access, we leverage in-memory storage to serve most of the required data. This approach results in significantly faster response times and reduced latency for bid retrieval, payload retrieval, and other essential operations.
 
 ### Efficient Data Storage
 In contrast to relying solely on a costly PostgreSQL database for storing large volumes of data, the Relay project adopts a more cost-effective approach. We store increasing amounts of data in files, utilizing file-based storage systems. This strategy not only reduces infrastructure costs but also enhances performance and scalability, as file operations can be optimized and scaled more efficiently.
