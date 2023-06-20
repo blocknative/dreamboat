@@ -137,17 +137,6 @@ The relay system provides various configuration options that can be customized t
 
 Please note that these values can be modified in the `config.ini` file according to your specific requirements.
 
-## Planned Features & Enhancements
-
-The following features and enhancements are in-progress.
-
-- [x] Support for multiple storage backends (Redis, Postgres, BadgerDB, Filesystem, etc.)
-- [x] Runtime profiling & tracing endpoint
-- [x] Parallel validator-signature verification
-- [x] Contention-free execution along hot paths
-- [x] Support for multiple beacon clients
-- [ ] Support for multiple external block builders
-
 ## Extend the blockchain networks
 Do you need to make your relay work with a different blockchain that is not:
 - Mainnet
