@@ -250,7 +250,7 @@ func TestRelay_SubmitBlock(t *testing.T) {
 
 			f := simpletest(t, controller, tt.fork, tt.args.sbr, sk, pubKey, relaySigningDomain, genesisTime)
 			rs := NewRelay(l,
-				f.config,
+				&f.config,
 				f.beacon,
 				f.cache,
 				f.vstore,

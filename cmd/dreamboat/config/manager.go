@@ -1,6 +1,8 @@
 package config
 
-import "github.com/blocknative/dreamboat/structs"
+import (
+	"github.com/blocknative/dreamboat/structs"
+)
 
 type Source interface {
 	Load(cfg *Config, initial bool) error
