@@ -644,11 +644,6 @@ func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload str
 	}
 }
 
-type TimeoutWaitGroup struct {
-	running int64
-	done    chan struct{}
-}
-
 type lastDelivered struct {
 	slot      uint64
 	blockHash types.Hash
