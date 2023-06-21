@@ -22,20 +22,27 @@ type APIConfig interface {
 	SetBool(key string, val bool) error
 }
 
+type GlobalConfig interface {
+	GetConfigJSON() ([]byte, error)
+}
+
 type API struct {
 	cfg     APIConfig
 	payload ApiPayload
+	gc      GlobalConfig
 }
 
-func NewAPI(cfg APIConfig, payload ApiPayload) *API {
+func NewAPI(cfg APIConfig, payload ApiPayload, gc GlobalConfig) *API {
 	return &API{
 		cfg:     cfg,
 		payload: payload,
+		gc:      gc,
 	}
 }
 
 func (a *API) AttachToHandler(m *http.ServeMux) {
 	m.HandleFunc("/services/status", a.getStatus)
+	m.HandleFunc("/services/config", a.getConfig)
 	m.HandleFunc("/services/endpoints/set_availability", a.setAvailability)
 
 	m.HandleFunc("/submission", a.getSubmission)
@@ -62,6 +69,16 @@ func (a *API) getStatus(w http.ResponseWriter, r *http.Request) {
 			SubmitBlock: sb,
 		},
 	})
+}
+
+func (a *API) getConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	b, err := a.gc.GetConfigJSON()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Write(b)
 }
 
 func (a *API) setAvailability(w http.ResponseWriter, r *http.Request) {

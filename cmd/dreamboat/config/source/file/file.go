@@ -152,17 +152,25 @@ func parseParam(currentSection *reflect.Value, subscribtionRoot config.Propagato
 				if err != nil {
 					return err
 				}
-
-				if !initial && !inArr(params, "allow_dynamic") {
-					return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
+				dur := el.Interface().(time.Duration)
+				if dur.Nanoseconds() == b.Nanoseconds() {
+					continue
 				}
-				if sRoot != nil {
-					sRoot.Propagate(structs.OldNew{
-						Name:      f.Name,
-						ParamPath: fullPath,
-						New:       el,
-						Old:       b,
-					})
+
+				if !initial {
+					if !inArr(params, "allow_dynamic") {
+						return fmt.Errorf("dynamic change of %s parameter is not allowed  ", key)
+					}
+
+					if !initial && sRoot != nil {
+						sRoot.Propagate(structs.OldNew{
+							Name:      f.Name,
+							ParamPath: fullPath,
+							New:       el,
+							Old:       b,
+						})
+
+					}
 				}
 				el.Set(reflect.ValueOf(b))
 				continue

@@ -7,6 +7,7 @@ import (
 
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/lthibault/log"
 	"golang.org/x/time/rate"
 )
 
@@ -23,13 +24,15 @@ type Limitter struct {
 	RateLimit         rate.Limit
 	Burst             int
 	LimitterCacheSize int
+	l                 log.Logger
 }
 
-func NewLimitter(ratel int, burst int, c Cache) *Limitter {
+func NewLimitter(l log.Logger, ratel int, burst int, c Cache) *Limitter {
 	return &Limitter{
 		c:         c,
 		RateLimit: rate.Limit(ratel),
 		Burst:     burst,
+		l:         l,
 	}
 }
 
@@ -64,11 +67,13 @@ func (l *Limitter) OnConfigChange(c structs.OldNew) (err error) {
 		if i, ok := c.New.(int64); ok {
 			l.RateLimit = rate.Limit(i)
 			l.c.Purge()
+			l.l.With(log.F{"param": "SubmissionLimitRate", "value": i}).Info("config param updated")
 		}
 	case "SubmissionLimitBurst":
 		if i, ok := c.New.(int64); ok {
 			l.Burst = int(i)
 			l.c.Purge()
+			l.l.With(log.F{"param": "SubmissionLimitBurst", "value": i}).Info("config param updated")
 		}
 	case "AllowedBuilders":
 		if keys, ok := c.New.([]string); ok {
@@ -78,6 +83,7 @@ func (l *Limitter) OnConfigChange(c structs.OldNew) (err error) {
 			}
 			l.c.Purge()
 			l.AllowedBuilders = ab
+			l.l.With(log.F{"param": "AllowedBuilders", "value": ab}).Info("config param updated")
 		}
 	}
 	return nil

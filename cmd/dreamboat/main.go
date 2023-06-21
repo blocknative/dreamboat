@@ -104,7 +104,7 @@ func main() {
 			logger.WithError(err).Fatal("failed loading config file")
 			return
 		}
-		go reloadConfigSignal(reloadSig, cfg)
+		go reloadConfigSignal(logger, reloadSig, cfg)
 	}
 
 	chainCfg := config.NewChainConfig()
@@ -320,7 +320,8 @@ func main() {
 		return
 	}
 
-	rCfg := relay.RelayConfig{
+	rCfg := &relay.RelayConfig{
+		L:                          logger,
 		BuilderSigningDomain:       domainBuilder,
 		GetPayloadResponseDelay:    cfg.Relay.GetPayloadResponseDelay,
 		GetPayloadRequestTimeLimit: cfg.Relay.GetPayloadRequestTimeLimit,
@@ -336,7 +337,7 @@ func main() {
 		StreamServedBids:     cfg.Distributed.StreamServedBids,
 	}
 	rCfg.ParseInitialConfig(cfg.Relay.AllowedBuilders)
-	cfg.Relay.SubscribeForUpdates(&rCfg)
+	cfg.Relay.SubscribeForUpdates(rCfg)
 
 	auctioneer := auction.NewAuctioneer()
 	r := relay.NewRelay(logger, rCfg, beaconPubCli, validatorCache, valDS, verificator,
@@ -352,10 +353,10 @@ func main() {
 		GetPayload:  true,
 		SubmitBlock: true,
 	}
-	iApi := inner.NewAPI(ee, ds)
+	iApi := inner.NewAPI(ee, ds, cfg)
 
 	limitterCache, _ := lru.New[[48]byte, *rate.Limiter](cfg.Api.LimitterCacheSize)
-	apiLimitter := api.NewLimitter(cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache)
+	apiLimitter := api.NewLimitter(logger, cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache)
 	apiLimitter.ParseInitialConfig(cfg.Api.AllowedBuilders)
 	cfg.Api.SubscribeForUpdates(apiLimitter)
 
@@ -443,9 +444,12 @@ func waitForSignal(cancel context.CancelFunc, osSig chan os.Signal) {
 	}
 }
 
-func reloadConfigSignal(osSig chan os.Signal, cfg *config.ConfigManager) {
+func reloadConfigSignal(l log.Logger, osSig chan os.Signal, cfg *config.ConfigManager) {
 	for range osSig {
-		cfg.Reload()
+		if err := cfg.Reload(); err != nil {
+			l.WithError(err).Warn("errror reloading config")
+		}
+
 	}
 }
 

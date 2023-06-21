@@ -141,10 +141,12 @@ func (a *API) OnConfigChange(c structs.OldNew) (err error) {
 	case "DataLimit":
 		if i, ok := c.New.(int64); ok {
 			a.dataLimit = int(i)
+			a.l.With(log.F{"param": "DataLimit", "value": i}).Info("config param updated")
 		}
 	case "ErrorsOnDisable":
 		if b, ok := c.New.(bool); ok {
 			a.errorsOnDisable = b
+			a.l.With(log.F{"param": "ErrorsOnDisable", "value": b}).Info("config param updated")
 		}
 	}
 	return nil

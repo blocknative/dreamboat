@@ -127,7 +127,7 @@ type Relay struct {
 	l log.Logger
 
 	ver    Verifier
-	config RelayConfig
+	config *RelayConfig
 
 	cache  ValidatorCache
 	vstore ValidatorStore
@@ -149,7 +149,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config RelayConfig, beacon Beacon, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
+func NewRelay(l log.Logger, config *RelayConfig, beacon Beacon, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
 	rs := &Relay{
 		pc:            pcache,
 		d:             d,
@@ -642,11 +642,6 @@ func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload str
 		logger.WithField("event", "evidence_failure").WithError(err).Warn("failed to set payload after delivery")
 		return
 	}
-}
-
-type TimeoutWaitGroup struct {
-	running int64
-	done    chan struct{}
 }
 
 type lastDelivered struct {

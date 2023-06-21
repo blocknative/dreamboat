@@ -111,7 +111,7 @@ func TestServerRouting(t *testing.T) {
 
 		service := mock_relay.NewMockRelay(ctrl)
 		c, _ := lru.New[[48]byte, *rate.Limiter](1000)
-		server := api.NewApi(logger, &ee, service, nil, nil, api.NewLimitter(1, 1, c), TestDataLimit, false)
+		server := api.NewApi(logger, &ee, service, nil, nil, api.NewLimitter(nil, 1, 1, c), TestDataLimit, false)
 		m := http.NewServeMux()
 		server.AttachToHandler(m)
 
@@ -403,7 +403,7 @@ func BenchmarkAPISequential(b *testing.B) {
 	service := mock_relay.NewMockRelay(ctrl)
 	register := mock_relay.NewMockRegistrations(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
-	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil), TestDataLimit, false)
+	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(nil, 1, 1, nil), TestDataLimit, false)
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 
@@ -434,7 +434,7 @@ func BenchmarkAPIParallel(b *testing.B) {
 
 	register := mock_relay.NewMockRegistrations(ctrl)
 	//Log:     log.New(log.WithWriter(ioutil.Discard)),
-	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(1, 1, nil), TestDataLimit, false)
+	server := api.NewApi(logger, &ee, service, register, nil, api.NewLimitter(nil, 1, 1, nil), TestDataLimit, false)
 	m := http.NewServeMux()
 	server.AttachToHandler(m)
 

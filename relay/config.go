@@ -7,9 +7,12 @@ import (
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/lthibault/log"
 )
 
 type RelayConfig struct {
+	L log.Logger
+
 	BuilderSigningDomain  types.Domain
 	ProposerSigningDomain map[structs.ForkVersion]types.Domain
 	PubKey                types.PublicKey
@@ -37,21 +40,25 @@ func (rc *RelayConfig) OnConfigChange(c structs.OldNew) (err error) {
 	case "PublishBlock":
 		if b, ok := c.New.(bool); ok {
 			rc.PublishBlock = b
+			rc.L.With(log.F{"param": "PublishBlock", "value": b}).Info("config param updated")
 		}
 
 	case "StreamServedBids":
 		if b, ok := c.New.(bool); ok {
-			rc.PublishBlock = b
+			rc.StreamServedBids = b
+			rc.L.With(log.F{"param": "PublishBlock", "value": b}).Info("config param updated")
 		}
 
 	case "GetPayloadResponseDelay":
 		if dur, ok := c.New.(time.Duration); ok {
 			rc.GetPayloadResponseDelay = dur
+			rc.L.With(log.F{"param": "GetPayloadResponseDelay", "value": dur}).Info("config param updated")
 		}
 
 	case "GetPayloadRequestTimeLimit":
 		if dur, ok := c.New.(time.Duration); ok {
 			rc.GetPayloadRequestTimeLimit = dur
+			rc.L.With(log.F{"param": "GetPayloadRequestTimeLimit", "value": dur}).Info("config param updated")
 		}
 
 	case "AllowedBuilders":
@@ -61,6 +68,7 @@ func (rc *RelayConfig) OnConfigChange(c structs.OldNew) (err error) {
 				return err
 			}
 			rc.AllowedListedBuilders = ab
+			rc.L.With(log.F{"param": "AllowedListedBuilders", "value": ab}).Info("config param updated")
 		}
 	}
 	return nil
