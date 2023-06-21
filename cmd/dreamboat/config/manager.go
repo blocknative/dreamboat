@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/json"
+
 	"github.com/blocknative/dreamboat/structs"
 )
 
@@ -51,6 +53,10 @@ func (cm *ConfigManager) Reload() error {
 
 func (cm *ConfigManager) Load() error {
 	return cm.s.Load(cm.Config, true)
+}
+
+func (cm *ConfigManager) GetConfigJSON() ([]byte, error) {
+	return json.Marshal(*cm.Config)
 }
 
 type Listener interface {

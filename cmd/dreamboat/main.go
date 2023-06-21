@@ -353,7 +353,7 @@ func main() {
 		GetPayload:  true,
 		SubmitBlock: true,
 	}
-	iApi := inner.NewAPI(ee, ds)
+	iApi := inner.NewAPI(ee, ds, cfg)
 
 	limitterCache, _ := lru.New[[48]byte, *rate.Limiter](cfg.Api.LimitterCacheSize)
 	apiLimitter := api.NewLimitter(logger, cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache)
