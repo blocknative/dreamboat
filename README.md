@@ -68,8 +68,6 @@ The following flags control specific relay functionalities:
 - **`-warehouse`**: Enables warehouse storage of data. By default, this flag is set to `true`.
 
 
-README.md
-
 ## Configuration Options
 
 The relay system provides various configuration options that can be customized through the `config.ini` file, specified through the `-config` flag. Each section and its respective items are explained below, along with their default values:
