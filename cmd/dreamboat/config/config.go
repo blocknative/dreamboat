@@ -58,7 +58,7 @@ type HTTPConfig struct {
 }
 
 var DefaultSQLConfig = &SQLConfig{
-	MaxOpenConns:    10,
+	MaxOpenConns:    15,
 	MaxIdleConns:    10,
 	ConnMaxIdleTime: 15 * time.Second,
 }
