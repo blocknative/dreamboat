@@ -82,7 +82,7 @@ func (a *Auctioneer) AddBlock(bid structs.BuilderBidExtended) bool {
 		maxBidValue.Cmp(&bidValue) > 0 {
 		auction.maxProfit[parent] = bid
 		for _, b := range auction.latestBlockByBuilder {
-			if mp.Slot() == b.Slot() { // Only check the current slot
+			if b.BuilderBid().Header().GetParentHash() == parent && mp.Slot() == b.Slot() { // Only check the current slot
 				mp, ok := auction.maxProfit[parent]
 				if !ok {
 					continue
