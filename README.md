@@ -68,9 +68,11 @@ The following flags control specific relay functionalities:
 - **`-warehouse`**: Enables warehouse storage of data. By default, this flag is set to `true`.
 
 
+README.md
+
 ## Configuration Options
 
-The relay system provides various configuration options that can be customized through the `config.ini` file, specified trough the flag `-config`. Each section and its respective items are explained below, along with their default values:
+The relay system provides various configuration options that can be customized through the `config.ini` file, specified through the `-config` flag. Each section and its respective items are explained below, along with their default values:
 
 - **`[external_http]`**:
   - `address` (default: "0.0.0.0:18550"): The IP address and port on which the relay serves external connections.
@@ -110,7 +112,9 @@ The relay system provides various configuration options that can be customized t
 
 - **`[verify]`**:
   - `workers` (default: 2000): The number of workers running verify in parallel.
-  - `queue_size` (default: 100000): The size of the verify queue.
+  - `queue
+
+_size` (default: 100000): The size of the verify queue.
 
 - **`[validators]`**:
   - `db.url` (default: ""): The database connection query string.
@@ -124,7 +128,37 @@ The relay system provides various configuration options that can be customized t
   - `registrations_cache_ttl` (default: 1h): The time-to-live duration for the registrations read cache.
   - `registrations_write_cache_ttl` (default: 12h): The time-to-live duration for the registrations write cache.
 
+- **`[block_simulation]`**:
+  - `rpc.address` (default: ""): The block validation raw URL (e.g., ipc path).
+  - `ws.address` (default: []): A comma-separated list of block validation endpoint addresses.
+  - `ws.retry` (default: true): Retry to other WebSocket connections on failure.
+  - `http.address` (default: ""): The block validation address.
+
+- **`[payload]`**:
+  - `badger.ttl` (default: 24h): The time-to-live duration for BadgerDB.
+  - `cache_size` (default: 1000): The number of payloads to cache for fast in-memory reads.
+  - `redis.read.address` (default: ""): The read Redis address.
+  - `redis.write.address` (default: ""): The write Redis address.
+
+- **`[dataapi]`**:
+  - `db.url` (default: ""): The database connection query string.
+  - `badger.ttl` (default: 24h): The time-to-live duration for BadgerDB.
+
+- **`[warehouse]`**:
+  - `directory` (default: "/data/relay/warehouse"): The data directory where the data is stored in the warehouse.
+  - `workers` (default: 32): The number of workers for storing data in the warehouse. If set to 0, data is not exported.
+  - `buffer` (default: 1000): The size of the buffer for processing requests.
+
+- **`[distributed]`**:
+  - `redis.topic` (default: "relay"): The Redis stream topic.
+  - `redis.address` (default: ""): The Redis stream address.
+  - `id` (default: ""): The distributed instance ID.
+  - `workers` (default: 100): The number of workers for storing data in the warehouse. If set to 0, data is not exported.
+  - `stream_queue_size` (default: 100): The stream internal channel size.
+  - `stream_served_bids` (default: true): Stream the entire block for every bid served in GetHeader requests.
+
 Please note that these values can be modified in the `config.ini` file according to your specific requirements.
+
 
 ## Extend the blockchain networks
 Do you need to make your relay work with a different blockchain that is not:
