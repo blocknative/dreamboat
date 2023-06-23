@@ -110,9 +110,7 @@ The relay system provides various configuration options that can be customized t
 
 - **`[verify]`**:
   - `workers` (default: 2000): The number of workers running verify in parallel.
-  - `queue
-
-_size` (default: 100000): The size of the verify queue.
+  - `queue_size` (default: 100000): The size of the verify queue.
 
 - **`[validators]`**:
   - `db.url` (default: ""): The database connection query string.
