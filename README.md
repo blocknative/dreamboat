@@ -36,17 +36,6 @@ More precisely, Dreamboat is a spec-compliant [builder](https://github.com/ether
 
 Eventually Dreamboat will vanish, as if a dream, once in-protocol PBS is live.  Until then, it sails the ephemeral seas of block space, delivering its trusted cargo of blocks to validators, guided simply by a lighthouse.
 
-## Design Goals
- 
-This is a from-scratch implementation of a PBS relay–aimed at strengthening #RelayDiversity–with the following design goals:
-
-1. **Extensibility.**  Dreamboat provides well-factored interfaces that make it easy to change its behavior.  We use [Go Datastore](https://pkg.go.dev/github.com/ipfs/go-datastore) for its persistence layer, so you can swap out the default [BadgerDB](https://github.com/dgraph-io/badger) store with your favorite database, and provide a clean separation between core relay logic, the beacon-chain client, and the HTTP server.
-2. **Reliability.** Work is ongoing implement a [supervision-tree architecture](https://ferd.ca/the-zen-of-erlang.html) in Dreamboat, so that you never miss a block.
-3. **Performance.** We have put significant engineering effort into tuning Dreamboat's performance, and have much, much more in store.  The HTTP server's hot paths are 100% lock-free, concurrency is carefully tuned, and there are ongoing efforts to optimize the garbage collector and speed up signature validation.  The result is a ship that doesn't just sail... it *glides*.
-4. **Transparency.**  Dreamboat implements the [Relay Data API](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#38a21c8a40e64970904500eb7b373ea5), so you can audit past proposals.  But we take a much broader view of transparency, which includes **code transparency**.  A major cleanup effort is underway to make–and *keep*–Dreamboat's code *legible*.  We believe this is an essential part of ensuring transparency and reliability.
-
-We are continuously improving Dreamoat's runtime performance, standards compliance, reliability and transparency. We would also like to thank the Flashbots team for their open-source tooling, which helped us get Dreamboat up and running in short order, and for their thoughtful comments on implementation.
-
 ## Dreamboat VS Others
 
 Why should you opt for Dreamboat instead of other relays?
@@ -81,7 +70,7 @@ The following flags control specific relay functionalities:
 
 ## Configuration Options
 
-The relay system provides various configuration options that can be customized through the `config.ini` file, specified trough the flag `-config`. Each section and its respective items are explained below, along with their default values:
+The relay system provides various configuration options that can be customized through the `config.ini` file, specified through the `-config` flag. Each section and its respective items are explained below, along with their default values:
 
 - **`[external_http]`**:
   - `address` (default: "0.0.0.0:18550"): The IP address and port on which the relay serves external connections.
@@ -135,7 +124,37 @@ The relay system provides various configuration options that can be customized t
   - `registrations_cache_ttl` (default: 1h): The time-to-live duration for the registrations read cache.
   - `registrations_write_cache_ttl` (default: 12h): The time-to-live duration for the registrations write cache.
 
+- **`[block_simulation]`**:
+  - `rpc.address` (default: ""): The block validation raw URL (e.g., ipc path).
+  - `ws.address` (default: []): A comma-separated list of block validation endpoint addresses.
+  - `ws.retry` (default: true): Retry to other WebSocket connections on failure.
+  - `http.address` (default: ""): The block validation address.
+
+- **`[payload]`**:
+  - `badger.ttl` (default: 24h): The time-to-live duration for BadgerDB.
+  - `cache_size` (default: 1000): The number of payloads to cache for fast in-memory reads.
+  - `redis.read.address` (default: ""): The read Redis address.
+  - `redis.write.address` (default: ""): The write Redis address.
+
+- **`[dataapi]`**:
+  - `db.url` (default: ""): The database connection query string.
+  - `badger.ttl` (default: 24h): The time-to-live duration for BadgerDB.
+
+- **`[warehouse]`**:
+  - `directory` (default: "/data/relay/warehouse"): The data directory where the data is stored in the warehouse.
+  - `workers` (default: 32): The number of workers for storing data in the warehouse. If set to 0, data is not exported.
+  - `buffer` (default: 1000): The size of the buffer for processing requests.
+
+- **`[distributed]`**:
+  - `redis.topic` (default: "relay"): The Redis stream topic.
+  - `redis.address` (default: ""): The Redis stream address.
+  - `id` (default: ""): The distributed instance ID.
+  - `workers` (default: 100): The number of workers for storing data in the warehouse. If set to 0, data is not exported.
+  - `stream_queue_size` (default: 100): The stream internal channel size.
+  - `stream_served_bids` (default: true): Stream the entire block for every bid served in GetHeader requests.
+
 Please note that these values can be modified in the `config.ini` file according to your specific requirements.
+
 
 ## Extend the blockchain networks
 Do you need to make your relay work with a different blockchain that is not:
@@ -168,6 +187,16 @@ Here is an example of how you should format the networks:
     },
 }
 ```
+
+## Design Goals
+ 
+This is a from-scratch implementation of a PBS relay–aimed at strengthening #RelayDiversity–with the following design goals:
+
+1. **Extensibility.**  Dreamboat provides well-factored interfaces that make it easy to change its behavior, including the database, beacon connection and even the relay core logic.
+2. **Performance.** We have put significant engineering effort into tuning Dreamboat's performance, and have much, much more in store. Concurrency is carefully tuned, we cache as much as we can, and we try to serve requests from memory.  The result is a ship that doesn't just sail... it *glides*.
+3. **Transparency.**  Dreamboat implements the [Relay Data API](https://flashbots.notion.site/Relay-API-Spec-5fb0819366954962bc02e81cb33840f5#38a21c8a40e64970904500eb7b373ea5), so you can audit past proposals.  But we take a much broader view of transparency, which includes **code transparency**.  A major cleanup effort is underway to make–and *keep*–Dreamboat's code *legible*.  We believe this is an essential part of ensuring transparency and reliability.
+
+We are continuously improving Dreamoat's runtime performance, standards compliance, reliability and transparency. We would also like to thank the Flashbots team for their open-source tooling, which helped us get Dreamboat up and running in short order, and for their thoughtful comments on implementation.
 
 ## Support
 
