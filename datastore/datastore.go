@@ -1,7 +1,6 @@
 package datastore
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -69,47 +68,4 @@ func (s *Datastore) GetPayload(ctx context.Context, fork structs.ForkVersion, ke
 	}
 
 	return payload, err
-}
-
-func (s *Datastore) GetSlotRawPayload(ctx context.Context, key structs.PayloadKey) (output [][]byte, err error) {
-	if key.Slot == 0 {
-		return nil, errors.New("wrong slot number")
-	}
-
-	err = s.DBInter.View(func(txn *badger.Txn) error {
-		op := badger.DefaultIteratorOptions
-		op.PrefetchValues = false
-
-		it := txn.NewIterator(op)
-		defer it.Close()
-
-		prefix := []byte("/payload-")
-		var suffix []byte
-		if key.BlockHash != [32]byte{} && key.Proposer != [48]byte{} {
-			suffix = []byte(fmt.Sprintf("%s-%s-%d", key.BlockHash.String(), key.Proposer.String(), key.Slot))
-		} else if key.Proposer != [48]byte{} {
-			suffix = []byte(fmt.Sprintf("%s-%d", key.Proposer.String(), key.Slot))
-		} else {
-			suffix = []byte(fmt.Sprintf("%d", key.Slot))
-		}
-
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			if !bytes.HasSuffix(item.Key(), suffix) {
-				continue
-			}
-
-			c, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			output = append(output, item.KeyCopy(nil))
-			output = append(output, []byte("  "))
-			output = append(output, c)
-			output = append(output, []byte("\n"))
-		}
-		return nil
-	})
-
-	return output, err
 }

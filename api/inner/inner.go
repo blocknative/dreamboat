@@ -2,9 +2,7 @@
 package inner
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,10 +10,6 @@ import (
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/flashbots/go-boost-utils/types"
 )
-
-type ApiPayload interface {
-	GetSlotRawPayload(ctx context.Context, key structs.PayloadKey) (output [][]byte, err error)
-}
 
 type APIConfig interface {
 	GetBool(key string) (bool, error)
@@ -27,16 +21,14 @@ type GlobalConfig interface {
 }
 
 type API struct {
-	cfg     APIConfig
-	payload ApiPayload
-	gc      GlobalConfig
+	cfg APIConfig
+	gc  GlobalConfig
 }
 
-func NewAPI(cfg APIConfig, payload ApiPayload, gc GlobalConfig) *API {
+func NewAPI(cfg APIConfig, gc GlobalConfig) *API {
 	return &API{
-		cfg:     cfg,
-		payload: payload,
-		gc:      gc,
+		cfg: cfg,
+		gc:  gc,
 	}
 }
 
@@ -44,8 +36,6 @@ func (a *API) AttachToHandler(m *http.ServeMux) {
 	m.HandleFunc("/services/status", a.getStatus)
 	m.HandleFunc("/services/config", a.getConfig)
 	m.HandleFunc("/services/endpoints/set_availability", a.setAvailability)
-
-	m.HandleFunc("/submission", a.getSubmission)
 
 	m.HandleFunc("/ ", a.getStatus)
 }
@@ -119,41 +109,6 @@ type ServiceStatus struct {
 	GetHeader   bool `json:"getHeader"`
 	GetPayload  bool `json:"getPayload"`
 	SubmitBlock bool `json:"submitBlock"`
-}
-
-func (a *API) getSubmission(w http.ResponseWriter, r *http.Request) {
-	slot, err := specificSlot(r)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("wrong slot"))
-		return
-	}
-	bh, err := blockHash(r)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("wrong blockhash"))
-		return
-	}
-	pk, err := publickKey(r)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("wrong public key"))
-		return
-	}
-
-	output, err := a.payload.GetSlotRawPayload(r.Context(), structs.PayloadKey{
-		Slot: slot, BlockHash: bh, Proposer: pk,
-	})
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(fmt.Errorf("error processing request %w", err).Error()))
-		return
-	}
-
-	for _, o := range output {
-		w.Write(o)
-	}
-	return
 }
 
 func specificSlot(r *http.Request) (structs.Slot, error) {

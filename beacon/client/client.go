@@ -1,504 +1,21 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"time"
 
-	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/structs"
-	"github.com/lthibault/log"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/r3labs/sse/v2"
 )
 
 var (
-	ErrHTTPErrorResponse = errors.New("got an HTTP error response")
-	ErrNodesUnavailable  = errors.New("beacon nodes are unavailable")
-	ErrBlockPublish202   = errors.New("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
+	ErrNodesUnavailable = errors.New("beacon nodes are unavailable")
+	ErrBlockPublish202  = errors.New("the block failed validation, but was successfully broadcast anyway. It was not integrated into the beacon node's database")
+	ErrFailedToPublish  = errors.New("failed to publish")
 )
-
-type beaconClient struct {
-	beaconEndpoint *url.URL
-	log            log.Logger
-	m              BeaconMetrics
-	c              BeaconConfig
-}
-
-type BeaconMetrics struct {
-	Timing *prometheus.HistogramVec
-}
-
-type BeaconConfig struct {
-	BeaconEventTimeout time.Duration
-	BeaconEventRestart int
-	BeaconQueryTimeout time.Duration
-}
-
-func NewBeaconClient(l log.Logger, endpoint string, config BeaconConfig) (*beaconClient, error) {
-	u, err := url.Parse(endpoint)
-
-	bc := &beaconClient{
-		beaconEndpoint: u,
-		log: l.With(log.F{
-			"beaconEndpoint":     endpoint,
-			"beaconEventTimeout": config.BeaconEventTimeout.String(),
-			"BeaconEventRestart": config.BeaconEventRestart,
-			"beaconQueryTimeout": config.BeaconQueryTimeout.String(),
-		}),
-		c: config,
-	}
-
-	bc.initMetrics()
-
-	return bc, err
-}
-
-func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {
-	logger := b.log.WithField("method", "SubscribeToHeadEvents")
-	defer logger.Debug("head events subscription stopped")
-
-	for {
-		loopCtx, cancelLoop := context.WithCancel(ctx)
-		timer := time.NewTimer(b.c.BeaconEventTimeout)
-		go b.runNewHeadSubscriptionLoop(loopCtx, logger, timer, slotC)
-
-		lastTimeout := time.Time{} // zeroed value time.Time
-		timeoutCounter := 0
-	EventSelect:
-		for {
-			select {
-			case <-timer.C:
-				logger.Debug("timed out head events subscription, manually querying latest header")
-
-				go b.manuallyFetchLatestHeader(ctx, logger, slotC)
-
-				// to prevent disconnection due to multiple timeouts occurring very close in time, the subscription loop is canceled and restarted
-				if time.Since(lastTimeout) <= b.c.BeaconEventTimeout*2 {
-					timeoutCounter++
-					if timeoutCounter >= b.c.BeaconEventRestart {
-						logger.WithField("timeoutCounter", timeoutCounter).Warn("restarting subcription")
-						cancelLoop()
-						break EventSelect
-					}
-				} else {
-					timeoutCounter = 0
-				}
-
-				lastTimeout = time.Now()
-				timer.Reset(b.c.BeaconEventTimeout)
-			case <-ctx.Done():
-				cancelLoop()
-				return
-			}
-		}
-	}
-}
-
-func (b *beaconClient) runNewHeadSubscriptionLoop(ctx context.Context, logger log.Logger, timer *time.Timer, slotC chan<- HeadEvent) {
-	logger.Debug("subscription loop started")
-	defer logger.Debug("subscription loop exited")
-
-	for {
-		client := sse.NewClient(fmt.Sprintf("%s/eth/v1/events?topics=head", b.beaconEndpoint.String()))
-		err := client.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
-			var head HeadEvent
-			if err := json.Unmarshal(msg.Data, &head); err != nil {
-				logger.WithError(err).Warn("event subscription failed")
-				return
-			}
-
-			timer.Reset(b.c.BeaconEventTimeout)
-
-			select {
-			case slotC <- head:
-			case <-time.After(structs.DurationPerSlot / 2): // relief pressure
-				logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event")
-				return
-			case <-ctx.Done():
-				logger.WithError(ctx.Err()).Warn("context cancelled waiting to consume head event after manual querying")
-				return
-			}
-		})
-
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return
-		}
-
-		logger.WithError(err).Warn("beacon subscription failed, restarting...")
-	}
-}
-
-func (b *beaconClient) manuallyFetchLatestHeader(ctx context.Context, logger log.Logger, slotC chan HeadEvent) {
-	// fetch head slot manully
-	header, err := b.queryLatestHeader()
-	if err != nil {
-		logger.WithError(err).Warn("failed querying latest header manually")
-		return
-	} else if len(header.Data) != 1 {
-		logger.Warnf("failed to query latest header manually, unexpected amount of header: expected 1 - got %d", len(header.Data))
-		return
-	}
-
-	// send slot to beacon manager to consume async
-	event := HeadEvent{Slot: header.Data[0].Header.Message.Slot}
-	logger.With(event).Debug("manually fetched latest beacon header")
-
-	select {
-	case slotC <- event:
-		return
-	case <-time.After(structs.DurationPerSlot / 2):
-		logger.WithField("timeout", structs.DurationPerSlot/2).Warn("timeout waiting to consume head event after manual querying")
-		return
-	case <-ctx.Done():
-		logger.WithError(ctx.Err()).Warn("context cancelled waiting to consume head event after manual querying")
-		return
-	}
-}
-
-// Returns the latest header from the beacon chain
-func (b *beaconClient) queryLatestHeader() (*HeaderRootObject, error) {
-	u := *b.beaconEndpoint
-	u.Path = fmt.Sprintf("/eth/v1/beacon/headers")
-	resp := new(HeaderRootObject)
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/headers", "GET"))
-	defer t.ObserveDuration()
-
-	err := b.queryBeacon(&u, "GET", resp)
-	return resp, err
-}
-
-// Returns proposer duties for every slot in this epoch
-func (b *beaconClient) GetProposerDuties(epoch structs.Epoch) (*RegisteredProposersResponse, error) {
-	u := *b.beaconEndpoint
-	// https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties
-	u.Path = fmt.Sprintf("/eth/v1/validator/duties/proposer/%d", epoch)
-	resp := new(RegisteredProposersResponse)
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/validator/duties/proposer", "GET"))
-	defer t.ObserveDuration()
-
-	err := b.queryBeacon(&u, "GET", resp)
-	return resp, err
-}
-
-// SyncStatus returns the current node sync-status
-func (b *beaconClient) SyncStatus() (*SyncStatusPayloadData, error) {
-	u := *b.beaconEndpoint
-	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
-	u.Path = "/eth/v1/node/syncing"
-	resp := new(SyncStatusPayload)
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/node/syncing", "GET"))
-	defer t.ObserveDuration()
-
-	err := b.queryBeacon(&u, "GET", resp)
-	if err != nil {
-		return nil, err
-	}
-	return &resp.Data, nil
-}
-
-func (b *beaconClient) KnownValidators(headSlot structs.Slot) (AllValidatorsResponse, error) {
-	u := *b.beaconEndpoint
-	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/validators", headSlot)
-	q := u.Query()
-	q.Add("status", "active,pending")
-	u.RawQuery = q.Encode()
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/validators", "GET"))
-	defer t.ObserveDuration()
-
-	var vd AllValidatorsResponse
-	err := b.queryBeacon(&u, "GET", &vd)
-
-	return vd, err
-}
-
-func (b *beaconClient) Genesis() (structs.GenesisInfo, error) {
-	resp := new(GenesisResponse)
-	u := *b.beaconEndpoint
-	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/genesis", "GET"))
-	defer t.ObserveDuration()
-
-	u.Path = "/eth/v1/beacon/genesis"
-	err := b.queryBeacon(&u, "GET", &resp)
-	return resp.Data, err
-}
-
-// GetWithdrawals - /eth/v1/beacon/states/<slot>/withdrawals
-func (b *beaconClient) GetWithdrawals(slot structs.Slot) (*GetWithdrawalsResponse, error) {
-	resp := new(GetWithdrawalsResponse)
-	u := *b.beaconEndpoint
-	// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/withdrawals", "GET"))
-	defer t.ObserveDuration()
-
-	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/withdrawals", slot)
-	err := b.queryBeacon(&u, "GET", &resp)
-	return resp, err
-}
-
-func (b *beaconClient) Randao(slot structs.Slot) (string, error) {
-	resp := new(GetRandaoResponse)
-	u := *b.beaconEndpoint
-	u.Path = fmt.Sprintf("/eth/v1/beacon/states/%d/randao", slot)
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/randao", "GET"))
-	defer t.ObserveDuration()
-
-	err := b.queryBeacon(&u, "GET", &resp)
-	return resp.Data.Randao, err
-}
-
-// GetForkSchedule - https://ethereum.github.io/beacon-APIs/#/Config/getForkSchedule
-func (b *beaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err error) {
-	resp := new(GetForkScheduleResponse)
-	u := *b.beaconEndpoint
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/config/fork_schedule", "GET"))
-	defer t.ObserveDuration()
-
-	u.Path = "/eth/v1/config/fork_schedule"
-	err = b.queryBeacon(&u, "GET", &resp)
-	return resp, err
-}
-
-func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) error {
-	buff := bytes.NewBuffer(nil)
-	enc := json.NewEncoder(buff)
-	if err := enc.Encode(block); err != nil {
-		return fmt.Errorf("fail to marshal block: %w", err)
-	}
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/blocks", "POST"))
-	defer t.ObserveDuration()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", buff)
-	if err != nil {
-		return fmt.Errorf("fail to publish block: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("fail to publish block: %w", err)
-	}
-
-	if resp.StatusCode == 202 { // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
-		return ErrBlockPublish202
-	} else if resp.StatusCode >= 300 {
-		ec := &struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		}{}
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("fail to read read error response body: %w", err)
-		}
-
-		if err = json.Unmarshal(bodyBytes, ec); err != nil {
-			return fmt.Errorf("fail to unmarshal error response: %w", err)
-		}
-		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
-	}
-
-	return nil
-}
-
-func (b *beaconClient) PublishV2Block(ctx context.Context, block structs.SignedBeaconBlock) error {
-	buff := bytes.NewBuffer(nil)
-	enc := json.NewEncoder(buff)
-	if err := enc.Encode(block); err != nil {
-		return fmt.Errorf("fail to marshal block: %w", err)
-	}
-
-	// UNSUPPORTED BY BEACONS RIGHT NOW - exists in documentation
-	// payload, err := block.MarshalSSZ()
-	// if err != nil {
-	//	return fmt.Errorf("fail to encode block: %w", err)
-	// }
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v2/beacon/blocks", "POST"))
-	defer t.ObserveDuration()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.beaconEndpoint.String()+"/eth/v2/beacon/blocks?broadcast_validation=consensus_and_equivocation", buff)
-	if err != nil {
-		return fmt.Errorf("fail to publish block: %w", err)
-	}
-	/// UNSUPPORTED BY BEACONS RIGHT NOW - exists in documentation
-	// req.Header.Set("Content-Type", "application/octet-stream")
-
-	req.Header.Set("Eth-Consensus-Version", block.ConsensusVersion())
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("fail to publish block: %w", err)
-	}
-
-	if resp.StatusCode == 202 { // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
-		return ErrBlockPublish202
-	} else if resp.StatusCode >= 300 {
-		ec := &struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		}{}
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("fail to read read error response body: %w", err)
-		}
-
-		if err = json.Unmarshal(bodyBytes, ec); err != nil {
-			return fmt.Errorf("fail to unmarshal error response: %w", err)
-		}
-		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
-	}
-
-	return nil
-}
-
-func (b *beaconClient) PublishV2Block(ctx context.Context, block structs.SignedBeaconBlock) error {
-	buff := bytes.NewBuffer(nil)
-	enc := json.NewEncoder(buff)
-	if err := enc.Encode(block); err != nil {
-		return fmt.Errorf("fail to marshal block: %w", err)
-	}
-
-	// UNSUPPORTED BY BEACONS RIGHT NOW - exists in documentation
-	// payload, err := block.MarshalSSZ()
-	// if err != nil {
-	//	return fmt.Errorf("fail to encode block: %w", err)
-	// }
-
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v2/beacon/blocks", "POST"))
-	defer t.ObserveDuration()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.beaconEndpoint.String()+"/eth/v2/beacon/blocks?broadcast_validation=consensus_and_equivocation", buff)
-	if err != nil {
-		return fmt.Errorf("fail to publish block: %w", err)
-	}
-	/// UNSUPPORTED BY BEACONS RIGHT NOW - exists in documentation
-	// req.Header.Set("Content-Type", "application/octet-stream")
-
-	req.Header.Set("Eth-Consensus-Version", block.ConsensusVersion())
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("fail to publish block: %w", err)
-	}
-
-	if resp.StatusCode == 202 { // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
-		return ErrBlockPublish202
-	} else if resp.StatusCode >= 300 {
-		ec := &struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		}{}
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("fail to read read error response body: %w", err)
-		}
-
-		if err = json.Unmarshal(bodyBytes, ec); err != nil {
-			return fmt.Errorf("fail to unmarshal error response: %w", err)
-		}
-		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
-	}
-
-	return nil
-}
-
-func (b *beaconClient) SubscribeToPayloadAttributesEvents(payloadAttributesC chan PayloadAttributesEvent) {
-	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=payload_attributes", b.beaconEndpoint)
-	log := b.log.WithField("url", eventsURL)
-
-	client := sse.NewClient(eventsURL)
-
-	for {
-		err := client.SubscribeRaw(func(msg *sse.Event) {
-			var data PayloadAttributesEvent
-			err := json.Unmarshal(msg.Data, &data)
-			if err != nil {
-				log.WithError(err).Error("could not unmarshal payload_attributes event")
-			} else {
-				payloadAttributesC <- data
-			}
-		})
-		if err != nil {
-			log.WithError(err).Error("failed to subscribe to payload_attributes events")
-			time.Sleep(1 * time.Second)
-		}
-		b.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
-	}
-}
-
-func (b *beaconClient) Endpoint() string {
-	return b.beaconEndpoint.String()
-}
-
-func (b *beaconClient) initMetrics() {
-	b.m.Timing = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "dreamboat",
-		Subsystem: "beacon",
-		Name:      "timing",
-		Help:      "Duration of requests per endpoint",
-	}, []string{"endpoint", "method"})
-}
-
-func (b *beaconClient) AttachMetrics(m *metrics.Metrics) {
-	m.Register(b.m.Timing)
-}
-
-func (b *beaconClient) queryBeacon(u *url.URL, method string, dst any) error {
-	ctx, cancel := context.WithTimeout(context.Background(), b.c.BeaconQueryTimeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
-	if err != nil {
-		return fmt.Errorf("invalid request for %s: %w", u, err)
-	}
-	req.Header.Set("accept", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("client refused for %s: %w", u, err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("could not read response body for %s: %w", u, err)
-	}
-
-	if resp.StatusCode >= 404 {
-		// BUG(l): do something with unsupported
-		return nil
-	} else if resp.StatusCode >= 300 {
-		ec := &struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		}{}
-		if err = json.Unmarshal(bodyBytes, ec); err != nil {
-			return fmt.Errorf("could not unmarshal error response from beacon node for %s from %s: %w", u, string(bodyBytes), err)
-		}
-		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
-	}
-
-	err = json.Unmarshal(bodyBytes, dst)
-	if err != nil {
-		return fmt.Errorf("could not unmarshal response for %s from %s: %w", u, string(bodyBytes), err)
-	}
-
-	return nil
-}
 
 // SyncStatusPayload is the response payload for /eth/v1/node/syncing
 type SyncStatusPayload struct {
@@ -601,23 +118,269 @@ type GetForkScheduleResponse struct {
 	}
 }
 
-type PayloadAttributesEvent struct {
-	Version string                     `json:"version"`
-	Data    PayloadAttributesEventData `json:"data"`
+type ClientError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
-type PayloadAttributesEventData struct {
-	ProposerIndex     uint64            `json:"proposer_index,string"`
-	ProposalSlot      uint64            `json:"proposal_slot,string"`
-	ParentBlockNumber uint64            `json:"parent_block_number,string"`
-	ParentBlockRoot   string            `json:"parent_block_root"`
-	ParentBlockHash   string            `json:"parent_block_hash"`
-	PayloadAttributes PayloadAttributes `json:"payload_attributes"`
+//tCtx, cancel := context.WithTimeout(ctx, timeout) // b.c.BeaconQueryTimeout)
+//defer cancel()
+// t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/genesis", "GET"))
+// t.ObserveDuration()
+
+func Genesis(ctx context.Context, address string) (gi structs.GenesisInfo, err error) {
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address+"/eth/v1/beacon/genesis", nil)
+	if err != nil {
+		return gi, fmt.Errorf("invalid request for %s: %w", address, err)
+	}
+	req.Header.Set("accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return gi, fmt.Errorf("error querying beacon %s: %w", address, err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkForFailure(resp.Body, resp.StatusCode); err != nil {
+		return gi, fmt.Errorf("error in beacon response %s: %w", address, err)
+	}
+
+	gen := &GenesisResponse{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(gen); err != nil {
+		return gi, fmt.Errorf("could not unmarshal response forom %s %w", address, err)
+	}
+
+	return gen.Data, err
 }
 
-type PayloadAttributes struct {
-	Timestamp             uint64                `json:"timestamp,string"`
-	PrevRandao            string                `json:"prev_randao"`
-	SuggestedFeeRecipient string                `json:"suggested_fee_recipient"`
-	Withdrawals           []*structs.Withdrawal `json:"withdrawals"`
+//	tCtx, cancel := context.WithTimeout(ctx, timeout) // b.c.BeaconQueryTimeout)
+//	defer cancel()
+// t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/validator/duties/proposer", "GET"))
+// t.ObserveDuration()
+
+// https://ethereum.github.io/beacon-APIs/#/Validator/getProposerDuties
+func GetProposerDuties(ctx context.Context, address string, epoch uint64) (gi *RegisteredProposersResponse, err error) {
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/eth/v1/validator/duties/proposer/%d", address, epoch), nil)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request for %s: %w", address, err)
+	}
+	req.Header.Set("accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error querying beacon %s: %w", address, err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkForFailure(resp.Body, resp.StatusCode); err != nil {
+		return nil, fmt.Errorf("error in beacon response %s: %w", address, err)
+	}
+
+	regProp := &RegisteredProposersResponse{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(regProp); err != nil {
+		return nil, fmt.Errorf("could not unmarshal response forom %s %w", address, err)
+	}
+
+	return regProp, err
+}
+
+// t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/node/syncing", "GET"))
+// defer t.ObserveDuration()
+
+// SyncStatus returns the current node sync-status
+// https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/getSyncingStatus
+func SyncStatus(ctx context.Context, address string) (sspd SyncStatusPayloadData, err error) {
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/eth/v1/node/syncing", nil)
+	if err != nil {
+		return sspd, fmt.Errorf("invalid request for %s: %w", address, err)
+	}
+	req.Header.Set("accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return sspd, fmt.Errorf("error querying beacon %s: %w", address, err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkForFailure(resp.Body, resp.StatusCode); err != nil {
+		return sspd, fmt.Errorf("error in beacon response %s: %w", address, err)
+	}
+
+	ssp := &SyncStatusPayload{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(ssp); err != nil {
+		return sspd, fmt.Errorf("could not unmarshal response forom %s %w", address, err)
+	}
+
+	return ssp.Data, err
+}
+
+// t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/validators", "GET"))
+// defer t.ObserveDuration()
+func KnownValidators(ctx context.Context, address string, slot uint64) (avr AllValidatorsResponse, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/eth/v1/beacon/states/%d/validators?status=active,pending", address, slot), nil)
+	if err != nil {
+		return avr, fmt.Errorf("invalid request for %s: %w", address, err)
+	}
+	req.Header.Set("accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return avr, fmt.Errorf("error querying beacon %s: %w", address, err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkForFailure(resp.Body, resp.StatusCode); err != nil {
+		return avr, fmt.Errorf("error in beacon response %s: %w", address, err)
+	}
+
+	avr = AllValidatorsResponse{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&avr); err != nil {
+		return avr, fmt.Errorf("could not unmarshal response forom %s %w", address, err)
+	}
+
+	return avr, err
+}
+
+// GetWithdrawals - /eth/v1/beacon/states/<slot>/withdrawals
+//
+//	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/withdrawals", "GET"))
+//	defer t.ObserveDuration()
+func GetWithdrawals(ctx context.Context, address string, slot uint64) (gwr GetWithdrawalsResponse, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/eth/v1/beacon/states/%d/withdrawals", address, slot), nil)
+	if err != nil {
+		return gwr, fmt.Errorf("invalid request for %s: %w", address, err)
+	}
+	req.Header.Set("accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return gwr, fmt.Errorf("error querying beacon %s: %w", address, err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkForFailure(resp.Body, resp.StatusCode); err != nil {
+		return gwr, fmt.Errorf("error in beacon response %s: %w", address, err)
+	}
+
+	gwr = GetWithdrawalsResponse{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&gwr); err != nil {
+		return gwr, fmt.Errorf("could not unmarshal response forom %s %w", address, err)
+	}
+
+	return gwr, err
+}
+
+// Randao - /eth/v1/beacon/states/<slot>/randao
+//
+// t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/states/randao", "GET"))
+// defer t.ObserveDuration()
+func Randao(ctx context.Context, address string, slot uint64) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/eth/v1/beacon/states/%d/randao", address, slot), nil)
+	if err != nil {
+		return "", fmt.Errorf("invalid request for %s: %w", address, err)
+	}
+	req.Header.Set("accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error querying beacon %s: %w", address, err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkForFailure(resp.Body, resp.StatusCode); err != nil {
+		return "", fmt.Errorf("error in beacon response %s: %w", address, err)
+	}
+
+	rresp := &GetRandaoResponse{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&rresp); err != nil {
+		return "", fmt.Errorf("could not unmarshal response forom %s %w", address, err)
+	}
+
+	return rresp.Data.Randao, err
+}
+
+// GetForkSchedule - https://ethereum.github.io/beacon-APIs/#/Config/getForkSchedule
+//
+//	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/config/fork_schedule", "GET"))
+//	defer t.ObserveDuration()
+func GetForkSchedule(ctx context.Context, address string) (spec *GetForkScheduleResponse, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address+"/eth/v1/config/fork_schedule", nil)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request for %s: %w", address, err)
+	}
+	req.Header.Set("accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error querying beacon %s: %w", address, err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkForFailure(resp.Body, resp.StatusCode); err != nil {
+		return nil, fmt.Errorf("error in beacon response %s: %w", address, err)
+	}
+
+	spec = &GetForkScheduleResponse{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&spec); err != nil {
+		return nil, fmt.Errorf("could not unmarshal response forom %s %w", address, err)
+	}
+
+	return spec, err
+}
+
+// Returns the latest header from the beacon chain
+//
+//	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/headers", "GET"))
+//	defer t.ObserveDuration()
+func Headers(ctx context.Context, address string) (spec *HeaderRootObject, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address+"/eth/v1/beacon/headers", nil)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request for %s: %w", address, err)
+	}
+	req.Header.Set("accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error querying beacon %s: %w", address, err)
+	}
+	defer resp.Body.Close()
+
+	if err := checkForFailure(resp.Body, resp.StatusCode); err != nil {
+		return nil, fmt.Errorf("error in beacon response %s: %w", address, err)
+	}
+
+	spec = &HeaderRootObject{}
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&spec); err != nil {
+		return nil, fmt.Errorf("could not unmarshal response forom %s %w", address, err)
+	}
+
+	return spec, err
+}
+
+func checkForFailure(body io.Reader, statusCode int) error {
+	if statusCode >= 404 {
+		return fmt.Errorf("failure querying beacon node")
+	}
+
+	if statusCode >= 300 {
+		dec := json.NewDecoder(body)
+
+		ce := &ClientError{}
+		if err := dec.Decode(ce); err != nil {
+			return fmt.Errorf("error reading beacon error response: %w", err)
+		}
+		return fmt.Errorf("error querying beacon: %s", ce.Message)
+	}
+	return nil
 }

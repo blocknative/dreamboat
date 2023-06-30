@@ -3,6 +3,7 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -110,9 +111,7 @@ type Auctioneer interface {
 	MaxProfitBlock(slot structs.Slot, parentHash types.Hash) (structs.BuilderBidExtended, bool)
 }
 
-type Beacon interface {
-	PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) error
-}
+type PublishBlock func(ctx context.Context, address string, block []byte) error
 
 type Warehouse interface {
 	StoreAsync(ctx context.Context, req wh.StoreRequest) error
@@ -136,8 +135,8 @@ type Relay struct {
 
 	bvc BlockValidationClient
 
-	beacon      Beacon
-	beaconState State
+	publishBlock PublishBlock
+	beaconState  State
 
 	wh Warehouse
 
@@ -149,7 +148,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config *RelayConfig, beacon Beacon, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
+func NewRelay(l log.Logger, config *RelayConfig, publishBlock PublishBlock, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
 	rs := &Relay{
 		pc:            pcache,
 		d:             d,
@@ -162,7 +161,7 @@ func NewRelay(l log.Logger, config *RelayConfig, beacon Beacon, vcache Validator
 		config:        config,
 		cache:         vcache,
 		vstore:        vstore,
-		beacon:        beacon,
+		publishBlock:  publishBlock,
 		wh:            wh,
 		beaconState:   beaconState,
 		runnignAsyncs: structs.NewTimeoutWaitGroup(),
@@ -511,14 +510,15 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			logger.WithField("event", "wrong_publish_payload").WithError(err).Error("fail to create block for publication")
 			return nil, ErrWrongPayload
 		}
-		if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
+
+		bblock, err := json.Marshal(beaconBlock)
+		if err != nil {
+			logger.WithField("event", "publish_encode_error").WithError(err).Error("fail to encode block")
+			return nil, ErrWrongPayload
+		}
+
+		if err = MultiPublishBlock(context.Background(), logger, rs.publishBlock, bblock); err != nil {
 			logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node")
-			time.Sleep(500 * time.Millisecond)
-			// retry - after possible reorg
-			if err = rs.beacon.PublishBlock(context.Background(), beaconBlock); err != nil {
-				logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node (retry)")
-				return nil, ErrFailedToPublish
-			}
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
 		m.AppendSince(tPublish, "getPayload", "publish")
@@ -647,4 +647,44 @@ func (rs *Relay) storeTraceDelivered(logger log.Logger, slot uint64, payload str
 type lastDelivered struct {
 	slot      uint64
 	blockHash types.Hash
+}
+
+func MultiPublishBlock(ctx context.Context, l log.Logger, publish PublishBlock, clients []string, block []byte) (err error) {
+
+	resp := make(chan error, len(clients))
+	for _, address := range clients {
+		go publishAsync(ctx, l, publish, address, block, resp)
+	}
+
+	var (
+		defError error
+		r        int
+	)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case e := <-resp:
+			r++
+			switch e {
+			case nil:
+				return nil
+			default:
+				defError = e
+				if r == len(clients) {
+					return defError
+				}
+			}
+		}
+	}
+}
+
+func publishAsync(ctx context.Context, l log.Logger, publish PublishBlock, address string, block []byte, resp chan<- error) {
+	err := publish(ctx, address, block)
+	if err != nil {
+		l.WithError(err).
+			WithField("endpoint", address).
+			Warn("failed to publish block to beacon")
+	}
+	resp <- err
 }

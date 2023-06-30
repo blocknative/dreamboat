@@ -182,19 +182,20 @@ func main() {
 		BeaconEventRestart: cfg.Beacon.EventRestart,
 		BeaconQueryTimeout: cfg.Beacon.QueryTimeout,
 	}
+	/*
 
-	beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, nil, m, beaconConfig)
-	if err != nil {
-		logger.WithError(err).Error("fail to initialize beacon")
-		return
-	}
+		beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, nil, m, beaconConfig)
+		if err != nil {
+			logger.WithError(err).Error("fail to initialize beacon")
+			return
+		}
 
-	beaconPubCli, err := initBeaconClients(logger, cfg.Beacon.PublishAddresses, cfg.Beacon.PublishAddressesV2, m, beaconConfig)
-	if err != nil {
-		logger.WithError(err).Error("fail to initialize publish beacon")
-		return
-	}
-
+		beaconPubCli, err := initBeaconClients(logger, cfg.Beacon.PublishAddresses, cfg.Beacon.PublishAddressesV2, m, beaconConfig)
+		if err != nil {
+			logger.WithError(err).Error("fail to initialize publish beacon")
+			return
+		}
+	*/
 	simFallb := fallback.NewFallback()
 	simFallb.AttachMetrics(m)
 
@@ -354,7 +355,7 @@ func main() {
 		GetPayload:  true,
 		SubmitBlock: true,
 	}
-	iApi := inner.NewAPI(ee, ds, cfg)
+	iApi := inner.NewAPI(ee, cfg)
 
 	limitterCache, _ := lru.New[[48]byte, *rate.Limiter](cfg.Api.LimitterCacheSize)
 	apiLimitter := api.NewLimitter(logger, cfg.Api.SubmissionLimitRate, cfg.Api.SubmissionLimitBurst, limitterCache)
@@ -485,7 +486,10 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, wri
 	l.With(log.F{"count": vc.Len(), "refreshed": refreshedTTLNum}).Info("Loaded cache validators")
 }
 
+/*
+
 func initBeaconClients(l log.Logger, endpoints []string, v2endpoints []string, m *metrics.Metrics, c bcli.BeaconConfig) (*bcli.MultiBeaconClient, error) {
+
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
@@ -508,6 +512,8 @@ func initBeaconClients(l log.Logger, endpoints []string, v2endpoints []string, m
 	}
 	return mbc, nil
 }
+	return bcli.NewMultiBeaconClient(l, clients), nil
+}*/
 
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay, relayWh *wh.Warehouse) {
 	regMgr.Close(ctx)

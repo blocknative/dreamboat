@@ -9,8 +9,6 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-
-
 type MultiSlotState struct {
 	mu    sync.Mutex
 	slots [structs.NumberOfSlotsInState]AtomicState
@@ -147,8 +145,8 @@ func (as *MultiSlotState) SetRandao(randao structs.RandaoState) {
 	curr.SetRandao(randao)
 }
 
-func (as *MultiSlotState) ForkVersion(slot structs.Slot) structs.ForkVersion {
-	return as.Fork().Version(slot)
+func (as *MultiSlotState) ForkVersion(slot, epoch uint64) structs.ForkVersion {
+	return as.Fork().Version(slot, epoch)
 }
 
 func (as *MultiSlotState) Fork() structs.ForkState {

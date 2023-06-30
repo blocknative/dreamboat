@@ -293,9 +293,9 @@ type RandaoState struct {
 }
 
 type ForkState struct {
-	AltairEpoch    Epoch
-	BellatrixEpoch Epoch
-	CapellaEpoch   Epoch
+	AltairEpoch    uint64
+	BellatrixEpoch uint64
+	CapellaEpoch   uint64
 }
 
 type ForkVersion uint8
@@ -320,27 +320,27 @@ func (v ForkVersion) String() string {
 	}
 }
 
-func (fs ForkState) IsCapella(slot Slot) bool {
-	return fs.CapellaEpoch > 0 && slot.Epoch() >= fs.CapellaEpoch
+func (fs ForkState) IsCapella(slot uint64, epoch uint64) bool {
+	return fs.CapellaEpoch > 0 && epoch >= fs.CapellaEpoch
 }
 
-func (fs ForkState) IsBellatrix(slot Slot) bool {
+func (fs ForkState) IsBellatrix(slot uint64, epoch uint64) bool {
 	if fs.CapellaEpoch == 0 {
-		return fs.BellatrixEpoch > 0 && slot.Epoch() >= fs.BellatrixEpoch
+		return fs.BellatrixEpoch > 0 && epoch >= fs.BellatrixEpoch
 	}
-	return fs.BellatrixEpoch > 0 && slot.Epoch() >= fs.BellatrixEpoch && slot.Epoch() < fs.CapellaEpoch
+	return fs.BellatrixEpoch > 0 && epoch >= fs.BellatrixEpoch && epoch < fs.CapellaEpoch
 }
 
-func (fs ForkState) IsAltair(slot Slot) bool {
-	return slot.Epoch() >= fs.AltairEpoch && slot.Epoch() < fs.BellatrixEpoch
+func (fs ForkState) IsAltair(slot uint64, epoch uint64) bool {
+	return epoch >= fs.AltairEpoch && epoch < fs.BellatrixEpoch
 }
 
-func (fs ForkState) Version(slot Slot) ForkVersion {
-	if fs.IsCapella(slot) {
+func (fs ForkState) Version(slot uint64, epoch uint64) ForkVersion {
+	if fs.IsCapella(slot, epoch) {
 		return ForkCapella
-	} else if fs.IsBellatrix(slot) {
+	} else if fs.IsBellatrix(slot, epoch) {
 		return ForkBellatrix
-	} else if fs.IsAltair(slot) {
+	} else if fs.IsAltair(slot, epoch) {
 		return ForkAltair
 	}
 	return ForkUnknown
