@@ -245,7 +245,7 @@ func main() {
 	}
 
 	// lazyload validators cache, it's optional and we don't care if it errors out
-	go preloadValidators(ctx, logger, valDS, validatorCache)
+	go preloadValidators(ctx, logger, valDS, float64(cfg.Validators.RegistrationsWriteCacheTTL), validatorCache)
 
 	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, cfg.Validators.RegistrationsWriteCacheTTL, cfg.Validators.QueueSize)
 	validatorStoreManager.AttachMetrics(m)
