@@ -189,6 +189,13 @@ func (s *Manager) Run(ctx context.Context, state State, client BeaconClient, d D
 		case ev := <-c:
 			t := time.Now()
 
+			if ev.Data.ProposalSlot == 0 {
+				logger.
+					WithField("slot", ev.Data.ProposalSlot).
+					Warn("error processing slot - zero slot")
+				continue
+			}
+
 			err := s.processNewSlot(ctx, state, client, ev, d, vCache)
 
 			headSlot := state.HeadSlot()

@@ -210,7 +210,7 @@ func main() {
 	// VALIDATOR MANAGEMENT
 	var valDS ValidatorStore
 	if cfg.Validators.DB.URL != "" {
-		valPG, err := trPostgres.Open(cfg.Validators.DB.URL, 10, 10, 10*time.Second)
+		valPG, err := trPostgres.Open(cfg.Validators.DB.URL, cfg.Validators.DB.MaxOpenConns, cfg.Validators.DB.MaxIdleConns, cfg.Validators.DB.ConnMaxIdleTime)
 		if err != nil {
 			logger.WithError(err).Error("failed to connect to validator database")
 			return
@@ -230,7 +230,7 @@ func main() {
 	// DATAAPI
 	var daDS relay.DataAPIStore
 	if cfg.DataAPI.DB.URL != "" {
-		valPG, err := trPostgres.Open(cfg.DataAPI.DB.URL, 10, 10, 10*time.Second) // TODO(l): make configurable
+		valPG, err := trPostgres.Open(cfg.DataAPI.DB.URL, cfg.DataAPI.DB.MaxOpenConns, cfg.DataAPI.DB.MaxIdleConns, cfg.DataAPI.DB.ConnMaxIdleTime) // TODO(l): make configurable
 		if err != nil {
 			logger.WithError(err).Error("failed to connect to dataapi database")
 		}
@@ -467,12 +467,16 @@ func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs Validat
 	}
 }
 
-func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, vc *lru.Cache[types.PublicKey, structs.ValidatorCacheEntry]) {
+func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, writeTTLSeconds float64, vc *lru.Cache[types.PublicKey, structs.ValidatorCacheEntry]) {
 	ch := make(chan structs.ValidatorCacheEntry, 100)
 	go asyncPopulateAllRegistrations(ctx, l, vs, ch)
 	for v := range ch {
-		v := v
-		vc.ContainsOrAdd(v.Entry.Message.Pubkey, v)
+		k := v
+		if time.Since(v.Time).Seconds() > writeTTLSeconds {
+			// set initial timer to half cache
+			k.Time = time.Now().Add(-1 * time.Duration(0.5*writeTTLSeconds*float64(time.Second)))
+		}
+		vc.ContainsOrAdd(v.Entry.Message.Pubkey, k)
 	}
 	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
 }
