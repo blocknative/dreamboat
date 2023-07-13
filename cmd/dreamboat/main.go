@@ -370,12 +370,11 @@ func main() {
 		"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 	}).Info("initialized")
 
-	if err := b.Init(ctx, state, beaconCli, validatorStoreManager, validatorCache); err != nil {
+	go b.Run(ctx, state, beaconCli, validatorStoreManager, validatorCache)
+	if err := b.Sync(ctx, state, beaconCli, validatorStoreManager, validatorCache); err != nil {
 		logger.WithError(err).Error("failed to init beacon manager")
 		return
 	}
-
-	go b.Run(ctx, state, beaconCli, validatorStoreManager, validatorCache)
 
 	logger.Info("beacon manager ready")
 
@@ -463,8 +462,8 @@ type ValidatorStore interface {
 
 func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs ValidatorStore, ch chan structs.ValidatorCacheEntry) {
 	defer close(ch)
-	err := vs.PopulateAllRegistrations(ctx, ch)
-	if err != nil {
+
+	if err := vs.PopulateAllRegistrations(ctx, ch); err != nil {
 		l.WithError(err).Warn("Cache population error")
 	}
 }

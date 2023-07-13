@@ -37,7 +37,7 @@ type StreamConfig struct {
 }
 
 type State interface {
-	ForkVersion(epoch structs.Slot) structs.ForkVersion
+	ForkVersion(slot, epoch uint64) structs.ForkVersion
 	HeadSlot() structs.Slot
 }
 

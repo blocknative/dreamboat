@@ -1,4 +1,4 @@
-//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/beacon Datastore,ValidatorCache,BeaconClient,State
+//go:generate mockgen  -destination=./mocks/mocks.go -package=mocks github.com/blocknative/dreamboat/beacon Datastore,ValidatorCache,State
 package beacon
 
 import (
@@ -27,42 +27,40 @@ type Datastore interface {
 
 type ValidatorCache interface {
 	Get(types.PublicKey) (structs.ValidatorCacheEntry, bool)
-} /*
-
-type BeaconClient interface {
-	SubscribeToHeadEvents(ctx context.Context, slotC chan bcli.HeadEvent)
-	GetProposerDuties(structs.Epoch) (*bcli.RegisteredProposersResponse, error)
-	SyncStatus() (*bcli.SyncStatusPayloadData, error)
-	KnownValidators(structs.Slot) (bcli.AllValidatorsResponse, error)
-	Genesis() (structs.GenesisInfo, error)
-	GetForkSchedule() (*bcli.GetForkScheduleResponse, error)
-	SubscribeToPayloadAttributesEvents(payloadAttrC chan bcli.PayloadAttributesEvent)
-}*/
+}
 
 type State interface {
+	/*
+
+
+		Duties() structs.DutiesState
+		SetDuties(structs.DutiesState)
+
+		KnownValidators() structs.ValidatorsState
+		KnownValidatorsUpdateTime() time.Time
+		SetKnownValidators(structs.ValidatorsState)
+
+		HeadSlot() uint64
+		SetHeadSlotIfHigher(structs.Slot) (structs.Slot, bool)
+
+		Withdrawals(uint64, types.Hash) structs.WithdrawalsState
+		SetWithdrawals(structs.WithdrawalsState)
+
+		SetRandao(structs.RandaoState)
+		Randao(uint64, types.Hash) structs.RandaoState
+
+
+		ParentBlockHash() types.Hash
+		SetParentBlockHash(types.Hash)
+	*/
+
 	SetGenesis(structs.GenesisInfo)
-
-	Duties() structs.DutiesState
-	SetDuties(structs.DutiesState)
-
-	KnownValidators() structs.ValidatorsState
-	KnownValidatorsUpdateTime() time.Time
-	SetKnownValidators(structs.ValidatorsState)
-
-	HeadSlot() structs.Slot
-	SetHeadSlotIfHigher(structs.Slot) (structs.Slot, bool)
-
-	Withdrawals(uint64, types.Hash) structs.WithdrawalsState
-	SetWithdrawals(structs.WithdrawalsState)
-
-	SetRandao(structs.RandaoState)
-	Randao(uint64, types.Hash) structs.RandaoState
-
 	Fork() structs.ForkState
 	SetFork(structs.ForkState)
 
-	ParentBlockHash() types.Hash
-	SetParentBlockHash(types.Hash)
+	SetPayloadAttributesState(slot uint64)
+
+	SimpleBySlot(slot uint64)
 }
 
 type Config struct {
@@ -73,12 +71,17 @@ type Config struct {
 	RunPayloadAttributesSubscription bool
 }
 
+type BeaconAddresses struct {
+}
+
 type Manager struct {
+	ba BeaconAddresses
+
 	Log    log.Logger
 	Config Config
 }
 
-func NewManager(l log.Logger, cfg Config) *Manager {
+func NewManager(l log.Logger, ba BeaconAddresses, cfg Config) *Manager {
 	return &Manager{
 		Log: l.With(log.F{
 			"subService":                       "beacon-manager",
@@ -89,7 +92,7 @@ func NewManager(l log.Logger, cfg Config) *Manager {
 	}
 }
 
-func (s *Manager) Init(ctx context.Context, state State, d Datastore, vCache ValidatorCache) error {
+func (s *Manager) Sync(ctx context.Context, state State, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "Init")
 
 	headSlot, err := waitForSynced(ctx, c)
@@ -106,52 +109,52 @@ func (s *Manager) Init(ctx context.Context, state State, d Datastore, vCache Val
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	if err := s.initForkEpoch(ctx, state, client); err != nil {
+	if err := s.initForkEpoch(ctx, state); err != nil {
 		return fmt.Errorf("failed to set fork state: %w", err)
 	}
 
 	fork := state.Fork()
-	if !fork.IsAltair(headSlot) && !fork.IsBellatrix(headSlot) && !fork.IsCapella(headSlot) {
+	if !fork.IsAltair(headSlot, headSlot/structs.NumberOfSlotsInState) &&
+		!fork.IsBellatrix(headSlot, headSlot/structs.NumberOfSlotsInState) &&
+		!fork.IsCapella(headSlot, headSlot/structs.NumberOfSlotsInState) {
 		return ErrUnkownFork
 	}
+	/*
+		ctx, cancel := context.WithCancel(ctx) // for stopping subscription after init is done
+		defer cancel()
 
-	ctx, cancel := context.WithCancel(ctx) // for stopping subscription after init is done
-	defer cancel()
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case event := <-c:
+				headSlot := structs.Slot(event.Data.ProposalSlot - 1)
+				state.SetHeadSlotIfHigher(headSlot)
 
-	c := make(chan bcli.PayloadAttributesEvent)
-	PayloadAttributesMultisubscribe(c)
+				// update proposer duties and known validators
+				if err := s.updateKnownValidators(ctx, state, client, headSlot); err != nil {
+					logger.WithError(err).Error("failed to update known validators")
+					continue
+				}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case event := <-c:
-			headSlot := structs.Slot(event.Data.ProposalSlot - 1)
-			state.SetHeadSlotIfHigher(headSlot)
+				entries, err := s.getProposerDuties(ctx, client, headSlot)
+				if err != nil {
+					return err
+				}
+				s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
 
-			// update proposer duties and known validators
-			if err := s.updateKnownValidators(ctx, state, client, headSlot); err != nil {
-				logger.WithError(err).Error("failed to update known validators")
-				continue
+				var receivedParentBlockHash types.Hash
+				if err := receivedParentBlockHash.UnmarshalText([]byte(event.Data.ParentBlockHash)); err != nil {
+					return fmt.Errorf("failed to unmarshal parentBlockHash: %w", err)
+				}
+
+				if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash); err != nil {
+					return err
+				}
+				return nil
 			}
-
-			entries, err := s.getProposerDuties(ctx, client, headSlot)
-			if err != nil {
-				return err
-			}
-			s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
-
-			var receivedParentBlockHash types.Hash
-			if err := receivedParentBlockHash.UnmarshalText([]byte(event.Data.ParentBlockHash)); err != nil {
-				return fmt.Errorf("failed to unmarshal parentBlockHash: %w", err)
-			}
-
-			if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash); err != nil {
-				return err
-			}
-			return nil
 		}
-	}
+	*/
 }
 
 func (m *Manager) initForkEpoch(ctx context.Context, state State) error {
@@ -164,11 +167,11 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State) error {
 	for _, fork := range forkSchedule.Data {
 		switch fork.CurrentVersion {
 		case m.Config.AltairForkVersion:
-			forkState.AltairEpoch = structs.Epoch(fork.Epoch)
+			forkState.AltairEpoch = fork.Epoch
 		case m.Config.BellatrixForkVersion:
-			forkState.BellatrixEpoch = structs.Epoch(fork.Epoch)
+			forkState.BellatrixEpoch = fork.Epoch
 		case m.Config.CapellaForkVersion:
-			forkState.CapellaEpoch = structs.Epoch(fork.Epoch)
+			forkState.CapellaEpoch = fork.Epoch
 		}
 	}
 
@@ -176,13 +179,10 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State) error {
 	return nil
 }
 
-func (s *Manager) Run(ctx context.Context, state State, bc BeaconClient, d Datastore, vCache ValidatorCache) error {
+func (s *Manager) Run(ctx context.Context, state State, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "RunBeacon")
 
 	defer logger.Debug("beacon loop stopped")
-
-	c := make(chan client.PayloadAttributesEvent)
-	PayloadAttributesMultisubscribe(c)
 
 	for {
 		select {
@@ -206,10 +206,10 @@ func (s *Manager) Run(ctx context.Context, state State, bc BeaconClient, d Datas
 			parentHash := state.ParentBlockHash()
 
 			logger = logger.With(log.F{
-				"epoch":                     headSlot.Epoch(),
+				"epoch":                     structs.ToEpoch(headSlot),
 				"slotHead":                  headSlot,
-				"slotStartNextEpoch":        structs.Slot(headSlot.Epoch()+1) * structs.SlotsPerEpoch,
-				"fork":                      state.Fork().Version(headSlot).String(),
+				"slotStartNextEpoch":        structs.Slot(structs.ToEpoch(headSlot)+1) * structs.SlotsPerEpoch,
+				"fork":                      state.Fork().Version(headSlot, structs.ToEpoch(headSlot)),
 				"numDuties":                 len(duties.ProposerDutiesResponse),
 				"numKnownValidators":        len(validators.KnownValidators),
 				"knownValidatorsUpdateTime": state.KnownValidatorsUpdateTime(),
@@ -257,7 +257,7 @@ func waitForSynced(ctx context.Context) (uint64, error) {
 	}
 }
 
-func (s *Manager) processNewSlot(ctx context.Context, state State, client BeaconClient, event bcli.PayloadAttributesEvent, d Datastore, vCache ValidatorCache) error {
+func (s *Manager) processNewSlot(ctx context.Context, state State, event bcli.PayloadAttributesEvent, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "ProcessNewSlot")
 
 	var (
@@ -341,10 +341,10 @@ func (m *Manager) updateWithdrawalsAndRandao(ctx context.Context, logger log.Log
 	return nil
 }
 
-func (s *Manager) getProposerDuties(ctx context.Context, client BeaconClient, epoch uint64) (entries []bcli.RegisteredProposersResponseData, err error) {
+func (s *Manager) getProposerDuties(ctx context.Context, epoch uint64) (entries []bcli.RegisteredProposersResponseData, err error) {
 
 	// Query current epoch
-	current, err := client.GetProposerDuties(epoch)
+	current, err := client.GetProposerDuties(ctx, epoch)
 	if err != nil {
 		return nil, fmt.Errorf("current epoch: get proposer duties: %w", err)
 	}
@@ -352,7 +352,7 @@ func (s *Manager) getProposerDuties(ctx context.Context, client BeaconClient, ep
 	entries = current.Data
 
 	// Query next epoch
-	next, err := client.GetProposerDuties(epoch + 1)
+	next, err := client.GetProposerDuties(ctx, epoch+1)
 	if err != nil {
 		return nil, fmt.Errorf("next epoch: get proposer duties: %w", err)
 	}

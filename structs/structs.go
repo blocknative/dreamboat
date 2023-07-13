@@ -12,6 +12,10 @@ import (
 
 var ErrUnknownValue = errors.New("value is unknown")
 
+func ToEpoch(slot uint64) uint64 {
+	return slot / SlotsPerEpoch
+}
+
 type Slot uint64
 
 func (s Slot) Loggable() map[string]any {
@@ -205,42 +209,43 @@ type BlockAndTraceExtended interface {
 	ToDeliveredTrace(slot uint64) (DeliveredTrace, error)
 }
 
-type BeaconState struct {
-	DutiesState
-	ValidatorsState
-	GenesisInfo
-}
-
-func (s *BeaconState) KnownValidatorByIndex(index uint64) (types.PubkeyHex, error) {
-	pk, ok := s.ValidatorsState.KnownValidatorsByIndex[index]
-	if !ok {
-		return "", ErrUnknownValue
+/*
+	type BeaconState struct {
+		DutiesState
+		ValidatorsState
+		GenesisInfo
 	}
-	return pk, nil
-}
 
-func (s *BeaconState) IsKnownValidator(pk types.PubkeyHex) (bool, error) {
-	_, ok := s.ValidatorsState.KnownValidators[pk]
-	return ok, nil
-}
+	func (s *BeaconState) KnownValidatorByIndex(index uint64) (types.PubkeyHex, error) {
+		pk, ok := s.ValidatorsState.KnownValidatorsByIndex[index]
+		if !ok {
+			return "", ErrUnknownValue
+		}
+		return pk, nil
+	}
 
-func (s *BeaconState) KnownValidators() map[types.PubkeyHex]struct{} {
-	return s.ValidatorsState.KnownValidators
-}
+	func (s *BeaconState) IsKnownValidator(pk types.PubkeyHex) (bool, error) {
+		_, ok := s.ValidatorsState.KnownValidators[pk]
+		return ok, nil
+	}
 
-func (s *BeaconState) HeadSlot() Slot {
-	return s.CurrentSlot
-}
+	func (s *BeaconState) KnownValidators() map[types.PubkeyHex]struct{} {
+		return s.ValidatorsState.KnownValidators
+	}
 
-func (s *BeaconState) ValidatorsMap() BuilderGetValidatorsResponseEntrySlice {
-	return s.ProposerDutiesResponse
-}
+	func (s *BeaconState) HeadSlot() Slot {
+		return s.CurrentSlot
+	}
 
-type DutiesState struct {
-	CurrentSlot            Slot
-	ProposerDutiesResponse BuilderGetValidatorsResponseEntrySlice
-}
+	func (s *BeaconState) ValidatorsMap() BuilderGetValidatorsResponseEntrySlice {
+		return s.ProposerDutiesResponse
+	}
 
+	type DutiesState struct {
+		CurrentSlot            Slot
+		ProposerDutiesResponse BuilderGetValidatorsResponseEntrySlice
+	}
+*/
 type ValidatorsState struct {
 	KnownValidatorsByIndex map[uint64]types.PubkeyHex
 	KnownValidators        map[types.PubkeyHex]struct{}

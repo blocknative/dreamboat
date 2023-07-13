@@ -75,8 +75,8 @@ type RateLimitter interface {
 }
 
 type State interface {
-	ForkVersion(epoch structs.Slot) structs.ForkVersion
-	HeadSlot() structs.Slot
+	CurrentForkVersion() structs.ForkVersion
+	//HeadSlot() uint64
 }
 
 type API struct {
@@ -275,7 +275,7 @@ func (a *API) getPayload(w http.ResponseWriter, r *http.Request) {
 	defer timer.ObserveDuration()
 
 	var req structs.SignedBlindedBeaconBlock
-	fork := a.st.ForkVersion(a.st.HeadSlot())
+	fork := a.st.CurrentForkVersion()
 
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -400,7 +400,7 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch a.st.ForkVersion(a.st.HeadSlot()) {
+	switch a.st.CurrentForkVersion() {
 	case structs.ForkCapella:
 		var creq capella.SubmitBlockRequest
 		if strings.ToLower(r.Header.Get("Content-Type")) == "application/octet-stream" {

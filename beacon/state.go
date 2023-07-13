@@ -13,15 +13,20 @@ type MultiSlotState struct {
 	mu    sync.Mutex
 	slots [structs.NumberOfSlotsInState]AtomicState
 
-	duties               atomic.Value
-	validatorsUpdateTime atomic.Value
-	headSlot             atomic.Value
-	fork                 atomic.Value
-	knownValidators      atomic.Value
-	genesis              atomic.Value
-	parentBlockHash      atomic.Value
+	// headSlot             atomic.Value
+	headSlot atomic.Uint64
+
+	fork            atomic.Value
+	knownValidators atomic.Value
+	genesis         atomic.Value
+	parentBlockHash atomic.Value
 }
 
+func NewMultiSlotState() *MultiSlotState {
+	return &MultiSlotState{}
+}
+
+/*
 func (as *MultiSlotState) Duties() structs.DutiesState {
 	if val := as.duties.Load(); val != nil {
 		return val.(structs.DutiesState)
@@ -33,6 +38,7 @@ func (as *MultiSlotState) Duties() structs.DutiesState {
 func (as *MultiSlotState) SetDuties(duties structs.DutiesState) {
 	as.duties.Store(duties)
 }
+*/
 
 func (as *MultiSlotState) Genesis() structs.GenesisInfo {
 	if val := as.genesis.Load(); val != nil {
@@ -67,15 +73,12 @@ func (as *MultiSlotState) KnownValidatorsUpdateTime() time.Time {
 	return updateTime
 }
 
-func (as *MultiSlotState) HeadSlot() structs.Slot {
-	if val := as.headSlot.Load(); val != nil {
-		return val.(structs.Slot)
-	}
-
-	return 0
+func (as *MultiSlotState) HeadSlot() uint64 {
+	return as.headSlot.Load()
 }
 
 func (as *MultiSlotState) SetHeadSlotIfHigher(slot structs.Slot) (structs.Slot, bool) {
+
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
@@ -88,6 +91,7 @@ func (as *MultiSlotState) SetHeadSlotIfHigher(slot structs.Slot) (structs.Slot, 
 	return headSlot.(structs.Slot), false
 }
 
+/*
 func (as *MultiSlotState) Withdrawals(slot uint64, parentHash types.Hash) structs.WithdrawalsState {
 	as.mu.Lock()
 	defer as.mu.Unlock()
@@ -144,6 +148,7 @@ func (as *MultiSlotState) SetRandao(randao structs.RandaoState) {
 
 	curr.SetRandao(randao)
 }
+*/
 
 func (as *MultiSlotState) ForkVersion(slot, epoch uint64) structs.ForkVersion {
 	return as.Fork().Version(slot, epoch)
@@ -178,6 +183,9 @@ type AtomicState struct {
 	slot        uint64
 	withdrawals map[types.Hash]structs.WithdrawalsState
 	randao      map[types.Hash]structs.RandaoState
+
+	duties               atomic.Value
+	validatorsUpdateTime atomic.Value
 }
 
 func (as *AtomicState) Withdrawals(parentHash types.Hash) structs.WithdrawalsState {
