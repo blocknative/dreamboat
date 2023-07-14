@@ -99,7 +99,7 @@ SendPayloads:
 		rs.m.RegistrationsCacheHits.WithLabelValues("miss").Inc()
 
 		checkTime := time.Now()
-		o, ok := verifyOther(rs.beaconState, rs.regMngr, i, p)
+		o, ok := verifyOther(rs.beaconState, i, p)
 		if !ok {
 			response.Close(i, o.Err)
 			break SendPayloads
