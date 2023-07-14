@@ -177,13 +177,19 @@ func (a *API) registerValidator(w http.ResponseWriter, r *http.Request) {
 
 	m := structs.NewMetricGroup(4)
 	if err := a.reg.RegisterValidator(r.Context(), m, payload); err != nil {
+		if r.Context().Err() != nil {
+			m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "register validator unknown"))
+			a.m.ApiReqCounter.WithLabelValues("registerValidator", "408", "register validator").Inc()
+			return
+		}
+
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "register validator unknown"))
 		a.m.ApiReqCounter.WithLabelValues("registerValidator", "400", "register validator").Inc()
 		a.l.With(log.F{
 			"code":     400,
 			"endpoint": "registerValidator",
 			"type":     "single",
-			"payload":  payload,
+			//"payload":  payload,
 		}).WithError(err).Debug("failed registerValidator")
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -219,6 +225,11 @@ func (a *API) getHeader(w http.ResponseWriter, r *http.Request) {
 	m := structs.NewMetricGroup(4)
 	response, err := a.r.GetHeader(r.Context(), m, uc, req)
 	if err != nil {
+		if r.Context().Err() != nil {
+			m.ObserveWithError(a.m.RelayTiming, context.Canceled)
+			a.m.ApiReqCounter.WithLabelValues("getHeader", "408", "get header").Inc()
+			return
+		}
 		m.ObserveWithError(a.m.RelayTiming, unwrapError(err, "get header unknown"))
 		a.m.ApiReqCounter.WithLabelValues("getHeader", "400", "get header").Inc()
 		slot, _ := req.Slot()

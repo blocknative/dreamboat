@@ -293,7 +293,7 @@ func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBea
 		return fmt.Errorf("fail to publish block: %w", err)
 	}
 
-	req.Header.Set("	Eth-Consensus-Version", "application/json")
+	req.Header.Set("Eth-Consensus-Version", block.ConsensusVersion())
 	//	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
