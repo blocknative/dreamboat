@@ -273,21 +273,28 @@ func (b *beaconClient) GetForkSchedule() (spec *GetForkScheduleResponse, err err
 }
 
 func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBeaconBlock) error {
-	buff := bytes.NewBuffer(nil)
-	enc := json.NewEncoder(buff)
-	if err := enc.Encode(block); err != nil {
-		return fmt.Errorf("fail to marshal block: %w", err)
+	//buff := bytes.NewBuffer(nil)
+	/*
+		enc := json.NewEncoder(buff)
+		if err := enc.Encode(block); err != nil {
+			return fmt.Errorf("fail to marshal block: %w", err)
+		}*/
+
+	payload, err := block.MarshalSSZ()
+	if err != nil {
+		return fmt.Errorf("fail to encode block: %w", err)
 	}
 
-	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/blocks", "POST"))
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v2/beacon/blocks", "POST"))
 	defer t.ObserveDuration()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", buff)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.beaconEndpoint.String()+"/eth/v2/beacon/blocks?broadcast_validation=consensus_and_equivocation", bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("fail to publish block: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("	Eth-Consensus-Version", "application/json")
+	//	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("fail to publish block: %w", err)
