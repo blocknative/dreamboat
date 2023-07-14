@@ -1382,8 +1382,51 @@ type SignedBeaconBlock struct {
 	CapellaSignature types.Signature `json:"signature" ssz-size:"96"`
 }
 
+func (s *SignedBeaconBlock) ConsensusVersion() string {
+	return "capella"
+}
+
 func (s *SignedBeaconBlock) Signature() types.Signature {
 	return s.CapellaSignature
+}
+
+func (s *SignedBeaconBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(100)
+
+	// Offset (0) 'Message'
+	dst = ssz.WriteOffset(dst, offset)
+	if s.CapellaMessage == nil {
+		s.CapellaMessage = new(BeaconBlock)
+	}
+	offset += s.CapellaMessage.SizeSSZ()
+
+	// Field (1) 'Signature'
+	dst = append(dst, s.CapellaSignature[:]...)
+
+	// Field (0) 'Message'
+	if dst, err = s.CapellaMessage.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the SignedBeaconBlock object
+func (s *SignedBeaconBlock) SizeSSZ() (size int) {
+	size = 100
+
+	// Field (0) 'Message'
+	if s.CapellaMessage == nil {
+		s.CapellaMessage = new(BeaconBlock)
+	}
+	size += s.CapellaMessage.SizeSSZ()
+
+	return
+}
+
+func (s *SignedBeaconBlock) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
 }
 
 type BlockAndTraceExtended struct {
@@ -1599,6 +1642,56 @@ type BeaconBlock struct {
 	Body          *BeaconBlockBody `json:"body"`
 }
 
+// MarshalSSZ ssz marshals the BeaconBlock object
+func (b *BeaconBlock) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconBlock object to a target array
+func (b *BeaconBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(84)
+
+	// Field (0) 'Slot'
+	dst = ssz.MarshalUint64(dst, uint64(b.Slot))
+
+	// Field (1) 'ProposerIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.ProposerIndex))
+
+	// Field (2) 'ParentRoot'
+	dst = append(dst, b.ParentRoot[:]...)
+
+	// Field (3) 'StateRoot'
+	dst = append(dst, b.StateRoot[:]...)
+
+	// Offset (4) 'Body'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.Body == nil {
+		b.Body = new(BeaconBlockBody)
+	}
+	offset += b.Body.SizeSSZ()
+
+	// Field (4) 'Body'
+	if dst, err = b.Body.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlock object
+func (b *BeaconBlock) SizeSSZ() (size int) {
+	size = 84
+
+	// Field (4) 'Body'
+	if b.Body == nil {
+		b.Body = new(BeaconBlockBody)
+	}
+	size += b.Body.SizeSSZ()
+
+	return
+}
+
 // BeaconBlockBody https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L38
 type BeaconBlockBody struct {
 	BLSToExecutionChanges []*SignedBLSToExecutionChange `json:"bls_to_execution_changes" ssz-max:"16"`
@@ -1612,6 +1705,200 @@ type BeaconBlockBody struct {
 	VoluntaryExits        []*types.SignedVoluntaryExit  `json:"voluntary_exits" ssz-max:"16"`
 	SyncAggregate         *types.SyncAggregate          `json:"sync_aggregate"`
 	ExecutionPayload      *ExecutionPayload             `json:"execution_payload"`
+}
+
+// MarshalSSZ ssz marshals the BeaconBlockBody object
+func (b *BeaconBlockBody) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BeaconBlockBody object to a target array
+func (b *BeaconBlockBody) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(388)
+
+	// Field (0) 'RANDAOReveal'
+	dst = append(dst, b.RandaoReveal[:]...)
+
+	// Field (1) 'Eth1Data'
+	if b.Eth1Data == nil {
+		b.Eth1Data = new(types.Eth1Data)
+	}
+	if dst, err = b.Eth1Data.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'Graffiti'
+	dst = append(dst, b.Graffiti[:]...)
+
+	// Offset (3) 'ProposerSlashings'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.ProposerSlashings) * 416
+
+	// Offset (4) 'AttesterSlashings'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(b.AttesterSlashings); ii++ {
+		offset += 4
+		offset += b.AttesterSlashings[ii].SizeSSZ()
+	}
+
+	// Offset (5) 'Attestations'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(b.Attestations); ii++ {
+		offset += 4
+		offset += b.Attestations[ii].SizeSSZ()
+	}
+
+	// Offset (6) 'Deposits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Deposits) * 1240
+
+	// Offset (7) 'VoluntaryExits'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.VoluntaryExits) * 112
+
+	// Field (8) 'SyncAggregate'
+	if b.SyncAggregate == nil {
+		b.SyncAggregate = new(types.SyncAggregate)
+	}
+	if dst, err = b.SyncAggregate.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Offset (9) 'ExecutionPayload'
+	dst = ssz.WriteOffset(dst, offset)
+	if b.ExecutionPayload == nil {
+		b.ExecutionPayload = new(ExecutionPayload)
+	}
+	offset += b.ExecutionPayload.SizeSSZ()
+
+	// Offset (10) 'BLSToExecutionChanges'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.BLSToExecutionChanges) * 172
+
+	// Field (3) 'ProposerSlashings'
+	if size := len(b.ProposerSlashings); size > 16 {
+		err = ssz.ErrListTooBigFn("BeaconBlockBody.ProposerSlashings", size, 16)
+		return
+	}
+	for ii := 0; ii < len(b.ProposerSlashings); ii++ {
+		if dst, err = b.ProposerSlashings[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (4) 'AttesterSlashings'
+	if size := len(b.AttesterSlashings); size > 2 {
+		err = ssz.ErrListTooBigFn("BeaconBlockBody.AttesterSlashings", size, 2)
+		return
+	}
+	{
+		offset = 4 * len(b.AttesterSlashings)
+		for ii := 0; ii < len(b.AttesterSlashings); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += b.AttesterSlashings[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(b.AttesterSlashings); ii++ {
+		if dst, err = b.AttesterSlashings[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (5) 'Attestations'
+	if size := len(b.Attestations); size > 128 {
+		err = ssz.ErrListTooBigFn("BeaconBlockBody.Attestations", size, 128)
+		return
+	}
+	{
+		offset = 4 * len(b.Attestations)
+		for ii := 0; ii < len(b.Attestations); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += b.Attestations[ii].SizeSSZ()
+		}
+	}
+	for ii := 0; ii < len(b.Attestations); ii++ {
+		if dst, err = b.Attestations[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (6) 'Deposits'
+	if size := len(b.Deposits); size > 16 {
+		err = ssz.ErrListTooBigFn("BeaconBlockBody.Deposits", size, 16)
+		return
+	}
+	for ii := 0; ii < len(b.Deposits); ii++ {
+		if dst, err = b.Deposits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (7) 'VoluntaryExits'
+	if size := len(b.VoluntaryExits); size > 16 {
+		err = ssz.ErrListTooBigFn("BeaconBlockBody.VoluntaryExits", size, 16)
+		return
+	}
+	for ii := 0; ii < len(b.VoluntaryExits); ii++ {
+		if dst, err = b.VoluntaryExits[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	// Field (9) 'ExecutionPayload'
+	if dst, err = b.ExecutionPayload.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (10) 'BLSToExecutionChanges'
+	if size := len(b.BLSToExecutionChanges); size > 16 {
+		err = ssz.ErrListTooBigFn("BeaconBlockBody.BLSToExecutionChanges", size, 16)
+		return
+	}
+	for ii := 0; ii < len(b.BLSToExecutionChanges); ii++ {
+		if dst, err = b.BLSToExecutionChanges[ii].MarshalSSZTo(dst); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BeaconBlockBody object
+func (b *BeaconBlockBody) SizeSSZ() (size int) {
+	size = 388
+
+	// Field (3) 'ProposerSlashings'
+	size += len(b.ProposerSlashings) * 416
+
+	// Field (4) 'AttesterSlashings'
+	for ii := 0; ii < len(b.AttesterSlashings); ii++ {
+		size += 4
+		size += b.AttesterSlashings[ii].SizeSSZ()
+	}
+
+	// Field (5) 'Attestations'
+	for ii := 0; ii < len(b.Attestations); ii++ {
+		size += 4
+		size += b.Attestations[ii].SizeSSZ()
+	}
+
+	// Field (6) 'Deposits'
+	size += len(b.Deposits) * 1240
+
+	// Field (7) 'VoluntaryExits'
+	size += len(b.VoluntaryExits) * 112
+
+	// Field (9) 'ExecutionPayload'
+	if b.ExecutionPayload == nil {
+		b.ExecutionPayload = new(ExecutionPayload)
+	}
+	size += b.ExecutionPayload.SizeSSZ()
+
+	// Field (10) 'BLSToExecutionChanges'
+	size += len(b.BLSToExecutionChanges) * 172
+
+	return
 }
 
 // BlindedBeaconBlock https://github.com/ethereum/beacon-APIs/blob/master/types/bellatrix/block.yaml#L74
@@ -1812,6 +2099,29 @@ func (s *SignedBLSToExecutionChange) SizeSSZ() (size int) {
 	return
 }
 
+// MarshalSSZ ssz marshals the SignedBLSToExecutionChange object
+func (s *SignedBLSToExecutionChange) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(s)
+}
+
+// MarshalSSZTo ssz marshals the SignedBLSToExecutionChange object to a target array
+func (s *SignedBLSToExecutionChange) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Message'
+	if s.Message == nil {
+		s.Message = new(BLSToExecutionChange)
+	}
+	if dst, err = s.Message.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	dst = append(dst, s.Signature[:]...)
+
+	return
+}
+
 // HashTreeRoot ssz hashes the SignedBLSToExecutionChange object
 func (s *SignedBLSToExecutionChange) HashTreeRoot() ([32]byte, error) {
 	return ssz.HashWithDefaultHasher(s)
@@ -1851,6 +2161,27 @@ type BLSToExecutionChange struct {
 // SizeSSZ returns the ssz encoded size in bytes for the BLSToExecutionChange object
 func (b *BLSToExecutionChange) SizeSSZ() (size int) {
 	size = 76
+	return
+}
+
+// MarshalSSZ ssz marshals the BLSToExecutionChange object
+func (b *BLSToExecutionChange) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BLSToExecutionChange object to a target array
+func (b *BLSToExecutionChange) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'ValidatorIndex'
+	dst = ssz.MarshalUint64(dst, uint64(b.ValidatorIndex))
+
+	// Field (1) 'FromBLSPubkey'
+	dst = append(dst, b.FromBLSPubkey[:]...)
+
+	// Field (2) 'ToExecutionAddress'
+	dst = append(dst, b.ToExecutionAddress[:]...)
+
 	return
 }
 
