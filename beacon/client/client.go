@@ -294,6 +294,7 @@ func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBea
 	}
 
 	req.Header.Set("Eth-Consensus-Version", block.ConsensusVersion())
+	req.Header.Set("Content-Type", "application/octet-stream")
 	//	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
