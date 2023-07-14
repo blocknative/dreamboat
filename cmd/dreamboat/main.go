@@ -231,7 +231,7 @@ func main() {
 	// DATAAPI
 	var daDS relay.DataAPIStore
 	if cfg.DataAPI.DB.URL != "" {
-		valPG, err := trPostgres.Open(cfg.DataAPI.DB.URL, cfg.DataAPI.DB.MaxOpenConns, cfg.DataAPI.DB.MaxIdleConns, cfg.DataAPI.DB.ConnMaxIdleTime) // TODO(l): make configurable
+		valPG, err := trPostgres.Open(cfg.DataAPI.DB.URL, cfg.DataAPI.DB.MaxOpenConns, cfg.DataAPI.DB.MaxIdleConns, cfg.DataAPI.DB.ConnMaxIdleTime)
 		if err != nil {
 			logger.WithError(err).Error("failed to connect to dataapi database")
 		}
