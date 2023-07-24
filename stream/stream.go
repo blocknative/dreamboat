@@ -233,7 +233,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "encode"))
-	forkEncoding := toBidFormat(s.st.ForkVersion(structs.Slot(bid.Slot())))
+	forkEncoding := toBidFormat(s.st.ForkVersion(bid.Slot(), structs.ToEpoch(bid.Slot())))
 	b, err := s.encode(bid, forkEncoding)
 	if err != nil {
 		timer1.ObserveDuration()

@@ -424,13 +424,13 @@ func (a *API) submitBlock(w http.ResponseWriter, r *http.Request) {
 		req = &creq
 		l = l.With(log.F{
 			"fork":      "capella",
-			"headSlot":  a.st.HeadSlot(),
 			"slot":      creq.CapellaMessage.Slot,
-			"slotDiff":  int64(creq.CapellaMessage.Slot) - int64(a.st.HeadSlot()),
 			"blockHash": creq.CapellaMessage.BlockHash,
 			"bidValue":  creq.CapellaMessage.Value,
 			"proposer":  creq.CapellaMessage.ProposerPubkey,
 			"builder":   creq.CapellaMessage.BuilderPubkey,
+			//"headSlot":  a.st.HeadSlot(),
+			//"slotDiff":  int64(creq.CapellaMessage.Slot) - int64(a.st.HeadSlot()),
 		})
 		if !creq.Validate() {
 			a.m.ApiReqCounter.WithLabelValues("submitBlock", "400", "payload validation").Inc()

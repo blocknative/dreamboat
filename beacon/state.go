@@ -77,18 +77,18 @@ func (as *MultiSlotState) HeadSlot() uint64 {
 	return as.headSlot.Load()
 }
 
-func (as *MultiSlotState) SetHeadSlotIfHigher(slot structs.Slot) (structs.Slot, bool) {
+func (as *MultiSlotState) SetHeadSlotIfHigher(slot uint64) (uint64, bool) {
 
 	as.mu.Lock()
 	defer as.mu.Unlock()
 
 	headSlot := as.headSlot.Load()
-	if headSlot == nil || slot > headSlot.(structs.Slot) {
+	if headSlot == 0 || slot > headSlot {
 		as.headSlot.Store(slot)
 		return slot, true
 	}
 
-	return headSlot.(structs.Slot), false
+	return headSlot, false
 }
 
 /*
