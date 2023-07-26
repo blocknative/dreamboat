@@ -472,7 +472,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, wri
 	go asyncPopulateAllRegistrations(ctx, l, vs, ch)
 	for v := range ch {
 		k := v
-		if time.Since(v.Time).Seconds() > writeTTLSeconds {
+		if time.Since(v.Time).Seconds() > writeTTLSeconds*0.5 {
 			// set initial timer to half cache
 			k.Time = time.Now().Add(-1 * time.Duration(0.5*writeTTLSeconds*float64(time.Second)))
 		}
