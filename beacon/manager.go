@@ -179,6 +179,27 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State) error {
 	return nil
 }
 
+func waitForSynced(ctx context.Context) (uint64, error) {
+
+	for {
+		status, err := client.SyncStatus(ctx, "")
+		if err != nil {
+			if !errors.Is(err, ErrBeaconNodeSyncing) {
+				return 0, err
+			}
+		} else if !status.IsSyncing {
+			return status.HeadSlot, nil
+		}
+
+		//logger.Debug("beacon clients are syncing...")
+		select {
+		case <-ctx.Done():
+			return status.HeadSlot, ctx.Err()
+		case <-time.After(1 * time.Second):
+		}
+	}
+}
+
 func (s *Manager) Run(ctx context.Context, state State, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "RunBeacon")
 
@@ -233,27 +254,6 @@ func (s *Manager) Run(ctx context.Context, state State, d Datastore, vCache Vali
 func PayloadAttributesMultisubscribe(slotC chan PayloadAttributesEvent) {
 	for _, instance := range b.Clients {
 		go instance.SubscribeToPayloadAttributesEvents(slotC)
-	}
-}
-
-func waitForSynced(ctx context.Context) (uint64, error) {
-
-	for {
-		status, err := client.SyncStatus(ctx, "")
-		if err != nil {
-			if !errors.Is(err, ErrBeaconNodeSyncing) {
-				return 0, err
-			}
-		} else if !status.IsSyncing {
-			return status.HeadSlot, nil
-		}
-
-		//logger.Debug("beacon clients are syncing...")
-		select {
-		case <-ctx.Done():
-			return status.HeadSlot, ctx.Err()
-		case <-time.After(1 * time.Second):
-		}
 	}
 }
 

@@ -38,7 +38,7 @@ type StreamConfig struct {
 
 type State interface {
 	ForkVersion(slot, epoch uint64) structs.ForkVersion
-	HeadSlot() structs.Slot
+	HeadSlot() uint64
 }
 
 type Client struct {
@@ -267,7 +267,7 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "encode"))
-	forkEncoding := toBlockCacheFormat(s.st.ForkVersion(structs.Slot(block.Slot())))
+	forkEncoding := toBlockCacheFormat(s.st.ForkVersion(block.Slot(), structs.ToEpoch(block.Slot())))
 	b, err := s.encode(block, forkEncoding)
 	if err != nil {
 		timer1.ObserveDuration()

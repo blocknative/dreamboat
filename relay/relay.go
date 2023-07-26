@@ -516,7 +516,6 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			logger.WithField("event", "publish_encode_error").WithError(err).Error("fail to encode block")
 			return nil, ErrWrongPayload
 		}
-
 		if err = MultiPublishBlock(context.Background(), logger, rs.publishBlock, bblock); err != nil {
 			logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node")
 		}
@@ -649,10 +648,10 @@ type lastDelivered struct {
 	blockHash types.Hash
 }
 
-func MultiPublishBlock(ctx context.Context, l log.Logger, publish PublishBlock, clients []string, block []byte) (err error) {
+func MultiPublishBlock(ctx context.Context, l log.Logger, publish PublishBlock, addresses []string, block []byte) (err error) {
 
-	resp := make(chan error, len(clients))
-	for _, address := range clients {
+	resp := make(chan error, len(addresses))
+	for _, address := range addresses {
 		go publishAsync(ctx, l, publish, address, block, resp)
 	}
 
@@ -671,7 +670,7 @@ func MultiPublishBlock(ctx context.Context, l log.Logger, publish PublishBlock, 
 				return nil
 			default:
 				defError = e
-				if r == len(clients) {
+				if r == len(addresses) {
 					return defError
 				}
 			}

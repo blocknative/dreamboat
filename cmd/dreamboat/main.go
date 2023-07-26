@@ -20,7 +20,6 @@ import (
 	"github.com/blocknative/dreamboat/api/inner"
 	"github.com/blocknative/dreamboat/auction"
 	"github.com/blocknative/dreamboat/beacon"
-	bcli "github.com/blocknative/dreamboat/beacon/client"
 	"github.com/blocknative/dreamboat/blstools"
 	wh "github.com/blocknative/dreamboat/datastore/warehouse"
 	"github.com/blocknative/dreamboat/metrics"
@@ -177,11 +176,6 @@ func main() {
 		return
 	}
 
-	beaconConfig := bcli.BeaconConfig{
-		BeaconEventTimeout: cfg.Beacon.EventTimeout,
-		BeaconEventRestart: cfg.Beacon.EventRestart,
-		BeaconQueryTimeout: cfg.Beacon.QueryTimeout,
-	}
 	/*
 
 		beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, nil, m, beaconConfig)
@@ -370,8 +364,8 @@ func main() {
 		"startTimeMs": time.Since(timeRelayStart).Milliseconds(),
 	}).Info("initialized")
 
-	go b.Run(ctx, state, beaconCli, validatorStoreManager, validatorCache)
-	if err := b.Sync(ctx, state, beaconCli, validatorStoreManager, validatorCache); err != nil {
+	go b.Run(ctx, state, validatorStoreManager, validatorCache)
+	if err := b.Sync(ctx, state, validatorStoreManager, validatorCache); err != nil {
 		logger.WithError(err).Error("failed to init beacon manager")
 		return
 	}

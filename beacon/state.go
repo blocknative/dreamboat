@@ -179,18 +179,18 @@ func (as *MultiSlotState) SetParentBlockHash(blockHash types.Hash) {
 }
 
 type AtomicState struct {
-	*sync.Mutex
+	*sync.RWMutex
 	slot        uint64
-	withdrawals map[types.Hash]structs.WithdrawalsState
-	randao      map[types.Hash]structs.RandaoState
+	withdrawals map[types.Hash]types.Root //structs.WithdrawalsState
+	randao      map[types.Hash]string     //structs.RandaoState
 
 	duties               atomic.Value
 	validatorsUpdateTime atomic.Value
 }
 
 func (as *AtomicState) Withdrawals(parentHash types.Hash) structs.WithdrawalsState {
-	as.Lock()
-	defer as.Unlock()
+	as.RLock()
+	defer as.RUnlock()
 
 	if w, ok := as.withdrawals[parentHash]; ok {
 		return w
@@ -207,8 +207,8 @@ func (as *AtomicState) SetWithdrawals(withdrawals structs.WithdrawalsState) {
 }
 
 func (as *AtomicState) Randao(parentHash types.Hash) structs.RandaoState {
-	as.Lock()
-	defer as.Unlock()
+	as.RLock()
+	defer as.RUnlock()
 
 	if r, ok := as.randao[parentHash]; ok {
 		return r
