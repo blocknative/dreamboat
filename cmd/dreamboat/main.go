@@ -245,7 +245,7 @@ func main() {
 	}
 
 	// lazyload validators cache, it's optional and we don't care if it errors out
-	go preloadValidators(ctx, logger, valDS, float64(cfg.Validators.RegistrationsWriteCacheTTL), validatorCache)
+	go preloadValidators(ctx, logger, valDS, cfg.Validators.RegistrationsWriteCacheTTL, validatorCache)
 
 	validatorStoreManager := validators.NewStoreManager(logger, validatorCache, valDS, cfg.Validators.RegistrationsWriteCacheTTL, cfg.Validators.QueueSize)
 	validatorStoreManager.AttachMetrics(m)
@@ -467,18 +467,20 @@ func asyncPopulateAllRegistrations(ctx context.Context, l log.Logger, vs Validat
 	}
 }
 
-func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, writeTTLSeconds float64, vc *lru.Cache[types.PublicKey, structs.ValidatorCacheEntry]) {
+func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, writeTTL time.Duration, vc *lru.Cache[types.PublicKey, structs.ValidatorCacheEntry]) {
 	ch := make(chan structs.ValidatorCacheEntry, 100)
 	go asyncPopulateAllRegistrations(ctx, l, vs, ch)
+	var refreshedTTLNum uint64
 	for v := range ch {
 		k := v
-		if time.Since(v.Time).Seconds() > writeTTLSeconds*0.5 {
+		if time.Since(v.Time).Seconds() > writeTTL.Seconds()*0.5 {
 			// set initial timer to half cache
-			k.Time = time.Now().Add(-1 * time.Duration(0.5*writeTTLSeconds*float64(time.Second)))
+			k.Time = time.Now().Add(-1 * time.Duration(0.5*writeTTL.Seconds()*float64(time.Second)))
+			refreshedTTLNum++
 		}
 		vc.ContainsOrAdd(v.Entry.Message.Pubkey, k)
 	}
-	l.With(log.F{"count": vc.Len()}).Info("Loaded cache validators")
+	l.With(log.F{"count": vc.Len(), "refreshed": refreshedTTLNum}).Info("Loaded cache validators")
 }
 
 func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c bcli.BeaconConfig) (*bcli.MultiBeaconClient, error) {
