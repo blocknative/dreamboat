@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -473,9 +474,10 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, wri
 	var refreshedTTLNum uint64
 	for v := range ch {
 		k := v
+		// this is needed for deployments and restarts, so we would not purge cache entirely
 		if time.Since(v.Time).Seconds() > writeTTL.Seconds()*0.5 {
-			// set initial timer to half cache
-			k.Time = time.Now().Add(-1 * time.Duration(0.5*writeTTL.Seconds()*float64(time.Second)))
+			// set initial timer between 1/4 and 1/2 amount cache
+			k.Time = time.Now().Add(-1 * (time.Duration(int64(0.25*writeTTL.Seconds())) + time.Duration(rand.Int63n(int64(0.25*writeTTL.Seconds()))*int64(time.Second))))
 			refreshedTTLNum++
 		}
 		vc.ContainsOrAdd(v.Entry.Message.Pubkey, k)
