@@ -2,6 +2,8 @@ package config
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Config struct {
@@ -303,7 +305,7 @@ var DefaultWarehouseConfig = &WarehouseConfig{
 type DistributedConfig struct {
 	Redis *RedisStreamConfig `config:"redis"`
 
-	InstanceID string `config:"id"`
+	InstanceID uuid.UUID `config:"id"`
 
 	// Number of workers for storing data in warehouse, if 0, then data is not exported
 	WorkerNumber int `config:"workers"`
@@ -313,6 +315,17 @@ type DistributedConfig struct {
 
 	// stream entire block for every bid that is served in GetHeader requests.
 	StreamServedBids bool `config:"stream_served_bids"`
+}
+
+// LocalNode returns a unique identifier for the locally-running relay.  If the
+// InstanceID field is set, LocalNode() returns its value.  Else, a random UUID
+// is generated and assigned to InstanceID before LocalNode() returns.
+func (c *DistributedConfig) LocalNode() uuid.UUID {
+	if c.InstanceID == uuid.Nil {
+		c.InstanceID = uuid.Must(uuid.NewRandom())
+	}
+
+	return c.InstanceID
 }
 
 var DefaultDistributedConfig = &DistributedConfig{
