@@ -153,6 +153,9 @@ type BeaconConfig struct {
 	// comma separate list of urls to beacon endpoints
 	PublishAddresses []string `config:"publish_addresses,allow_dynamic"`
 
+	// comma separate list of urls to beacon endpoints
+	PublishAddressesV2 []string `config:"publish_addresses_v2,allow_dynamic"`
+
 	// should payload attributes be enabled
 	PayloadAttributesSubscription bool `config:"payload_attributes_subscription,allow_dynamic"`
 

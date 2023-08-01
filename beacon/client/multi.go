@@ -26,6 +26,7 @@ type BeaconNode interface {
 	Genesis() (structs.GenesisInfo, error)
 	GetForkSchedule() (*GetForkScheduleResponse, error)
 	PublishBlock(context.Context, structs.SignedBeaconBlock) error
+	PublishV2Block(context.Context, structs.SignedBeaconBlock) error
 	Randao(structs.Slot) (string, error)
 	Endpoint() string
 	GetWithdrawals(structs.Slot) (*GetWithdrawalsResponse, error)
@@ -33,8 +34,9 @@ type BeaconNode interface {
 }
 
 type MultiBeaconClient struct {
-	Log     log.Logger
-	Clients []BeaconNode
+	Log              log.Logger
+	Clients          []BeaconNode
+	PublishV2Clients []BeaconNode
 
 	bestBeaconIndex uberatomic.Int64
 }
@@ -248,6 +250,12 @@ func (b *MultiBeaconClient) PublishBlock(ctx context.Context, block structs.Sign
 		go publishAsync(ctx, c, b.Log, block, resp)
 	}
 
+	for _, client := range b.PublishV2Clients {
+		i++
+		c := client
+		go publishV2Async(ctx, c, b.Log, block, resp)
+	}
+
 	var (
 		defError error
 		r        int
@@ -273,6 +281,16 @@ func (b *MultiBeaconClient) PublishBlock(ctx context.Context, block structs.Sign
 
 func publishAsync(ctx context.Context, client BeaconNode, l log.Logger, block structs.SignedBeaconBlock, resp chan<- error) {
 	err := client.PublishBlock(ctx, block)
+	if err != nil {
+		l.WithError(err).
+			WithField("endpoint", client.Endpoint()).
+			Warn("failed to publish block to beacon")
+	}
+	resp <- err
+}
+
+func publishV2Async(ctx context.Context, client BeaconNode, l log.Logger, block structs.SignedBeaconBlock, resp chan<- error) {
+	err := client.PublishV2Block(ctx, block)
 	if err != nil {
 		l.WithError(err).
 			WithField("endpoint", client.Endpoint()).

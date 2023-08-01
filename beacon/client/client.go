@@ -279,6 +279,48 @@ func (b *beaconClient) PublishBlock(ctx context.Context, block structs.SignedBea
 		return fmt.Errorf("fail to marshal block: %w", err)
 	}
 
+	t := prometheus.NewTimer(b.m.Timing.WithLabelValues("/eth/v1/beacon/blocks", "POST"))
+	defer t.ObserveDuration()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.beaconEndpoint.String()+"/eth/v1/beacon/blocks", buff)
+	if err != nil {
+		return fmt.Errorf("fail to publish block: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("fail to publish block: %w", err)
+	}
+
+	if resp.StatusCode == 202 { // https://ethereum.github.io/beacon-APIs/#/Beacon/publishBlock
+		return ErrBlockPublish202
+	} else if resp.StatusCode >= 300 {
+		ec := &struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}{}
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("fail to read read error response body: %w", err)
+		}
+
+		if err = json.Unmarshal(bodyBytes, ec); err != nil {
+			return fmt.Errorf("fail to unmarshal error response: %w", err)
+		}
+		return fmt.Errorf("%w: %s", ErrHTTPErrorResponse, ec.Message)
+	}
+
+	return nil
+}
+
+func (b *beaconClient) PublishV2Block(ctx context.Context, block structs.SignedBeaconBlock) error {
+	buff := bytes.NewBuffer(nil)
+	enc := json.NewEncoder(buff)
+	if err := enc.Encode(block); err != nil {
+		return fmt.Errorf("fail to marshal block: %w", err)
+	}
+
 	// UNSUPPORTED BY BEACONS RIGHT NOW - exists in documentation
 	// payload, err := block.MarshalSSZ()
 	// if err != nil {
