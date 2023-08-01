@@ -520,14 +520,6 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 }
 
 func newStreamClient(cfg *config.DistributedConfig, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) *stream.Client {
-	//// TODO:  move this to where the stream subscribers are actually started
-	// timeStreamStart := time.Now()
-	// defer func() {
-	// 	l.WithField("relay-service", "stream-subscriber").
-	// 		WithField("startTimeMs", time.Since(timeStreamStart).Milliseconds()).
-	// 		Info("initialized")
-	// }()
-
 	return &stream.Client{
 		State: st,
 		Logger: l.
@@ -549,22 +541,4 @@ func newStreamClient(cfg *config.DistributedConfig, redisClient *redis.Client, l
 		NumWorkers: cfg.WorkerNumber,
 		Metrics:    m,
 	}
-
-	// // ...
-
-	// streamConfig := stream.StreamConfig{
-	// 	Logger:          l,
-	// 	ID:              id,
-	// 	PubsubTopic:     cfg.Redis.Topic,
-	// 	StreamQueueSize: cfg.StreamQueueSize,
-	// }
-
-	// redisStreamer := stream.NewClient(pubsub, st, streamConfig)
-	// redisStreamer.AttachMetrics(m)
-
-	// if err := redisStreamer.RunSubscriberParallel(ctx, uint(cfg.WorkerNumber)); err != nil {
-	// 	return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
-	// }
-
-	// return redisStreamer, nil
 }
