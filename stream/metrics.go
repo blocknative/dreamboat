@@ -1,14 +1,13 @@
 package stream
 
 import (
-	"github.com/blocknative/dreamboat/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type StreamMetrics struct {
-	RecvCounter *prometheus.CounterVec
-	Timing      *prometheus.HistogramVec
-	PublishSize *prometheus.HistogramVec
+type streamMetrics struct {
+	RecvCounter    *prometheus.CounterVec
+	Timing         *prometheus.HistogramVec
+	PublishSize    *prometheus.HistogramVec
 	PublishCounter *prometheus.CounterVec
 }
 
@@ -40,11 +39,9 @@ func (s *Client) initMetrics() {
 		Name:      "publishCounter",
 		Help:      "Number of publications per function",
 	}, []string{"function"})
-}
 
-func (s *Client) AttachMetrics(m *metrics.Metrics) {
-	m.Register(s.m.RecvCounter)
-	m.Register(s.m.Timing)
-	m.Register(s.m.PublishSize)
-	m.Register(s.m.PublishCounter)
+	s.Metrics.Register(s.m.RecvCounter)
+	s.Metrics.Register(s.m.Timing)
+	s.Metrics.Register(s.m.PublishSize)
+	s.Metrics.Register(s.m.PublishCounter)
 }
