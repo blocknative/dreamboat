@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 
 	"time"
@@ -27,7 +27,6 @@ import (
 	"github.com/blocknative/dreamboat/sim"
 	"github.com/blocknative/dreamboat/sim/client/fallback"
 	"github.com/blocknative/dreamboat/stream"
-	"github.com/google/uuid"
 	badger "github.com/ipfs/go-ds-badger2"
 
 	fileS "github.com/blocknative/dreamboat/cmd/dreamboat/config/source/file"
@@ -123,7 +122,7 @@ func main() {
 	var (
 		storage  datastore.TTLStorage
 		badgerDs *badger.Datastore
-		streamer relay.Streamer
+		streamer *stream.Client
 		err      error
 	)
 
@@ -143,24 +142,25 @@ func main() {
 		readClient := redis.NewClient(&redis.Options{
 			Addr: cfg.Payload.Redis.Read.Address,
 		})
+		defer readClient.Close()
 		m.RegisterRedis("redis", "readreplica", readClient)
 
 		writeClient := redis.NewClient(&redis.Options{
 			Addr: cfg.Payload.Redis.Write.Address,
 		})
+		defer writeClient.Close()
 		m.RegisterRedis("redis", "master", writeClient)
 		storage = &dsRedis.RedisDatastore{Read: readClient, Write: writeClient}
 
 		redisClient := redis.NewClient(&redis.Options{
 			Addr: cfg.Distributed.Redis.Address,
 		})
-
+		defer redisClient.Close()
 		m.RegisterRedis("redis", "stream", redisClient)
-		streamer, err = initStreamer(ctx, cfg.Distributed, redisClient, logger, m, state)
-		if err != nil {
-			logger.WithError(err).Error("fail to create streamer")
-			return
-		}
+
+		streamer = newStreamClient(cfg.Distributed, redisClient, logger, m, state)
+		defer streamer.Close()
+
 	} else {
 		storage = badgerDs
 	}
@@ -529,34 +529,52 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 	return types.ComputeDomain(domainType, forkVersion, genesisValidatorsRoot), nil
 }
 
-func initStreamer(ctx context.Context, cfg *config.DistributedConfig, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) (relay.Streamer, error) {
-	timeStreamStart := time.Now()
+func newStreamClient(cfg *config.DistributedConfig, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) *stream.Client {
+	//// TODO:  move this to where the stream subscribers are actually started
+	// timeStreamStart := time.Now()
+	// defer func() {
+	// 	l.WithField("relay-service", "stream-subscriber").
+	// 		WithField("startTimeMs", time.Since(timeStreamStart).Milliseconds()).
+	// 		Info("initialized")
+	// }()
 
-	pubsub := &redisStream.Pubsub{Redis: redisClient, Logger: l}
-
-	id := cfg.InstanceID
-	if id == "" {
-		id = uuid.NewString()
+	return &stream.Client{
+		State: st,
+		Logger: l.
+			WithField("subService", "stream").
+			WithField("type", "redis"),
+		Bids: &redisStream.Topic{
+			Redis:     redisClient,
+			Logger:    l.WithField("topic", stream.BidTopic),
+			Name:      path.Join(cfg.Redis.Topic, stream.BidTopic),
+			LocalNode: cfg.LocalNode(),
+		},
+		Cache: &redisStream.Topic{
+			Redis:     redisClient,
+			Logger:    l.WithField("topic", stream.CacheTopic),
+			Name:      path.Join(cfg.Redis.Topic, stream.CacheTopic),
+			LocalNode: cfg.LocalNode(),
+		},
+		QueueSize:  cfg.StreamQueueSize,
+		NumWorkers: cfg.WorkerNumber,
+		Metrics:    m,
 	}
 
-	streamConfig := stream.StreamConfig{
-		Logger:          l,
-		ID:              id,
-		PubsubTopic:     cfg.Redis.Topic,
-		StreamQueueSize: cfg.StreamQueueSize,
-	}
+	// // ...
 
-	redisStreamer := stream.NewClient(pubsub, st, streamConfig)
-	redisStreamer.AttachMetrics(m)
+	// streamConfig := stream.StreamConfig{
+	// 	Logger:          l,
+	// 	ID:              id,
+	// 	PubsubTopic:     cfg.Redis.Topic,
+	// 	StreamQueueSize: cfg.StreamQueueSize,
+	// }
 
-	if err := redisStreamer.RunSubscriberParallel(ctx, uint(cfg.WorkerNumber)); err != nil {
-		return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
-	}
+	// redisStreamer := stream.NewClient(pubsub, st, streamConfig)
+	// redisStreamer.AttachMetrics(m)
 
-	l.With(log.F{
-		"relay-service": "stream-subscriber",
-		"startTimeMs":   time.Since(timeStreamStart).Milliseconds(),
-	}).Info("initialized")
+	// if err := redisStreamer.RunSubscriberParallel(ctx, uint(cfg.WorkerNumber)); err != nil {
+	// 	return nil, fmt.Errorf("fail to start stream subscriber: %w", err)
+	// }
 
-	return redisStreamer, nil
+	// return redisStreamer, nil
 }
