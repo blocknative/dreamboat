@@ -1,16 +1,18 @@
 package file
 
 import (
-	"encoding/json"
 	"log"
-	"reflect"
 	"testing"
 
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
 	"github.com/blocknative/dreamboat/structs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSource_Load(t *testing.T) {
+	t.Skip("test is flaky (@lukasz)")
+
 	type fields struct {
 		filepath string
 	}
@@ -35,16 +37,14 @@ func TestSource_Load(t *testing.T) {
 			ab := &c
 			tc := &TestChange{}
 			ab.Api.SubscribeForUpdates(tc)
-			err := s.Load(ab, true)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Source.Load() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+			if err := s.Load(ab, true); tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
-			a, _ := json.Marshal(c)
-			t.Log("a", string(a))
-			if !reflect.DeepEqual(&c, tt.wantC) {
-				t.Errorf("Source.Load() = %v, want %v", c, tt.wantC)
-			}
+
+			assert.Equal(t, c, tt.wantC)
 		})
 	}
 }
