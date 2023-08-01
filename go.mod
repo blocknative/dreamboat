@@ -13,6 +13,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.1
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ds-badger2 v0.1.3
+	github.com/jpillora/backoff v1.0.0
 	github.com/lib/pq v1.10.8
 	github.com/lthibault/log v1.2.3
 	github.com/pkg/errors v0.9.1
