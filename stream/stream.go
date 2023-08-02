@@ -166,7 +166,7 @@ func (c *Client) subscribe(ps PubSub, handle func(transport.Message)) {
 	}
 }
 
-func (c *Client) handleBid(msg transport.Message) {
+func (c *Client) handleBid(msg transport.Message) error {
 	var (
 		bb structs.BuilderBidExtended
 	)
@@ -175,31 +175,19 @@ func (c *Client) handleBid(msg transport.Message) {
 	case transport.BellatrixJson:
 		var bbb bellatrix.BuilderBidExtended
 		if err := json.Unmarshal(msg.Payload, &bbb); err != nil {
-			c.Logger.WithError(err).
-				WithField("method", "runBuilderBidSubscriber").
-				WithField("forkEncoding", forkEncoding).
-				Warn("failed to decode builder bid")
-			return
+			return err
 		}
 		bb = &bbb
 	case transport.CapellaJson:
 		var cbb capella.BuilderBidExtended
 		if err := json.Unmarshal(msg.Payload, &cbb); err != nil {
-			c.Logger.WithError(err).
-				WithField("method", "runBuilderBidSubscriber").
-				WithField("forkEncoding", forkEncoding).
-				Warn("failed to decode builder bid")
-			return
+			return err
 		}
 		bb = &cbb
 	case transport.CapellaSSZ:
 		var cbb capella.BuilderBidExtended
 		if err := cbb.UnmarshalSSZ(msg.Payload); err != nil {
-			c.Logger.WithError(err).
-				WithField("method", "runBuilderBidSubscriber").
-				WithField("forkEncoding", forkEncoding).
-				Warn("failed to decode builder bid")
-			return
+			return err
 		}
 		bb = &cbb
 	default:
