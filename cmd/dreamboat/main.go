@@ -543,15 +543,12 @@ func newStreamClient(cfg *config.DistributedConfig, redisClient *redis.Client, l
 		LocalNode: cfg.LocalNode(),
 	}
 
-	return &stream.Client{
-		Logger: l.
-			WithField("subService", "stream").
-			WithField("type", "redis"),
-		Metrics:    m,
-		State:      st,
-		Bids:       bids,
-		Cache:      cache,
-		QueueSize:  cfg.StreamQueueSize,
-		NumWorkers: cfg.WorkerNumber,
-	}
+	return stream.NewClient(
+		l.WithField("subService", "stream").WithField("type", "redis"),
+		m,
+		st,
+		bids,
+		cache,
+		cfg,
+	)
 }
