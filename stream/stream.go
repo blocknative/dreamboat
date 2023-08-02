@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
+	"github.com/blocknative/dreamboat/metrics"
 	"github.com/blocknative/dreamboat/stream/transport"
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/blocknative/dreamboat/structs/forks/bellatrix"
@@ -40,8 +41,6 @@ type Metrics interface {
 }
 
 type Client struct {
-	once sync.Once
-
 	Logger                log.Logger
 	State                 State
 	Bids, Cache           PubSub
@@ -59,33 +58,37 @@ type Client struct {
 	st State
 }
 
-func (c *Client) init() {
-	c.once.Do(func() {
-		c.initMetrics()
+func NewClient(l log.Logger, m *metrics.Metrics, s State, bids, cache PubSub, cfg *config.DistributedConfig) *Client {
+	c := &Client{
+		State: s,
+		Logger: l.
+			WithField("subService", "stream").
+			WithField("type", "redis"),
+		Bids:       bids,
+		Cache:      cache,
+		QueueSize:  cfg.StreamQueueSize,
+		NumWorkers: cfg.WorkerNumber,
+		Metrics:    m,
+	}
 
-		if c.Logger == nil {
-			c.Logger = log.New()
-		}
+	c.initMetrics()
 
-		c.builderBidOut = make(chan structs.BuilderBidExtended, c.QueueSize)
-		c.cacheOut = make(chan structs.BlockAndTraceExtended, c.QueueSize)
+	c.builderBidOut = make(chan structs.BuilderBidExtended, c.QueueSize)
+	c.cacheOut = make(chan structs.BlockAndTraceExtended, c.QueueSize)
 
-		c.ctx, c.cancel = context.WithCancel(context.Background())
-		go c.subscribe(c.Bids, c.handleBid)
-		go c.subscribe(c.Cache, c.handleCache)
-	})
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	go c.subscribe(c.Bids, c.handleBid)
+	go c.subscribe(c.Cache, c.handleCache)
+
+	return c
 }
 
 func (c *Client) Close() error {
-	c.once.Do(func() {
-		c.ctx, c.cancel = context.WithCancel(context.Background())
-	})
 	c.cancel()
 	return nil
 }
 
 func (s *Client) BlockCache() <-chan structs.BlockAndTraceExtended {
-	s.init()
 	return s.cacheOut
 }
 
@@ -188,8 +191,6 @@ func (c *Client) handleBid(msg transport.Message) error {
 }
 
 func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidExtended) error {
-	s.init()
-
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "encode"))
@@ -224,8 +225,6 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 }
 
 func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTraceExtended) error {
-	s.init()
-
 	timer0 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "all"))
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "encode"))

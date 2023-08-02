@@ -30,6 +30,7 @@ import (
 	badger "github.com/ipfs/go-ds-badger2"
 
 	fileS "github.com/blocknative/dreamboat/cmd/dreamboat/config/source/file"
+	redis_stream "github.com/blocknative/dreamboat/stream/transport/redis"
 
 	"github.com/blocknative/dreamboat/cmd/dreamboat/config"
 	"github.com/blocknative/dreamboat/datastore"
@@ -41,8 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/types"
-
-	redisStream "github.com/blocknative/dreamboat/stream/transport/redis"
 
 	trPostgres "github.com/blocknative/dreamboat/datastore/transport/postgres"
 
@@ -530,25 +529,29 @@ func ComputeDomain(domainType types.DomainType, forkVersionHex string, genesisVa
 }
 
 func newStreamClient(cfg *config.DistributedConfig, redisClient *redis.Client, l log.Logger, m *metrics.Metrics, st stream.State) *stream.Client {
+	bids := &redis_stream.Topic{
+		Redis:     redisClient,
+		Logger:    l.WithField("topic", stream.BidTopic),
+		Name:      path.Join(cfg.Redis.Topic, stream.BidTopic),
+		LocalNode: cfg.LocalNode(),
+	}
+
+	cache := &redis_stream.Topic{
+		Redis:     redisClient,
+		Logger:    l.WithField("topic", stream.CacheTopic),
+		Name:      path.Join(cfg.Redis.Topic, stream.CacheTopic),
+		LocalNode: cfg.LocalNode(),
+	}
+
 	return &stream.Client{
-		State: st,
 		Logger: l.
 			WithField("subService", "stream").
 			WithField("type", "redis"),
-		Bids: &redisStream.Topic{
-			Redis:     redisClient,
-			Logger:    l.WithField("topic", stream.BidTopic),
-			Name:      path.Join(cfg.Redis.Topic, stream.BidTopic),
-			LocalNode: cfg.LocalNode(),
-		},
-		Cache: &redisStream.Topic{
-			Redis:     redisClient,
-			Logger:    l.WithField("topic", stream.CacheTopic),
-			Name:      path.Join(cfg.Redis.Topic, stream.CacheTopic),
-			LocalNode: cfg.LocalNode(),
-		},
+		Metrics:    m,
+		State:      st,
+		Bids:       bids,
+		Cache:      cache,
 		QueueSize:  cfg.StreamQueueSize,
 		NumWorkers: cfg.WorkerNumber,
-		Metrics:    m,
 	}
 }
