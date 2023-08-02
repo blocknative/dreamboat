@@ -20,6 +20,10 @@ type Topic struct {
 	LocalNode uuid.UUID
 }
 
+func (t *Topic) String() string {
+	return t.Name
+}
+
 func (t *Topic) Publish(ctx context.Context, m transport.Message) error {
 	m.Source = t.LocalNode
 

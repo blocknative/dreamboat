@@ -26,6 +26,7 @@ const (
 )
 
 type PubSub interface {
+	String() string
 	Publish(context.Context, transport.Message) error
 	Subscribe(context.Context) transport.Subscription
 }
@@ -89,62 +90,39 @@ func (s *Client) BlockCache() <-chan structs.BlockAndTraceExtended {
 	return s.cacheOut
 }
 
-func (c *Client) handleCache(msg transport.Message) {
-	var (
-		receivedAt = time.Now()
-		bbt        structs.BlockAndTraceExtended
-	)
+func (c *Client) handleCache(msg transport.Message) error {
+	var bbt structs.BlockAndTraceExtended
 
 	switch forkEncoding := msg.ForkEncoding; forkEncoding {
 	case transport.BellatrixJson:
 		var bbbt bellatrix.BlockBidAndTrace
 		if err := json.Unmarshal(msg.Payload, &bbbt); err != nil {
-			c.Logger.WithError(err).
-				WithField("method", "runCacheSubscriber").
-				WithField("forkEncoding", forkEncoding).
-				Warn("failed to decode cache")
-			return
+			return err
 		}
 		bbt = &bbbt
 	case transport.CapellaJson:
 		var cbbt capella.BlockAndTraceExtended
 		if err := json.Unmarshal(msg.Payload, &cbbt); err != nil {
-			c.Logger.WithError(err).
-				WithField("method", "runCacheSubscriber").
-				WithField("forkEncoding", forkEncoding).
-				Warn("failed to decode cache")
-			return
+			return err
 		}
 		bbt = &cbbt
 	case transport.CapellaSSZ:
 		var cbbt capella.BlockAndTraceExtended
 		if err := cbbt.UnmarshalSSZ(msg.Payload); err != nil {
-			c.Logger.WithError(err).
-				WithField("method", "runCacheSubscriber").
-				WithField("forkEncoding", forkEncoding).
-				Warn("failed to decode cache")
-			return
+			return err
 		}
 		bbt = &cbbt
 	default:
-		c.Logger.
-			WithField("method", "runCacheSubscriber").
-			WithField("forkEncoding", forkEncoding).
-			Warn("unkown cache forkEncoding")
-		return
+		return fmt.Errorf("unknown fork encoding: %d", forkEncoding)
 	}
 
 	select {
 	case <-c.ctx.Done():
-	case c.cacheOut <- bbt:
-		c.Logger.With(log.F{
-			"method":    "runCacheSubscriber",
-			"itemType":  "blockCache",
-			"blockHash": bbt.ExecutionPayload().BlockHash(),
-			"timestamp": receivedAt.String(),
-		}).Debug("received")
+		return c.ctx.Err()
 
+	case c.cacheOut <- bbt:
 		c.m.RecvCounter.WithLabelValues("cache").Inc()
+		return nil
 	}
 }
 
@@ -152,7 +130,7 @@ func (s *Client) BuilderBid() <-chan structs.BuilderBidExtended {
 	return s.builderBidOut
 }
 
-func (c *Client) subscribe(ps PubSub, handle func(transport.Message)) {
+func (c *Client) subscribe(ps PubSub, handle func(transport.Message) error) {
 	s := c.Bids.Subscribe(c.ctx)
 	defer s.Close()
 
@@ -162,15 +140,20 @@ func (c *Client) subscribe(ps PubSub, handle func(transport.Message)) {
 			return // subscription only returns fatal errors
 		}
 
-		handle(msg)
+		if err = handle(msg); err != nil {
+			if err == context.Canceled {
+				return
+			}
+
+			c.Logger.WithError(err).
+				WithField("topic", ps.String()).
+				Warn("failed to handle subscription event")
+		}
 	}
 }
 
 func (c *Client) handleBid(msg transport.Message) error {
-	var (
-		receivedAt = time.Now()
-		bb         structs.BuilderBidExtended
-	)
+	var bb structs.BuilderBidExtended
 
 	switch forkEncoding := msg.ForkEncoding; forkEncoding {
 	case transport.BellatrixJson:
@@ -192,24 +175,16 @@ func (c *Client) handleBid(msg transport.Message) error {
 		}
 		bb = &cbb
 	default:
-		c.Logger.
-			WithField("method", "runBuilderBidSubscriber").
-			WithField("forkEncoding", forkEncoding).
-			Warn("unkown builder bid forkEncoding")
-		return
+		return fmt.Errorf("unknown fork encoding: %d", forkEncoding)
 	}
 
 	select {
 	case <-c.ctx.Done():
-	case c.builderBidOut <- bb:
-		c.Logger.With(log.F{
-			"method":    "runBuilderBidSubscriber",
-			"itemType":  "builderBid",
-			"blockHash": bb.BuilderBid().Header().GetBlockHash(),
-			"timestamp": receivedAt.String(),
-		}).Debug("received")
+		return c.ctx.Err()
 
+	case c.builderBidOut <- bb:
 		c.m.RecvCounter.WithLabelValues("bid").Inc()
+		return nil
 	}
 }
 
