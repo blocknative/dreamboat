@@ -55,12 +55,10 @@ func Decode(b []byte) (Message, error) {
 		return Message{}, ErrDecodeVarint
 	}
 
-	b = b[n:]
-
 	switch ForkVersionFormat(varint) {
 	case BellatrixJson, CapellaJson:
 		var msg Message
-		if err := json.Unmarshal(b, &msg); err != nil {
+		if err := json.Unmarshal(b[n:], &msg); err != nil {
 			return Message{}, err
 		}
 		return msg, nil
