@@ -49,7 +49,6 @@ type Client struct {
 	Metrics Metrics
 	m       streamMetrics
 
-	ctx    context.Context
 	cancel context.CancelFunc
 
 	builderBidOut chan structs.BuilderBidExtended
@@ -76,9 +75,10 @@ func NewClient(l log.Logger, m *metrics.Metrics, s State, bids, cache PubSub, cf
 	c.builderBidOut = make(chan structs.BuilderBidExtended, c.QueueSize)
 	c.cacheOut = make(chan structs.BlockAndTraceExtended, c.QueueSize)
 
-	c.ctx, c.cancel = context.WithCancel(context.Background())
-	go c.subscribe(c.Bids, c.handleBid)
-	go c.subscribe(c.Cache, c.handleCache)
+	var ctx context.Context
+	ctx, c.cancel = context.WithCancel(context.Background())
+	go subscribe(ctx, c.Logger, c.Bids, c.handleBid)
+	go subscribe(ctx, c.Logger, c.Cache, c.handleCache)
 
 	return c
 }
@@ -92,7 +92,7 @@ func (s *Client) BlockCache() <-chan structs.BlockAndTraceExtended {
 	return s.cacheOut
 }
 
-func (c *Client) handleCache(msg transport.Message) error {
+func (c *Client) handleCache(ctx context.Context, msg transport.Message) error {
 	var bbt structs.BlockAndTraceExtended
 
 	switch forkEncoding := msg.ForkEncoding; forkEncoding {
@@ -119,8 +119,8 @@ func (c *Client) handleCache(msg transport.Message) error {
 	}
 
 	select {
-	case <-c.ctx.Done():
-		return c.ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 
 	case c.cacheOut <- bbt:
 		c.m.RecvCounter.WithLabelValues("cache").Inc()
@@ -132,29 +132,29 @@ func (s *Client) BuilderBid() <-chan structs.BuilderBidExtended {
 	return s.builderBidOut
 }
 
-func (c *Client) subscribe(ps PubSub, handle func(transport.Message) error) {
-	s := c.Bids.Subscribe(c.ctx)
+func subscribe(ctx context.Context, log log.Logger, ps PubSub, handle func(context.Context, transport.Message) error) {
+	s := ps.Subscribe(ctx)
 	defer s.Close()
 
 	for {
-		msg, err := s.Next(c.ctx)
+		msg, err := s.Next(ctx)
 		if err != nil {
 			return // subscription only returns fatal errors
 		}
 
-		if err = handle(msg); err != nil {
+		if err = handle(ctx, msg); err != nil {
 			if err == context.Canceled {
 				return
 			}
 
-			c.Logger.WithError(err).
+			log.WithError(err).
 				WithField("topic", ps.String()).
 				Warn("failed to handle subscription event")
 		}
 	}
 }
 
-func (c *Client) handleBid(msg transport.Message) error {
+func (c *Client) handleBid(ctx context.Context, msg transport.Message) error {
 	var bb structs.BuilderBidExtended
 
 	switch forkEncoding := msg.ForkEncoding; forkEncoding {
@@ -181,8 +181,8 @@ func (c *Client) handleBid(msg transport.Message) error {
 	}
 
 	select {
-	case <-c.ctx.Done():
-		return c.ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 
 	case c.builderBidOut <- bb:
 		c.m.RecvCounter.WithLabelValues("bid").Inc()
