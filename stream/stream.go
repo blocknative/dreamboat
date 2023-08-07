@@ -43,7 +43,6 @@ type Metrics interface {
 
 type Client struct {
 	Logger                log.Logger
-	State                 State
 	Bids, Cache           PubSub
 	QueueSize, NumWorkers int
 
@@ -60,7 +59,6 @@ type Client struct {
 
 func NewClient(l log.Logger, m *metrics.Metrics, s State, bids, cache PubSub, cfg *config.DistributedConfig) *Client {
 	c := &Client{
-		State: s,
 		Logger: l.
 			WithField("subService", "stream").
 			WithField("type", "redis"),
@@ -69,6 +67,7 @@ func NewClient(l log.Logger, m *metrics.Metrics, s State, bids, cache PubSub, cf
 		QueueSize:  cfg.StreamQueueSize,
 		NumWorkers: cfg.WorkerNumber,
 		Metrics:    m,
+		st:         s,
 	}
 
 	c.initMetrics()
