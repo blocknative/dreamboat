@@ -195,7 +195,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 
 	timer1 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "encode"))
 	forkEncoding := toBidFormat(s.st.ForkVersion(structs.Slot(bid.Slot())))
-	b, err := s.encode(bid, forkEncoding)
+	msg, err := s.encode(bid, forkEncoding)
 	if err != nil {
 		timer1.ObserveDuration()
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
@@ -211,7 +211,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "publish"))
 	l.WithField("timestamp", time.Now().String()).Debug("publishing")
-	if err := s.Bids.Publish(ctx, b); err != nil {
+	if err := s.Bids.Publish(ctx, msg); err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
 	l.WithField("timestamp", time.Now().String()).Debug("published")
