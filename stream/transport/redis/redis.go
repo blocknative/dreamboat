@@ -37,6 +37,7 @@ func (t *Topic) Publish(ctx context.Context, m transport.Message) error {
 
 func (t *Topic) Subscribe(ctx context.Context) transport.Subscription {
 	return Subscription{
+		Logger:    t.Logger,
 		PubSub:    t.Redis.Subscribe(ctx, t.Name),
 		LocalNode: t.LocalNode,
 	}
