@@ -32,15 +32,15 @@ import (
 // TestSubmitBlocksCancel - this should probably go to auctioneer
 
 type fields struct {
-	d           Datastore
-	das         DataAPIStore
-	a           Auctioneer
-	ver         Verifier
-	config      RelayConfig
-	cache       ValidatorCache
-	vstore      ValidatorStore
-	bvc         BlockValidationClient
-	beacon      Beacon
+	d      Datastore
+	das    DataAPIStore
+	a      Auctioneer
+	ver    Verifier
+	config RelayConfig
+	cache  ValidatorCache
+	vstore ValidatorStore
+	bvc    BlockValidationClient
+	//beacon      Beacon
 	beaconState State
 	pc          PayloadCache
 	wh          Warehouse
@@ -179,15 +179,15 @@ func simpletest(t require.TestingT, ctrl *gomock.Controller, fork structs.ForkVe
 	wh.EXPECT().StoreAsync(gomock.Any(), gomock.Any()).Times(1)
 
 	return fields{
-		config:      conf,
-		d:           ds,
-		das:         das,
-		a:           a,
-		ver:         verify,
-		cache:       cache,
-		vstore:      vstore,
-		bvc:         bvc,
-		beacon:      mocks.NewMockBeacon(ctrl),
+		config: conf,
+		d:      ds,
+		das:    das,
+		a:      a,
+		ver:    verify,
+		cache:  cache,
+		vstore: vstore,
+		bvc:    bvc,
+		//	beacon:      mocks.NewMockBeacon(ctrl),
 		beaconState: state,
 		pc:          pc,
 		wh:          wh,

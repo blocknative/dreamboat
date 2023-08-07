@@ -31,8 +31,6 @@ type ValidatorCache interface {
 
 type State interface {
 	/*
-
-
 		Duties() structs.DutiesState
 		SetDuties(structs.DutiesState)
 
@@ -92,15 +90,15 @@ func NewManager(l log.Logger, ba BeaconAddresses, cfg Config) *Manager {
 	}
 }
 
-func (s *Manager) Sync(ctx context.Context, state State, d Datastore, vCache ValidatorCache) error {
+func (s *Manager) Sync(ctx context.Context, state State) error {
 	logger := s.Log.WithField("method", "Init")
 
-	headSlot, err := waitForSynced(ctx, c)
+	headSlot, err := waitForSynced(ctx, address)
 	if err != nil {
 		return err
 	}
 
-	genesis, err := client.Genesis(ctx)
+	genesis, err := client.Genesis(ctx, address)
 	if err != nil {
 		return fmt.Errorf("fail to get genesis from beacon: %w", err)
 	}
@@ -119,42 +117,7 @@ func (s *Manager) Sync(ctx context.Context, state State, d Datastore, vCache Val
 		!fork.IsCapella(headSlot, headSlot/structs.NumberOfSlotsInState) {
 		return ErrUnkownFork
 	}
-	/*
-		ctx, cancel := context.WithCancel(ctx) // for stopping subscription after init is done
-		defer cancel()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case event := <-c:
-				headSlot := structs.Slot(event.Data.ProposalSlot - 1)
-				state.SetHeadSlotIfHigher(headSlot)
-
-				// update proposer duties and known validators
-				if err := s.updateKnownValidators(ctx, state, client, headSlot); err != nil {
-					logger.WithError(err).Error("failed to update known validators")
-					continue
-				}
-
-				entries, err := s.getProposerDuties(ctx, client, headSlot)
-				if err != nil {
-					return err
-				}
-				s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
-
-				var receivedParentBlockHash types.Hash
-				if err := receivedParentBlockHash.UnmarshalText([]byte(event.Data.ParentBlockHash)); err != nil {
-					return fmt.Errorf("failed to unmarshal parentBlockHash: %w", err)
-				}
-
-				if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash); err != nil {
-					return err
-				}
-				return nil
-			}
-		}
-	*/
+	return nil
 }
 
 func (m *Manager) initForkEpoch(ctx context.Context, state State) error {
@@ -179,8 +142,7 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State) error {
 	return nil
 }
 
-func waitForSynced(ctx context.Context) (uint64, error) {
-
+func waitForSynced(ctx context.Context, addresses []string) (uint64, error) {
 	for {
 		status, err := client.SyncStatus(ctx, "")
 		if err != nil {
@@ -436,6 +398,43 @@ type PayloadAttributes struct {
 	SuggestedFeeRecipient string                `json:"suggested_fee_recipient"`
 	Withdrawals           []*structs.Withdrawal `json:"withdrawals"`
 }
+
+/*
+	ctx, cancel := context.WithCancel(ctx) // for stopping subscription after init is done
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case event := <-c:
+			headSlot := structs.Slot(event.Data.ProposalSlot - 1)
+			state.SetHeadSlotIfHigher(headSlot)
+
+			// update proposer duties and known validators
+			if err := s.updateKnownValidators(ctx, state, client, headSlot); err != nil {
+				logger.WithError(err).Error("failed to update known validators")
+				continue
+			}
+
+			entries, err := s.getProposerDuties(ctx, client, headSlot)
+			if err != nil {
+				return err
+			}
+			s.storeProposerDuties(ctx, state, d, vCache, headSlot, entries)
+
+			var receivedParentBlockHash types.Hash
+			if err := receivedParentBlockHash.UnmarshalText([]byte(event.Data.ParentBlockHash)); err != nil {
+				return fmt.Errorf("failed to unmarshal parentBlockHash: %w", err)
+			}
+
+			if err := s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+*/
 
 /*
 func (b *MultiBeaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan HeadEvent) {

@@ -135,7 +135,7 @@ type Relay struct {
 
 	bvc BlockValidationClient
 
-	publishBlock PublishBlock
+	publishBlock []PublishBlock
 	beaconState  State
 
 	wh Warehouse
@@ -148,7 +148,7 @@ type Relay struct {
 }
 
 // NewRelay relay service
-func NewRelay(l log.Logger, config *RelayConfig, publishBlock PublishBlock, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
+func NewRelay(l log.Logger, config *RelayConfig, publishBlock []PublishBlock, vcache ValidatorCache, vstore ValidatorStore, ver Verifier, beaconState State, pcache PayloadCache, d Datastore, das DataAPIStore, a Auctioneer, bvc BlockValidationClient, wh Warehouse, s Streamer) *Relay {
 	rs := &Relay{
 		pc:            pcache,
 		d:             d,
@@ -516,7 +516,10 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 			logger.WithField("event", "publish_encode_error").WithError(err).Error("fail to encode block")
 			return nil, ErrWrongPayload
 		}
-		if err = MultiPublishBlock(context.Background(), logger, rs.publishBlock, bblock); err != nil {
+		if err = MultiPublishBlock(context.Background(), logger, []mPublish{
+			{F: rs.publishBlock[0], Addresses: []string{}},
+			{F: rs.publishBlock[1], Addresses: []string{}},
+		}, bblock); err != nil {
 			logger.WithField("event", "publish_error").WithError(err).Error("fail to publish block to beacon node")
 		}
 		logger.WithField("event", "published").Info("published block to beacon node")
@@ -648,29 +651,38 @@ type lastDelivered struct {
 	blockHash types.Hash
 }
 
-func MultiPublishBlock(ctx context.Context, l log.Logger, publish PublishBlock, addresses []string, block []byte) (err error) {
+type mPublish struct {
+	F         PublishBlock
+	Addresses []string
+}
 
-	resp := make(chan error, len(addresses))
-	for _, address := range addresses {
-		go publishAsync(ctx, l, publish, address, block, resp)
+func MultiPublishBlock(ctx context.Context, l log.Logger, publish []mPublish, block []byte) (err error) {
+
+	resp := make(chan error, 100)
+	var sent int
+	for _, p := range publish {
+		for _, address := range p.Addresses {
+			sent++
+			go publishAsync(ctx, l, p.F, address, block, resp)
+		}
 	}
 
 	var (
 		defError error
-		r        int
+		recv     int
 	)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case e := <-resp:
-			r++
+			recv++
 			switch e {
 			case nil:
 				return nil
 			default:
 				defError = e
-				if r == len(addresses) {
+				if recv == sent {
 					return defError
 				}
 			}
