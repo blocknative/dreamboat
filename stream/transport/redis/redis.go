@@ -2,7 +2,6 @@ package redis_stream
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -27,7 +26,7 @@ func (t *Topic) String() string {
 func (t *Topic) Publish(ctx context.Context, m transport.Message) error {
 	m.Source = t.LocalNode
 
-	b, err := json.Marshal(&m)
+	b, err := transport.Encode(m)
 	if err != nil {
 		return fmt.Errorf("marshal json: %w", err)
 	}
