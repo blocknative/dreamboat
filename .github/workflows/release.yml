@@ -17,7 +17,7 @@ jobs:
       - name: Checkout the codebase
         uses: actions/checkout@v2
       - name: build the app
-        uses: wangyoucao577/go-release-action@v1.26
+        uses: wangyoucao577/go-release-action@v1.38
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.goos }}
