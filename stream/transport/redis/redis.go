@@ -68,7 +68,12 @@ func (s Subscription) Next(ctx context.Context) (transport.Message, error) {
 				WithField("attempt", b.Attempt()).
 				WithField("backoff", b.ForAttempt(b.Attempt())).
 				Warn("failed to get subscription message from redis")
-			time.Sleep(b.Duration())
+			select {
+			case <-time.After(b.Duration()):
+			case <-ctx.Done():
+				return transport.Message{}, ctx.Err()
+			}
+
 			continue
 		}
 
