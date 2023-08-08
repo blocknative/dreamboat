@@ -29,10 +29,35 @@ type Subscription interface {
 
 type ForkVersionFormat uint64
 
+func (f ForkVersionFormat) String() string {
+	switch f {
+	case Unknown:
+		return "none"
+	case AltairJson:
+		return "altair/json"
+	case BellatrixJson:
+		return "bellatrix/json"
+	case CapellaJson:
+		return "capella/json"
+	case CapellaSSZ:
+		return "capella/ssz"
+	}
+
+	return fmt.Sprintf("invalid: %d", f)
+}
+
 type Message struct {
 	Source       uuid.UUID
 	ForkEncoding ForkVersionFormat
 	Payload      []byte
+}
+
+func (m Message) Loggable() map[string]any {
+	return map[string]any{
+		"source":        m.Source,
+		"fork_encoding": m.ForkEncoding,
+		"n_bytes":       len(m.Payload),
+	}
 }
 
 func Encode(m Message) ([]byte, error) {
