@@ -24,6 +24,7 @@ jobs:
           goos: ${{ matrix.goos }}
           goversion: ${{ matrix.goversion }}
           goarch: ${{ matrix.goarch }}
+          goversion: ${{ matrix.goversion }}
           binary_name: dreamboat
           asset_name: ${{ github.ref_name }}-dreamboat-${{ matrix.goos }}-${{ matrix.goarch }}
           project_path: ./cmd/dreamboat
