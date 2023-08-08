@@ -136,6 +136,8 @@ func subscribe(ctx context.Context, log log.Logger, ps PubSub, handle func(conte
 	s := ps.Subscribe(ctx)
 	defer s.Close()
 
+	log = log.WithField("topic", ps.String())
+
 	for {
 		msg, err := s.Next(ctx)
 		if err != nil {
@@ -147,10 +149,12 @@ func subscribe(ctx context.Context, log log.Logger, ps PubSub, handle func(conte
 				return
 			}
 
-			log.WithError(err).
-				WithField("topic", ps.String()).
+			log.With(msg).
+				WithError(err).
 				Warn("failed to handle subscription event")
 		}
+
+		log.With(msg).Debug("handled subscription event")
 	}
 }
 
