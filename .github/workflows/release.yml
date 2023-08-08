@@ -13,6 +13,7 @@ jobs:
         # build and publish in parallel: linux/amd64
         goos: [linux]
         goarch: [amd64]
+        goversion: ["1.20"]
     steps:
       - name: Checkout the codebase
         uses: actions/checkout@v2
@@ -22,6 +23,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
+          goversion: ${{ matrix.goversion }}
           binary_name: dreamboat
           asset_name: ${{ github.ref_name }}-dreamboat-${{ matrix.goos }}-${{ matrix.goarch }}
           project_path: ./cmd/dreamboat
