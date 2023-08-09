@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/lthibault/log"
 	"github.com/prometheus/client_golang/prometheus"
@@ -94,7 +95,7 @@ func (s *Client) BlockCache() <-chan structs.BlockAndTraceExtended {
 func (c *Client) handleCache(ctx context.Context, msg transport.Message) error {
 	var bbt structs.BlockAndTraceExtended
 
-	switch forkEncoding := msg.ForkEncoding; forkEncoding {
+	switch forkEncoding := msg.Encoding; forkEncoding {
 	case transport.BellatrixJson:
 		var bbbt bellatrix.BlockBidAndTrace
 		if err := json.Unmarshal(msg.Payload, &bbbt); err != nil {
@@ -161,7 +162,7 @@ func subscribe(ctx context.Context, log log.Logger, ps PubSub, handle func(conte
 func (c *Client) handleBid(ctx context.Context, msg transport.Message) error {
 	var bb structs.BuilderBidExtended
 
-	switch forkEncoding := msg.ForkEncoding; forkEncoding {
+	switch forkEncoding := msg.Encoding; forkEncoding {
 	case transport.BellatrixJson:
 		var bbb bellatrix.BuilderBidExtended
 		if err := json.Unmarshal(msg.Payload, &bbb); err != nil {
@@ -206,20 +207,19 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 	}
 	timer1.ObserveDuration()
 
-	// l := s.Logger.With(log.F{
-	// 	"method":   "publishBuilderBid",
-	// 	"itemType": "builderBid",
-	// 	// "size":      len(b),
-	// 	"blockHash": bid.BuilderBid().Header().GetBlockHash(),
-	// })
+	l := s.Logger.With(msg).With(log.F{
+		"method":    "publishBuilderBid",
+		"itemType":  "builderBid",
+		"blockHash": bid.BuilderBid().Header().GetBlockHash(),
+	})
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "publish"))
-	// l.WithField("timestamp", time.Now().String()).Debug("publishing")
 	if err := s.Bids.Publish(ctx, msg); err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
-	// l.WithField("timestamp", time.Now().String()).Debug("published")
 	timer2.ObserveDuration()
+	l.WithField("timestamp", time.Now()).
+		Debug("published")
 
 	// s.m.PublishSize.WithLabelValues("publishBuilderBid").Observe(float64(len(b)))
 	// s.m.PublishCounter.WithLabelValues("publishBuilderBid").Add(float64(len(b)))
@@ -240,21 +240,19 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 	}
 	timer1.ObserveDuration()
 
-	// l := s.Logger.With(log.F{
-	// 	"method":   "publishBlockCache",
-	// 	"itemType": "blockCache",
-	// 	// "size":      len(b),
-	// 	"blockHash": block.ExecutionPayload().BlockHash(),
-	// 	"timestamp": time.Now().String(),
-	// })
+	l := s.Logger.With(msg).With(log.F{
+		"method":    "publishBlockCache",
+		"itemType":  "blockCache",
+		"blockHash": block.ExecutionPayload().BlockHash(),
+	})
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "publish"))
-	// l.WithField("timestamp", time.Now().String()).Debug("publishing")
 	if err := s.Cache.Publish(ctx, msg); err != nil {
 		return fmt.Errorf("fail to publish cache block: %w", err)
 	}
-	//l.WithField("timestamp", time.Now().String()).Debug("published")
 	timer2.ObserveDuration()
+	l.WithField("timestamp", time.Now()).
+		Debug("published")
 
 	// s.m.PublishSize.WithLabelValues("publishBlockCache").Observe(float64(len(b)))
 	// s.m.PublishCounter.WithLabelValues("publishBlockCache").Add(float64(len(b)))
@@ -267,35 +265,23 @@ func (s *Client) PublishSlotDelivered(ctx context.Context, slot structs.Slot) er
 	return nil // TODO
 }
 
-func (s *Client) encode(data any, fvf transport.ForkVersionFormat) (transport.Message, error) {
-	var (
-		rawData []byte
-		err     error
-	)
+func (s *Client) encode(data any, e transport.Encoding) (m transport.Message, err error) {
+	switch m.Encoding = e; e { // NOTE:  we set the message's encoding field
+	case transport.CapellaSSZ:
+		if enc, ok := data.(EncoderSSZ); ok {
+			m.Payload, err = enc.MarshalSSZ()
+			break
+		}
+		err = errors.New("unable to cast to SSZ encoder")
 
-	if fvf == transport.CapellaSSZ {
-		enc, ok := data.(EncoderSSZ)
-		if !ok {
-			return transport.Message{}, errors.New("unable to cast to SSZ encoder")
-		}
-		rawData, err = enc.MarshalSSZ()
-		if err != nil {
-			return transport.Message{}, err
-		}
-	} else {
-		rawData, err = json.Marshal(data)
-		if err != nil {
-			return transport.Message{}, err
-		}
+	default:
+		m.Payload, err = json.Marshal(data)
 	}
 
-	return transport.Message{
-		Payload:      rawData,
-		ForkEncoding: fvf, // NOTE:  Source set by Publish
-	}, nil
+	return
 }
 
-func toBidFormat(fork structs.ForkVersion) transport.ForkVersionFormat {
+func toBidFormat(fork structs.ForkVersion) transport.Encoding {
 	switch fork {
 	case structs.ForkAltair:
 		return transport.AltairJson
@@ -308,7 +294,7 @@ func toBidFormat(fork structs.ForkVersion) transport.ForkVersionFormat {
 	}
 }
 
-func toBlockCacheFormat(fork structs.ForkVersion) transport.ForkVersionFormat {
+func toBlockCacheFormat(fork structs.ForkVersion) transport.Encoding {
 	switch fork {
 	case structs.ForkAltair:
 		return transport.AltairJson

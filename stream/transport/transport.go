@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,9 +26,9 @@ type Subscription interface {
 	Close() error
 }
 
-type ForkVersionFormat uint64
+type Encoding uint16
 
-func (f ForkVersionFormat) String() string {
+func (f Encoding) String() string {
 	switch f {
 	case Unknown:
 		return "none"
@@ -47,48 +46,24 @@ func (f ForkVersionFormat) String() string {
 }
 
 type Message struct {
-	Source       uuid.UUID
-	ForkEncoding ForkVersionFormat
-	Payload      []byte
+	Source   uuid.UUID
+	Encoding Encoding
+	Payload  []byte
 }
 
 func (m Message) Loggable() map[string]any {
 	return map[string]any{
 		"source":        m.Source,
-		"fork_encoding": m.ForkEncoding,
+		"fork_encoding": m.Encoding,
 		"n_bytes":       len(m.Payload),
 	}
 }
 
 func Encode(m Message) ([]byte, error) {
-	rawItem, err := json.Marshal(m)
-	if err != nil {
-		return nil, err
-	}
-	// encode the varint with a variable size
-	varintBytes := make([]byte, binary.MaxVarintLen64)
-	n := binary.PutUvarint(varintBytes, CapellaJson)
-	varintBytes = varintBytes[:n]
-
-	// append the varint
-	return append(varintBytes, rawItem...), nil
+	return json.Marshal(m)
 }
 
-func Decode(b []byte) (Message, error) {
-	varint, n := binary.Uvarint(b)
-	if n <= 0 {
-		return Message{}, ErrDecodeVarint
-	}
-
-	switch ForkVersionFormat(varint) {
-	case BellatrixJson, CapellaJson:
-		var msg Message
-		if err := json.Unmarshal(b[n:], &msg); err != nil {
-			return Message{}, err
-		}
-		return msg, nil
-
-	default:
-		return Message{}, fmt.Errorf("invalid fork version: %d", varint)
-	}
+func Decode(b []byte) (m Message, err error) {
+	err = json.Unmarshal(b, &m)
+	return
 }
