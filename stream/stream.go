@@ -215,7 +215,7 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "publish"))
 	if err := s.Bids.Publish(ctx, msg); err != nil {
-		return fmt.Errorf("fail to encode encode and stream block: %w", err)
+		return fmt.Errorf("publish bid: %w", err)
 	}
 	timer2.ObserveDuration()
 	l.WithField("timestamp", time.Now()).
@@ -248,7 +248,7 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "publish"))
 	if err := s.Cache.Publish(ctx, msg); err != nil {
-		return fmt.Errorf("fail to publish cache block: %w", err)
+		return fmt.Errorf("publish block: %w", err)
 	}
 	timer2.ObserveDuration()
 	l.WithField("timestamp", time.Now()).
