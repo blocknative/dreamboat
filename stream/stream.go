@@ -169,7 +169,7 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 	var bb structs.BuilderBidExtended
 
 	for raw := range s.builderBidIn {
-		receivedAt := time.Now()
+		// receivedAt := time.Now()
 		sData, err := s.decode(raw)
 		if err != nil {
 			l.WithError(err).Warn("failed to decode builder bid  wrapper")
@@ -206,11 +206,14 @@ func (s *Client) RunBuilderBidSubscriber(ctx context.Context) error {
 			l.WithField("forkEncoding", forkEncoding).Warn("unkown builder bid forkEncoding")
 			continue
 		}
-		l.With(log.F{
-			"itemType":  "builderBid",
-			"blockHash": bb.BuilderBid().Header().GetBlockHash(),
-			"timestamp": receivedAt.String(),
-		}).Debug("received")
+
+		/*
+			l.With(log.F{
+				"itemType":  "builderBid",
+				"blockHash": bb.BuilderBid().Header().GetBlockHash(),
+				"timestamp": receivedAt.String(),
+			}).Debug("received")
+		*/
 
 		s.m.RecvCounter.WithLabelValues("bid").Inc()
 		select {
@@ -237,20 +240,20 @@ func (s *Client) PublishBuilderBid(ctx context.Context, bid structs.BuilderBidEx
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
 	timer1.ObserveDuration()
-
-	l := s.Logger.With(log.F{
-		"method":    "publishBuilderBid",
-		"itemType":  "builderBid",
-		"size":      len(b),
-		"blockHash": bid.BuilderBid().Header().GetBlockHash(),
-	})
-
+	/*
+		l := s.Logger.With(log.F{
+			"method":    "publishBuilderBid",
+			"itemType":  "builderBid",
+			"size":      len(b),
+			"blockHash": bid.BuilderBid().Header().GetBlockHash(),
+		})
+	*/
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishBuilderBid", "publish"))
-	l.WithField("timestamp", time.Now().String()).Debug("publishing")
+	//l.WithField("timestamp", time.Now().String()).Debug("publishing")
 	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+BidTopic, b); err != nil {
 		return fmt.Errorf("fail to encode encode and stream block: %w", err)
 	}
-	l.WithField("timestamp", time.Now().String()).Debug("published")
+	// l.WithField("timestamp", time.Now().String()).Debug("published")
 	timer2.ObserveDuration()
 
 	s.m.PublishSize.WithLabelValues("publishBuilderBid").Observe(float64(len(b)))
@@ -271,21 +274,21 @@ func (s *Client) PublishBlockCache(ctx context.Context, block structs.BlockAndTr
 		return fmt.Errorf("fail to encode cache block: %w", err)
 	}
 	timer1.ObserveDuration()
-
-	l := s.Logger.With(log.F{
-		"method":    "publishBlockCache",
-		"itemType":  "blockCache",
-		"size":      len(b),
-		"blockHash": block.ExecutionPayload().BlockHash(),
-		"timestamp": time.Now().String(),
-	})
-
+	/*
+		l := s.Logger.With(log.F{
+			"method":    "publishBlockCache",
+			"itemType":  "blockCache",
+			"size":      len(b),
+			"blockHash": block.ExecutionPayload().BlockHash(),
+			"timestamp": time.Now().String(),
+		})
+	*/
 	timer2 := prometheus.NewTimer(s.m.Timing.WithLabelValues("publishCacheBlock", "publish"))
-	l.WithField("timestamp", time.Now().String()).Debug("publishing")
+	//l.WithField("timestamp", time.Now().String()).Debug("publishing")
 	if err := s.Pubsub.Publish(ctx, s.Config.PubsubTopic+CacheTopic, b); err != nil {
 		return fmt.Errorf("fail to publish cache block: %w", err)
 	}
-	l.WithField("timestamp", time.Now().String()).Debug("published")
+	//l.WithField("timestamp", time.Now().String()).Debug("published")
 	timer2.ObserveDuration()
 
 	s.m.PublishSize.WithLabelValues("publishBlockCache").Observe(float64(len(b)))

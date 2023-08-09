@@ -97,5 +97,8 @@ type GetHeaderResponse interface {
 }
 
 type SignedBeaconBlock interface {
+	ConsensusVersion() string
+
 	Signature() types.Signature
+	MarshalSSZ() ([]byte, error)
 }

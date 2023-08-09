@@ -99,7 +99,7 @@ SendPayloads:
 		rs.m.RegistrationsCacheHits.WithLabelValues("miss").Inc()
 
 		checkTime := time.Now()
-		o, ok := verifyOther(rs.beaconState, rs.regMngr, i, p)
+		o, ok := verifyOther(rs.beaconState, i, p)
 		if !ok {
 			response.Close(i, o.Err)
 			break SendPayloads
@@ -156,7 +156,7 @@ SendPayloads:
 	return err
 }
 
-func verifyOther(beacon State, tsReg RegistrationManager, i int, sp types.SignedValidatorRegistration) (svresp verify.Resp, ok bool) {
+func verifyOther(beacon State, i int, sp types.SignedValidatorRegistration) (svresp verify.Resp, ok bool) {
 	if sp.Message.Timestamp > uint64(time.Now().Add(10*time.Second).Unix()) {
 		return verify.Resp{Commit: false, ID: i, Err: fmt.Errorf("request too far in future for %s", sp.Message.Pubkey.String())}, false
 	}

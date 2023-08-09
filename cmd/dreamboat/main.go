@@ -183,13 +183,13 @@ func main() {
 		BeaconQueryTimeout: cfg.Beacon.QueryTimeout,
 	}
 
-	beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, m, beaconConfig)
+	beaconCli, err := initBeaconClients(logger, cfg.Beacon.Addresses, nil, m, beaconConfig)
 	if err != nil {
 		logger.WithError(err).Error("fail to initialize beacon")
 		return
 	}
 
-	beaconPubCli, err := initBeaconClients(logger, cfg.Beacon.PublishAddresses, m, beaconConfig)
+	beaconPubCli, err := initBeaconClients(logger, cfg.Beacon.PublishAddresses, cfg.Beacon.PublishAddressesV2, m, beaconConfig)
 	if err != nil {
 		logger.WithError(err).Error("fail to initialize publish beacon")
 		return
@@ -231,7 +231,7 @@ func main() {
 	// DATAAPI
 	var daDS relay.DataAPIStore
 	if cfg.DataAPI.DB.URL != "" {
-		valPG, err := trPostgres.Open(cfg.DataAPI.DB.URL, cfg.DataAPI.DB.MaxOpenConns, cfg.DataAPI.DB.MaxIdleConns, cfg.DataAPI.DB.ConnMaxIdleTime) // TODO(l): make configurable
+		valPG, err := trPostgres.Open(cfg.DataAPI.DB.URL, cfg.DataAPI.DB.MaxOpenConns, cfg.DataAPI.DB.MaxIdleConns, cfg.DataAPI.DB.ConnMaxIdleTime)
 		if err != nil {
 			logger.WithError(err).Error("failed to connect to dataapi database")
 		}
@@ -485,7 +485,7 @@ func preloadValidators(ctx context.Context, l log.Logger, vs ValidatorStore, wri
 	l.With(log.F{"count": vc.Len(), "refreshed": refreshedTTLNum}).Info("Loaded cache validators")
 }
 
-func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c bcli.BeaconConfig) (*bcli.MultiBeaconClient, error) {
+func initBeaconClients(l log.Logger, endpoints []string, v2endpoints []string, m *metrics.Metrics, c bcli.BeaconConfig) (*bcli.MultiBeaconClient, error) {
 	clients := make([]bcli.BeaconNode, 0, len(endpoints))
 
 	for _, endpoint := range endpoints {
@@ -496,7 +496,17 @@ func initBeaconClients(l log.Logger, endpoints []string, m *metrics.Metrics, c b
 		client.AttachMetrics(m) // attach metrics
 		clients = append(clients, client)
 	}
-	return bcli.NewMultiBeaconClient(l, clients), nil
+
+	mbc := bcli.NewMultiBeaconClient(l, clients)
+	for _, endpoint := range v2endpoints {
+		client, err := bcli.NewBeaconClient(l, endpoint, c)
+		if err != nil {
+			return nil, err
+		}
+		client.AttachMetrics(m) // attach metrics
+		mbc.PublishV2Clients = append(mbc.PublishV2Clients, client)
+	}
+	return mbc, nil
 }
 
 func closemanager(ctx context.Context, finish chan struct{}, regMgr *validators.StoreManager, r *relay.Relay, relayWh *wh.Warehouse) {

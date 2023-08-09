@@ -139,6 +139,20 @@ func (mr *MockBeaconNodeMockRecorder) PublishBlock(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishBlock", reflect.TypeOf((*MockBeaconNode)(nil).PublishBlock), arg0, arg1)
 }
 
+// PublishV2Block mocks base method.
+func (m *MockBeaconNode) PublishV2Block(arg0 context.Context, arg1 structs.SignedBeaconBlock) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishV2Block", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PublishV2Block indicates an expected call of PublishV2Block.
+func (mr *MockBeaconNodeMockRecorder) PublishV2Block(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishV2Block", reflect.TypeOf((*MockBeaconNode)(nil).PublishV2Block), arg0, arg1)
+}
+
 // Randao mocks base method.
 func (m *MockBeaconNode) Randao(arg0 structs.Slot) (string, error) {
 	m.ctrl.T.Helper()
