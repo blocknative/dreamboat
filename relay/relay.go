@@ -425,12 +425,12 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 		logger.WithField("msIntoSlot", msIntoSlot).Debug("requested too early - delaying")
 		time.Sleep(time.Duration(delayMillis) * time.Millisecond)
 	}
-
-	proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
-	if !ok {
-		return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.ProposerIndex())
-	}
-
+	/*
+		proposerPubkey, ok := rs.beaconState.KnownValidators().KnownValidatorsByIndex[payloadRequest.ProposerIndex()]
+		if !ok {
+			return nil, fmt.Errorf("%w for index %d", ErrUnknownValidator, payloadRequest.ProposerIndex())
+		}
+	*/
 	tVerify := time.Now()
 	pk, err := types.HexToPubkey(proposerPubkey.String())
 	if err != nil {

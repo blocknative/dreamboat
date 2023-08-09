@@ -57,8 +57,6 @@ type State interface {
 	SetFork(structs.ForkState)
 
 	SetPayloadAttributesState(slot uint64)
-
-	SimpleBySlot(slot uint64)
 }
 
 type Config struct {
@@ -107,11 +105,13 @@ func (s *Manager) Sync(ctx context.Context, state State) error {
 		WithField("genesis-time", time.Unix(int64(genesis.GenesisTime), 0)).
 		Info("genesis retrieved")
 
-	if err := s.initForkEpoch(ctx, state); err != nil {
+	fork, err := s.initForkEpoch(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to set fork state: %w", err)
 	}
+	state.SetFork(fork)
 
-	fork := state.Fork()
+	//fork := state.Fork()
 	if !fork.IsAltair(headSlot, headSlot/structs.NumberOfSlotsInState) &&
 		!fork.IsBellatrix(headSlot, headSlot/structs.NumberOfSlotsInState) &&
 		!fork.IsCapella(headSlot, headSlot/structs.NumberOfSlotsInState) {
@@ -120,13 +120,13 @@ func (s *Manager) Sync(ctx context.Context, state State) error {
 	return nil
 }
 
-func (m *Manager) initForkEpoch(ctx context.Context, state State) error {
+func (m *Manager) initForkEpoch(ctx context.Context) (forkState structs.ForkState, err error) {
 	forkSchedule, err := client.GetForkSchedule(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get fork: %w", err)
+		return forkState, fmt.Errorf("failed to get fork: %w", err)
 	}
 
-	forkState := structs.ForkState{}
+	forkState = structs.ForkState{}
 	for _, fork := range forkSchedule.Data {
 		switch fork.CurrentVersion {
 		case m.Config.AltairForkVersion:
@@ -138,8 +138,7 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State) error {
 		}
 	}
 
-	state.SetFork(forkState)
-	return nil
+	return forkState, nil
 }
 
 func waitForSynced(ctx context.Context, addresses []string) (uint64, error) {
@@ -157,7 +156,7 @@ func waitForSynced(ctx context.Context, addresses []string) (uint64, error) {
 		select {
 		case <-ctx.Done():
 			return status.HeadSlot, ctx.Err()
-		case <-time.After(1 * time.Second):
+		case <-time.After(500 * time.Millisecond):
 		}
 	}
 }
@@ -183,10 +182,10 @@ func (s *Manager) Run(ctx context.Context, state State, d Datastore, vCache Vali
 
 			err := s.processNewSlot(ctx, state, client, ev, d, vCache)
 
-			headSlot := state.HeadSlot()
-			validators := state.KnownValidators()
-			duties := state.Duties()
-			parentHash := state.ParentBlockHash()
+			//  headSlot := state.HeadSlot()
+			//	validators := state.KnownValidators()
+			//	duties := state.Duties()
+			//	parentHash := state.ParentBlockHash()
 
 			logger = logger.With(log.F{
 				"epoch":                     structs.ToEpoch(headSlot),
@@ -219,13 +218,14 @@ func PayloadAttributesMultisubscribe(slotC chan PayloadAttributesEvent) {
 	}
 }
 
-func (s *Manager) processNewSlot(ctx context.Context, state State, event bcli.PayloadAttributesEvent, d Datastore, vCache ValidatorCache) error {
+func (s *Manager) processNewSlot(ctx context.Context, state State, event PayloadAttributesEvent, d Datastore, vCache ValidatorCache) error {
 	logger := s.Log.WithField("method", "ProcessNewSlot")
 
 	var (
 		receivedParentBlockHash    types.Hash
 		currParentBlockHash        = state.ParentBlockHash()
-		receivedSlot               = structs.Slot(event.Data.ProposalSlot - 1)
+		receivedSlot               = event.Data.ProposalSlot - 1
+		receivedEpoch              = structs.ToEpoch(receivedSlot)
 		currHeadSlot, isNewHighest = state.SetHeadSlotIfHigher(receivedSlot)
 	)
 
@@ -239,7 +239,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, event bcli.Pa
 	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash == currParentBlockHash {
 		logger.WithField("slotHead", currHeadSlot).Debug("received duplicate payload attributes")
 		return nil
-	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash != currParentBlockHash && !(state.Fork().IsAltair(receivedSlot) || state.Fork().IsBellatrix(receivedSlot)) {
+	} else if !isNewHighest && receivedSlot == currHeadSlot && receivedParentBlockHash != currParentBlockHash && !(state.Fork().IsAltair(receivedSlot, receivedEpoch) || state.Fork().IsBellatrix(receivedSlot, receivedEpoch)) {
 		logger.
 			WithField("slotHead", currHeadSlot).
 			WithField("currParentBlockHash", currParentBlockHash).
@@ -257,7 +257,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, event bcli.Pa
 	currHeadSlot = receivedSlot
 	logger = logger.WithField("slotHead", currHeadSlot)
 
-	if fork := state.Fork().Version(receivedSlot); fork == structs.ForkAltair || fork == structs.ForkBellatrix {
+	if fork := state.Fork().Version(receivedSlot, receivedEpoch); fork == structs.ForkAltair || fork == structs.ForkBellatrix {
 		return fmt.Errorf("unknown fork: %d", fork)
 	}
 
@@ -280,14 +280,15 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, event bcli.Pa
 	}
 	s.storeProposerDuties(ctx, state, d, vCache, structs.Slot(currHeadSlot), entries)
 
-	if state.Fork().IsAltair(receivedSlot) || state.Fork().IsBellatrix(receivedSlot) {
+	if state.Fork().IsAltair(receivedSlot, receivedEpoch) ||
+		state.Fork().IsBellatrix(receivedSlot, receivedEpoch) {
 		return nil
 	}
 
 	return s.updateWithdrawalsAndRandao(ctx, logger, state, event, receivedParentBlockHash)
 }
 
-func (m *Manager) updateWithdrawalsAndRandao(ctx context.Context, logger log.Logger, state State, event bcli.PayloadAttributesEvent, parentHash types.Hash) error {
+func (m *Manager) updateWithdrawalsAndRandao(ctx context.Context, logger log.Logger, state State, event PayloadAttributesEvent, parentHash types.Hash) error {
 	slot := event.Data.ProposalSlot - 1
 
 	hW := structs.HashWithdrawals{Withdrawals: event.Data.PayloadAttributes.Withdrawals}
