@@ -151,6 +151,7 @@ func subscribe(ctx context.Context, log log.Logger, ps PubSub, handle func(conte
 			log.With(msg).
 				WithError(err).
 				Warn("failed to handle subscription event")
+			continue
 		}
 
 		log.With(msg).Debug("handled subscription event")
