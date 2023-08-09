@@ -23,8 +23,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.goos }}
           goversion: ${{ matrix.goversion }}
-          goarch: ${{ matrix.goarch }}
-          goversion: ${{ matrix.goversion }}
+          goarch: ${{ matrix.goarch }} 
           binary_name: dreamboat
           asset_name: ${{ github.ref_name }}-dreamboat-${{ matrix.goos }}-${{ matrix.goarch }}
           project_path: ./cmd/dreamboat
