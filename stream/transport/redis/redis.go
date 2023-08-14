@@ -1,43 +1,95 @@
-package stream
+package redis_stream
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"github.com/blocknative/dreamboat/stream/transport"
+	"github.com/google/uuid"
+	"github.com/jpillora/backoff"
 	"github.com/lthibault/log"
 	"github.com/redis/go-redis/v9"
 )
 
-type Pubsub struct {
-	Redis  *redis.Client
-	Logger log.Logger
+type Topic struct {
+	Redis     *redis.Client
+	Logger    log.Logger
+	Name      string
+	LocalNode uuid.UUID
 }
 
-func (r *Pubsub) Publish(ctx context.Context, topic string, data []byte) error {
-	return r.Redis.Publish(ctx, topic, data).Err()
+func (t *Topic) String() string {
+	return t.Name
 }
 
-func (r *Pubsub) Subscribe(ctx context.Context, topic string) chan []byte {
-	logger := r.Logger.WithField("topic", topic)
+func (t *Topic) Publish(ctx context.Context, m transport.Message) error {
+	m.Source = t.LocalNode
 
-	sub := make(chan []byte)
-	go func() {
-		defer close(sub)
-		for ctx.Err() == nil { // restart on failure
-			pubsub := r.Redis.Subscribe(ctx, topic)
-			logger.Debug("redis subscription started")
+	b, err := transport.Encode(m)
+	if err != nil {
+		return fmt.Errorf("marshal json: %w", err)
+	}
 
-			redisSub := pubsub.Channel()
-			for data := range redisSub {
-				select {
-				case sub <- []byte(data.Payload):
-				case <-ctx.Done():
-					return
-				}
-			}
-			logger.Warn("redis subscription closed")
+	return t.Redis.Publish(ctx, t.Name, b).Err()
+}
+
+func (t *Topic) Subscribe(ctx context.Context) transport.Subscription {
+	return Subscription{
+		Logger:    t.Logger,
+		PubSub:    t.Redis.Subscribe(ctx, t.Name),
+		LocalNode: t.LocalNode,
+	}
+}
+
+type Subscription struct {
+	*redis.PubSub
+	Logger    log.Logger
+	LocalNode uuid.UUID
+}
+
+func (s Subscription) Next(ctx context.Context) (transport.Message, error) {
+	var b = backoff.Backoff{
+		Min:    time.Millisecond,
+		Max:    time.Millisecond * 100,
+		Jitter: true,
+	}
+
+	for {
+		rawMsg, err := s.ReceiveMessage(ctx)
+		switch err {
+		case redis.ErrClosed, context.Canceled:
+			return transport.Message{}, err
 		}
 
-	}()
+		if err != nil {
+			s.Logger.
+				WithError(err).
+				WithField("attempt", b.Attempt()).
+				WithField("backoff", b.ForAttempt(b.Attempt())).
+				Warn("failed to get subscription message from redis")
+			select {
+			case <-time.After(b.Duration()):
+			case <-ctx.Done():
+				return transport.Message{}, ctx.Err()
+			}
 
-	return sub
+			continue
+		}
+
+		b.Reset()
+
+		msg, err := transport.Decode([]byte(rawMsg.Payload))
+		if err != nil {
+			s.Logger.
+				WithError(err).
+				Error("failed to decode subscription message from redis")
+			continue
+		}
+
+		// skip the message if we originally published it
+		if msg.Source != s.LocalNode {
+			return msg, nil
+		}
+	}
 }

@@ -6,24 +6,6 @@ import (
 	"github.com/blocknative/dreamboat/structs/forks/capella"
 )
 
-type Metadata struct {
-	Source       string
-	ForkEncoding ForkVersionFormat
-}
-
-type JsonItem struct {
-	StreamMeta Metadata
-	StreamData []byte
-}
-
-func (d JsonItem) Data() []byte {
-	return d.StreamData
-}
-
-func (d JsonItem) Meta() Metadata {
-	return d.StreamMeta
-}
-
 type HeaderWithSlot struct {
 	ExecutionPayloadHeader structs.ExecutionPayloadHeader
 	HeaderSlot             uint64
