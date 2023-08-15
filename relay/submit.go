@@ -80,7 +80,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 	m.AppendSince(tVerify, "submitBlock", "verify")
 
 	root, wRetried, err := verifyWithdrawals(rs.beaconState, sbr)
-	logger = logger.WithField("withdrawalsRoot", root)
+	logger = logger.With(log.F{"withdrawalsRoot": root, "registeredGasLimit": gasLimit})
 	if err != nil {
 		return fmt.Errorf("failed to verify withdrawals: %w", err)
 	}
