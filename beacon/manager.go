@@ -3,6 +3,7 @@ package beacon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/blocknative/dreamboat/structs"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/lthibault/log"
+	"github.com/r3labs/sse"
 )
 
 var (
@@ -706,27 +708,27 @@ func (b *beaconClient) SubscribeToHeadEvents(ctx context.Context, slotC chan Hea
 	}
 }
 
-func (b *beaconClient) SubscribeToPayloadAttributesEvents(payloadAttributesC chan PayloadAttributesEvent) {
-	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=payload_attributes", b.beaconEndpoint)
-	log := b.log.WithField("url", eventsURL)
+*/
+
+func SubscribeToPayloadAttributesEvents(lo log.Logger, endpoint string, outC chan PayloadAttributesEvent) {
+	eventsURL := fmt.Sprintf("%s/eth/v1/events?topics=payload_attributes", endpoint)
+	l := lo.WithField("url", eventsURL)
 
 	client := sse.NewClient(eventsURL)
-
 	for {
 		err := client.SubscribeRaw(func(msg *sse.Event) {
 			var data PayloadAttributesEvent
 			err := json.Unmarshal(msg.Data, &data)
 			if err != nil {
-				log.WithError(err).Error("could not unmarshal payload_attributes event")
+				l.WithError(err).Error("could not unmarshal payload_attributes event")
 			} else {
-				payloadAttributesC <- data
+				outC <- data
 			}
 		})
 		if err != nil {
-			log.WithError(err).Error("failed to subscribe to payload_attributes events")
+			l.WithError(err).Error("failed to subscribe to payload_attributes events")
 			time.Sleep(1 * time.Second)
 		}
-		b.log.Warn("beaconclient SubscribeRaw ended, reconnecting")
+		l.Warn("beaconclient SubscribeRaw ended, reconnecting")
 	}
 }
-*/
