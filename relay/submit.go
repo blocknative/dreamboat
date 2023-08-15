@@ -89,6 +89,7 @@ func (rs *Relay) SubmitBlock(ctx context.Context, m *structs.MetricGroup, uc str
 	select {
 	case err := <-valErr:
 		if err != nil {
+			logger.WithError(err).Debug("block validation failure")
 			return err
 		}
 	case <-ctx.Done():
