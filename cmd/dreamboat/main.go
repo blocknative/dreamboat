@@ -264,6 +264,7 @@ func main() {
 	b := beacon.NewManager(logger, beacon.Config{
 		BellatrixForkVersion:             chainCfg.BellatrixForkVersion,
 		CapellaForkVersion:               chainCfg.CapellaForkVersion,
+		DenebForkVersion:                 chainCfg.DenebForkVersion,
 		RunPayloadAttributesSubscription: cfg.Beacon.PayloadAttributesSubscription,
 	})
 
@@ -285,6 +286,12 @@ func main() {
 	}
 
 	capellaBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, chainCfg.CapellaForkVersion, chainCfg.GenesisValidatorsRoot)
+	if err != nil {
+		logger.WithError(err).Error("fail to compute proposer domain (capella)")
+		return
+	}
+
+	denebBeaconProposer, err := ComputeDomain(types.DomainTypeBeaconProposer, chainCfg.DenebForkVersion, chainCfg.GenesisValidatorsRoot)
 	if err != nil {
 		logger.WithError(err).Error("fail to compute proposer domain (capella)")
 		return
@@ -327,7 +334,8 @@ func main() {
 		GetPayloadRequestTimeLimit: cfg.Relay.GetPayloadRequestTimeLimit,
 		ProposerSigningDomain: map[structs.ForkVersion]types.Domain{
 			structs.ForkBellatrix: bellatrixBeaconProposer,
-			structs.ForkCapella:   capellaBeaconProposer},
+			structs.ForkCapella:   capellaBeaconProposer,
+			structs.ForkDeneb:     denebBeaconProposer},
 		PubKey:               pk,
 		SecretKey:            sk,
 		RegistrationCacheTTL: cfg.Validators.RegistrationsReadCacheTTL,

@@ -296,6 +296,7 @@ type ForkState struct {
 	AltairEpoch    Epoch
 	BellatrixEpoch Epoch
 	CapellaEpoch   Epoch
+	DenebEpoch     Epoch
 }
 
 type ForkVersion uint8
@@ -305,6 +306,7 @@ const (
 	ForkAltair
 	ForkBellatrix
 	ForkCapella
+	ForkDeneb
 )
 
 func (v ForkVersion) String() string {
@@ -315,13 +317,22 @@ func (v ForkVersion) String() string {
 		return "bellatrix"
 	case ForkCapella:
 		return "capella"
+	case ForkDeneb:
+		return "deneb"
 	default:
 		return "unknown"
 	}
 }
 
+func (fs ForkState) IsDeneb(slot Slot) bool {
+	return fs.DenebEpoch > 0 && slot.Epoch() >= fs.DenebEpoch
+}
+
 func (fs ForkState) IsCapella(slot Slot) bool {
-	return fs.CapellaEpoch > 0 && slot.Epoch() >= fs.CapellaEpoch
+	if fs.DenebEpoch == 0 {
+		return fs.CapellaEpoch > 0 && slot.Epoch() >= fs.CapellaEpoch
+	}
+	return fs.CapellaEpoch > 0 && slot.Epoch() >= fs.CapellaEpoch && slot.Epoch() < fs.DenebEpoch
 }
 
 func (fs ForkState) IsBellatrix(slot Slot) bool {
@@ -336,7 +347,9 @@ func (fs ForkState) IsAltair(slot Slot) bool {
 }
 
 func (fs ForkState) Version(slot Slot) ForkVersion {
-	if fs.IsCapella(slot) {
+	if fs.IsDeneb(slot) {
+		return ForkDeneb
+	} else if fs.IsCapella(slot) {
 		return ForkCapella
 	} else if fs.IsBellatrix(slot) {
 		return ForkBellatrix

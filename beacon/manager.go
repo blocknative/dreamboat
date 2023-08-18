@@ -66,6 +66,7 @@ type Config struct {
 	AltairForkVersion    string
 	BellatrixForkVersion string
 	CapellaForkVersion   string
+	DenebForkVersion     string
 
 	RunPayloadAttributesSubscription bool
 }
@@ -109,7 +110,7 @@ func (s *Manager) Init(ctx context.Context, state State, client BeaconClient, d 
 
 	fork := state.Fork()
 	headSlot := structs.Slot(syncStatus.HeadSlot)
-	if !fork.IsAltair(headSlot) && !fork.IsBellatrix(headSlot) && !fork.IsCapella(headSlot) {
+	if !fork.IsAltair(headSlot) && !fork.IsBellatrix(headSlot) && !fork.IsCapella(headSlot) && !fork.IsDeneb(headSlot) {
 		return ErrUnkownFork
 	}
 
@@ -167,6 +168,8 @@ func (m *Manager) initForkEpoch(ctx context.Context, state State, client BeaconC
 			forkState.BellatrixEpoch = structs.Epoch(fork.Epoch)
 		case m.Config.CapellaForkVersion:
 			forkState.CapellaEpoch = structs.Epoch(fork.Epoch)
+		case m.Config.DenebForkVersion:
+			forkState.DenebEpoch = structs.Epoch(fork.Epoch)
 		}
 	}
 
@@ -288,7 +291,7 @@ func (s *Manager) processNewSlot(ctx context.Context, state State, client Beacon
 	currHeadSlot = receivedSlot
 	logger = logger.WithField("slotHead", currHeadSlot)
 
-	if fork := state.Fork().Version(receivedSlot); fork == structs.ForkAltair || fork == structs.ForkBellatrix {
+	if fork := state.Fork().Version(receivedSlot); fork <= structs.ForkBellatrix {
 		return fmt.Errorf("unknown fork: %d", fork)
 	}
 
