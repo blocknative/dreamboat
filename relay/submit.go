@@ -174,6 +174,22 @@ func (rs *Relay) validateBlock(ctx context.Context, gasLimit uint64, sbr structs
 			return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
 		}
 		return
+
+		// case *deneb.SubmitBlockRequest:
+		// 	hW := structs.HashWithdrawals{Withdrawals: t.Withdrawals()}
+		// 	withdrawalsRoot, err2 := hW.HashTreeRoot()
+		// 	if err2 != nil {
+		// 		return fmt.Errorf("%w: %s", ErrVerification, err2.Error()) // TODO: multiple err wrapping in Go 1.20
+		// 	}
+		// 	rpccall := &rpctypes.BuilderBlockValidationRequestV3{
+		// 		SubmitBlockRequest: t,
+		// 		RegisteredGasLimit: gasLimit,
+		// 		WithdrawalsRoot:    withdrawalsRoot,
+		// 	}
+		// 	if err = rs.bvc.ValidateBlockV3(ctx, rpccall); err != nil {
+		// 		return fmt.Errorf("%w: %s", ErrVerification, err.Error()) // TODO: multiple err wrapping in Go 1.20
+		// 	}
+		// 	return
 	}
 
 	return nil

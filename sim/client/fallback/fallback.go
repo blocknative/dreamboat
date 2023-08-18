@@ -172,3 +172,55 @@ func (f *Fallback) validateBlockV2(ctx context.Context, c sim.Client, block *typ
 	f.m.ServedFrom.WithLabelValues(c.Kind(), "fallback").Inc()
 	return err, true
 }
+
+func (f *Fallback) ValidateBlockV3(ctx context.Context, block *types.BuilderBlockValidationRequestV3) (err error) {
+	if !f.atLeastOne {
+		f.m.ServedFrom.WithLabelValues("none", "error").Inc()
+		return sim.ErrNotFound
+	}
+
+	var keepTrying bool
+	for _, c := range f.clientsRPC {
+		err, keepTrying = f.validateBlockV3(ctx, c, block)
+		if !keepTrying {
+			return err
+		}
+	}
+
+	for _, c := range f.clientsWS {
+		err, keepTrying = f.validateBlockV3(ctx, c, block)
+		if !keepTrying {
+			return err
+		}
+	}
+
+	for _, c := range f.clientsHTTP {
+		err, keepTrying = f.validateBlockV3(ctx, c, block)
+		if !keepTrying {
+			return err
+		}
+	}
+
+	f.m.ServedFrom.WithLabelValues("all", "fatal").Inc()
+	return err
+}
+
+func (f *Fallback) validateBlockV3(ctx context.Context, c sim.Client, block *types.BuilderBlockValidationRequestV3) (err error, keepTrying bool) {
+	if ctx.Err() != nil {
+		f.m.ServedFrom.WithLabelValues(c.Kind(), "ctx").Inc()
+		return ctx.Err(), false
+	}
+	err = c.ValidateBlockV3(ctx, block)
+	if err == nil {
+		f.m.ServedFrom.WithLabelValues(c.Kind(), "ok").Inc()
+		return
+	}
+
+	if !(errors.Is(err, sim.ErrNotFound) || errors.Is(err, sim.ErrConnectionFailure)) {
+		f.m.ServedFrom.WithLabelValues(c.Kind(), "error").Inc()
+		return err, false
+	}
+
+	f.m.ServedFrom.WithLabelValues(c.Kind(), "fallback").Inc()
+	return err, true
+}

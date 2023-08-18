@@ -53,6 +53,7 @@ type BlockValidationClient interface {
 	IsSet() bool
 	ValidateBlock(ctx context.Context, block *rpctypes.BuilderBlockValidationRequest) (err error)
 	ValidateBlockV2(ctx context.Context, block *rpctypes.BuilderBlockValidationRequestV2) (err error)
+	ValidateBlockV3(ctx context.Context, block *rpctypes.BuilderBlockValidationRequestV3) (err error)
 }
 
 type ValidatorStore interface {

@@ -43,8 +43,13 @@ func (f *Client) IsSet() bool {
 func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV1", block)
 }
+
 func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV2", block)
+}
+
+func (c *Client) ValidateBlockV3(ctx context.Context, block *types.BuilderBlockValidationRequestV3) (err error) {
+	return c.validateBlock(ctx, "validateBuilderSubmissionV3", block)
 }
 
 func (c *Client) validateBlock(ctx context.Context, method string, block any) (err error) {

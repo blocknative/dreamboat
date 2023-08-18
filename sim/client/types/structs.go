@@ -16,3 +16,10 @@ type BuilderBlockValidationRequestV2 struct {
 	WithdrawalsRoot    common.Hash `json:"withdrawals_root"`
 	RegisteredGasLimit uint64      `json:"registered_gas_limit,string"`
 }
+
+type BuilderBlockValidationRequestV3 struct {
+	// TODO
+	*capella.SubmitBlockRequest
+	WithdrawalsRoot    common.Hash `json:"withdrawals_root"`
+	RegisteredGasLimit uint64      `json:"registered_gas_limit,string"`
+}
