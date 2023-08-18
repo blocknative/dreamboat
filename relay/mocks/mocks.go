@@ -424,6 +424,20 @@ func (mr *MockBlockValidationClientMockRecorder) ValidateBlockV2(arg0, arg1 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateBlockV2", reflect.TypeOf((*MockBlockValidationClient)(nil).ValidateBlockV2), arg0, arg1)
 }
 
+// ValidateBlockV3 mocks base method.
+func (m *MockBlockValidationClient) ValidateBlockV3(arg0 context.Context, arg1 *types.BuilderBlockValidationRequestV3) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateBlockV3", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ValidateBlockV3 indicates an expected call of ValidateBlockV3.
+func (mr *MockBlockValidationClientMockRecorder) ValidateBlockV3(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateBlockV3", reflect.TypeOf((*MockBlockValidationClient)(nil).ValidateBlockV3), arg0, arg1)
+}
+
 // MockAuctioneer is a mock of Auctioneer interface.
 type MockAuctioneer struct {
 	ctrl     *gomock.Controller

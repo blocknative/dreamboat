@@ -454,6 +454,26 @@ func (rs *Relay) GetPayload(ctx context.Context, m *structs.MetricGroup, uc stru
 	if err != nil || !ok {
 		return nil, ErrInvalidSignature
 	}
+
+	// // verify sidecar signatures
+	// for i, sidecar := range block.Deneb.SignedBlindedBlobSidecars {
+	// 	if sidecar == nil || sidecar.Message == nil {
+	// 		return false, errors.New("nil sidecar or message")
+	// 	}
+	// 	root, err := sidecar.Message.HashTreeRoot()
+	// 	if err != nil {
+	// 		return false, errors.Wrap(err, fmt.Sprintf("failed to calculate hash tree root for sidecar index %d", i))
+	// 	}
+	// 	signingData := phase0.SigningData{ObjectRoot: root, Domain: domain}
+	// 	msg, err := signingData.HashTreeRoot()
+	// 	if err != nil {
+	// 		return false, err
+	// 	}
+
+	// 	if ok, err := bls.VerifySignatureBytes(msg[:], sidecar.Signature[:], pubKey[:]); !ok || err != nil {
+	// 		return false, errors.Wrap(err, fmt.Sprintf("failed to verify signature for sidecar index %d ", i))
+	// 	}
+	// }
 	m.AppendSince(tVerify, "getPayload", "verify")
 
 	tGet := time.Now()
@@ -628,6 +648,35 @@ func validatePayload(expected structs.BlockAndTraceExtended, requested structs.S
 	if have != got {
 		return fmt.Errorf("%w: expected %s, received %s", ErrInvalidExecutionPayload, have, got)
 	}
+
+	// Validate deneb sidecar parameters
+	//
+	// if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Commitments) {
+	// 	return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG commitments")
+	// }
+	// if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Proofs) {
+	// 	return errors.Wrap(ErrBlobMismatch, "mismatched number of KZG proofs length")
+	// }
+	// if len(bb.Deneb.SignedBlindedBlobSidecars) != len(payload.Deneb.BlobsBundle.Blobs) {
+	// 	return errors.Wrap(ErrBlobMismatch, "mismatched number of blobs")
+	// }
+
+	// for i, blindedSidecar := range bb.Deneb.SignedBlindedBlobSidecars {
+	// 	if blindedSidecar.Message.KzgCommitment != payload.Deneb.BlobsBundle.Commitments[i] {
+	// 		return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG commitment at index %d", i))
+	// 	}
+	// 	if blindedSidecar.Message.KzgProof != payload.Deneb.BlobsBundle.Proofs[i] {
+	// 		return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched KZG proof at index %d", i))
+	// 	}
+	// 	blobRootHelper := utildeneb.BeaconBlockBlob{Blob: payload.Deneb.BlobsBundle.Blobs[i]}
+	// 	blobRoot, err := blobRootHelper.HashTreeRoot()
+	// 	if err != nil {
+	// 		return errors.New(fmt.Sprintf("failed to compute blob root at index %d", i))
+	// 	}
+	// 	if blindedSidecar.Message.BlobRoot != blobRoot {
+	// 		return errors.Wrap(ErrBlobMismatch, fmt.Sprintf("mismatched blob root at index %d", i))
+	// 	}
+	// }
 
 	return nil
 }
