@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/lthibault/log"
+
 	sim "github.com/blocknative/dreamboat/sim/client"
 	"github.com/blocknative/dreamboat/sim/client/types"
 )
@@ -14,10 +16,14 @@ type Fallback struct {
 	clientsHTTP []sim.Client
 	atLeastOne  bool
 	m           Metrics
+
+	l log.Logger
 }
 
-func NewFallback() *Fallback {
-	f := &Fallback{}
+func NewFallback(l log.Logger) *Fallback {
+	f := &Fallback{
+		l: l,
+	}
 	f.initMetrics()
 	return f
 }
@@ -117,6 +123,7 @@ func (f *Fallback) validateBlock(ctx context.Context, c sim.Client, block *types
 		return err, false
 	}
 
+	f.l.With(log.F{"node": node}).WithError(err).Warn("validation fallback")
 	f.m.ServedFrom.WithLabelValues(c.Kind(), node, "fallback").Inc()
 	return err, true
 }
@@ -168,6 +175,8 @@ func (f *Fallback) validateBlockV2(ctx context.Context, c sim.Client, block *typ
 		f.m.ServedFrom.WithLabelValues(c.Kind(), node, "error").Inc()
 		return err, false
 	}
+
+	f.l.With(log.F{"node": node}).WithError(err).Warn("validation fallback")
 
 	f.m.ServedFrom.WithLabelValues(c.Kind(), node, "fallback").Inc()
 	return err, true
