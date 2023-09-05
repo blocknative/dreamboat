@@ -40,16 +40,16 @@ func (f *Client) IsSet() bool {
 	return f.namespace != "" && f.address != ""
 }
 
-func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (node string, err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV1", block)
 }
-func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
+func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (node string, err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV2", block)
 }
 
-func (c *Client) validateBlock(ctx context.Context, method string, block any) (err error) {
+func (c *Client) validateBlock(ctx context.Context, method string, block any) (node string, err error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return "", ctx.Err()
 	}
 	buff := new(bytes.Buffer)
 	enc := json.NewEncoder(buff)
@@ -60,16 +60,16 @@ func (c *Client) validateBlock(ctx context.Context, method string, block any) (e
 			Method:     c.namespace + "_" + method,
 			Params:     []interface{}{block},
 		}); err != nil {
-		return err
+		return "", err
 	}
 	resp, err := justsend(ctx, c.client, c.address, buff)
 	if err != nil {
-		return err
+		return c.address, err
 	}
 	if resp.Error != nil && resp.Error.Message != "" {
-		return errors.New(resp.Error.Message)
+		return c.address, errors.New(resp.Error.Message)
 	}
-	return nil
+	return c.address, nil
 }
 
 func justsend(ctx context.Context, client *http.Client, url string, body io.Reader) (rrr types.RpcRawResponse, err error) {

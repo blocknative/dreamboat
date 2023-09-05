@@ -9,6 +9,7 @@ type RpcRawResponse struct {
 	Result     json.RawMessage `json:"result"`
 	Error      *RpcError       `json:"error"`
 	ID         uint64          `json:"id"`
+	Node       string          `json:"node"`
 }
 
 type RpcRequest struct {

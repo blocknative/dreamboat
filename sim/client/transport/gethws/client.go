@@ -43,51 +43,51 @@ func (c *Client) Kind() string {
 	return "ws"
 }
 
-func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
+func (c *Client) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (node string, err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV1", block)
 }
-func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
+func (c *Client) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (node string, err error) {
 	return c.validateBlock(ctx, "validateBuilderSubmissionV2", block)
 }
 
-func (c *Client) validateBlock(ctx context.Context, method string, block any) (err error) {
+func (c *Client) validateBlock(ctx context.Context, method string, block any) (node string, err error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return "", ctx.Err()
 	}
 
 	conn, n, err := c.nodeConn.Get()
 	if err != nil {
-		return client.ErrNotFound
+		return "", client.ErrNotFound
 	}
 
 	params, err := json.Marshal([]any{block})
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	err = c.trySend(ctx, conn, method, params)
+	node, err = c.trySend(ctx, conn, method, params)
 	if c.tryOtherConnection && err == client.ErrConnectionFailure {
 		tConn, iErr := c.nodeConn.TryOtherThan(n)
 		if iErr != nil {
-			return err
+			return node, err
 		}
-		err = c.trySend(ctx, tConn, method, params)
+		node, err = c.trySend(ctx, tConn, method, params)
 	}
 
-	return err
+	return node, err
 }
 
-func (c *Client) trySend(ctx context.Context, conn *Conn, method string, params []byte) (err error) {
+func (c *Client) trySend(ctx context.Context, conn *Conn, method string, params []byte) (node string, err error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return "", ctx.Err()
 	}
 
 	resp, err := conn.RequestRPC(ctx, c.namespace+"_"+method, params)
 	if err != nil {
-		return client.ErrConnectionFailure //err
+		return resp.Node, client.ErrConnectionFailure //err
 	}
 	if resp.Error != nil && resp.Error.Message != "" {
-		return errors.New(resp.Error.Message)
+		return resp.Node, errors.New(resp.Error.Message)
 	}
-	return nil
+	return resp.Node, nil
 }
