@@ -93,6 +93,7 @@ func (conn *Conn) Connect(url string) (err error) {
 	if err != nil {
 		return err
 	}
+	conn.url = url
 
 	go conn.readHandler()
 	go conn.writeHandler()
