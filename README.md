@@ -6,6 +6,9 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/blocknative/dreamboat?style=flat-square)](https://goreportcard.com/report/github.com/blocknative/dreamboat)
 [![Discord](https://img.shields.io/discord/542403978693050389?color=%237289da&label=discord&style=flat-square)](https://img.shields.io/discord/542403978693050389?color=%237289da&label=discord&style=flat-square)
 
+> ### ⚠️ As of September 27, 2023 the Dreamboat code base is no longer being actively maintained by the Blocknative team. Please see this [post](https://twitter.com/blocknative/status/1706685103286485364) for more context.
+
+
 An Ethereum 2.0 Relay for proposer-builder separation (PBS) with MEV-boost.  Commissioned, built, and put to sea by Blocknative.
 
 [![blocknative-dreamboat](https://user-images.githubusercontent.com/9452561/189974883-6910dd5c-0f55-4aa6-87be-515c5930362e.png)](https://blocknative.com)
