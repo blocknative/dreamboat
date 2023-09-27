@@ -15,7 +15,7 @@ func (fb *Fallback) initMetrics() {
 		Subsystem: "simclient",
 		Name:      "requestSource",
 		Help:      "Number of calls being done by transport type",
-	}, []string{"kind", "result"})
+	}, []string{"kind", "node", "result"})
 }
 
 func (fb *Fallback) AttachMetrics(m *metrics.Metrics) {

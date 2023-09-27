@@ -29,6 +29,7 @@ type Conn struct {
 	l log.Logger
 
 	input     chan []byte
+	url       string
 	messageID uint64
 
 	lastRead time.Time
@@ -92,6 +93,7 @@ func (conn *Conn) Connect(url string) (err error) {
 	if err != nil {
 		return err
 	}
+	conn.url = url
 
 	go conn.readHandler()
 	go conn.writeHandler()
@@ -116,6 +118,8 @@ func (conn *Conn) rpcDecoder(ctx context.Context, in <-chan []byte) {
 		if r.ID == 1 {
 			continue
 		}
+		// Attach node identifier
+		r.Node = conn.url
 
 		ch, ok := conn.rc.Get(r.ID)
 		if !ok {

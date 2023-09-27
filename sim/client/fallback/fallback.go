@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/lthibault/log"
+
 	sim "github.com/blocknative/dreamboat/sim/client"
 	"github.com/blocknative/dreamboat/sim/client/types"
 )
@@ -14,10 +16,14 @@ type Fallback struct {
 	clientsHTTP []sim.Client
 	atLeastOne  bool
 	m           Metrics
+
+	l log.Logger
 }
 
-func NewFallback() *Fallback {
-	f := &Fallback{}
+func NewFallback(l log.Logger) *Fallback {
+	f := &Fallback{
+		l: l,
+	}
 	f.initMetrics()
 	return f
 }
@@ -72,7 +78,7 @@ func removeClient(cSlice []sim.Client, id string) []sim.Client {
 
 func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockValidationRequest) (err error) {
 	if !f.atLeastOne {
-		f.m.ServedFrom.WithLabelValues("none", "error").Inc()
+		f.m.ServedFrom.WithLabelValues("none", "notfound", "error").Inc()
 		return sim.ErrNotFound
 	}
 
@@ -97,33 +103,34 @@ func (f *Fallback) ValidateBlock(ctx context.Context, block *types.BuilderBlockV
 			return err
 		}
 	}
-	f.m.ServedFrom.WithLabelValues("all", "fatal").Inc()
+	f.m.ServedFrom.WithLabelValues("all", "all", "fatal").Inc()
 	return err
 }
 
 func (f *Fallback) validateBlock(ctx context.Context, c sim.Client, block *types.BuilderBlockValidationRequest) (err error, keepTrying bool) {
 	if ctx.Err() != nil {
-		f.m.ServedFrom.WithLabelValues(c.Kind(), "ctx").Inc()
+		f.m.ServedFrom.WithLabelValues(c.Kind(), "", "ctx").Inc()
 		return ctx.Err(), false
 	}
-	err = c.ValidateBlock(ctx, block)
+	node, err := c.ValidateBlock(ctx, block)
 	if err == nil {
-		f.m.ServedFrom.WithLabelValues(c.Kind(), "ok").Inc()
+		f.m.ServedFrom.WithLabelValues(c.Kind(), node, "ok").Inc()
 		return
 	}
 
 	if !(errors.Is(err, sim.ErrNotFound) || errors.Is(err, sim.ErrConnectionFailure)) {
-		f.m.ServedFrom.WithLabelValues(c.Kind(), "error").Inc()
+		f.m.ServedFrom.WithLabelValues(c.Kind(), node, "error").Inc()
 		return err, false
 	}
 
-	f.m.ServedFrom.WithLabelValues(c.Kind(), "fallback").Inc()
+	f.l.With(log.F{"node": node}).WithError(err).Warn("validation fallback")
+	f.m.ServedFrom.WithLabelValues(c.Kind(), node, "fallback").Inc()
 	return err, true
 }
 
 func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBlockValidationRequestV2) (err error) {
 	if !f.atLeastOne {
-		f.m.ServedFrom.WithLabelValues("none", "error").Inc()
+		f.m.ServedFrom.WithLabelValues("none", "", "error").Inc()
 		return sim.ErrNotFound
 	}
 
@@ -149,26 +156,28 @@ func (f *Fallback) ValidateBlockV2(ctx context.Context, block *types.BuilderBloc
 		}
 	}
 
-	f.m.ServedFrom.WithLabelValues("all", "fatal").Inc()
+	f.m.ServedFrom.WithLabelValues("all", "all", "fatal").Inc()
 	return err
 }
 
 func (f *Fallback) validateBlockV2(ctx context.Context, c sim.Client, block *types.BuilderBlockValidationRequestV2) (err error, keepTrying bool) {
 	if ctx.Err() != nil {
-		f.m.ServedFrom.WithLabelValues(c.Kind(), "ctx").Inc()
+		f.m.ServedFrom.WithLabelValues(c.Kind(), "", "ctx").Inc()
 		return ctx.Err(), false
 	}
-	err = c.ValidateBlockV2(ctx, block)
+	node, err := c.ValidateBlockV2(ctx, block)
 	if err == nil {
-		f.m.ServedFrom.WithLabelValues(c.Kind(), "ok").Inc()
+		f.m.ServedFrom.WithLabelValues(c.Kind(), node, "ok").Inc()
 		return
 	}
 
 	if !(errors.Is(err, sim.ErrNotFound) || errors.Is(err, sim.ErrConnectionFailure)) {
-		f.m.ServedFrom.WithLabelValues(c.Kind(), "error").Inc()
+		f.m.ServedFrom.WithLabelValues(c.Kind(), node, "error").Inc()
 		return err, false
 	}
 
-	f.m.ServedFrom.WithLabelValues(c.Kind(), "fallback").Inc()
+	f.l.With(log.F{"node": node}).WithError(err).Warn("validation fallback")
+
+	f.m.ServedFrom.WithLabelValues(c.Kind(), node, "fallback").Inc()
 	return err, true
 }

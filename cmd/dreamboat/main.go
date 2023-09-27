@@ -194,7 +194,7 @@ func main() {
 		return
 	}
 
-	simFallb := fallback.NewFallback()
+	simFallb := fallback.NewFallback(logger)
 	simFallb.AttachMetrics(m)
 
 	simManager := sim.NewManager(logger, simFallb)
